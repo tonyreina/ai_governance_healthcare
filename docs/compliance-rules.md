@@ -1,6 +1,6 @@
 # Compliance rules
 
-Each project gets a status from the flags raised by `flags(p)` in `index.html`.
+Each project gets a status from the flags raised by `flags(p)` in `docs/app/index.html`.
 Any red flag makes the project **Out of compliance**; otherwise any amber flag
 makes it **Needs update**; otherwise it is **On track**. Projects stopped at a
 checkpoint or retired at Checkpoint D are **Retired** and raise no flags.

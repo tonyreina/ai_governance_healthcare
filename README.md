@@ -15,15 +15,19 @@ AI solution they evaluate or run, and tracks the whole portfolio on one dashboar
   Card, with a live preview.
 - **Exports**: standalone HTML report, Markdown, JSON (per project) and CSV (portfolio).
 
-No build step, no dependencies: everything is in `index.html`.
+No build step, no dependencies: everything is in `docs/app/index.html`.
+
+**Live site:** <https://tonyreina.github.io/ai_governance_healthcare/> —
+documentation, with the dashboard itself at
+[`/app/`](https://tonyreina.github.io/ai_governance_healthcare/app/).
 
 ## Run it
 
-Open `index.html` in a browser, or serve the folder:
+Open `docs/app/index.html` in a browser, or serve the folder:
 
 ```bash
-python3 -m http.server 8000
-# then visit http://localhost:8000
+python3 -m http.server 8000 --directory docs
+# then visit http://localhost:8000/app/
 ```
 
 ### Storage modes
@@ -33,22 +37,35 @@ python3 -m http.server 8000
 | Published as a Claude artifact | Artifact database (`claude.use("db")`) | Yes, live, with per-user sign-off |
 | Opened directly / GitHub Pages | Browser `localStorage` | No, one browser only |
 
-All persistence goes through two small classes in `index.html`, `DbStore` and
+All persistence goes through two small classes in `docs/app/index.html`, `DbStore` and
 `LocalStore`, which share one interface (`subscribeAll`, `create`, `update`,
 `remove`, `log`, `subscribeLog`). To back the tool with your own server
 (Firestore, Supabase, a FastAPI service, etc.), add a third class with the same
 methods and select it at boot.
 
-## Deploy to GitHub Pages
+## Documentation site
 
-The included workflow (`.github/workflows/pages.yml`) publishes the repo root on
-every push to `main`. Enable it once under **Settings → Pages → Build and
-deployment → Source: GitHub Actions**. The site will be at
-`https://tonyreina.github.io/ai_governance_healthcare/`.
+The docs are built with [Zensical](https://zensical.org), configured in
+`zensical.toml`, with sources in `docs/`. The dashboard lives at
+`docs/app/index.html` and is copied into the build verbatim, so the published
+site serves the docs at `/` and the app at `/app/`.
+
+The environment is managed with [pixi](https://pixi.sh):
+
+```bash
+pixi run docs-serve    # live preview at http://localhost:8000
+pixi run docs-build    # writes ./site
+```
+
+### Deploy
+
+`.github/workflows/pages.yml` builds with Zensical and publishes on every push
+to `main`. Enable it once under **Settings → Pages → Build and deployment
+→ Source: GitHub Actions**.
 
 ## Compliance rules
 
-Status is computed in the browser by `flags()` in `index.html`. See
+Status is computed in the browser by `flags()` in `docs/app/index.html`. See
 [`docs/compliance-rules.md`](docs/compliance-rules.md) for the full list and how
 to change it.
 

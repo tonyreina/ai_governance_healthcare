@@ -1,3 +1,10 @@
+# Zensical build output and cache
+site/
+.cache/
+
+# pixi
+.pixi/
+
 # WSL / Windows metadata
 *:Zone.Identifier
 

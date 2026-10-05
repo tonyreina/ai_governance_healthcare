@@ -1,0 +1,12 @@
+# WSL / Windows metadata
+*:Zone.Identifier
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/

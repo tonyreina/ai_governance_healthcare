@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Health AI assurance review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EDF1F2; --surface:#FFFFFF; --sunk:#E3E9EB; --ink:#13233A; --muted:#55667A; --rule:#C9D3D9;
+  --teal:#0E6E66; --teal-soft:#D6ECE9; --amber:#9A5806; --amber-soft:#F7E8CF; --red:#B42318; --red-soft:#F8DCD9;
+  --green:#1F7A3E; --green-soft:#D7EEDD; --focus:#2E6BD8;
+  --sans:"Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --display:"Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E161E; --surface:#16212C; --sunk:#1D2a36; --ink:#E3EBF1; --muted:#93A4B4; --rule:#2B3A48;
+    --teal:#4FC1B4; --teal-soft:#173A3A; --amber:#E3A44A; --amber-soft:#3A2C16; --red:#F0776C; --red-soft:#3E1E1D;
+    --green:#5CC98A; --green-soft:#183324; --focus:#7FA8F0; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E161E; --surface:#16212C; --sunk:#1D2a36; --ink:#E3EBF1; --muted:#93A4B4; --rule:#2B3A48;
+  --teal:#4FC1B4; --teal-soft:#173A3A; --amber:#E3A44A; --amber-soft:#3A2C16; --red:#F0776C; --red-soft:#3E1E1D;
+  --green:#5CC98A; --green-soft:#183324; --focus:#7FA8F0; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+img{max-width:100%}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--paper);border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:16px;padding:10px 20px}
+.brand{font-family:var(--display);font-weight:800;font-stretch:80%;font-size:19px;letter-spacing:-.01em;white-space:nowrap}
+.brand small{display:block;font-family:var(--sans);font-weight:500;font-stretch:100%;font-size:12px;color:var(--muted);letter-spacing:0}
+.top .spacer{flex:1}
+.saved{font-size:12px;color:var(--muted);white-space:nowrap}
+.btn{border:1px solid var(--rule);background:var(--surface);border-radius:6px;padding:7px 12px;cursor:pointer;font-size:14px;font-weight:600;white-space:nowrap}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--red)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.preview-toggle{display:none}
+
+/* shell */
+.shell{display:grid;grid-template-columns:232px minmax(0,1fr) 380px;gap:0;max-width:1480px;margin:0 auto}
+nav.rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 58px);align-self:start;height:calc(100vh - 58px);overflow:auto;padding:22px 12px 40px 20px}
+.rail ol{list-style:none;margin:0;padding:0}
+.rail li{position:relative}
+.rail button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:26px 1fr auto;align-items:center;gap:8px;width:100%;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:14px}
+.rail button:hover{background:var(--sunk)}
+.rail button:focus-visible{outline:2px solid var(--focus)}
+.rail button[aria-current="step"]{background:var(--surface);box-shadow:inset 3px 0 0 var(--teal);font-weight:600}
+.rail .num{font-family:var(--display);font-weight:800;font-size:15px;text-align:center;color:var(--muted)}
+.rail .gate .num{color:var(--teal)}
+.rail .gate button{font-size:13px;color:var(--muted)}
+.rail .gate button[aria-current="step"]{color:var(--ink)}
+.rail .meta{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rail .meta.done{color:var(--green)}
+.rail .meta.warn{color:var(--amber)}
+.rail .sep{height:1px;background:var(--rule);margin:10px 8px}
+.diamond{display:inline-block;width:9px;height:9px;transform:rotate(45deg);border:2px solid currentColor}
+
+main{padding:26px 32px 80px;min-width:0}
+.eyebrow{font-size:13px;color:var(--teal);font-weight:600;margin:0 0 4px}
+h1{font-family:var(--display);font-weight:800;font-stretch:78%;font-size:clamp(30px,4vw,44px);line-height:1.02;letter-spacing:-.015em;margin:0 0 10px}
+h2{font-family:var(--display);font-weight:700;font-stretch:88%;font-size:21px;margin:30px 0 10px}
+.lede{max-width:66ch;color:var(--muted);margin:0 0 22px}
+
+/* forms */
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 18px;max-width:820px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field.wide{grid-column:1/-1}
+.field label{font-size:13px;font-weight:600}
+.field .hint{font-size:12px;color:var(--muted);margin-top:-2px}
+input[type=text],input[type=date],select,textarea{width:100%;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:8px 10px;font-size:14.5px}
+textarea{resize:vertical;min-height:64px;line-height:1.45}
+input:hover,select:hover,textarea:hover{border-color:var(--muted)}
+
+/* checklist */
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted);margin:0 0 14px}
+.pchip{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 5px;border-radius:4px;font:700 11px/1 var(--display);font-stretch:90%;background:var(--sunk);color:var(--ink);letter-spacing:.02em}
+.checklist{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule);max-width:900px}
+.ci{border-bottom:1px solid var(--rule);padding:12px 2px}
+.ci-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:start}
+.ci-text{padding-top:1px}
+.ci-text .more{all:unset;cursor:pointer;font-size:12.5px;color:var(--teal);font-weight:600;margin-left:6px}
+.ci-text .more:focus-visible{outline:2px solid var(--focus)}
+.ci-text .has-notes{font-size:12px;color:var(--muted);margin-left:6px}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{all:unset;cursor:pointer;padding:5px 9px;font-size:12.5px;font-weight:600;color:var(--muted);border-left:1px solid var(--rule)}
+.seg button:first-child{border-left:0}
+.seg button:hover{color:var(--ink);background:var(--sunk)}
+.seg button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.seg button[aria-pressed="true"][data-s="met"]{background:var(--green-soft);color:var(--green)}
+.seg button[aria-pressed="true"][data-s="partial"]{background:var(--amber-soft);color:var(--amber)}
+.seg button[aria-pressed="true"][data-s="notmet"]{background:var(--red-soft);color:var(--red)}
+.seg button[aria-pressed="true"][data-s="na"]{background:var(--sunk);color:var(--ink)}
+.ci-detail{display:none;grid-template-columns:minmax(0,1fr) 180px 150px;gap:10px;margin:10px 0 2px 38px}
+.ci.open .ci-detail{display:grid}
+.ci-detail label{font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px}
+
+/* metrics */
+.mtable{width:100%;max-width:900px;border-collapse:collapse;font-size:14px}
+.mwrap{overflow-x:auto;max-width:900px}
+.mtable th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:6px 6px;border-bottom:1px solid var(--rule)}
+.mtable td{padding:5px 4px;vertical-align:top}
+.mtable input,.mtable select{padding:6px 8px;font-size:13.5px}
+.icon-btn{all:unset;cursor:pointer;color:var(--muted);padding:6px 8px;border-radius:4px;font-size:13px}
+.icon-btn:hover{color:var(--red);background:var(--red-soft)}
+
+/* gate */
+.gate-panel{max-width:820px;border:1px solid var(--rule);border-radius:10px;background:var(--surface);padding:20px 22px}
+.decisions{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 18px}
+.decisions button{all:unset;cursor:pointer;border:1px solid var(--rule);border-radius:999px;padding:7px 14px;font-size:14px;font-weight:600}
+.decisions button:hover{border-color:var(--ink)}
+.decisions button:focus-visible{outline:2px solid var(--focus)}
+.decisions button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.note{border-left:3px solid var(--amber);background:var(--amber-soft);padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin:0 0 16px;max-width:820px}
+.note.ok{border-color:var(--green);background:var(--green-soft)}
+.gaplist{margin:6px 0 0;padding-left:18px;font-size:13.5px}
+
+.pager{display:flex;justify-content:space-between;gap:12px;max-width:900px;margin-top:34px;padding-top:18px;border-top:1px solid var(--rule)}
+
+/* label panel */
+aside.panel{position:sticky;top:calc(env(safe-area-inset-top,0px) + 58px);align-self:start;height:calc(100vh - 58px);overflow:auto;padding:22px 20px 40px 8px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.panel-head p{margin:0;font-size:13px;color:var(--muted)}
+.panel-close{display:none}
+
+/* ---------- the label (always print-white) ---------- */
+.label{background:#fff;color:#000;border:2px solid #000;padding:10px 12px 12px;font-family:var(--sans);font-size:12.5px;line-height:1.38}
+.label .l-kicker{font:700 11px/1 var(--sans);margin:0 0 4px}
+.label .l-name{font-family:var(--display);font-weight:900;font-stretch:72%;font-size:32px;line-height:.98;margin:0;letter-spacing:-.01em;overflow-wrap:anywhere}
+.label .l-dev{margin:3px 0 0;font-size:12.5px}
+.label .r8{border-top:8px solid #000;margin:8px 0 6px}
+.label .r4{border-top:4px solid #000;margin:7px 0 5px}
+.label .r1{border-top:1px solid #000;margin:4px 0}
+.label .l-sec{font-family:var(--display);font-weight:800;font-stretch:85%;font-size:16px;margin:0}
+.label .l-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 8px;font-size:11.5px}
+.label .l-grid b{display:block;font-size:10.5px}
+.label dl{margin:0}
+.label .l-row{padding:3px 0;border-top:1px solid #000}
+.label .l-row:first-child{border-top:0}
+.label dt{font-weight:700;display:inline}
+.label dt::after{content:": "}
+.label dd{display:inline;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.label .empty{color:#8a8a8a}
+.label .l-metric{display:grid;grid-template-columns:1fr auto;gap:8px;padding:3px 0;border-top:1px solid #000}
+.label .l-metric span:last-child{font-weight:800;font-variant-numeric:tabular-nums;text-align:right}
+.label .l-mcat{font-weight:800;font-size:11px;margin:6px 0 1px}
+.label .l-foot{font-size:10.5px;margin-top:8px}
+
+/* report */
+.report{max-width:900px}
+.report .r-actions{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 22px}
+.r-head{border-bottom:3px solid var(--ink);padding-bottom:12px;margin-bottom:18px}
+.r-head h1{margin-bottom:4px}
+.r-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px 18px;font-size:13.5px;margin:12px 0 0}
+.r-meta div b{display:block;font-size:12px;color:var(--muted);font-weight:600}
+.overall{display:flex;align-items:baseline;gap:14px;margin:6px 0 4px}
+.overall .big{font-family:var(--display);font-weight:900;font-stretch:72%;font-size:64px;line-height:1}
+.overall p{margin:0;color:var(--muted);max-width:52ch;font-size:14px}
+.bars{display:grid;gap:8px;margin:14px 0 6px}
+.bar{display:grid;grid-template-columns:minmax(150px,240px) 1fr 56px;gap:12px;align-items:center;font-size:13.5px}
+.bar .track{height:12px;background:var(--sunk);border-radius:2px;overflow:hidden}
+.bar .fill{height:100%;background:var(--teal)}
+.bar .fill.mid{background:var(--amber)}
+.bar .fill.low{background:var(--red)}
+.bar .pct{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+.rtable{width:100%;border-collapse:collapse;font-size:13.5px}
+.rtable th,.rtable td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--rule);vertical-align:top}
+.rtable th{font-size:12px;color:var(--muted);font-weight:600}
+.tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:12px;font-weight:700;white-space:nowrap}
+.tag.met{background:var(--green-soft);color:var(--green)}
+.tag.partial{background:var(--amber-soft);color:var(--amber)}
+.tag.notmet{background:var(--red-soft);color:var(--red)}
+.tag.na,.tag.none{background:var(--sunk);color:var(--muted)}
+.r-wrap{overflow-x:auto}
+.disclaimer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--rule);margin-top:28px;padding-top:12px;max-width:80ch}
+.fallback{margin-top:10px}
+.fallback textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;min-height:180px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:6px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+.vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* responsive */
+@media (max-width:1180px){
+  .shell{grid-template-columns:212px minmax(0,1fr)}
+  aside.panel{display:none;position:fixed;inset:0;z-index:40;height:100%;background:color-mix(in srgb,var(--paper) 96%,transparent);padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(24px + env(safe-area-inset-bottom,0px))}
+  aside.panel.open{display:block}
+  aside.panel .label{max-width:420px;margin:0 auto}
+  .panel-head{max-width:420px;margin:0 auto 10px}
+  .panel-close{display:inline-block}
+  .preview-toggle{display:inline-block}
+}
+@media (max-width:820px){
+  .top{flex-wrap:wrap;gap:8px 12px;padding:10px 14px}
+  .top .saved{order:5;width:100%}
+  .shell{grid-template-columns:minmax(0,1fr)}
+  nav.rail{position:sticky;top:auto;height:auto;padding:8px 10px;border-bottom:1px solid var(--rule);overflow-x:auto;background:var(--paper)}
+  .rail ol{display:flex;gap:4px}
+  .rail li{flex:0 0 auto}
+  .rail button{grid-template-columns:auto auto;padding:6px 10px}
+  .rail .meta{display:none}
+  .rail .sep{display:none}
+  main{padding:20px 16px 60px}
+  .fields{grid-template-columns:minmax(0,1fr)}
+  .ci-row{grid-template-columns:28px minmax(0,1fr)}
+  .ci-row .seg{grid-column:2;justify-self:start;margin-top:6px}
+  .ci-detail{grid-template-columns:minmax(0,1fr);margin-left:0}
+  .bar{grid-template-columns:1fr 48px}
+  .bar .track{grid-column:1/-1;order:3}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{
+  .top,nav.rail,aside.panel,.r-actions,.pager,.fallback{display:none!important}
+  .shell{display:block}
+  main{padding:0}
+}
+
+/* ---------- portfolio / shared additions ---------- */
+.brand-btn{all:unset;cursor:pointer;border-radius:4px}
+.brand-btn:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+.mode{font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.mode.shared{background:var(--teal-soft);color:var(--teal)}
+.mode.ro{background:var(--amber-soft);color:var(--amber)}
+body.home .shell{grid-template-columns:minmax(0,1fr)}
+body.home nav.rail, body.home aside.panel, body.home .proj-only{display:none!important}
+body.home main{max-width:1240px;margin:0 auto;width:100%}
+.rail .home-link button{grid-template-columns:26px 1fr;color:var(--muted);font-size:13.5px}
+
+.dash-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
+.dash-head .lede{margin:0}
+.tallies{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px}
+.tally{all:unset;box-sizing:border-box;cursor:pointer;min-width:150px;flex:1 1 150px;max-width:230px;background:var(--surface);border:1px solid var(--rule);border-left-width:5px;border-radius:6px;padding:10px 14px}
+.tally:hover{border-color:var(--ink)}
+.tally:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.tally[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink)}
+.tally .n{display:block;font-family:var(--display);font-weight:900;font-stretch:72%;font-size:40px;line-height:1}
+.tally .t{display:block;font-size:13px;font-weight:600;margin-top:2px}
+.tally.red{border-left-color:var(--red)} .tally.red .n{color:var(--red)}
+.tally.amber{border-left-color:var(--amber)} .tally.amber .n{color:var(--amber)}
+.tally.green{border-left-color:var(--green)}
+.tally.retired{border-left-color:var(--muted)}
+.tally.all{border-left-color:var(--ink)}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.toolbar input[type=search]{flex:1 1 240px;max-width:360px;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:8px 10px}
+.toolbar .spacer{flex:1}
+.newform{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:12px 14px;margin-bottom:14px}
+.newform input{flex:1 1 260px}
+.newform[hidden]{display:none}
+
+.plist{list-style:none;margin:0;padding:0;border-top:2px solid var(--ink)}
+.phead,.prow{display:grid;grid-template-columns:minmax(220px,2.2fr) 190px 78px 112px minmax(220px,2.4fr);gap:14px;align-items:start}
+.phead{font-size:12px;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--rule)}
+.prow{padding:12px 10px;border-bottom:1px solid var(--rule);cursor:pointer}
+.prow:hover{background:var(--surface)}
+.prow.red{box-shadow:inset 4px 0 0 var(--red)}
+.prow.amber{box-shadow:inset 4px 0 0 var(--amber)}
+.prow .pname{all:unset;cursor:pointer;font-weight:700;font-size:15.5px;line-height:1.25}
+.prow .pname:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.prow .psub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.prow .pct{font-family:var(--display);font-weight:800;font-size:20px;font-stretch:80%;font-variant-numeric:tabular-nums}
+.prow .small{font-size:12.5px;color:var(--muted)}
+.prow .due{font-size:13.5px;font-variant-numeric:tabular-nums}
+.prow .due.late{color:var(--red);font-weight:700}
+.st{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap}
+.st.red{background:var(--red-soft);color:var(--red)}
+.st.amber{background:var(--amber-soft);color:var(--amber)}
+.st.green{background:var(--green-soft);color:var(--green)}
+.st.retired{background:var(--sunk);color:var(--muted)}
+.flags{list-style:none;margin:5px 0 0;padding:0;font-size:12.5px}
+.flags li{padding-left:12px;position:relative;line-height:1.4;margin-top:2px}
+.flags li::before{content:"";position:absolute;left:0;top:.5em;width:6px;height:6px;border-radius:50%;background:var(--amber)}
+.flags li.red::before{background:var(--red)}
+.empty-state{border:1px dashed var(--rule);border-radius:10px;padding:28px;text-align:left;max-width:640px;margin:20px 0}
+.empty-state p{margin:0 0 14px;color:var(--muted)}
+
+/* lifecycle track */
+.lc{display:flex;align-items:center;gap:4px;margin-top:2px}
+.lc .pip{width:18px;height:18px;border:1.5px solid var(--rule);border-radius:3px;display:flex;align-items:center;justify-content:center;font:700 10px/1 var(--display);color:var(--muted);position:relative;overflow:hidden;background:var(--surface)}
+.lc .pip i{position:absolute;left:0;bottom:0;width:100%;background:var(--teal);opacity:.28}
+.lc .pip.full{border-color:var(--teal);color:var(--teal)}
+.lc .pip.cur{border-color:var(--ink);color:var(--ink)}
+.lc .gd{width:9px;height:9px;transform:rotate(45deg);border:1.5px solid var(--rule);flex:0 0 auto}
+.lc .gd.go{background:var(--teal);border-color:var(--teal)}
+.lc .gd.cond{background:var(--amber);border-color:var(--amber)}
+.lc .gd.stop{background:var(--red);border-color:var(--red)}
+.lc-label{font-size:12.5px;color:var(--muted);margin-top:4px}
+
+.signed{font-size:13px;color:var(--muted);margin:14px 0 0}
+.history{list-style:none;margin:0;padding:0;max-width:820px;font-size:13.5px;border-top:1px solid var(--rule)}
+.history li{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:7px 0;border-bottom:1px solid var(--rule)}
+.history time{color:var(--muted);font-variant-numeric:tabular-nums}
+.banner{background:var(--teal-soft);border-left:3px solid var(--teal);padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin:0 0 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+body.ro .ro-hide{display:none!important}
+
+@media (max-width:980px){
+  .phead{display:none}
+  .prow{grid-template-columns:minmax(0,1fr) auto;gap:6px 14px}
+  .prow > :nth-child(1){grid-column:1/-1}
+  .prow > :nth-child(5){grid-column:1/-1}
+}
+</style>
+</head>
+<body class="home">
+<header class="top">
+  <button class="brand-btn" id="brandBtn" type="button" aria-label="Go to all projects"><span class="brand">Health AI assurance review<small id="projName">Portfolio</small></span></button>
+  <span class="mode" id="mode">Connecting…</span>
+  <div class="spacer"></div>
+  <span class="saved" id="saved" aria-live="polite"></span>
+  <button class="btn ghost preview-toggle proj-only" id="openPreview" type="button">Model card</button>
+  <input type="file" id="importFile" accept="application/json,.json" class="vh" aria-label="Import project JSON">
+  <button class="btn proj-only" id="goReport" type="button">View report</button>
+</header>
+<div class="shell">
+  <nav class="rail" aria-label="Review steps"><ol id="rail"></ol></nav>
+  <main id="main" tabindex="-1"></main>
+  <aside class="panel" id="panel" aria-label="Applied model card preview">
+    <div class="panel-head"><p>Applied model card, live</p><button class="btn ghost panel-close" id="closePreview" type="button">Close</button></div>
+    <div id="labelHost"></div>
+  </aside>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+/* ============================================================
+   Content model
+   Checklist items are paraphrased summaries organized around the
+   CHAI six-stage lifecycle and five principles. They are not the
+   official CHAI Responsible AI Checklist text.
+   ============================================================ */
+const PRINCIPLES = {
+  U:{name:"Usefulness, usability & efficacy"},
+  F:{name:"Fairness"},
+  S:{name:"Safety & reliability"},
+  T:{name:"Transparency & accountability"},
+  P:{name:"Security & privacy"}
+};
+const STAGES = [
+  {id:"s1",n:1,title:"Define the problem & plan",blurb:"Agree on the clinical or operational problem, confirm AI is the right tool, and name who is accountable before anything is built or bought.",items:[
+    ["U","Problem statement and target outcome agreed with clinical and operational stakeholders"],
+    ["U","Current-state or root-cause analysis shows AI is an appropriate intervention, not just a possible one"],
+    ["U","Success measures and a baseline to compare against are defined"],
+    ["F","Affected patient populations identified, including groups at risk of being underserved or harmed"],
+    ["S","Potential harms and failure modes listed, with severity and likelihood"],
+    ["T","Accountable owner, governance body, and decision rights named"],
+    ["P","Data needs, privacy, consent, and regulatory constraints scoped"]
+  ]},
+  {id:"s2",n:2,title:"Design the AI system",blurb:"Specify how the system fits into care: who uses it, where in the workflow, what it outputs, and what happens when it is wrong.",items:[
+    ["U","End users took part in workflow and interface design"],
+    ["U","Intended use, users, and care setting documented, with out-of-scope uses listed"],
+    ["F","Subgroups and fairness criteria for evaluation pre-specified"],
+    ["S","Decision thresholds defined and clinically justified"],
+    ["S","Human oversight and override path designed into the workflow"],
+    ["T","Pathway for reporting safety issues and harms drafted, naming who reports to whom"],
+    ["P","Threat model, access controls, and data flows designed"]
+  ]},
+  {id:"s3",n:3,title:"Engineer the AI solution",blurb:"Build or configure the model with traceable data and documented choices, so the assessment stage has something it can verify.",items:[
+    ["T","Data provenance and known data limitations documented"],
+    ["F","Demographic and socio-demographic make-up of development data characterized"],
+    ["F","Bias mitigation approach chosen and documented"],
+    ["S","Data quality checks and handling of missing data documented"],
+    ["T","Version control in place for datasets, code, and model artifacts"],
+    ["P","De-identification or other privacy-enhancing techniques applied where appropriate"],
+    ["S","People responsible for monitoring data and model behavior designated"]
+  ]},
+  {id:"s4",n:4,title:"Assess",blurb:"Validate the solution locally before patients are exposed to it. Record key metrics below; they flow into the model card.",items:[
+    ["U","Performance validated on local data representative of the deployment population"],
+    ["F","Performance compared across demographic subgroups, with gaps explained"],
+    ["S","Calibration checked, not only discrimination"],
+    ["S","Silent (shadow) evaluation run in the live environment"],
+    ["S","Installation qualification completed, where applicable"],
+    ["T","Explanations of outputs are suited to the intended users"],
+    ["P","Security review or vendor security assessment completed"],
+    ["T","Safety reporting pathway updated with what assessment revealed"]
+  ], metrics:true},
+  {id:"s5",n:5,title:"Pilot",blurb:"Run a small, time-boxed pilot to learn whether the solution helps in real care, for whom, and at what cost to staff.",items:[
+    ["U","Pilot scope, sites, duration, and stop rules defined"],
+    ["U","Usability and workflow fit assessed with frontline users"],
+    ["U","Real-world effect on outcomes or process measured against baseline"],
+    ["F","Pilot results checked for differences across patient groups"],
+    ["S","Adverse events and near misses tracked and reviewed"],
+    ["T","Users trained, and the approach to patient disclosure decided"]
+  ]},
+  {id:"s6",n:6,title:"Deploy & monitor",blurb:"Scale up with monitoring, change control, and a plan for when to retrain or retire.",items:[
+    ["S","Performance and drift monitoring live, with alert thresholds and an owner"],
+    ["F","Subgroup performance monitored on an ongoing basis"],
+    ["T","Audit schedule and change control set, with a revised model card for each version"],
+    ["S","Incident response, rollback, and retirement criteria documented"],
+    ["P","Access reviews and security patching scheduled"],
+    ["U","Value to patients and staff re-evaluated periodically"]
+  ]}
+];
+STAGES.forEach(s=>s.items=s.items.map((it,i)=>({id:`${s.id}-${i+1}`,p:it[0],text:it[1]})));
+
+const GATES = {
+  A:{after:"s1",title:"Checkpoint A",q:"Approve moving to design?",help:"Is the problem worth solving with AI, and is the plan sound enough to start design?",options:["Proceed","Proceed with conditions","Revise and resubmit","Stop"]},
+  B:{after:"s4",title:"Checkpoint B",q:"Approve a pilot?",help:"Has local assessment shown the solution is safe, effective, and fair enough to expose a small group of patients to it?",options:["Proceed","Proceed with conditions","Revise and resubmit","Stop"]},
+  C:{after:"s5",title:"Checkpoint C",q:"Approve deployment at scale?",help:"Did the pilot show real benefit without unacceptable harm or disparity?",options:["Proceed","Proceed with conditions","Revise and resubmit","Stop"]},
+  D:{after:"s6",title:"Checkpoint D",q:"Periodic review decision",help:"Based on monitoring, should the solution continue as is, change, or be retired? Record a new review each cycle; the next due date is set from it.",options:["Continue","Continue with changes","Retrain or revise","Retire"]}
+};
+
+const CARD = [
+  {sec:"Identity",fields:[
+    ["name","Name","",0],["developer","Developer","",0],["contact","Inquiries or to report an issue","Email or phone",0],
+    ["releaseStage","Release stage","e.g. Pilot, General availability",0],["releaseDate","Release date","",0],["version","Version","Tie the card to a software version",0],
+    ["availability","Global availability","",0],["regulatory","Regulatory approval, if applicable","e.g. FDA 510(k) number, or not a device",0],
+    ["summary","Summary","The most important things a clinician or buyer should know",1],["keywords","Keywords","",0]]},
+  {sec:"Uses and directions",fields:[
+    ["intendedUse","Intended use and workflow","",1],["users","Primary intended users","",0],["howTo","How to use","",1],
+    ["population","Targeted patient population","",1],["outOfScope","Cautioned out-of-scope settings and use cases","",1]]},
+  {sec:"Warnings",fields:[
+    ["risks","Known risks and limitations","",1],["biases","Known biases or ethical considerations","",1],["riskLevel","Clinical risk level","e.g. Low, Moderate, High, with a one-line reason",0]]},
+  {sec:"Trust ingredients",fields:[
+    ["outputs","Outcome(s) and output(s)","",1],["modelType","Model type","",0],["foundation","Foundation models used, if applicable","",0],
+    ["inputSource","Input data source","",1],["dataType","Input and output data types","",0],["devData","Development data characterization","Size, dates, sites, demographics",1],
+    ["biasMitigation","Bias mitigation approaches","",1],["maintenance","Ongoing maintenance","Monitoring, retraining cadence, owner",1],
+    ["security","Security and compliance practices or accreditations","",1]]},
+  {sec:"Resources",fields:[
+    ["evalRefs","Evaluation references","",1],["trials","Clinical trials","",0],["pubs","Peer-reviewed publications","",1],
+    ["reimbursement","Reimbursement status","",0],["consent","Patient consent or disclosure","",1]]}
+];
+const CARD_FIELDS = CARD.flatMap(s=>s.fields.map(f=>f[0]));
+const CORE_CARD = ["intendedUse","users","population","outOfScope","risks","riskLevel","outputs","inputSource","maintenance"];
+const CARD_LABEL = Object.fromEntries(CARD.flatMap(s=>s.fields.map(f=>[f[0],f[1]])));
+const METRIC_CATS = ["Usefulness, usability & efficacy","Fairness & equity","Safety & reliability"];
+
+const VIEWS = [
+  {id:"setup",kind:"setup",label:"Project setup"},
+  {id:"s1",kind:"stage"},{id:"gA",kind:"gate",gate:"A"},
+  {id:"s2",kind:"stage"},{id:"s3",kind:"stage"},{id:"s4",kind:"stage"},{id:"gB",kind:"gate",gate:"B"},
+  {id:"s5",kind:"stage"},{id:"gC",kind:"gate",gate:"C"},
+  {id:"s6",kind:"stage"},{id:"gD",kind:"gate",gate:"D"},
+  {id:"card",kind:"card",label:"Applied model card"},
+  {id:"report",kind:"report",label:"Report"}
+];
+
+/* ============================================================
+   Utilities
+   ============================================================ */
+const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const clone = o => o==null ? o : JSON.parse(JSON.stringify(o));
+const isObj = v => v && typeof v==="object" && !Array.isArray(v);
+function deepMerge(t,src){ for(const k in src){ if(isObj(src[k]) && isObj(t[k])) deepMerge(t[k],src[k]); else t[k]=clone(src[k]); } return t; }
+function pad(n){return String(n).padStart(2,"0");}
+function ymd(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+const TODAY = ()=> ymd(new Date());
+function parseDay(s){ if(!s||!/^\d{4}-\d{2}-\d{2}/.test(s)) return null; const d=new Date(s.slice(0,10)+"T00:00:00"); return isNaN(d)?null:d; }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function addMonths(d,n){ const x=new Date(d); x.setMonth(x.getMonth()+n); return x; }
+function daysBetween(a,b){ return Math.round((b-a)/86400000); }
+function fmtDay(s){ const d=parseDay(s); return d? d.toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}) : ""; }
+function ago(iso){ if(!iso) return ""; const d=new Date(iso); if(isNaN(d)) return ""; const m=Math.round((Date.now()-d)/60000);
+  if(m<1) return "just now"; if(m<60) return `${m} min ago`; const h=Math.round(m/60); if(h<24) return `${h} h ago`; const dd=Math.round(h/24); if(dd<45) return `${dd} days ago`; return fmtDay(iso.slice(0,10)); }
+const newId = ()=> "p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+/* ============================================================
+   Project model
+   ============================================================ */
+const blankMeta = ()=>({solution:"",org:"",developer:"",sourcing:"",sponsor:"",reviewers:"",riskTier:"",reviewCadence:"",startDate:"",scope:""});
+function blankProject(name){
+  const now=new Date().toISOString();
+  return {meta:{...blankMeta(),solution:name||""}, items:{}, gates:{A:{},B:{},C:{},D:{}}, metrics:[], card:{},
+    archived:false, createdAt:now, createdBy:ME.id||null, updatedAt:now, updatedBy:ME.id||null, cardUpdatedAt:null};
+}
+function normalize(p){
+  p.meta=Object.assign(blankMeta(),p.meta||{}); p.items=p.items||{}; p.gates=Object.assign({A:{},B:{},C:{},D:{}},p.gates||{});
+  p.metrics=Array.isArray(p.metrics)?p.metrics:[]; p.card=p.card||{}; return p;
+}
+const cardValOf = (p,k) => ((p.card||{})[k]||"").trim() || (k==="name"?(p.meta.solution||"").trim():"") || (k==="developer"?(p.meta.developer||"").trim():"");
+
+const STATUS = {met:"Met",partial:"Partial",notmet:"Not met",na:"N/A"};
+const VAL = {met:1,partial:.5,notmet:0};
+function allItems(){ return STAGES.flatMap(s=>s.items.map(it=>({...it,stage:s}))); }
+function scoreOf(list, items){
+  items=items||S.items; let sum=0,n=0,answered=0;
+  list.forEach(it=>{ const st=(items[it.id]||{}).status; if(st) answered++; if(st==="na") return; n++; sum+=VAL[st]||0; });
+  return {pct:n?Math.round(sum/n*100):0,answered,total:list.length,applicable:n};
+}
+function gapsUpTo(p,stageId){
+  const idx=STAGES.findIndex(s=>s.id===stageId);
+  return STAGES.slice(0,idx+1).flatMap(s=>s.items.filter(it=>{const st=(p.items[it.id]||{}).status; return !st||st==="notmet";}).map(it=>({...it,stage:s})));
+}
+const dec = (p,k)=> ((p.gates||{})[k]||{}).decision||"";
+const isGo = d => /^(Proceed|Continue)/.test(d||"");
+function phase(p){
+  if([dec(p,"A"),dec(p,"B"),dec(p,"C")].includes("Stop")) return {key:"retired",label:"Stopped"};
+  if(dec(p,"D")==="Retire") return {key:"retired",label:"Retired"};
+  if(isGo(dec(p,"C"))) return {key:"deployed",label:"Deployed",stage:6};
+  if(isGo(dec(p,"B"))) return {key:"pilot",label:"Pilot",stage:5};
+  if(isGo(dec(p,"A"))) return {key:"build",label:"Design, build & assess",stage:2};
+  return {key:"intake",label:"Intake & planning",stage:1};
+}
+function cadenceMonths(p){ const n=parseInt(p.meta.reviewCadence,10); return n>0?n:(p.meta.riskTier==="High"?6:12); }
+function nextReview(p){
+  if(phase(p).key!=="deployed") return null;
+  const base = parseDay(dec(p,"D") ? p.gates.D.date : "") || parseDay(p.gates.C.date);
+  if(!base) return null;
+  return ymd(addMonths(base,cadenceMonths(p)));
+}
+function latestGo(p){
+  let best=null;
+  ["A","B","C","D"].forEach(k=>{ const g=p.gates[k]||{}; if(isGo(g.decision)){ const d=parseDay(g.date); if(d && (!best||d>best.d)) best={k,d}; }});
+  return best;
+}
+
+/* Compliance rules. Red = out of compliance, amber = needs update. */
+function flags(p){
+  const F=[]; const ph=phase(p); const today=parseDay(TODAY());
+  if(ph.key==="retired") return F;
+  const live = ph.key==="deployed", piloting = ph.key==="pilot";
+  const items=allItems();
+  const overdue = items.filter(it=>{const d=p.items[it.id]||{}; const due=parseDay(d.due); return due && due<today && d.status!=="met" && d.status!=="na";});
+  if(overdue.length) F.push({sev:(live||piloting)?"red":"amber",text:`${overdue.length} action${overdue.length>1?"s":""} past due`});
+  if(live){
+    const notmet=items.filter(it=>(p.items[it.id]||{}).status==="notmet").length;
+    if(notmet) F.push({sev:"red",text:`Live with ${notmet} criteri${notmet>1?"a":"on"} not met`});
+    const nr=nextReview(p);
+    if(!nr) F.push({sev:"red",text:"Live with no deployment date recorded at Checkpoint C"});
+    else { const d=parseDay(nr), left=daysBetween(today,d);
+      if(left<0) F.push({sev:"red",text:`Periodic review overdue since ${fmtDay(nr)}`});
+      else if(left<=30) F.push({sev:"amber",text:`Periodic review due ${fmtDay(nr)}`}); }
+    if(dec(p,"D")==="Retrain or revise") F.push({sev:"amber",text:"Last review asked for retraining or revision"});
+  }
+  if(live||piloting){
+    const missing=CORE_CARD.filter(k=>!cardValOf(p,k));
+    if(missing.length) F.push({sev:live?"red":"amber",text:`Model card missing ${missing.length} core field${missing.length>1?"s":""}`});
+    const lg=latestGo(p); const cu=p.cardUpdatedAt?new Date(p.cardUpdatedAt):null;
+    if(lg && (!cu || cu < lg.d)) F.push({sev:"amber",text:`Model card not updated since ${GATES[lg.k].title}`});
+    if(!p.metrics.some(m=>m.name||m.value)) F.push({sev:"amber",text:"No key metrics recorded"});
+  }
+  ["A","B","C","D"].forEach(k=>{ const g=p.gates[k]||{};
+    if(isGo(g.decision) && !(g.rationale||"").trim()){
+      if(/conditions|changes/.test(g.decision)) F.push({sev:"amber",text:`${GATES[k].title}: conditional approval with no conditions recorded`});
+      else if(gapsUpTo(p,GATES[k].after).length) F.push({sev:"amber",text:`${GATES[k].title}: approved with open criteria and no rationale`});
+    }});
+  if(!live && p.updatedAt){ const idle=daysBetween(new Date(p.updatedAt),new Date()); if(idle>90) F.push({sev:"amber",text:`No activity in ${idle} days`}); }
+  return F.sort((a,b)=>(a.sev==="red"?0:1)-(b.sev==="red"?0:1));
+}
+function statusOf(p){
+  const ph=phase(p); if(ph.key==="retired") return {key:"retired",label:ph.label};
+  const f=flags(p);
+  if(f.some(x=>x.sev==="red")) return {key:"red",label:"Out of compliance"};
+  if(f.length) return {key:"amber",label:"Needs update"};
+  return {key:"green",label:"On track"};
+}
+
+/* ============================================================
+   Stores: shared database, or this browser as a fallback
+   ============================================================ */
+class DbStore{
+  constructor(db){ this.db=db; }
+  col(){ return this.db.collection("projects"); }
+  subscribeAll(cb,err){ return this.col().onSnapshot(s=>cb(s.docs.map(d=>({id:d.id,...clone(d.data())}))),err); }
+  create(id,data){ return this.col().doc(id).set(data); }
+  update(id,patch){ return this.col().doc(id).update(patch); }
+  remove(id){ return this.col().doc(id).delete(); }
+  log(id,e){ return this.db.collection(`projects/${id}/log`).add(e); }
+  subscribeLog(id,cb){ return this.db.collection(`projects/${id}/log`).orderBy("at","desc").limit(60).onSnapshot(s=>cb(s.docs.map(d=>clone(d.data()))),()=>{}); }
+}
+class LocalStore{
+  constructor(){ this.k="chai-portfolio-local-v1"; this.d=this.load(); this.subs=[]; this.logSubs={}; }
+  load(){ try{ return JSON.parse(localStorage.getItem(this.k)) || {projects:{},logs:{}}; }catch(e){ return {projects:{},logs:{}}; } }
+  persist(){ try{ localStorage.setItem(this.k,JSON.stringify(this.d)); }catch(e){} }
+  emit(){ const list=Object.entries(this.d.projects).map(([id,v])=>({id,...clone(v)})); this.subs.forEach(f=>setTimeout(()=>f(list))); }
+  subscribeAll(cb){ this.subs.push(cb); this.emit(); return ()=>{ this.subs=this.subs.filter(x=>x!==cb); }; }
+  async create(id,data){ this.d.projects[id]=clone(data); this.persist(); this.emit(); }
+  async update(id,patch){ if(!this.d.projects[id]) throw {code:"invalid_argument"}; deepMerge(this.d.projects[id],patch); this.persist(); this.emit(); }
+  async remove(id){ delete this.d.projects[id]; delete this.d.logs[id]; this.persist(); this.emit(); }
+  async log(id,e){ const l=(this.d.logs[id]||(this.d.logs[id]=[])); l.unshift(e); this.d.logs[id]=l.slice(0,100); this.persist(); (this.logSubs[id]||[]).forEach(f=>setTimeout(()=>f(clone(this.d.logs[id])))); }
+  subscribeLog(id,cb){ (this.logSubs[id]||(this.logSubs[id]=[])).push(cb); setTimeout(()=>cb(clone(this.d.logs[id]||[]))); return ()=>{ this.logSubs[id]=(this.logSubs[id]||[]).filter(x=>x!==cb); }; }
+}
+
+/* ============================================================
+   App state
+   ============================================================ */
+let STORE=null, MODE="connecting", RO=false, CAN_DELETE=true, USER=null;
+const ME={id:null};
+let PROJECTS=new Map(), LOADED=false;
+let CUR=null;              // open project id
+let S=null;                // working copy of open project
+let LOG=[], unsubLog=null;
+const openItems=new Set();
+const pending={}, timers={}, flushing={};
+let UI={view:"setup", project:null, filter:"all", q:""};
+try{ UI=Object.assign(UI, JSON.parse(localStorage.getItem("chai-ui-v2"))||{}); }catch(e){}
+function saveUI(){ try{ localStorage.setItem("chai-ui-v2",JSON.stringify({view:UI.view,project:CUR,filter:UI.filter})); }catch(e){} }
+
+/* names */
+const NAMES={};
+async function resolveNames(root){
+  root=root||document;
+  const els=[...root.querySelectorAll("[data-uid]")];
+  const ids=[...new Set(els.map(e=>e.dataset.uid).filter(Boolean))];
+  els.forEach(e=>{ if(!e.dataset.uid) e.textContent = MODE==="local"?"you (this browser)":"someone"; });
+  const need=ids.filter(i=>!(i in NAMES));
+  if(need.length && USER && USER.profiles){
+    try{ const ps=await USER.profiles(need); need.forEach(i=>{ const p=ps[i]; NAMES[i]= p ? (p.isMe ? "you" : (p.name||"someone")) : "someone"; }); }catch(e){ need.forEach(i=>NAMES[i]="someone"); }
+  }
+  els.forEach(e=>{ const i=e.dataset.uid; if(i) e.textContent = NAMES[i] || (i===ME.id?"you":"someone"); });
+}
+const who = id => `<span data-uid="${esc(id||"")}">${id&&NAMES[id]?esc(NAMES[id]):"someone"}</span>`;
+
+/* ============================================================
+   Writes
+   ============================================================ */
+function setSaved(t){ document.getElementById("saved").textContent=t; }
+function stamp(extra){ return Object.assign({updatedAt:new Date().toISOString(), updatedBy:ME.id||null}, extra||{}); }
+function queuePatch(pid,patch){
+  if(RO) return;
+  deepMerge(pending[pid]||(pending[pid]={}), patch);
+  setSaved("Saving…");
+  clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid),550);
+}
+async function flush(pid,retry){
+  if(flushing[pid]){ clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid),300); return; }
+  const p=pending[pid]; if(!p) return; delete pending[pid];
+  flushing[pid]=true;
+  try{ await STORE.update(pid,p); if(!pending[pid]) setSaved(MODE==="shared"?"Saved to shared workspace":"Saved in this browser"); }
+  catch(e){
+    const c=e&&e.code;
+    if(c==="unavailable" && !retry){ pending[pid]=deepMerge(p,pending[pid]||{}); flushing[pid]=false; setTimeout(()=>flush(pid,true),800+Math.random()*700); return; }
+    if(c==="invalid_argument"){ setReadOnly(true); toast("You can view this workspace but not edit it"); }
+    else if(c==="quota_exceeded"){ toast("The workspace is full. Archive or delete old projects."); }
+    else if(c==="revoked"){ setReadOnly(true); }
+    else toast("Couldn't save. Check your connection and try again.");
+    setSaved("Not saved");
+  } finally { flushing[pid]=false; }
+}
+function patchFromPath(path,val){
+  const ks=path.split("."); const out={}; let o=out;
+  for(let i=0;i<ks.length-1;i++){ o=o[ks[i]]={}; } o[ks[ks.length-1]]=val; return out;
+}
+function setLocal(path,val){
+  const ks=path.split("."); let o=S;
+  for(let i=0;i<ks.length-1;i++){ if(o[ks[i]]==null||typeof o[ks[i]]!=="object") o[ks[i]]={}; o=o[ks[i]]; }
+  o[ks[ks.length-1]]=val;
+}
+function edit(path,val){
+  setLocal(path,val);
+  let patch;
+  if(path.startsWith("metrics.")) patch={metrics:clone(S.metrics), cardUpdatedAt:new Date().toISOString()};
+  else { patch=patchFromPath(path,val); if(path.startsWith("card.")) patch.cardUpdatedAt=new Date().toISOString(); }
+  if(patch.cardUpdatedAt) S.cardUpdatedAt=patch.cardUpdatedAt;
+  const st=stamp(); S.updatedAt=st.updatedAt; S.updatedBy=st.updatedBy;
+  queuePatch(CUR, Object.assign(patch,st));
+}
+function saveMetrics(){
+  const now=new Date().toISOString(); S.cardUpdatedAt=now; const st=stamp(); Object.assign(S,st);
+  queuePatch(CUR, Object.assign({metrics:clone(S.metrics), cardUpdatedAt:now}, st));
+}
+function writeLog(pid,text){ if(RO) return; STORE.log(pid,{at:new Date().toISOString(),by:ME.id||null,text}).catch(()=>{}); }
+
+async function createProject(data,logText){
+  if(RO) return null;
+  const id=newId();
+  try{ await STORE.create(id,data); writeLog(id,logText||"Project created"); return id; }
+  catch(e){ toast(e&&e.code==="quota_exceeded"?"The workspace is full. Archive or delete old projects.":"Couldn't create the project"); return null; }
+}
+
+/* ============================================================
+   Rendering: project rail, views, label
+   ============================================================ */
+const get = (path)=> path.split(".").reduce((o,k)=>o==null?undefined:o[k], S);
+const shortDecision = d => ({"Proceed with conditions":"Conditional","Revise and resubmit":"Revise","Continue with changes":"Changes","Retrain or revise":"Retrain"}[d]||d);
+
+function renderRail(){
+  const ol=document.getElementById("rail");
+  const rows = VIEWS.map(v=>{
+    const cur = UI.view===v.id ? ' aria-current="step"':'';
+    if(v.kind==="stage"){
+      const s=STAGES.find(x=>x.id===v.id), c=scoreOf(s.items);
+      return `<li><button data-go="${v.id}"${cur}><span class="num">${s.n}</span><span>${esc(s.title)}</span><span class="meta ${c.answered===c.total?"done":""}">${c.answered}/${c.total}</span></button></li>`;
+    }
+    if(v.kind==="gate"){
+      const d=(S.gates[v.gate]||{}).decision||"";
+      const cls = !d?"":(/Stop|Retire|Revise|Retrain/.test(d)?"warn":"done");
+      return `<li class="gate"><button data-go="${v.id}"${cur}><span class="num"><span class="diamond" aria-hidden="true"></span></span><span>${GATES[v.gate].title}</span><span class="meta ${cls}">${d?esc(shortDecision(d)):"open"}</span></button></li>`;
+    }
+    if(v.kind==="setup") return `<li><button data-go="setup"${cur}><span class="num">0</span><span>${v.label}</span><span class="meta"></span></button></li><li class="sep" role="presentation"></li>`;
+    if(v.kind==="card"){ const filled=CARD_FIELDS.filter(k=>cardValOf(S,k)).length;
+      return `<li class="sep" role="presentation"></li><li><button data-go="card"${cur}><span class="num" aria-hidden="true">≡</span><span>${v.label}</span><span class="meta">${filled}/${CARD_FIELDS.length}</span></button></li>`; }
+    return `<li><button data-go="report"${cur}><span class="num" aria-hidden="true">✓</span><span>${v.label}</span><span class="meta"></span></button></li>`;
+  }).join("");
+  ol.innerHTML = `<li class="home-link"><button data-home="1"><span class="num" aria-hidden="true">←</span><span>All projects</span></button></li><li class="sep" role="presentation"></li>` + rows;
+  document.getElementById("projName").textContent = S.meta.solution || "Untitled AI solution";
+}
+
+function field(path,label,hint,long,opts){
+  const v=esc(get(path)||""); const id="f_"+path.replace(/\./g,"_");
+  let input;
+  if(opts) input=`<select id="${id}" data-bind="${path}"><option value="">Choose…</option>${opts.map(o=>`<option${get(path)===o?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
+  else if(long) input=`<textarea id="${id}" data-bind="${path}" rows="3">${v}</textarea>`;
+  else input=`<input type="text" id="${id}" data-bind="${path}" value="${v}">`;
+  return `<div class="field${long?" wide":""}"><label for="${id}">${esc(label)}</label>${hint?`<span class="hint">${esc(hint)}</span>`:""}${input}</div>`;
+}
+function pager(){
+  const i=VIEWS.findIndex(v=>v.id===UI.view);
+  const prev=VIEWS[i-1], next=VIEWS[i+1];
+  const name=v=>v? (v.kind==="stage"?`Stage ${STAGES.find(s=>s.id===v.id).n}`: v.kind==="gate"?GATES[v.gate].title : v.label):"";
+  return `<div class="pager">${prev?`<button class="btn" data-go="${prev.id}">Back to ${esc(name(prev))}</button>`:`<button class="btn" data-home="1">Back to all projects</button>`}${next?`<button class="btn primary" data-go="${next.id}">Continue to ${esc(name(next))}</button>`:""}</div>`;
+}
+function historyHTML(){
+  if(!LOG.length) return `<p style="font-size:14px;color:var(--muted)">No recorded events yet.</p>`;
+  return `<ul class="history">${LOG.slice(0,25).map(e=>`<li><time>${esc(fmtDay((e.at||"").slice(0,10)))}</time><span>${esc(e.text)} <span style="color:var(--muted)">by ${who(e.by)}</span></span></li>`).join("")}</ul>`;
+}
+function renderSetup(){
+  const f=flags(S), st=statusOf(S), nr=nextReview(S);
+  const empty = !Object.keys(S.items).length && !Object.keys(S.card).length;
+  return `<p class="eyebrow">Before stage 1</p><h1>Project setup</h1>
+  <p class="lede">Everyone with access to this workspace sees and edits the same project. Changes save automatically.</p>
+  <div class="note ${st.key==="green"?"ok":""}" style="${st.key==="retired"?"border-color:var(--muted);background:var(--sunk)":""}"><b>${esc(st.label)}</b> · ${esc(phase(S).label)}${nr?` · next periodic review ${esc(fmtDay(nr))}`:""}
+    ${f.length?`<ul class="gaplist">${f.map(x=>`<li>${esc(x.text)}</li>`).join("")}</ul>`:""}</div>
+  <div class="fields">
+    ${field("meta.solution","AI solution under review","",0)}
+    ${field("meta.org","Health system, hospital, or department","",0)}
+    ${field("meta.developer","Developer or vendor","",0)}
+    ${field("meta.sourcing","How it was sourced","",0,["Purchased from a vendor","Built internally","Co-developed","Open-source model, locally adapted"])}
+    ${field("meta.sponsor","Clinical sponsor","Accountable clinical owner",0)}
+    ${field("meta.riskTier","Risk tier","Your organization's own triage",0,["Low","Moderate","High"])}
+    ${field("meta.reviewCadence","Periodic review cadence once live","Defaults to 6 months for high risk, otherwise 12",0,["3 months","6 months","12 months","24 months"])}
+    ${field("meta.startDate","Review start date","YYYY-MM-DD",0)}
+    ${field("meta.reviewers","Review team","Names and roles, e.g. CMIO, data science, nursing informatics, compliance, patient representative",1)}
+    ${field("meta.scope","Scope of this review","Sites, units, and versions in scope",1)}
+  </div>
+  <h2>History</h2>
+  ${historyHTML()}
+  <h2 class="ro-hide">Manage</h2>
+  <div class="ro-hide" style="display:flex;flex-wrap:wrap;gap:8px">
+    ${empty?`<button class="btn" data-act="example">Fill with an example</button>`:""}
+    <button class="btn" data-act="archive">${S.archived?"Restore project":"Archive project"}</button>
+    ${CAN_DELETE?`<button class="btn danger" data-act="delete">Delete project</button>`:""}
+  </div>
+  ${pager()}`;
+}
+function renderStage(s){
+  const c=scoreOf(s.items);
+  return `<p class="eyebrow">Stage ${s.n} of 6</p><h1>${esc(s.title)}</h1>
+  <p class="lede">${esc(s.blurb)}</p>
+  <div class="legend">${Object.entries(PRINCIPLES).map(([k,p])=>`<span><span class="pchip">${k}</span> ${esc(p.name)}</span>`).join("")}</div>
+  <ol class="checklist">${s.items.map(it=>ciHTML(it)).join("")}</ol>
+  <p style="font-size:13px;color:var(--muted);margin-top:10px">${c.answered} of ${c.total} answered. Give anything partial or not met an owner and a due date; overdue actions are flagged on the dashboard.</p>
+  ${s.metrics?metricsHTML():""}
+  ${pager()}`;
+}
+function ciHTML(it){
+  const d=S.items[it.id]||{}; const st=d.status||"";
+  const open = openItems.has(it.id);
+  const late = d.due && parseDay(d.due)<parseDay(TODAY()) && st!=="met" && st!=="na";
+  const notes = (d.evidence||d.owner||d.due) && !open ? `<span class="has-notes">${late?`<b style="color:var(--red)">overdue ${esc(fmtDay(d.due))}</b>`:"notes added"}</span>`:"";
+  return `<li class="ci${open?" open":""}" data-item="${it.id}">
+    <div class="ci-row">
+      <span class="pchip" title="${esc(PRINCIPLES[it.p].name)}">${it.p}</span>
+      <div class="ci-text">${esc(it.text)}<button class="more" data-toggle="${it.id}" aria-expanded="${open}">${open?"Hide details":"Evidence & owner"}</button>${notes}</div>
+      <div class="seg" role="group" aria-label="Status">${Object.entries(STATUS).map(([k,l])=>`<button data-set="${it.id}" data-s="${k}" aria-pressed="${st===k}">${l}</button>`).join("")}</div>
+    </div>
+    <div class="ci-detail">
+      <div><label for="ev_${it.id}">Evidence or notes</label><textarea id="ev_${it.id}" rows="2" data-bind="items.${it.id}.evidence">${esc(d.evidence||"")}</textarea></div>
+      <div><label for="ow_${it.id}">Owner</label><input type="text" id="ow_${it.id}" data-bind="items.${it.id}.owner" value="${esc(d.owner||"")}"></div>
+      <div><label for="du_${it.id}">Due</label><input type="date" id="du_${it.id}" data-bind="items.${it.id}.due" value="${esc(d.due||"")}"></div>
+    </div>
+  </li>`;
+}
+function metricsHTML(){
+  return `<h2>Key metrics</h2>
+  <p class="lede" style="margin-bottom:12px">Report each metric with the population it was measured on. Add one row per subgroup for fairness results.</p>
+  <div class="mwrap"><table class="mtable"><thead><tr><th style="width:24%">Category</th><th>Metric</th><th style="width:13%">Value</th><th style="width:15%">95% CI</th><th style="width:22%">Population or subgroup</th><th><span class="vh">Remove</span></th></tr></thead><tbody>
+  ${S.metrics.map((m,i)=>`<tr>
+    <td><select aria-label="Category" data-bind="metrics.${i}.cat">${METRIC_CATS.map(c=>`<option${m.cat===c?" selected":""}>${c}</option>`).join("")}</select></td>
+    <td><input type="text" aria-label="Metric" data-bind="metrics.${i}.name" value="${esc(m.name)}" placeholder="e.g. AUROC"></td>
+    <td><input type="text" aria-label="Value" data-bind="metrics.${i}.value" value="${esc(m.value)}"></td>
+    <td><input type="text" aria-label="95% CI" data-bind="metrics.${i}.ci" value="${esc(m.ci)}"></td>
+    <td><input type="text" aria-label="Population" data-bind="metrics.${i}.pop" value="${esc(m.pop)}"></td>
+    <td><button class="icon-btn ro-hide" data-delmetric="${i}" aria-label="Remove metric">Remove</button></td></tr>`).join("")}
+  </tbody></table></div>
+  ${S.metrics.length?"":`<p style="font-size:14px;color:var(--muted)">No metrics yet. Add the ones your team will stand behind.</p>`}
+  <button class="btn ro-hide" data-act="addmetric" style="margin-top:10px">Add metric</button>`;
+}
+function renderGate(key){
+  const G=GATES[key], g=S.gates[key]||{};
+  const s=STAGES.find(x=>x.id===G.after);
+  const gaps=gapsUpTo(S,G.after);
+  const partial = STAGES.slice(0,STAGES.indexOf(s)+1).flatMap(x=>x.items).filter(it=>(S.items[it.id]||{}).status==="partial").length;
+  let note="";
+  if(gaps.length){
+    note=`<div class="note"><b>${gaps.length} item${gaps.length>1?"s":""} in stages 1–${s.n} ${gaps.length>1?"are":"is"} unanswered or not met${partial?`, and ${partial} partial`:""}.</b>${isGo(g.decision)?" Record the conditions or the accepted risk in the rationale.":""}
+    <ul class="gaplist">${gaps.slice(0,6).map(it=>`<li>Stage ${it.stage.n}: ${esc(it.text)} <em>(${(S.items[it.id]||{}).status?"not met":"unanswered"})</em></li>`).join("")}${gaps.length>6?`<li>and ${gaps.length-6} more</li>`:""}</ul></div>`;
+  } else if(partial) note=`<div class="note">All items through stage ${s.n} are answered; ${partial} ${partial>1?"are":"is"} partial.</div>`;
+  else note=`<div class="note ok">Every applicable item through stage ${s.n} is met.</div>`;
+  const nr = key==="D" ? nextReview(S) : null;
+  return `<p class="eyebrow">${G.title}, after stage ${s.n}</p><h1>${esc(G.q)}</h1>
+  <p class="lede">${esc(G.help)}</p>
+  ${note}
+  <div class="gate-panel">
+    <p style="margin:0;font-weight:600">Decision</p>
+    <div class="decisions" role="group" aria-label="Decision">${G.options.map(o=>`<button data-gate="${key}" data-d="${esc(o)}" aria-pressed="${g.decision===o}">${esc(o)}</button>`).join("")}</div>
+    <div class="fields">
+      ${field(`gates.${key}.by`,"Decided by","Committee, or name and role",0)}
+      ${field(`gates.${key}.date`,"Decision date","YYYY-MM-DD",0)}
+      ${field(`gates.${key}.rationale`,"Rationale and conditions","What the decision rests on, conditions attached, and when it will be revisited",1)}
+    </div>
+    ${g.decision?`<p class="signed">Recorded by ${who(g.signedBy)}${g.signedAt?` on ${esc(fmtDay(g.signedAt.slice(0,10)))}`:""}.${nr?` Next periodic review due ${esc(fmtDay(nr))}.`:""}</p>`:""}
+    ${key==="D"&&g.decision?`<p class="ro-hide" style="margin:12px 0 0"><button class="btn" data-act="newreview">Record a new periodic review today</button></p>`:""}
+  </div>
+  ${pager()}`;
+}
+function renderCardForm(){
+  return `<p class="eyebrow">Transparency</p><h1>Applied model card</h1>
+  <p class="lede">The fields follow the CHAI Applied Model Card template. Core fields for live or piloted solutions: ${CORE_CARD.map(k=>CARD_LABEL[k].toLowerCase()).join(", ")}. Edits here mark the card as updated on the dashboard.</p>
+  ${S.cardUpdatedAt?`<p style="font-size:13px;color:var(--muted);margin:-8px 0 0">Card last updated ${esc(ago(S.cardUpdatedAt))}.</p>`:""}
+  ${CARD.map(sec=>`<h2>${esc(sec.sec)}</h2><div class="fields">${sec.fields.map(f=>{
+      const ph = f[0]==="name"?S.meta.solution: f[0]==="developer"?S.meta.developer:"";
+      return field(`card.${f[0]}`,f[1]+(CORE_CARD.includes(f[0])?" (core)":""),f[2],f[3]).replace(/data-bind="card\.(name|developer)"/, m=>`${m} placeholder="${esc(ph)}"`);
+    }).join("")}</div>`).join("")}
+  ${pager()}`;
+}
+
+function labelHTML(p){
+  p=p||S;
+  const v=k=>cardValOf(p,k);
+  const dd=k=>v(k)?esc(v(k)):`<span class="empty">Not provided</span>`;
+  const rows=keys=>keys.map(([k,l])=>`<div class="l-row"><dt>${esc(l)}</dt><dd>${dd(k)}</dd></div>`).join("");
+  const sec=name=>CARD.find(s=>s.sec===name).fields.map(f=>[f[0],f[1]]);
+  const ms=p.metrics.filter(m=>m.name||m.value);
+  const metricsBlock = ms.length
+    ? METRIC_CATS.map(c=>{const g=ms.filter(m=>m.cat===c); if(!g.length) return "";
+        return `<div class="l-mcat">${esc(c)}</div>${g.map(m=>`<div class="l-metric"><span>${esc(m.name||"Metric")}${m.pop?`, ${esc(m.pop)}`:""}</span><span>${esc(m.value||"–")}${m.ci?` <span style="font-weight:400">(${esc(m.ci)})</span>`:""}</span></div>`).join("")}`;}).join("")
+    : `<div class="l-row"><span class="empty">No metrics entered</span></div>`;
+  return `<div class="label">
+    <p class="l-kicker">Applied model card</p>
+    <h2 class="l-name">${v("name")?esc(v("name")):'<span class="empty">Unnamed solution</span>'}</h2>
+    <p class="l-dev">Developer: <b>${dd("developer")}</b></p>
+    <p class="l-dev">Inquiries or issues: ${dd("contact")}</p>
+    <div class="r8"></div>
+    <div class="l-grid">
+      <div><b>Release stage</b>${dd("releaseStage")}</div><div><b>Release date</b>${dd("releaseDate")}</div><div><b>Version</b>${dd("version")}</div>
+      <div><b>Availability</b>${dd("availability")}</div><div style="grid-column:span 2"><b>Regulatory approval</b>${dd("regulatory")}</div>
+    </div>
+    <div class="r4"></div>
+    <p class="l-sec">Summary</p><div style="white-space:pre-wrap">${dd("summary")}</div>
+    <div style="margin-top:3px"><b>Keywords:</b> ${dd("keywords")}</div>
+    <div class="r8"></div>
+    <p class="l-sec">Uses and directions</p><dl>${rows(sec("Uses and directions"))}</dl>
+    <div class="r4"></div>
+    <p class="l-sec">Warnings</p><dl>${rows(sec("Warnings"))}</dl>
+    <div class="r8"></div>
+    <p class="l-sec">Trust ingredients</p><dl>${rows(sec("Trust ingredients"))}</dl>
+    <div class="r4"></div>
+    <p class="l-sec">Key metrics</p>${metricsBlock}
+    <div class="r4"></div>
+    <p class="l-sec">Resources</p><dl>${rows(sec("Resources"))}</dl>
+    <div class="r1"></div>
+    <p class="l-foot">Structure follows the CHAI Applied Model Card template (draft v0.1). Prepared by the deploying organization; not a CHAI certification.</p>
+  </div>`;
+}
+function renderLabel(){ if(S) document.getElementById("labelHost").innerHTML = labelHTML(); }
+
+/* ---------- report ---------- */
+function barCls(p){ return p>=80?"":p>=50?"mid":"low"; }
+function reportBody(names){
+  const nm = id => names ? esc(id?(NAMES[id]||"someone"):"someone") : who(id);
+  const all=allItems(); const ov=scoreOf(all);
+  const unanswered=all.filter(it=>!(S.items[it.id]||{}).status).length;
+  const gaps=all.filter(it=>{const st=(S.items[it.id]||{}).status; return !st||st==="notmet"||st==="partial";});
+  const tag=st=>`<span class="tag ${st||"none"}">${st?STATUS[st]:"Unanswered"}</span>`;
+  const m=S.meta, F=flags(S), st=statusOf(S), nr=nextReview(S);
+  return `<div class="r-head">
+      <p class="eyebrow">CHAI lifecycle assurance review</p>
+      <h1>${esc(m.solution||"Untitled AI solution")}</h1>
+      <div class="r-meta">
+        <div><b>Status</b>${esc(st.label)}</div><div><b>Lifecycle phase</b>${esc(phase(S).label)}</div>
+        <div><b>Organization</b>${esc(m.org||"–")}</div><div><b>Developer</b>${esc(m.developer||"–")}</div>
+        <div><b>Sourcing</b>${esc(m.sourcing||"–")}</div><div><b>Risk tier</b>${esc(m.riskTier||"–")}</div>
+        <div><b>Clinical sponsor</b>${esc(m.sponsor||"–")}</div><div><b>Next periodic review</b>${nr?esc(fmtDay(nr)):"–"}</div>
+        <div><b>Report generated</b>${esc(fmtDay(TODAY()))}</div>
+      </div>
+      ${m.reviewers?`<p style="font-size:13.5px;margin:10px 0 0"><b>Review team:</b> ${esc(m.reviewers)}</p>`:""}
+      ${m.scope?`<p style="font-size:13.5px;margin:4px 0 0"><b>Scope:</b> ${esc(m.scope)}</p>`:""}
+    </div>
+    <h2>Compliance flags</h2>
+    ${F.length?`<ul class="gaplist" style="font-size:14px">${F.map(f=>`<li><span class="tag ${f.sev==="red"?"notmet":"partial"}">${f.sev==="red"?"Out of compliance":"Needs update"}</span> ${esc(f.text)}</li>`).join("")}</ul>`:`<p>No open flags.</p>`}
+    <h2>Readiness</h2>
+    <div class="overall"><span class="big">${ov.pct}%</span><p>of applicable criteria met (partial counts as half, unanswered as zero). ${ov.answered} of ${ov.total} items answered${unanswered?`; ${unanswered} still open`:""}.</p></div>
+    <div class="bars">${Object.entries(PRINCIPLES).map(([k,p])=>{const sc=scoreOf(all.filter(it=>it.p===k)); return `<div class="bar"><span>${esc(p.name)}</span><span class="track"><span class="fill ${barCls(sc.pct)}" style="width:${sc.pct}%;display:block"></span></span><span class="pct">${sc.pct}%</span></div>`;}).join("")}</div>
+    <h2>Lifecycle status</h2>
+    <div class="r-wrap"><table class="rtable"><thead><tr><th>Stage</th><th>Answered</th><th>Met</th><th>Partial</th><th>Not met</th><th>Score</th></tr></thead><tbody>
+    ${STAGES.map(s=>{const cnt=k=>s.items.filter(it=>(S.items[it.id]||{}).status===k).length; const sc=scoreOf(s.items);
+      return `<tr><td>${s.n}. ${esc(s.title)}</td><td>${sc.answered}/${sc.total}</td><td>${cnt("met")}</td><td>${cnt("partial")}</td><td>${cnt("notmet")}</td><td><b>${sc.pct}%</b></td></tr>`;}).join("")}
+    </tbody></table></div>
+    <h2>Checkpoint decisions</h2>
+    <div class="r-wrap"><table class="rtable"><thead><tr><th>Checkpoint</th><th>Decision</th><th>Decided by</th><th>Date</th><th>Rationale and conditions</th></tr></thead><tbody>
+    ${Object.entries(GATES).map(([k,G])=>{const g=S.gates[k]||{}; return `<tr><td>${G.title}<br><span style="color:var(--muted);font-size:12px">${esc(G.q)}</span></td><td>${g.decision?`<b>${esc(g.decision)}</b>`:'<span style="color:var(--muted)">Not yet decided</span>'}</td><td>${esc(g.by||"")}${g.signedBy?`<br><span style="color:var(--muted);font-size:12px">recorded by ${nm(g.signedBy)}</span>`:""}</td><td>${esc(g.date||"")}</td><td style="white-space:pre-wrap">${esc(g.rationale||"")}</td></tr>`;}).join("")}
+    </tbody></table></div>
+    <h2>Open gaps and actions</h2>
+    ${gaps.length?`<div class="r-wrap"><table class="rtable"><thead><tr><th>Stage</th><th>Criterion</th><th>Principle</th><th>Status</th><th>Owner</th><th>Due</th></tr></thead><tbody>
+      ${gaps.map(it=>{const d=S.items[it.id]||{}; const late=d.due&&parseDay(d.due)<parseDay(TODAY()); return `<tr><td>${it.stage.n}</td><td>${esc(it.text)}${d.evidence?`<br><span style="color:var(--muted);font-size:12.5px;white-space:pre-wrap">${esc(d.evidence)}</span>`:""}</td><td>${esc(PRINCIPLES[it.p].name)}</td><td>${tag(d.status)}</td><td>${esc(d.owner||"–")}</td><td${late?' style="color:var(--red);font-weight:700"':""}>${esc(d.due||"–")}</td></tr>`;}).join("")}
+    </tbody></table></div>`:`<p>No open gaps. Every applicable criterion is met.</p>`}
+    <h2>Applied model card</h2>
+    <div style="max-width:560px">${labelHTML()}</div>
+    <h2>Sign-off history</h2>
+    ${LOG.length?`<div class="r-wrap"><table class="rtable"><tbody>${LOG.map(e=>`<tr><td style="width:120px">${esc(fmtDay((e.at||"").slice(0,10)))}</td><td>${esc(e.text)}</td><td>${nm(e.by)}</td></tr>`).join("")}</tbody></table></div>`:`<p>No recorded events.</p>`}
+    <h2>Appendix: full checklist</h2>
+    ${STAGES.map(s=>`<h3 style="font-size:15px;margin:18px 0 6px">${s.n}. ${esc(s.title)}</h3><div class="r-wrap"><table class="rtable"><tbody>
+      ${s.items.map(it=>{const d=S.items[it.id]||{}; return `<tr><td style="width:46px"><span class="pchip">${it.p}</span></td><td>${esc(it.text)}${d.evidence?`<br><span style="color:var(--muted);font-size:12.5px;white-space:pre-wrap">${esc(d.evidence)}</span>`:""}</td><td style="width:110px">${tag(d.status)}</td></tr>`;}).join("")}
+    </tbody></table></div>`).join("")}
+    <p class="disclaimer">This report organizes a local review around the Coalition for Health AI (CHAI) six-stage lifecycle and five principles, and the structure of the CHAI Applied Model Card. Checklist wording is a paraphrased summary, not the official CHAI Responsible AI Checklist. It is an internal governance record, not a certification, legal opinion, or regulatory determination.</p>`;
+}
+function renderReport(){
+  return `<div class="report">
+    <div class="r-actions" id="ractions">
+      <button class="btn primary" data-act="dl-html">Download report (HTML)</button>
+      <button class="btn" data-act="dl-md">Download Markdown</button>
+      <button class="btn" data-act="dl-json">Download project data (JSON)</button>
+      <button class="btn ghost" data-act="print">Print</button>
+    </div>
+    <div id="dlFallback"></div>
+    ${reportBody()}
+    ${pager()}
+  </div>`;
+}
+
+function focusKey(el){
+  if(!el||!el.dataset) return null; const d=el.dataset;
+  if(d.set) return `[data-set="${d.set}"][data-s="${d.s}"]`;
+  if(d.gate) return `[data-gate="${d.gate}"][data-d="${CSS.escape(d.d)}"]`;
+  if(d.toggle) return `[data-toggle="${d.toggle}"]`;
+  if(d.act) return `[data-act="${d.act}"]`;
+  return null;
+}
+function renderMain(focusTop){
+  const v=VIEWS.find(x=>x.id===UI.view)||VIEWS[0];
+  const m=document.getElementById("main");
+  const fk = focusTop?null:focusKey(document.activeElement);
+  if(v.kind==="setup") m.innerHTML=renderSetup();
+  else if(v.kind==="stage") m.innerHTML=renderStage(STAGES.find(s=>s.id===v.id));
+  else if(v.kind==="gate") m.innerHTML=renderGate(v.gate);
+  else if(v.kind==="card") m.innerHTML=renderCardForm();
+  else m.innerHTML=renderReport();
+  if(v.kind==="report") updateDlUI();
+  applyRO(m);
+  resolveNames(m);
+  if(focusTop){ window.scrollTo({top:0}); m.focus({preventScroll:true}); }
+  else if(fk){ const el=m.querySelector(fk); if(el) el.focus({preventScroll:true}); }
+}
+function renderProject(focusTop){ document.body.classList.remove("home"); renderRail(); renderMain(focusTop); renderLabel(); }
+function editingInMain(){ const a=document.activeElement, m=document.getElementById("main"); return a && m.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); }
+function syncInputs(){
+  document.querySelectorAll("#main [data-bind]").forEach(el=>{ if(el===document.activeElement) return; const v=get(el.dataset.bind)??""; if(el.value!==v) el.value=v; });
+  document.querySelectorAll("#main [data-set]").forEach(b=>b.setAttribute("aria-pressed",String((S.items[b.dataset.set]||{}).status===b.dataset.s)));
+}
+function softRefresh(){
+  renderRail(); renderLabel();
+  if(editingInMain()) syncInputs();
+  else { const y=window.scrollY; renderMain(false); window.scrollTo(0,y); }
+}
+
+/* ============================================================
+   Dashboard
+   ============================================================ */
+function lcTrack(p){
+  const ph=phase(p);
+  const pip=s=>{const c=scoreOf(s.items,p.items); const frac=c.total?c.answered/c.total:0;
+    return `<span class="pip${frac===1?" full":""}${ph.stage===s.n?" cur":""}" title="Stage ${s.n}: ${c.answered}/${c.total} answered"><i style="height:${Math.round(frac*100)}%"></i>${s.n}</span>`;};
+  const gd=k=>{const d=dec(p,k); const cls=!d?"":(/Stop|Retire/.test(d)?"stop":/conditions|changes|Revise|Retrain/.test(d)?"cond":"go"); return `<span class="gd ${cls}" title="${GATES[k].title}: ${esc(d||"open")}"></span>`;};
+  const S_=STAGES;
+  return `<div class="lc" aria-hidden="true">${pip(S_[0])}${gd("A")}${pip(S_[1])}${pip(S_[2])}${pip(S_[3])}${gd("B")}${pip(S_[4])}${gd("C")}${pip(S_[5])}${gd("D")}</div><div class="lc-label">${esc(ph.label)}</div>`;
+}
+function dashData(){
+  const list=[...PROJECTS.values()].map(p=>normalize(p));
+  const rows=list.map(p=>({p, st:statusOf(p), f:flags(p), score:scoreOf(allItems(),p.items).pct, nr:nextReview(p)}));
+  return rows;
+}
+function renderDashboardShell(){
+  document.body.classList.add("home");
+  document.getElementById("projName").textContent = "Portfolio";
+  const m=document.getElementById("main");
+  let legacy=null;
+  try{ const raw=localStorage.getItem("chai-review-v1"); if(raw && !localStorage.getItem("chai-legacy-imported")){ const j=JSON.parse(raw); if(j&&j.meta&&(j.meta.solution||Object.keys(j.items||{}).length)) legacy=j; } }catch(e){}
+  m.innerHTML = `
+    <div class="dash-head">
+      <div><p class="eyebrow">AI governance</p><h1>AI projects under review</h1>
+      <p class="lede">Every AI solution your organization is evaluating or running, checked against the CHAI lifecycle. Projects out of compliance or needing an update rise to the top.</p></div>
+      <button class="btn primary ro-hide" data-act="new">New project</button>
+    </div>
+    ${legacy?`<div class="banner ro-hide" id="legacyBanner"><span>A review of <b>${esc(legacy.meta.solution||"an AI solution")}</b> was saved in this browser before the shared workspace existed.</span><span style="display:flex;gap:8px"><button class="btn" data-act="legacy">Add it to the workspace</button><button class="btn ghost" data-act="legacy-dismiss">Dismiss</button></span></div>`:""}
+    <form class="newform ro-hide" id="newform" hidden>
+      <label for="newname" class="vh">Name of the AI solution</label>
+      <input type="text" id="newname" placeholder="Name of the AI solution, e.g. Sepsis early warning" autocomplete="off">
+      <button class="btn primary" type="submit">Create project</button>
+      <button class="btn ghost" type="button" data-act="new-cancel">Cancel</button>
+    </form>
+    <div class="tallies" id="tallies" role="group" aria-label="Filter by status"></div>
+    <div class="toolbar">
+      <label for="q" class="vh">Search projects</label>
+      <input type="search" id="q" placeholder="Search by name, developer, or sponsor" value="${esc(UI.q||"")}">
+      <span class="spacer"></span>
+      <button class="btn ghost" data-act="dl-csv">Export portfolio (CSV)</button>
+      <button class="btn ghost ro-hide" data-act="import">Import project JSON</button>
+    </div>
+    <div id="plistHost"></div>`;
+  applyRO(m);
+  updateDashboard();
+}
+function updateDashboard(){
+  const host=document.getElementById("plistHost"); if(!host) return;
+  const t=document.getElementById("tallies");
+  if(!LOADED){ host.innerHTML=`<p style="color:var(--muted)">Loading projects…</p>`; t.innerHTML=""; return; }
+  const rows=dashData();
+  const active=rows.filter(r=>!r.p.archived);
+  const cnt=k=>active.filter(r=>r.st.key===k).length;
+  const archived=rows.length-active.length;
+  const T=[["red","Out of compliance",cnt("red")],["amber","Needs update",cnt("amber")],["green","On track",cnt("green")],["retired","Retired or stopped",cnt("retired")],["all","All active",active.length]];
+  if(archived) T.push(["archived","Archived",archived]);
+  t.innerHTML = T.map(([k,l,n])=>`<button class="tally ${k==="archived"?"retired":k}" data-filter="${k}" aria-pressed="${UI.filter===k}"><span class="n">${n}</span><span class="t">${l}</span></button>`).join("");
+  const q=(UI.q||"").toLowerCase().trim();
+  let list = UI.filter==="archived" ? rows.filter(r=>r.p.archived) : active.filter(r=>UI.filter==="all"||r.st.key===UI.filter);
+  if(q) list=list.filter(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.org].join(" ").toLowerCase().includes(q));
+  const rank={red:0,amber:1,green:2,retired:3};
+  list.sort((a,b)=>(rank[a.st.key]-rank[b.st.key]) || (b.f.length-a.f.length) || (a.p.meta.solution||"").localeCompare(b.p.meta.solution||""));
+  if(!rows.length){
+    host.innerHTML=`<div class="empty-state"><p>No AI projects yet. Add the first solution your organization is evaluating, or load three sample projects to see how compliance flags work.</p>
+      <div class="ro-hide" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="new">New project</button><button class="btn" data-act="samples">Load sample projects</button></div></div>`;
+    applyRO(host); return;
+  }
+  if(!list.length){ host.innerHTML=`<p style="color:var(--muted);margin-top:18px">No projects match. Clear the search or choose another status.</p>`; return; }
+  const today=parseDay(TODAY());
+  host.innerHTML=`<div class="phead" aria-hidden="true"><span>Project</span><span>Lifecycle</span><span>Readiness</span><span>Next review</span><span>Status</span></div>
+  <ul class="plist">${list.map(r=>{const p=r.p; const late=r.nr&&parseDay(r.nr)<today;
+    return `<li class="prow ${r.st.key}" data-open="${esc(p.id)}">
+      <div><button class="pname" data-open="${esc(p.id)}">${esc(p.meta.solution||"Untitled AI solution")}</button>
+        <div class="psub">${esc([p.meta.developer,p.meta.sponsor&&("Sponsor: "+p.meta.sponsor)].filter(Boolean).join(" · ")||"No developer or sponsor recorded")}</div>
+        <div class="psub">Updated ${esc(ago(p.updatedAt))} by ${who(p.updatedBy)}${p.archived?" · archived":""}</div></div>
+      <div>${lcTrack(p)}</div>
+      <div><span class="pct">${r.score}%</span></div>
+      <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">overdue</div>`:""}`:`<span class="small">${phase(p).key==="deployed"?"not set":"not live"}</span>`}</div>
+      <div><span class="st ${r.st.key}">${esc(r.st.label)}</span>
+        ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(f.text)}</li>`).join("")}${r.f.length>3?`<li>and ${r.f.length-3} more</li>`:""}</ul>`:""}</div>
+    </li>`;}).join("")}</ul>`;
+  resolveNames(host);
+}
+function goHome(){
+  if(CUR && pending[CUR]) flush(CUR);
+  if(unsubLog){ unsubLog(); unsubLog=null; }
+  CUR=null; S=null; LOG=[]; openItems.clear(); saveUI();
+  document.getElementById("panel").classList.remove("open");
+  renderDashboardShell(); window.scrollTo({top:0});
+}
+function openProject(id,view){
+  const p=PROJECTS.get(id); if(!p) return;
+  if(unsubLog){ unsubLog(); unsubLog=null; }
+  CUR=id; S=normalize(clone(p)); LOG=[]; openItems.clear();
+  UI.view=view||"setup"; saveUI();
+  unsubLog=STORE.subscribeLog(id,l=>{ LOG=l||[]; if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
+  renderProject(true);
+}
+function go(view){ UI.view=view; saveUI(); renderRail(); renderMain(true); document.getElementById("panel").classList.remove("open"); }
+
+/* ============================================================
+   Data arrival
+   ============================================================ */
+function onProjects(list){
+  PROJECTS=new Map(list.map(p=>[p.id,normalize(p)])); 
+  const first=!LOADED; LOADED=true;
+  if(first && UI.project && PROJECTS.has(UI.project) && !CUR){ openProject(UI.project,UI.view); return; }
+  if(CUR){
+    const r=PROJECTS.get(CUR);
+    if(!r){ toast("This project was deleted"); goHome(); return; }
+    S=normalize(deepMerge(clone(r), clone(pending[CUR]||{})));
+    softRefresh();
+  } else updateDashboard();
+}
+function onDbError(e){
+  if(e&&e.code==="revoked"){ setReadOnly(true); setMode("Access ended","ro"); }
+  else { setMode("Disconnected: reload to reconnect","ro"); }
+}
+
+/* ============================================================
+   Read-only handling, mode badge
+   ============================================================ */
+function setMode(text,cls){ const el=document.getElementById("mode"); el.textContent=text; el.className="mode "+(cls||""); }
+function setReadOnly(v){ RO=v; document.body.classList.toggle("ro",v); if(v) setMode("View only","ro"); if(CUR) renderMain(false); else if(document.getElementById("plistHost")) renderDashboardShell(); }
+function applyRO(root){
+  if(!RO) return;
+  root.querySelectorAll("input:not([type=search]),textarea,select").forEach(e=>{ if(!e.closest(".fallback")) e.disabled=true; });
+  root.querySelectorAll("[data-set],[data-gate],[data-delmetric]").forEach(e=>e.disabled=true);
+}
+
+/* ============================================================
+   Exports
+   ============================================================ */
+const STANDALONE_CSS = () => {
+  const css=[...document.styleSheets].flatMap(sh=>{try{return [...sh.cssRules]}catch(e){return []}})
+    .filter(r=>r.selectorText && /^(\.label|\.r-|\.overall|\.bars|\.bar|\.rtable|\.tag|\.pchip|\.disclaimer|\.eyebrow|\.gaplist|h1|h2|\.report)/.test(r.selectorText))
+    .map(r=>r.cssText).join("\n");
+  return `:root{--paper:#fff;--surface:#fff;--sunk:#EEF2F3;--ink:#13233A;--muted:#55667A;--rule:#C9D3D9;--teal:#0E6E66;--amber:#9A5806;--amber-soft:#F7E8CF;--red:#B42318;--red-soft:#F8DCD9;--green:#1F7A3E;--green-soft:#D7EEDD;--sans:"Public Sans","Segoe UI",system-ui,sans-serif;--display:"Archivo","Arial Narrow",Arial,sans-serif}
+body{margin:0;background:#fff;color:var(--ink);font:15px/1.55 var(--sans)}main{max-width:900px;margin:0 auto;padding:32px 24px 60px}.r-wrap{overflow-x:auto}
+@media print{main{padding:0}h2{break-after:avoid}.label{break-inside:avoid}}
+${css}`;
+};
+function exportHTML(){
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(S.meta.solution||"AI solution")} – CHAI assurance review</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}</main></body></html>`;
+}
+function exportMD(){
+  const all=allItems(), ov=scoreOf(all), m=S.meta, L=[];
+  const st=s=>s?STATUS[s]:"Unanswered";
+  const line=s=>String(s||"").replace(/\n+/g," ").replace(/\|/g,"\\|");
+  const nm=id=>id?(NAMES[id]||"someone"):"someone";
+  L.push(`# ${m.solution||"Untitled AI solution"}: CHAI assurance review`,"");
+  L.push(`- **Status:** ${statusOf(S).label}`,`- **Lifecycle phase:** ${phase(S).label}`,`- **Organization:** ${m.org||"–"}`,`- **Developer:** ${m.developer||"–"}`,`- **Sourcing:** ${m.sourcing||"–"}`,`- **Risk tier:** ${m.riskTier||"–"}`,`- **Clinical sponsor:** ${m.sponsor||"–"}`,`- **Next periodic review:** ${nextReview(S)||"–"}`,`- **Review team:** ${line(m.reviewers)||"–"}`,`- **Scope:** ${line(m.scope)||"–"}`,`- **Generated:** ${TODAY()}`,"");
+  const F=flags(S); L.push("## Compliance flags",""); if(F.length) F.forEach(f=>L.push(`- **${f.sev==="red"?"Out of compliance":"Needs update"}:** ${f.text}`)); else L.push("None."); L.push("");
+  L.push(`## Readiness`,"",`Overall: **${ov.pct}%** of applicable criteria met (${ov.answered}/${ov.total} answered).`,"","| Principle | Score |","|---|---|");
+  Object.entries(PRINCIPLES).forEach(([k,p])=>L.push(`| ${p.name} | ${scoreOf(all.filter(it=>it.p===k)).pct}% |`));
+  L.push("","## Checkpoint decisions","","| Checkpoint | Decision | Decided by | Date | Rationale |","|---|---|---|---|---|");
+  Object.entries(GATES).forEach(([k,G])=>{const g=S.gates[k]||{}; L.push(`| ${G.title}: ${G.q} | ${g.decision||"Not decided"} | ${line(g.by)}${g.signedBy?` (recorded by ${line(nm(g.signedBy))})`:""} | ${line(g.date)} | ${line(g.rationale)} |`);});
+  L.push("","## Open gaps","");
+  const gaps=all.filter(it=>{const s=(S.items[it.id]||{}).status; return !s||s==="notmet"||s==="partial";});
+  if(gaps.length){ L.push("| Stage | Criterion | Status | Owner | Due |","|---|---|---|---|---|"); gaps.forEach(it=>{const d=S.items[it.id]||{}; L.push(`| ${it.stage.n} | ${line(it.text)} | ${st(d.status)} | ${line(d.owner)} | ${line(d.due)} |`);}); }
+  else L.push("None.");
+  L.push("","## Applied model card","");
+  CARD.forEach(sec=>{L.push(`### ${sec.sec}`,""); sec.fields.forEach(f=>L.push(`- **${f[1]}:** ${line(cardValOf(S,f[0]))||"_Not provided_"}`)); L.push("");
+    if(sec.sec==="Trust ingredients"){ L.push("### Key metrics",""); if(S.metrics.length){L.push("| Category | Metric | Value | 95% CI | Population |","|---|---|---|---|---|"); S.metrics.forEach(x=>L.push(`| ${x.cat} | ${line(x.name)} | ${line(x.value)} | ${line(x.ci)} | ${line(x.pop)} |`));} else L.push("_None entered_"); L.push("");}});
+  L.push("## Sign-off history",""); if(LOG.length) LOG.forEach(e=>L.push(`- ${(e.at||"").slice(0,10)}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push("None."); L.push("");
+  L.push("## Appendix: full checklist","");
+  STAGES.forEach(s=>{L.push(`### ${s.n}. ${s.title}`,""); s.items.forEach(it=>{const d=S.items[it.id]||{}; L.push(`- [${it.p}] ${it.text}: **${st(d.status)}**${d.evidence?` (${line(d.evidence)})`:""}`);}); L.push("");});
+  L.push("---","_Structured around the CHAI six-stage lifecycle and Applied Model Card. Checklist wording is paraphrased; this is an internal governance record, not a CHAI certification._");
+  return L.join("\n");
+}
+function projectJSON(p){
+  const all=allItems();
+  const state=clone(p); delete state.id;
+  return {
+    schema:"chai-review/2", generated:new Date().toISOString(),
+    status:statusOf(p).label, phase:phase(p).label, next_review:nextReview(p), flags:flags(p),
+    meta:p.meta, gates:p.gates, metrics:p.metrics,
+    model_card:Object.fromEntries(CARD_FIELDS.map(k=>[k,cardValOf(p,k)])),
+    checklist:all.map(it=>({id:it.id,stage:it.stage.n,principle:it.p,criterion:it.text,...(({status,evidence,owner,due})=>({status:status||null,evidence:evidence||"",owner:owner||"",due:due||""}))(p.items[it.id]||{})})),
+    scores:{overall:scoreOf(all,p.items).pct,...Object.fromEntries(Object.keys(PRINCIPLES).map(k=>[k,scoreOf(all.filter(it=>it.p===k),p.items).pct]))},
+    _state:state
+  };
+}
+function exportCSV(){
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const head=["Project","Developer","Clinical sponsor","Risk tier","Lifecycle phase","Status","Readiness %","Next review","Flags","Archived","Last updated"];
+  const rows=dashData().map(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.riskTier,phase(r.p).label,r.st.label,r.score,r.nr||"",r.f.map(f=>f.text).join("; "),r.p.archived?"yes":"",(r.p.updatedAt||"").slice(0,10)]);
+  return [head,...rows].map(r=>r.map(q).join(",")).join("\r\n");
+}
+const slug = s=> (s||"ai-solution").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,60) || "ai-solution";
+
+let DL=null, dlChecked=false;
+const STANDALONE = !(window.claude && typeof window.claude.use==="function");
+function updateDlUI(){
+  const fb=document.getElementById("dlFallback"); if(!fb) return;
+  const btns=[...document.querySelectorAll('#ractions [data-act^="dl-"]')];
+  if(DL||STANDALONE){ btns.forEach(b=>b.hidden=false); fb.innerHTML=""; return; }
+  if(!dlChecked) return;
+  btns.forEach(b=>b.hidden=true);
+  fb.innerHTML=`<details class="fallback"><summary style="cursor:pointer;font-size:14px;font-weight:600">Downloads aren't available in this view. Copy the export instead.</summary>
+    <p style="font-size:13px;color:var(--muted)">Markdown pastes into most wikis and docs; JSON can be imported here or read from Python.</p>
+    <label class="vh" for="fbmd">Markdown</label><textarea id="fbmd" readonly>${esc(exportMD())}</textarea>
+    <label class="vh" for="fbjs">JSON</label><textarea id="fbjs" readonly style="margin-top:8px">${esc(JSON.stringify(projectJSON(S),null,2))}</textarea></details>`;
+}
+async function download(filename,data){
+  if(STANDALONE){
+    const types={html:"text/html",md:"text/markdown",json:"application/json",csv:"text/csv"};
+    const ext=filename.split(".").pop();
+    const url=URL.createObjectURL(new Blob([data],{type:(types[ext]||"text/plain")+";charset=utf-8"}));
+    const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000); toast("Saved "+filename); return;
+  }
+  if(!DL){ toast("Downloads aren't available here"); return; }
+  try{ const r=await DL.save({filename,data}); if(r&&r.status==="saved") toast("Saved "+filename); }
+  catch(e){
+    const c=e&&e.code;
+    if(c==="declined") return;
+    if(c==="rate_limited") toast("A save prompt is already open");
+    else if(c==="extension_not_enabled") toast("That file type isn't available here");
+    else { DL=null; updateDlUI(); toast("Downloads aren't available here"); }
+  }
+}
+
+/* ============================================================
+   Examples
+   ============================================================ */
+const EX_CARD={contact:"aigovernance@example.org",releaseStage:"General availability",version:"3.2-local",availability:"United States",regulatory:"Not FDA-cleared; deployed as clinical decision support",
+  summary:"Scores adult inpatients every hour for risk of clinical deterioration within 12 hours. Flags patients for nurse review; does not replace clinical judgment.",
+  keywords:"early warning, deterioration, inpatient",intendedUse:"Hourly risk score on the unit patient list; scores above threshold prompt a bedside nurse assessment.",
+  users:"Bedside and charge nurses on adult med-surg units",howTo:"Review flagged patients within 30 minutes and document the assessment; escalate per rapid-response policy.",
+  population:"Adults 18+ admitted to medical-surgical units",outOfScope:"ICU, pediatrics, obstetrics, emergency department, and comfort-care patients",
+  risks:"Alert fatigue; reduced sensitivity in younger adults; depends on timely vital-sign charting.",biases:"Development cohort demographics not yet disclosed by vendor.",riskLevel:"Moderate: informs escalation decisions",
+  outputs:"Risk score 0–100 and a threshold flag",modelType:"Gradient-boosted trees",foundation:"None",inputSource:"EHR vital signs, labs, nursing assessments",dataType:"Structured EHR data in; numeric score out",
+  maintenance:"Monthly performance and drift report to the AI governance committee; vendor recalibration annually or on drift alert."};
+const EX_METRICS=[
+  {cat:"Usefulness, usability & efficacy",name:"AUROC, 12-hour deterioration",value:"0.82",ci:"0.80–0.84",pop:"All adults, local validation"},
+  {cat:"Fairness & equity",name:"Sensitivity at threshold",value:"0.71",ci:"0.66–0.76",pop:"Age 18–30"},
+  {cat:"Fairness & equity",name:"Sensitivity at threshold",value:"0.79",ci:"0.77–0.81",pop:"Age 65+"},
+  {cat:"Safety & reliability",name:"Calibration slope",value:"0.94",ci:"",pop:"All adults"}];
+function fillItems(p, stages, status){ STAGES.filter(s=>stages.includes(s.n)).forEach(s=>s.items.forEach(it=>p.items[it.id]={status,evidence:"",owner:"",due:""})); }
+function exampleInto(p){
+  const today=new Date(), d=n=>ymd(addDays(today,n));
+  Object.assign(p.meta,{org:p.meta.org||"Example Regional Health",developer:"Example Vendor, Inc.",sourcing:"Purchased from a vendor",sponsor:"Dr. A. Rivera, Hospital Medicine",reviewers:"CMIO; nursing informatics lead; data science lead; compliance officer; patient and family advisor",riskTier:"Moderate",startDate:d(-40),scope:"Adult med-surg units at two hospitals; vendor version 3.2"});
+  fillItems(p,[1,2],"met");
+  p.items["s1-4"]={status:"partial",evidence:"Limited-English-proficiency patients not yet considered.",owner:"Nursing informatics",due:d(21)};
+  p.items["s3-1"]={status:"partial",evidence:"Vendor provided a summary only; full provenance requested.",owner:"Procurement",due:d(14)};
+  p.items["s3-2"]={status:"notmet",evidence:"Vendor has not shared development cohort demographics.",owner:"Procurement",due:d(14)};
+  p.gates.A={decision:"Proceed",by:"AI governance committee",date:d(-30),rationale:"Clear clinical need; strong sponsor.",signedBy:ME.id||null,signedAt:new Date().toISOString()};
+  p.metrics=clone(EX_METRICS);
+  p.card=Object.assign(clone(EX_CARD),{releaseStage:"Silent evaluation"}); p.cardUpdatedAt=new Date().toISOString();
+}
+async function loadSamples(){
+  const now=new Date(), d=n=>ymd(addDays(now,n)), iso=n=>addDays(now,n).toISOString();
+  // 1: live, review overdue, one criterion not met
+  const a=blankProject("Sepsis early warning (sample)");
+  Object.assign(a.meta,{org:"Example Regional Health",developer:"Example Vendor, Inc.",sourcing:"Purchased from a vendor",sponsor:"Dr. L. Chen, Critical Care",riskTier:"High",reviewCadence:"12 months",scope:"All adult inpatient units"});
+  fillItems(a,[1,2,3,4,5,6],"met");
+  a.items["s3-2"]={status:"notmet",evidence:"Vendor declined to share cohort demographics.",owner:"Procurement",due:d(-20)};
+  a.items["s6-2"]={status:"partial",evidence:"Subgroup dashboard built for age and sex only.",owner:"Data science",due:d(30)};
+  ["A","B","C"].forEach((k,i)=>a.gates[k]={decision:"Proceed",by:"AI governance committee",date:d(-520+i*60),rationale:"Met criteria for this stage.",signedBy:ME.id||null,signedAt:iso(-520+i*60)});
+  a.card=Object.assign(clone(EX_CARD),{summary:"Flags adult inpatients at risk of sepsis for rapid assessment."}); a.metrics=clone(EX_METRICS); a.cardUpdatedAt=iso(-420); a.updatedAt=iso(-30);
+  // 2: pilot, conditional approval without conditions, card stale
+  const b=blankProject("Ambient clinical documentation (sample)");
+  Object.assign(b.meta,{org:"Example Regional Health",developer:"Example Scribe Co.",sourcing:"Purchased from a vendor",sponsor:"Dr. M. Okafor, Primary Care",riskTier:"Moderate",scope:"Six primary care clinics"});
+  fillItems(b,[1,2,3,4],"met"); b.items["s4-2"]={status:"partial",evidence:"Accuracy for non-native English speakers under review.",owner:"Clinical informatics",due:d(25)};
+  b.gates.A={decision:"Proceed",by:"AI governance committee",date:d(-120),rationale:"High clinician burden; good fit.",signedBy:ME.id||null,signedAt:iso(-120)};
+  b.gates.B={decision:"Proceed with conditions",by:"AI governance committee",date:d(-20),rationale:"",signedBy:ME.id||null,signedAt:iso(-20)};
+  b.card={summary:"Drafts visit notes from ambient audio for clinician review and signature.",intendedUse:"Draft note generation during outpatient visits.",users:"Primary care clinicians",population:"Adult outpatients who consent to recording",outOfScope:"Behavioral health and sensitive visits",risks:"Hallucinated findings; omissions.",riskLevel:"Moderate",outputs:"Draft visit note",inputSource:"Visit audio",maintenance:"Monthly note-quality audit."};
+  b.metrics=[{cat:"Safety & reliability",name:"Notes with a clinically significant error",value:"1.8%",ci:"",pop:"Silent evaluation, 400 notes"}];
+  b.cardUpdatedAt=iso(-60); b.updatedAt=iso(-3);
+  // 3: early, on track
+  const c=blankProject("Stroke imaging triage (sample)");
+  Object.assign(c.meta,{org:"Example Regional Health",developer:"Internal radiology AI team",sourcing:"Built internally",sponsor:"Dr. P. Nguyen, Neuroradiology",riskTier:"High"});
+  fillItems(c,[1],"met"); c.items["s2-1"]={status:"met"}; c.items["s2-2"]={status:"met"}; c.items["s2-3"]={status:"partial",evidence:"Scanner-vendor subgroups being added.",owner:"Radiology AI team",due:d(10)};
+  c.gates.A={decision:"Proceed",by:"AI governance committee",date:d(-10),rationale:"Door-to-needle time is a priority metric.",signedBy:ME.id||null,signedAt:iso(-10)};
+  c.updatedAt=iso(-1);
+  for(const p of [a,b,c]) await createProject(p,"Sample project added");
+  toast("Sample projects added");
+}
+
+/* ============================================================
+   Events
+   ============================================================ */
+document.addEventListener("click",async e=>{
+  const row=e.target.closest(".prow");
+  const t=e.target.closest("button");
+  if(!t && row){ openProject(row.dataset.open); return; }
+  if(!t) return;
+  if(t.dataset.open){ openProject(t.dataset.open); return; }
+  if(t.dataset.home){ goHome(); return; }
+  if(t.dataset.go){ go(t.dataset.go); return; }
+  if(t.dataset.filter){ UI.filter=t.dataset.filter; saveUI(); updateDashboard(); document.querySelector(`[data-filter="${UI.filter}"]`)?.focus(); return; }
+  if(t.dataset.set && !RO){
+    const id=t.dataset.set, cur=(S.items[id]||{}).status||"";
+    const val = cur===t.dataset.s ? "" : t.dataset.s;
+    edit(`items.${id}.status`, val);
+    const li=t.closest(".ci");
+    li.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.s===val)));
+    if((val==="partial"||val==="notmet") && !openItems.has(id)){ openItems.add(id); li.classList.add("open"); const m=li.querySelector(".more"); m.textContent="Hide details"; m.setAttribute("aria-expanded","true"); }
+    renderRail(); return;
+  }
+  if(t.dataset.toggle){
+    const id=t.dataset.toggle, li=t.closest(".ci"); const open=!openItems.has(id);
+    open?openItems.add(id):openItems.delete(id);
+    li.classList.toggle("open",open); t.textContent=open?"Hide details":"Evidence & owner"; t.setAttribute("aria-expanded",String(open));
+    if(open && !RO) li.querySelector("textarea").focus();
+    return;
+  }
+  if(t.dataset.gate && !RO){
+    const k=t.dataset.gate, g=S.gates[k]||{};
+    const val = g.decision===t.dataset.d ? "" : t.dataset.d;
+    const now=new Date().toISOString();
+    const patch={gates:{[k]:{decision:val, signedBy:val?(ME.id||null):null, signedAt:val?now:null, date: val ? (g.date||TODAY()) : (g.date||"")}}};
+    deepMerge(S,patch); const st=stamp(); Object.assign(S,st);
+    queuePatch(CUR, Object.assign(patch,st));
+    writeLog(CUR, val?`${GATES[k].title}: ${val}`:`${GATES[k].title}: decision cleared`);
+    renderRail(); renderMain(false); return;
+  }
+  if(t.dataset.delmetric!=null && !RO){ S.metrics.splice(+t.dataset.delmetric,1); saveMetrics(); renderMain(false); renderLabel(); return; }
+  const a=t.dataset.act; if(!a) return;
+  if(a==="new"){ const f=document.getElementById("newform"); if(f){ f.hidden=false; document.getElementById("newname").focus(); } return; }
+  if(a==="new-cancel"){ document.getElementById("newform").hidden=true; return; }
+  if(a==="samples"){ t.disabled=true; await loadSamples(); return; }
+  if(a==="legacy"){
+    try{ const j=JSON.parse(localStorage.getItem("chai-review-v1")); const p=normalize(Object.assign(blankProject(j.meta.solution),{meta:j.meta,items:j.items||{},gates:j.gates||{},metrics:j.metrics||[],card:j.card||{}}));
+      Object.values(p.items).forEach(x=>{ if(x) delete x._open; });
+      const id=await createProject(p,"Imported from a review saved in this browser"); if(id){ localStorage.setItem("chai-legacy-imported","1"); document.getElementById("legacyBanner")?.remove(); toast("Review added to the workspace"); }
+    }catch(err){ toast("Couldn't read the earlier review"); }
+    return;
+  }
+  if(a==="legacy-dismiss"){ try{localStorage.setItem("chai-legacy-imported","1");}catch(e){} document.getElementById("legacyBanner")?.remove(); return; }
+  if(a==="import"){ document.getElementById("importFile").click(); return; }
+  if(a==="dl-csv"){ download(`ai-governance-portfolio-${TODAY()}.csv`, exportCSV()); return; }
+  if(!S) return;
+  if(a==="addmetric"){ S.metrics.push({cat:METRIC_CATS[0],name:"",value:"",ci:"",pop:""}); saveMetrics(); renderMain(false); const ins=document.querySelectorAll('.mtable input[aria-label="Metric"]'); ins[ins.length-1]?.focus(); }
+  else if(a==="example"){ exampleInto(S); const st=stamp(); queuePatch(CUR,Object.assign({meta:clone(S.meta),items:clone(S.items),gates:clone(S.gates),metrics:clone(S.metrics),card:clone(S.card),cardUpdatedAt:S.cardUpdatedAt},st)); writeLog(CUR,"Example data filled in"); renderProject(false); toast("Example filled in"); }
+  else if(a==="archive"){ const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?"Project archived":"Project restored"); }
+  else if(a==="delete"){ if(!confirm(`Delete "${S.meta.solution||"this project"}" for everyone? This can't be undone. Archive it instead to keep the record.`)) return;
+    const id=CUR; delete pending[id]; clearTimeout(timers[id]);
+    try{ await STORE.remove(id); goHome(); toast("Project deleted"); }catch(err){ toast("Couldn't delete the project"); } }
+  else if(a==="newreview"){ const now=new Date().toISOString(); const patch={gates:{D:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); writeLog(CUR,`Checkpoint D: periodic review recorded (${S.gates.D.decision})`); renderRail(); renderMain(false); toast("Periodic review recorded"); }
+  else if(a==="dl-html") download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML());
+  else if(a==="dl-md") download(`${slug(S.meta.solution)}-chai-review.md`, exportMD());
+  else if(a==="dl-json") download(`${slug(S.meta.solution)}-chai-review.json`, JSON.stringify(projectJSON(S),null,2));
+  else if(a==="print") window.print();
+});
+document.addEventListener("submit",async e=>{
+  if(e.target.id!=="newform") return; e.preventDefault();
+  const name=document.getElementById("newname").value.trim(); if(!name){ document.getElementById("newname").focus(); return; }
+  const id=await createProject(blankProject(name),"Project created");
+  if(id){ const wait=()=>PROJECTS.has(id)?openProject(id,"setup"):setTimeout(wait,120); wait(); }
+});
+document.addEventListener("input",e=>{
+  const el=e.target;
+  if(el.id==="q"){ UI.q=el.value; updateDashboard(); return; }
+  const p=el.dataset && el.dataset.bind; if(!p || RO || !S) return;
+  edit(p, el.value);
+  if(p.startsWith("meta.")||p.startsWith("card.")||p.startsWith("metrics.")) renderLabel();
+  if(p==="meta.solution"||p.startsWith("card.")) renderRail();
+});
+document.addEventListener("change",e=>{
+  const el=e.target; if(el.tagName==="SELECT" && el.dataset.bind && S && !RO){ edit(el.dataset.bind, el.value); renderLabel(); renderRail(); }
+});
+document.getElementById("brandBtn").onclick=()=>goHome();
+document.getElementById("goReport").onclick=()=>{ if(S) go("report"); };
+document.getElementById("importFile").onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    const j=JSON.parse(await f.text()); const st=j._state||j;
+    if(!st.meta||!st.items) throw new Error("not a review");
+    const p=normalize(Object.assign(blankProject(st.meta.solution), clone(st))); delete p.id;
+    Object.values(p.items).forEach(x=>{ if(x) delete x._open; }); delete p.view;
+    p.updatedAt=new Date().toISOString(); p.updatedBy=ME.id||null;
+    const id=await createProject(p,"Imported from a JSON export");
+    if(id) toast("Project imported");
+  }catch(err){ toast("That file isn't a project export from this tool"); }
+  e.target.value="";
+};
+const panel=document.getElementById("panel");
+document.getElementById("openPreview").onclick=()=>{ renderLabel(); panel.classList.add("open"); document.getElementById("closePreview").focus(); };
+document.getElementById("closePreview").onclick=()=>panel.classList.remove("open");
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") panel.classList.remove("open"); });
+window.addEventListener("pagehide",()=>{ Object.keys(pending).forEach(flush); });
+
+let toastT;
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),2400); }
+
+/* ============================================================
+   Boot
+   ============================================================ */
+renderDashboardShell();
+(async()=>{
+  let db=null, user=null;
+  const hasClaude = window.claude && typeof window.claude.use==="function";
+  if(hasClaude){
+    const dlP = window.claude.use("downloads").then(d=>{DL=d;}).catch(()=>{}).finally(()=>{dlChecked=true; updateDlUI();});
+    [db,user] = await Promise.all([window.claude.use("db").catch(()=>null), window.claude.use("user").catch(()=>null)]);
+  } else { dlChecked=true; }
+  USER=user;
+  if(user){
+    try{ ME.id = await user.id(); }catch(e){}
+    try{ const c=await user.can("data.write"); if(db && c===false) RO=true; }catch(e){}
+    try{ CAN_DELETE = (await user.canEdit()) || (await user.isOwner()); }catch(e){ CAN_DELETE=false; }
+  }
+  if(db){ STORE=new DbStore(db); MODE="shared"; setMode(RO?"View only":"Shared workspace", RO?"ro":"shared"); }
+  else { STORE=new LocalStore(); MODE="local"; CAN_DELETE=true; setMode("This browser only",""); }
+  document.body.classList.toggle("ro",RO);
+  STORE.subscribeAll(onProjects,onDbError);
+})();
+
+</script>
+</body>
+</html>

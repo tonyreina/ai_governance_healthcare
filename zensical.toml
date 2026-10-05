@@ -24,6 +24,7 @@ nav = [
   { "Compliance rules" = "compliance-rules.md" },
   { "Python exports" = "exports.md" },
   { "Self-hosting" = "self-hosting.md" },
+  { "Cloud deployment" = "deploy.md" },
   { "Notice & license" = "notice.md" },
   { "chai: namespace" = "ns/index.md" },
 ]

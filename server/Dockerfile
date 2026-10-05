@@ -1,0 +1,63 @@
+# syntax=docker/dockerfile:1
+#
+# Two stages so the runtime image carries no compiler, no pip cache and no
+# build metadata: only the interpreter, the virtualenv and the app.
+#
+# Nothing in this image refers to its directory by name, so the build context
+# can be ./server or ./api without edits.
+
+FROM python:3.12-slim AS build
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /src
+
+# Dependencies resolve from pyproject alone, so this layer is cached until the
+# dependency list itself changes -- not on every source edit.
+COPY pyproject.toml README.md ./
+COPY app ./app
+# Install from pyproject so the dependency list has one source of truth, then
+# drop the project itself back out: the runtime stage copies the source in at
+# /app, and two copies of the same package on sys.path is a debugging trap.
+RUN python -m venv /opt/venv \
+ && /opt/venv/bin/pip install --upgrade pip \
+ && /opt/venv/bin/pip install . \
+ && /opt/venv/bin/pip uninstall --yes chai-governance-api
+
+
+FROM python:3.12-slim AS runtime
+
+# PYTHONUNBUFFERED: without it, logs sit in a pipe buffer and a container that
+# dies takes its last words with it.
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    PATH="/opt/venv/bin:$PATH"
+
+# Non-root, with no shell and no home directory to write into. The app needs
+# neither; a process that cannot write to disk cannot be made to persist
+# anything an attacker leaves behind.
+RUN useradd --system --no-create-home --shell /usr/sbin/nologin --uid 10001 chai
+
+WORKDIR /app
+COPY --from=build /opt/venv /opt/venv
+COPY --chown=root:root app ./app
+COPY --chown=root:root migrations ./migrations
+
+USER 10001:10001
+
+EXPOSE 8000
+
+# Python rather than curl: the slim image has no curl, and adding one for a
+# health check is a package of attack surface for a single HTTP GET.
+# /api/health is unauthenticated precisely so this works -- there is no proxy
+# inside the container to add an identity header.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["python", "-c", "import os,sys,urllib.request; p=os.environ.get('PORT') or os.environ.get('API_PORT') or '8000'; sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{p}/api/health', timeout=3).status==200 else 1)"]
+
+# PORT is what Cloud Run and most platforms set; API_PORT is what this
+# repository's compose.yaml sets. exec so uvicorn is PID 1 and receives
+# SIGTERM directly -- otherwise shutdown waits for the 10s kill timeout and
+# every open SSE stream dies hard instead of closing.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-${API_PORT:-8000}} --no-server-header --timeout-graceful-shutdown 20"]

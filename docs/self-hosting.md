@@ -79,9 +79,14 @@ All persistence goes through two small classes in `app/js/00-core/20-stores.js`,
 | `log(id, entry)` | Append an audit-log entry |
 | `subscribeLog(id, cb)` | Stream the most recent log entries for a project |
 
-To back the tool with your own server — Firestore, Supabase, a FastAPI service,
-or anything else — add a third class implementing those six methods and select
-it at boot.
+Three implementations ship: `DbStore` (Claude artifact database), `LocalStore`
+(browser `localStorage`), and `ApiStore` (a self-hosted FastAPI + PostgreSQL
+backend). `ApiStore` is selected automatically when `/api/health` answers, so
+one build serves both the GitHub Pages copy and the Docker stack.
+
+To back the tool with something else — Firestore, Supabase, your own service —
+add a fourth class implementing those six methods and select it at boot. See
+[Deploying with Docker and SSO](deploy.md).
 
 !!! warning "Sign-off needs real identity"
 

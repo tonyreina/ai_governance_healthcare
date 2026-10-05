@@ -16,7 +16,22 @@ renderDashboardShell();
     try{ CAN_DELETE = (await user.canEdit()) || (await user.isOwner()); }catch(e){ CAN_DELETE=false; }
   }
   if(db){ STORE=new DbStore(db); MODE="shared"; setMode(RO?"View only":"Shared workspace", RO?"ro":"shared"); }
-  else { STORE=new LocalStore(); MODE="local"; CAN_DELETE=true; setMode("This browser only",""); }
+  else {
+    // Self-hosted backend, if this page is served by one. Checked only when
+    // there is no artifact database, so the artifact path costs nothing.
+    const api = await detectApi("/api");
+    if(api){
+      STORE=new ApiStore("/api"); MODE="api"; CAN_DELETE=true;
+      setMode("Shared workspace","shared");
+      // Identity is established by the proxy, so the browser cannot choose it.
+      try{
+        const me = await fetch("/api/me",{credentials:"same-origin"}).then(r=>r.json());
+        if(me && me.id){ ME.id=me.id; if(me.name) NAMES[me.id]=me.name; }
+      }catch(e){}
+    } else {
+      STORE=new LocalStore(); MODE="local"; CAN_DELETE=true; setMode("This browser only","");
+    }
+  }
   document.body.classList.toggle("ro",RO);
   STORE.subscribeAll(onProjects,onDbError);
 })();

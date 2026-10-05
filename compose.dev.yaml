@@ -1,0 +1,79 @@
+# =============================================================================
+# Development override. NOT a deployment file.
+#
+#   docker compose -f compose.yaml -f compose.dev.yaml up      (or: make dev)
+#
+# It is a separate file rather than compose.override.yaml on purpose: an
+# override file is picked up implicitly by a bare `docker compose up`, and this
+# one punches a hole straight through the security model. Opting in by name
+# means nobody deploys it by forgetting to delete it.
+#
+# What it changes:
+#   * identity becomes a fixed local developer, with no SSO front door
+#   * the API hot-reloads from the working tree
+#   * Postgres and the API are published on 127.0.0.1 so psql, pytest and
+#     an HTTP client can reach them directly
+# =============================================================================
+
+services:
+  db:
+    ports:
+      # 127.0.0.1 only -- NOT 0.0.0.0. On a laptop on hospital wifi, "5432:5432"
+      # offers the database to the whole subnet.
+      - "127.0.0.1:${DEV_DB_PORT:-5432}:5432"
+    environment:
+      # A default so `make dev` works on a fresh clone with no .env. The base
+      # file has no default, so a real deployment still has to supply one.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-only-not-a-secret}
+
+  api:
+    ports:
+      # ======================================================================
+      # DEVELOPMENT ONLY. This is the exact hole the production file exists to
+      # prevent: anything on this machine can now reach the API directly and
+      # set X-Auth-Request-User to whatever it likes. That is fine when the
+      # only thing on this machine is you, and catastrophic anywhere else.
+      # Nothing in compose.yaml publishes this port. Keep it that way.
+      # ======================================================================
+      - "127.0.0.1:${DEV_API_PORT:-8000}:8000"
+
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-only-not-a-secret}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-chai}:${POSTGRES_PASSWORD:-dev-only-not-a-secret}@db:5432/${POSTGRES_DB:-chai}
+      LOG_LEVEL: debug
+      # Loosened so a request straight to 127.0.0.1:8000 from the host (which
+      # arrives from the Docker gateway, not the proxy) is not rejected.
+      TRUSTED_PROXY_CIDR: 0.0.0.0/0
+      # Tracebacks in responses. Never set this outside a laptop.
+      API_DEBUG: "true"
+
+    # Hot reload. The source is bind-mounted over the image's copy so an edit
+    # on the host restarts the worker. Keep the container's virtualenv out of
+    # the way of the mount if the API image installs into /app/.venv.
+    volumes:
+      # ./server holds app/ and migrations/, which is the layout the image
+      # expects at /app. The virtualenv lives at /opt/venv and is untouched by
+      # this mount, so the installed dependencies survive it.
+      - ./server:/app
+
+    # Overrides the image's CMD (which has no --reload). Nothing else in this
+    # file assumes a framework.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app"]
+
+    # --reload makes the first start slower and restarts mid-edit, so widen the
+    # image's HEALTHCHECK window before it starts marking the container
+    # unhealthy on a save.
+    healthcheck:
+      start_period: 60s
+      interval: 15s
+
+  proxy:
+    environment:
+      # Fixed developer identity. No SSO front door is running locally, so
+      # these are literal strings rather than Caddy placeholders -- which is
+      # also a useful demonstration that the API cannot tell the difference,
+      # and why the API must be unreachable except through this proxy.
+      IDENTITY_ID_SOURCE: ${DEV_IDENTITY_ID:-dev@localhost}
+      IDENTITY_NAME_SOURCE: ${DEV_IDENTITY_NAME:-Dev User}
+      IDENTITY_EMAIL_SOURCE: ${DEV_IDENTITY_EMAIL:-dev@localhost}
+      SITE_ADDRESS: http://:80

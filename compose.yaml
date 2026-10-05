@@ -1,0 +1,239 @@
+# =============================================================================
+# CHAI governance dashboard -- full stack.
+#
+#     browser ──► proxy (Caddy) ──► api (REST + SSE) ──► db (Postgres)
+#                 static dashboard
+#
+# THE SECURITY MODEL, in one sentence: the API does not authenticate anybody.
+# It trusts an identity header that the proxy sets, and it refuses to read
+# identity from anywhere else. That is only safe if the API cannot be reached
+# except through the proxy -- otherwise anyone who can open a socket to the API
+# sets the header themselves and becomes whoever they like.
+#
+# This file enforces that with networking rather than with a README sentence:
+#
+#   * `api` publishes NO host port, so it is unreachable from the host, the
+#     LAN, or the internet. Only containers sharing a Docker network with it
+#     can connect.
+#   * The only network `api` shares with anything internet-facing is `edge`,
+#     and the only other member of `edge` is `proxy`.
+#   * `db` lives on `data`, which is `internal: true` -- Docker gives that
+#     bridge no gateway, so Postgres has no route off the host in either
+#     direction, and `db` publishes no host port either.
+#
+# Before adding a service, ask which of those two networks it belongs on.
+# Putting anything else on `edge` widens the trust boundary.
+#
+# Run:  cp .env.example .env && docker compose up -d
+# Dev:  docker compose -f compose.yaml -f compose.dev.yaml up   (or: make dev)
+# =============================================================================
+
+name: chai-governance
+
+services:
+  # ---------------------------------------------------------------------------
+  # Postgres. Holds the project documents and the per-project audit log.
+  # ---------------------------------------------------------------------------
+  db:
+    # Pinned to a major version, never :latest. Postgres does not auto-migrate
+    # its on-disk format: moving 17 -> 18 under a live volume makes the cluster
+    # unreadable and needs pg_upgrade or a dump/restore. A floating tag would
+    # make that happen by surprise on some unrelated `docker compose pull`.
+    image: postgres:17
+    restart: unless-stopped
+
+    # Deliberately NO `ports:`. Postgres is not published to the host in this
+    # file. compose.dev.yaml publishes it on 127.0.0.1 for psql and GUI tools;
+    # that override is for laptops only.
+    networks:
+      - data
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-chai}
+      POSTGRES_USER: ${POSTGRES_USER:-chai}
+      # No default on purpose: an unset password fails the run loudly instead of
+      # quietly standing up a database with a password someone copied from a
+      # sample file. Put a real one in .env.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (cp .env.example .env)}
+      # Keep the cluster in a subdirectory of the mount point. Cosmetic with a
+      # named volume; load-bearing the moment somebody swaps in a bind mount,
+      # where initdb refuses a directory that already contains lost+found.
+      PGDATA: /var/lib/postgresql/data/pgdata
+
+    volumes:
+      # NAMED VOLUME -- this is what makes the data survive `docker compose
+      # down`. `down` removes containers and networks but leaves named volumes
+      # alone; only `docker compose down -v` destroys this one. See the
+      # `volumes:` block at the bottom.
+      - pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      # Over TCP on 127.0.0.1 rather than the Unix socket, because TCP is how
+      # the API connects -- a check on the socket can pass while the TCP
+      # listener is still closed. The $$ escapes compose interpolation so the
+      # container's shell expands these, not compose.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      # First boot runs initdb, which briefly starts and stops a private server.
+      # Failures inside start_period do not count against `retries`.
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # The API. Implements the REST + SSE surface the browser's ApiStore calls:
+  #   GET    /api/health                  {status, version}
+  #   GET    /api/me                      identity, read from the proxy header
+  #   GET    /api/projects                list
+  #   POST   /api/projects/{id}           create, 409 if it exists
+  #   PATCH  /api/projects/{id}           deep merge (arrays replace)
+  #   DELETE /api/projects/{id}           project + its log
+  #   GET    /api/projects/{id}/log       newest 60, desc by .at
+  #   POST   /api/projects/{id}/log       append one entry
+  #   GET    /api/events                  text/event-stream, one event per change
+  # ---------------------------------------------------------------------------
+  api:
+    # Built from ./server locally; set API_IMAGE to a registry tag (pinned by
+    # digest or version, not :latest) when deploying to a cloud.
+    image: ${API_IMAGE:-chai-governance-api:local}
+    build:
+      context: ./server
+    restart: unless-stopped
+
+    # Deliberately NO `ports:`. THIS IS THE SECURITY PROPERTY. Publishing a
+    # port here -- even 127.0.0.1:8000 -- lets anything on the host bypass the
+    # proxy and set the identity header itself.
+    networks:
+      - edge   # reachable by the proxy, and by nothing else on this stack
+      - data   # reaches Postgres
+
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-chai}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-chai}
+      API_PORT: "8000"
+
+      # Which headers carry identity. The API reads these and NOTHING else --
+      # no cookie, no bearer token, no query parameter. Keep them in sync with
+      # proxy/Caddyfile.
+      AUTH_HEADER_ID: ${AUTH_HEADER_ID:-X-Auth-Request-User}
+      AUTH_HEADER_NAME: ${AUTH_HEADER_NAME:-X-Auth-Request-Name}
+      AUTH_HEADER_EMAIL: ${AUTH_HEADER_EMAIL:-X-Auth-Request-Email}
+
+      # Belt and braces: the API should refuse a request whose peer address is
+      # outside this range, so a misconfigured network cannot silently turn the
+      # header into a free-for-all. 172.16.0.0/12 is the default Docker bridge
+      # pool; narrow it to the proxy's address if you can.
+      TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:-172.16.0.0/12}
+
+      # Reject a request that arrives with no identity rather than inventing an
+      # anonymous user. Leave this on everywhere except a throwaway demo.
+      REQUIRE_IDENTITY: ${REQUIRE_IDENTITY:-true}
+
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+    depends_on:
+      db:
+        # The API waits for a database that actually answers queries, not just
+        # for a container that has been created. Without `condition:
+        # service_healthy` the API races initdb and crash-loops on first boot.
+        condition: service_healthy
+
+    # No healthcheck here on purpose: server/Dockerfile defines a HEALTHCHECK
+    # that already knows which port the app bound (PORT, then API_PORT, then
+    # 8000) and uses the interpreter that is in the image. Repeating it here
+    # would be a second definition to keep in sync, and the two would drift.
+    # `docker compose ps` shows the image's result either way.
+
+  # ---------------------------------------------------------------------------
+  # Caddy. The only service with a published port.
+  #
+  # Three jobs:
+  #   1. serve the built dashboard (docs/app/index.html) at /
+  #   2. proxy /api/* to the API, streaming /api/events without buffering
+  #   3. own identity: delete any client-supplied identity header, then set it
+  #      from a source the operator configured (a fixed dev value locally, the
+  #      cloud SSO front door's header in production)
+  # ---------------------------------------------------------------------------
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+
+    ports:
+      # The one way in. Bind to 127.0.0.1 by setting HTTP_BIND=127.0.0.1 if the
+      # host is multi-homed and something else terminates TLS in front.
+      - "${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-8080}:80"
+
+    networks:
+      - edge
+
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The dashboard is a single pre-built static file. It is MOUNTED, not
+      # rebuilt in Docker: it is generated on the host by `pixi run build-app`
+      # from the sources under app/. Read-only so the web server cannot be
+      # tricked into writing to it.
+      - ./docs/app:/srv/app:ro
+      # Certificates and OCSP staples, so an automatic-HTTPS deployment does not
+      # re-issue from Let's Encrypt on every restart and hit the rate limit.
+      - caddy_data:/data
+      - caddy_config:/config
+
+    environment:
+      # http://:80 means plain HTTP, no automatic HTTPS -- correct for local
+      # dev, and correct in GCP/AWS/Azure where the SSO front door terminates
+      # TLS and forwards cleartext inside the VPC. Set a bare hostname
+      # (governance.example.org) only when Caddy itself is the public edge;
+      # then it gets a certificate automatically and you must publish 80 & 443.
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://:80}
+
+      # Where identity comes from. Each value is either a literal string (dev)
+      # or a Caddy placeholder naming the header the cloud's SSO front door
+      # sets. .env.example lists the value for IAP, ALB OIDC and Easy Auth.
+      IDENTITY_ID_SOURCE: ${IDENTITY_ID_SOURCE:?set IDENTITY_ID_SOURCE in .env}
+      IDENTITY_NAME_SOURCE: ${IDENTITY_NAME_SOURCE:-}
+      IDENTITY_EMAIL_SOURCE: ${IDENTITY_EMAIL_SOURCE:-}
+
+      # Canonical header names handed to the API. Must match AUTH_HEADER_* above.
+      AUTH_HEADER_ID: ${AUTH_HEADER_ID:-X-Auth-Request-User}
+      AUTH_HEADER_NAME: ${AUTH_HEADER_NAME:-X-Auth-Request-Name}
+      AUTH_HEADER_EMAIL: ${AUTH_HEADER_EMAIL:-X-Auth-Request-Email}
+
+    depends_on:
+      api:
+        # Only `service_started`, not `service_healthy`, and on purpose: the
+        # dashboard is a static file that should still load (and show its
+        # "cannot reach the server" state) while the API is starting or broken.
+        # Caddy retries the upstream on every request anyway.
+        condition: service_started
+
+# -----------------------------------------------------------------------------
+# PERSISTENCE
+#
+# `pgdata` is a named volume, which is the whole reason the database survives:
+#
+#   docker compose down        containers + networks go; pgdata STAYS
+#   docker compose down -v     pgdata is destroyed. There is no undo.
+#
+# Inspect it with `docker volume inspect chai-governance_pgdata`; back it up
+# with `make backup` (pg_dump through the running container), which is the
+# supported path -- copying the volume's files out from under a running
+# Postgres gives you a torn snapshot.
+# -----------------------------------------------------------------------------
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  # Internet-facing side. `proxy` publishes a port here; `api` is here so the
+  # proxy can reach it. Adding a third service to this network means that
+  # service can also talk straight to the API -- i.e. forge identity. Don't.
+  edge:
+    driver: bridge
+
+  # `internal: true` tells Docker to create the bridge with no gateway and no
+  # NAT rules, so containers on it cannot route to the internet and nothing
+  # outside the host can route to them. Postgres is on this network and no
+  # other.
+  data:
+    driver: bridge
+    internal: true

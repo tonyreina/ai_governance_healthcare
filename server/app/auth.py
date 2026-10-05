@@ -1,0 +1,347 @@
+"""Identity, taken from a reverse proxy and from nowhere else.
+
+The browser app does not authenticate. A proxy in front of this service --
+Google Cloud IAP, an AWS ALB with an ``authenticate-oidc`` listener rule, Azure
+Easy Auth, or the Caddy front door in this repository's compose stack --
+terminates the SSO flow and stamps the authenticated user onto every request as
+a header. This module reads that header and turns it into an :class:`Identity`.
+
+The one hard requirement
+------------------------
+**This service must be unreachable except through the proxy.** It trusts a
+request header, and a header is trivially forged::
+
+    curl -H 'X-Forwarded-Email: cmo@hospital.org' https://api.example.org/api/me
+
+If that request can reach the container from anywhere other than the proxy,
+anyone can be anyone. No code in this file can make up for a routable port.
+Network isolation is the security boundary:
+
+* **Google Cloud** -- Cloud Run ingress ``internal-and-cloud-load-balancing``,
+  so only the load balancer carrying IAP can reach the revision.
+* **AWS** -- ECS tasks in private subnets, no public IP, task security group
+  accepting inbound *only* from the ALB's security group.
+* **Azure** -- Easy Auth runs in front of the app container; do not expose a
+  second ingress port past it.
+* **Compose** -- the ``api`` service publishes no ports; only Caddy does.
+
+Two second locks are available, both off by default and both defence in depth
+rather than a substitute for closing the port:
+
+``TRUSTED_PROXY_CIDR``
+    Reject any request whose TCP peer address is outside these ranges. This is
+    why the container does **not** run uvicorn with ``--proxy-headers``: that
+    would rewrite the peer address from ``X-Forwarded-For``, which the client
+    controls, and the check would be checking the attacker's own claim.
+
+``PROXY_SHARED_SECRET``
+    Reject any request that does not carry a secret only the proxy knows.
+
+Identity is never read from the request body, a query parameter, or a cookie.
+The audit log's ``by`` field is overwritten with the proxy identity on write
+for the same reason.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import hmac
+import ipaddress
+import json
+import logging
+import time
+from dataclasses import dataclass
+from typing import Any
+
+from fastapi import HTTPException, Request, status
+
+from .config import Settings
+
+log = logging.getLogger("chai.auth")
+
+__all__ = [
+    "ANONYMOUS",
+    "DEV_BANNER",
+    "Identity",
+    "identity_from_request",
+    "log_auth_posture",
+]
+
+
+@dataclass(frozen=True)
+class Identity:
+    """One authenticated person, as the proxy described them."""
+
+    id: str
+    name: str
+    email: str
+    dev: bool = False
+
+
+ANONYMOUS = Identity(id="anonymous", name="anonymous", email="", dev=False)
+"""Used only when ``REQUIRE_IDENTITY=false``. Sign-offs recorded against this
+are worthless for audit, which is why the default is to refuse the request."""
+
+
+DEV_BANNER = r"""
+  ######################################################################
+  #                                                                    #
+  #   DEV_INSECURE_AUTH=1 -- EVERY REQUEST IS AUTHENTICATED AS A       #
+  #   FIXED FAKE USER. THE IDENTITY HEADER IS IGNORED ENTIRELY.        #
+  #   ANYONE WHO CAN REACH THIS PORT IS THAT USER.                     #
+  #                                                                    #
+  #   This exists so the stack runs on a laptop with no proxy.         #
+  #   If you are reading this in a deployed environment, STOP and      #
+  #   unset DEV_INSECURE_AUTH.                                         #
+  #                                                                    #
+  ######################################################################
+"""
+
+
+def log_auth_posture(settings: Settings) -> None:
+    """Say out loud, at startup, how this process decides who you are."""
+    if settings.dev_insecure_auth:
+        for line in DEV_BANNER.strip("\n").splitlines():
+            log.warning(line)
+        log.warning(
+            "dev identity: %s <%s>",
+            settings.dev_identity_name,
+            settings.dev_identity_email,
+        )
+        return
+
+    log.info(
+        "identity: mode=%s header=%r format=%s%s",
+        settings.identity_mode,
+        settings.identity_header,
+        settings.identity_header_format,
+        f" strip={settings.identity_strip_prefix!r}"
+        if settings.identity_strip_prefix
+        else "",
+    )
+    if settings.trusted_proxy_cidrs:
+        log.info(
+            "peer address restricted to %s", ", ".join(settings.trusted_proxy_cidrs)
+        )
+    else:
+        log.warning(
+            "TRUSTED_PROXY_CIDR is unset: any host that can open a TCP "
+            "connection to this port can set the identity header. Make sure "
+            "the network makes that impossible."
+        )
+    if not settings.require_identity:
+        log.warning(
+            "REQUIRE_IDENTITY=false: requests with no identity header are "
+            "served as 'anonymous'. Audit attribution is meaningless."
+        )
+
+
+# --- peer address -----------------------------------------------------------
+
+
+def _networks(cidrs: list[str]) -> list[ipaddress._BaseNetwork]:
+    nets = []
+    for cidr in cidrs:
+        try:
+            nets.append(ipaddress.ip_network(cidr, strict=False))
+        except ValueError:
+            log.error("ignoring unparseable TRUSTED_PROXY_CIDR entry %r", cidr)
+    return nets
+
+
+def _check_peer(request: Request, settings: Settings) -> None:
+    if not settings.trusted_proxy_cidrs:
+        return
+    client = request.client
+    if client is None:  # ASGI transports without a peer, e.g. in-process tests
+        return
+    try:
+        peer = ipaddress.ip_address(client.host)
+    except ValueError:
+        log.warning("unparseable peer address %r", client.host)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Request did not come through the authenticating proxy.",
+        ) from None
+    for net in _networks(settings.trusted_proxy_cidrs):
+        if peer in net:
+            return
+    log.warning(
+        "rejected %s %s from %s: outside TRUSTED_PROXY_CIDR",
+        request.method,
+        request.url.path,
+        peer,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Request did not come through the authenticating proxy.",
+    )
+
+
+def _check_shared_secret(request: Request, settings: Settings) -> None:
+    if not settings.proxy_shared_secret:
+        return
+    presented = request.headers.get(settings.proxy_secret_header, "")
+    if not hmac.compare_digest(presented, settings.proxy_shared_secret):
+        log.warning(
+            "rejected request without a valid %s header", settings.proxy_secret_header
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Request did not come through the authenticating proxy.",
+        )
+
+
+# --- header parsing ---------------------------------------------------------
+
+
+def _strip_prefix(value: str, prefix: str) -> str:
+    """Remove a front-door-specific scheme prefix.
+
+    Google IAP sends ``accounts.google.com:person@example.org``. Code that
+    forgets to strip that prefix stores a user id nobody can match against a
+    directory, so ``IDENTITY_MODE=iap`` sets the prefix for you.
+    """
+    if prefix and value.startswith(prefix):
+        return value[len(prefix) :].strip()
+    return value
+
+
+def _jwt_segments(token: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Decode a JWT's header and payload **without verifying the signature**.
+
+    AWS's ALB puts the user's claims in ``x-amzn-oidc-data``, a JWT it signs
+    itself, because ``x-amzn-oidc-identity`` carries only the opaque ``sub``.
+    Reading the claims is the only way to get an email address out of an ALB.
+
+    The signature is not checked here, and that is safe for exactly the same
+    reason the plain-header mode is safe and no other: the request can only
+    have come from the ALB, because nothing else can reach the port. To check
+    it properly, verify at the edge, or verify ``x-amzn-oidc-data`` against
+    ``https://public-keys.auth.elb.<region>.amazonaws.com/<kid>`` and require
+    the token header's ``signer`` to equal your listener's ARN. ``docs/deploy.md``
+    walks through why step 3 -- audience, not merely validity -- is the one
+    people skip.
+    """
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise ValueError("not a three-segment JWT")
+    out: list[dict[str, Any]] = []
+    for segment in parts[:2]:
+        segment += "=" * (-len(segment) % 4)  # restore base64url padding
+        try:
+            raw = base64.urlsafe_b64decode(segment)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("JWT segment is not base64url") from exc
+        decoded = json.loads(raw)
+        if not isinstance(decoded, dict):
+            raise ValueError("JWT segment is not a JSON object")
+        out.append(decoded)
+    return out[0], out[1]
+
+
+def _unauthorized(detail: str) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+
+
+def _identity_from_jwt(raw: str, settings: Settings) -> Identity:
+    try:
+        header, claims = _jwt_segments(raw)
+    except (ValueError, json.JSONDecodeError) as exc:
+        log.warning("could not decode %s: %s", settings.identity_header, exc)
+        raise _unauthorized(
+            f"{settings.identity_header} is not a readable JWT."
+        ) from exc
+
+    expires = claims.get("exp")
+    if isinstance(expires, (int, float)) and expires < time.time():
+        raise _unauthorized(f"{settings.identity_header} has expired.")
+
+    if settings.identity_audience:
+        # Catches a token minted for a different service in the same cloud
+        # account. Without signature verification this stops misconfiguration,
+        # not a determined forger -- see the module docstring.
+        audience = claims.get("aud")
+        signer = header.get("signer")
+        candidates = audience if isinstance(audience, list) else [audience]
+        if settings.identity_audience not in candidates and (
+            signer != settings.identity_audience
+        ):
+            log.warning(
+                "rejected assertion: aud=%r signer=%r, expected %r",
+                audience,
+                signer,
+                settings.identity_audience,
+            )
+            raise _unauthorized(
+                f"{settings.identity_header} was not issued for this service."
+            )
+
+    email = str(claims.get(settings.identity_jwt_email_claim) or "").strip()
+    name = str(claims.get(settings.identity_jwt_name_claim) or "").strip()
+    subject = str(claims.get(settings.identity_jwt_id_claim) or "").strip()
+    if not email and not subject:
+        raise _unauthorized(
+            f"{settings.identity_header} carried neither "
+            f"'{settings.identity_jwt_email_claim}' nor "
+            f"'{settings.identity_jwt_id_claim}'."
+        )
+    email = email or subject
+    return Identity(id=subject or email, name=name or email, email=email)
+
+
+def _identity_from_plain(raw: str, request: Request, settings: Settings) -> Identity:
+    email = _strip_prefix(raw, settings.identity_strip_prefix)
+    name = ""
+    if settings.identity_name_header:
+        name = (request.headers.get(settings.identity_name_header) or "").strip()
+        name = _strip_prefix(name, settings.identity_strip_prefix)
+    user_id = ""
+    if settings.identity_id_header:
+        user_id = (request.headers.get(settings.identity_id_header) or "").strip()
+        user_id = _strip_prefix(user_id, settings.identity_strip_prefix)
+    if not email:
+        raise _unauthorized(
+            f"{settings.identity_header} was present but empty after parsing."
+        )
+    return Identity(id=user_id or email, name=name or email, email=email)
+
+
+def identity_from_request(request: Request, settings: Settings) -> Identity:
+    """Build an :class:`Identity`, or raise 401 / 403.
+
+    A 401 here means the identity header was missing or unreadable. In a
+    correct deployment that cannot happen -- the proxy sets it on every request
+    it forwards -- so a 401 in production almost always means traffic reached
+    the service *around* the proxy. That is worth alerting on.
+    """
+    if settings.dev_insecure_auth:
+        return Identity(
+            id=settings.dev_identity_email,
+            name=settings.dev_identity_name,
+            email=settings.dev_identity_email,
+            dev=True,
+        )
+
+    _check_peer(request, settings)
+    _check_shared_secret(request, settings)
+
+    raw = (request.headers.get(settings.identity_header) or "").strip()
+    if not raw:
+        if not settings.require_identity:
+            return ANONYMOUS
+        log.warning(
+            "no %s header on %s %s -- is this request bypassing the proxy?",
+            settings.identity_header,
+            request.method,
+            request.url.path,
+        )
+        raise _unauthorized(
+            f"No {settings.identity_header} header. This API only accepts "
+            "requests from an authenticating reverse proxy."
+        )
+
+    if settings.identity_header_format == "jwt":
+        return _identity_from_jwt(raw, settings)
+    return _identity_from_plain(raw, request, settings)

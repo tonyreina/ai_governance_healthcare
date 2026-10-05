@@ -1,0 +1,194 @@
+# =============================================================================
+# proxy/Caddyfile -- the identity boundary.
+#
+# WHY CADDY AND NOT NGINX
+#
+#   1. Header deletion is a first-class verb. `request_header -X-Auth-Request-User`
+#      removes the header, full stop. nginx has no delete: the idiom is
+#      `proxy_set_header X-Auth-Request-User "";`, which sends an empty header
+#      rather than none, and which silently does nothing if any other
+#      proxy_set_header appears in a more specific block (nginx replaces the
+#      whole inherited set instead of merging). In a config whose entire job is
+#      "the client must not be able to supply this header", a verb that means
+#      what it says is worth more than familiarity.
+#
+#   2. SSE works by default. /api/events is a long-lived text/event-stream.
+#      Caddy streams proxied responses and flushes event-streams immediately.
+#      nginx buffers: SSE needs proxy_buffering off, proxy_cache off,
+#      proxy_http_version 1.1, proxy_read_timeout raised from 60s, and usually
+#      an X-Accel-Buffering escape hatch -- five chances to get it wrong, with
+#      a failure mode (events arrive in a batch minutes later) that looks like
+#      an application bug.
+#
+#   3. One file. No sites-enabled/, no mime.types, no separate TLS block, and
+#      automatic HTTPS from a hostname when Caddy is the public edge.
+#
+# WHAT THIS FILE GUARANTEES
+#
+#   Every request that reaches the API has had any client-supplied identity
+#   header stripped and replaced with one this proxy chose. That guarantee is
+#   worth exactly as much as the network rule that the API has no other way in
+#   -- see the `networks:` comments in compose.yaml. A reachable API makes this
+#   file decorative.
+# =============================================================================
+{
+	# No admin API: it is an unauthenticated config-write endpoint on :2019 and
+	# nothing here needs it.
+	admin off
+
+	# Keep the server header generic.
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+# http://:80 locally and behind a cloud SSO front door that terminates TLS.
+# A bare hostname (governance.example.org) instead makes Caddy the public edge
+# and provisions a certificate automatically -- then publish 80 and 443.
+{$SITE_ADDRESS:http://:80} {
+	log {
+		output stdout
+		format console
+	}
+
+	encode zstd gzip
+
+	# -------------------------------------------------------------------------
+	# The API, and the identity handoff.
+	#
+	# `route` keeps these in the order written. That order is the security
+	# property: strip first, set second, reject third, forward last.
+	# -------------------------------------------------------------------------
+	handle /api/* {
+		route {
+			# 1. STRIP. Unconditionally remove any copy the client sent. A
+			#    browser that sets X-Auth-Request-User by hand gets it deleted
+			#    here, before anything else looks at the request. These names
+			#    are the contract with the API's AUTH_HEADER_* settings in
+			#    compose.yaml -- change one, change both.
+			request_header -X-Auth-Request-User
+			request_header -X-Auth-Request-Name
+			request_header -X-Auth-Request-Email
+
+			#    Strip the upstream providers' headers too. Stripping only the
+			#    three above is not enough: if this proxy is configured to
+			#    READ a cloud header (IDENTITY_*_SOURCE pointing at, say,
+			#    X-Goog-Authenticated-User-Email), a client that reaches this
+			#    proxy directly can set that header itself and have its value
+			#    copied into the canonical ones at step 2. Forged identity,
+			#    through the front door's own logic.
+			#
+			#    Which is why, in a cloud deployment, THIS PROXY MUST NOT BE
+			#    THE PLACE CLOUD IDENTITY IS READ. Set IDENTITY_MODE on the
+			#    API instead (iap / alb / easyauth) and pin the peer with
+			#    TRUSTED_PROXY_CIDR, so the only component trusting a cloud
+			#    header is the one that can also check who it came from. This
+			#    proxy's identity block is for the local stack, where it is
+			#    the sole front door and mints a fixed development identity.
+			#    See docs/deploy.md.
+			request_header -X-Goog-Authenticated-User-Email
+			request_header -X-Goog-Authenticated-User-Id
+			request_header -X-Goog-Iap-Jwt-Assertion
+			request_header -X-Amzn-Oidc-Identity
+			request_header -X-Amzn-Oidc-Data
+			request_header -X-Amzn-Oidc-Accesstoken
+			request_header -X-Ms-Client-Principal
+			request_header -X-Ms-Client-Principal-Id
+			request_header -X-Ms-Client-Principal-Name
+			request_header -X-Ms-Client-Principal-Idp
+			request_header -X-Forwarded-Email
+			request_header -X-Forwarded-User
+			request_header -X-Forwarded-Preferred-Username
+
+			# 2. SET from a source the operator configured.
+			#
+			#    IDENTITY_ID_SOURCE is either a literal string (local dev:
+			#    "dev@localhost") or a Caddy placeholder naming the header the
+			#    cloud's SSO front door set, e.g.
+			#
+			#      GCP  IAP          {http.request.header.X-Goog-Authenticated-User-Email}
+			#      AWS  ALB + OIDC   {http.request.header.X-Amzn-Oidc-Identity}
+			#      Azure Easy Auth   {http.request.header.X-Ms-Client-Principal-Name}
+			#
+			#    Caddy substitutes {$VAR} while parsing this file, so the
+			#    placeholder is resolved per request afterwards. .env.example
+			#    lists all three verbatim.
+			#
+			#    The values are QUOTED, and must stay quoted. Unquoted,
+			#    `request_header X-Auth-Request-Name Dev User` is three
+			#    arguments, which is Caddy's find-and-replace form
+			#    (field, search, replace) -- it silently does nothing to a
+			#    header that does not exist yet, and the identity vanishes
+			#    with no error anywhere. Any display name with a space in it
+			#    hits this.
+			#    NO DEFAULT VALUE. These used to read
+			#    {$IDENTITY_ID_SOURCE:dev@localhost}, which fails OPEN: with
+			#    the variable unset -- a fresh deployment, a typo'd .env, a
+			#    cloud task definition missing one entry -- every anonymous
+			#    request was stamped with a real-looking identity and sailed
+			#    past the check below, because "dev@localhost" is not empty.
+			#    Unset now resolves to "" and the request is rejected at
+			#    step 3. compose.dev.yaml sets the dev identity explicitly,
+			#    which is the only place a fixed identity belongs.
+			request_header X-Auth-Request-User "{$IDENTITY_ID_SOURCE}"
+			request_header X-Auth-Request-Name "{$IDENTITY_NAME_SOURCE}"
+			request_header X-Auth-Request-Email "{$IDENTITY_EMAIL_SOURCE}"
+
+			# 3. REJECT an anonymous request here rather than passing an empty
+			#    header downstream and hoping the API notices. This fires when
+			#    the SSO front door is misconfigured or has been bypassed: the
+			#    source header is absent, the placeholder resolves to "", and
+			#    the request never reaches the API.
+			#
+			#    Both headers are checked. The API authenticates on the EMAIL
+			#    header (AUTH_HEADER_EMAIL -> identity_header), so testing only
+			#    the user header would let a request through with the one
+			#    header that actually matters empty.
+			@anonymous expression {http.request.header.X-Auth-Request-Email} == "" || {http.request.header.X-Auth-Request-User} == ""
+			respond @anonymous "No authenticated identity. This API is only reachable through the single sign-on proxy." 401 {
+				close
+			}
+
+			# 4. FORWARD.
+			reverse_proxy api:8000 {
+				# flush_interval -1 disables response buffering for every /api
+				# response, not just the event stream. The cost is a syscall
+				# per write on a low-traffic internal tool; the benefit is that
+				# /api/events cannot regress into a buffered endpoint because
+				# somebody changed a content type.
+				flush_interval -1
+
+				# For the API's access log only. The API must NOT use these
+				# for authorisation -- identity is X-Auth-Request-User and
+				# nothing else. (X-Forwarded-For and X-Forwarded-Proto are set
+				# by Caddy already.)
+				header_up X-Real-IP {remote_host}
+
+				# A dead API should look dead, not like a hung page.
+				transport http {
+					dial_timeout 5s
+					# No read timeout: /api/events is meant to stay open.
+				}
+			}
+		}
+	}
+
+	# -------------------------------------------------------------------------
+	# The dashboard: one pre-built, self-contained file, mounted read-only from
+	# the host at docs/app/ (built by `pixi run build-app`, never by Docker).
+	# -------------------------------------------------------------------------
+	handle {
+		root * /srv/app
+		file_server
+
+		# The dashboard is regenerated by a build step and its URL never
+		# changes, so a long cache would serve a stale app after every deploy.
+		header Cache-Control "no-cache"
+
+		# It is a single inline-everything HTML file with no third-party
+		# origins, so the policy can be this tight.
+		header X-Content-Type-Options "nosniff"
+		header X-Frame-Options "DENY"
+		header Referrer-Policy "same-origin"
+	}
+}

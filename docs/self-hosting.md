@@ -37,3 +37,25 @@ To build locally:
 pixi run docs-serve    # live preview at http://localhost:8000
 pixi run docs-build    # writes ./site
 ```
+
+## Linting and git hooks
+
+Markdown is linted with [rumdl](https://rumdl.dev), configured in `.rumdl.toml`.
+The `mkdocs` flavor is set there deliberately: Zensical shares Material for
+MkDocs' Markdown dialect, and under the `standard` flavor an admonition block is
+misread as an indented code block and reported as `MD046`.
+
+Git hooks are managed with [prek](https://prek.j178.dev), a drop-in replacement
+for pre-commit:
+
+```bash
+pixi run hooks-install   # install the git hook shims, once per clone
+pixi run check           # run every hook over all files
+pixi run lint-fix        # rumdl, fixing what it can in place
+```
+
+!!! note "`--strict` does not validate the nav"
+
+    The `zensical build --strict` hook fails on broken internal links, but a
+    `nav` entry in `zensical.toml` pointing at a page that does not exist still
+    builds cleanly. After changing the nav, check the rendered site.

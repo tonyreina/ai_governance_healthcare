@@ -1,0 +1,15 @@
+# rumdl configuration — https://rumdl.dev
+
+[global]
+# Zensical shares Material for MkDocs' Markdown dialect, so the mkdocs flavor is
+# what keeps admonitions (!!! warning) and attr_list ({ .md-button }) from being
+# reported as errors.
+flavor = "mkdocs"
+
+exclude = [
+    ".git",
+    ".github",
+    ".pixi",
+    "site",      # Zensical build output
+    ".cache",    # Zensical build cache
+]

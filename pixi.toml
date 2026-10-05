@@ -9,7 +9,13 @@ python = ">=3.11,<3.13"
 
 [pypi-dependencies]
 zensical = "*"
+prek = "*"
+rumdl = "*"
 
 [tasks]
 docs-serve = "zensical serve"
-docs-build = "zensical build"
+docs-build = "zensical build --clean --strict"
+lint = "rumdl check ."
+lint-fix = "rumdl check --fix ."
+hooks-install = "prek install"
+check = "prek run --all-files"

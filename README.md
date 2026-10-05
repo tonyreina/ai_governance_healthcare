@@ -7,8 +7,9 @@ AI solution they evaluate or run, and tracks the whole portfolio on one dashboar
 - **Portfolio dashboard**: every AI project with its lifecycle position, readiness
   score, next periodic review date, and a status of *Out of compliance*,
   *Needs update*, *On track*, or *Retired*, with the reasons spelled out.
-- **Lifecycle checklists**: 41 criteria across the six CHAI stages, each tagged to one
-  of CHAI's five principles, with status, evidence, owner, and due date.
+- **Lifecycle checklists**: 41 criteria across the six CHAI stages, each
+  tagged to one of CHAI's five principles, with status, evidence, owner, and
+  due date.
 - **Four go/no-go checkpoints** (after stages 1, 4, 5 and 6) with decision,
   rationale, and a sign-off history.
 - **Applied model card** following the field structure of the CHAI Applied Model
@@ -37,9 +38,10 @@ python3 -m http.server 8000 --directory docs
 | Published as a Claude artifact | Artifact database (`claude.use("db")`) | Yes, live, with per-user sign-off |
 | Opened directly / GitHub Pages | Browser `localStorage` | No, one browser only |
 
-All persistence goes through two small classes in `docs/app/index.html`, `DbStore` and
-`LocalStore`, which share one interface (`subscribeAll`, `create`, `update`,
-`remove`, `log`, `subscribeLog`). To back the tool with your own server
+All persistence goes through two small classes in `docs/app/index.html`,
+`DbStore` and `LocalStore`, which share one interface (`subscribeAll`,
+`create`, `update`, `remove`, `log`, `subscribeLog`). To back the tool with
+your own server
 (Firestore, Supabase, a FastAPI service, etc.), add a third class with the same
 methods and select it at boot.
 
@@ -56,6 +58,23 @@ The environment is managed with [pixi](https://pixi.sh):
 pixi run docs-serve    # live preview at http://localhost:8000
 pixi run docs-build    # writes ./site
 ```
+
+## Linting and git hooks
+
+Markdown is linted with [rumdl](https://rumdl.dev), configured in `.rumdl.toml`
+with the `mkdocs` flavor so Material admonitions and attribute lists are not
+reported as errors. Git hooks are managed with [prek](https://prek.j178.dev), a
+drop-in replacement for pre-commit.
+
+```bash
+pixi run hooks-install   # install the git hook shims, once per clone
+pixi run check           # run every hook over all files
+pixi run lint            # rumdl only
+pixi run lint-fix        # rumdl, fixing what it can in place
+```
+
+The same hooks run in CI via `.github/workflows/lint.yml`, so CI cannot drift
+from what contributors get locally.
 
 ### Deploy
 

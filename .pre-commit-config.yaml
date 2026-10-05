@@ -35,6 +35,24 @@ repos:
       # --strict build gates the deploy. Note: --strict does NOT flag a nav
       # entry pointing at a missing page -- that builds clean, so nav changes
       # still want a look at the rendered site.
+      # Blocks non-Latin characters that render like ASCII letters. A URL
+      # shared with this project used a Cyrillic o in "who"; that class of
+      # substitution is invisible in review and breaks search and anchors.
+      - id: check-homographs
+        name: check for confusable characters
+        entry: pixi run check-homographs
+        language: system
+        types: [text]
+
+      # Regenerates the published CHAI checklist from the app. prek fails the
+      # run if this modifies the file, so the docs cannot drift from the app.
+      - id: gen-checklists
+        name: regenerate generated checklist pages
+        entry: pixi run gen-docs
+        language: system
+        pass_filenames: false
+        files: '^(docs/app/index\.html|data/optica_items\.json|scripts/gen_.*\.py)$'
+
       - id: zensical-build
         name: zensical build (strict)
         entry: pixi run zensical build --clean --strict

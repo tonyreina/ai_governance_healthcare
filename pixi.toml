@@ -11,11 +11,17 @@ python = ">=3.11,<3.13"
 zensical = "*"
 prek = "*"
 rumdl = "*"
+pypdf = ">=6.19.0, <7"
+mlcroissant = ">=1.1.1, <2"
 
 [tasks]
 docs-serve = "zensical serve"
 docs-build = "zensical build --clean --strict"
 lint = "rumdl check ."
 lint-fix = "rumdl check --fix ."
+gen-docs = { depends-on = ["gen-chai-docs", "gen-optica-docs"] }
+gen-chai-docs = "python scripts/gen_chai_checklist.py"
+gen-optica-docs = "python scripts/gen_optica_checklist.py"
+check-homographs = "python scripts/check_homographs.py"
 hooks-install = "prek install"
 check = "prek run --all-files"

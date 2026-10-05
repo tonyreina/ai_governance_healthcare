@@ -57,6 +57,20 @@ The tool picks its storage backend based on where it is running.
     move a project between people or machines, or see
     [Self-hosting](self-hosting.md) to put it behind a real database.
 
+## Two frameworks, reconciled
+
+This tool tracks the CHAI lifecycle. It also carries a full crosswalk to
+**OPTICA**, the Clalit adoption checklist that the WHO Regional Office for
+Europe named alongside CHAI as one of four complementary approaches in 2026.
+
+- [The frameworks](frameworks/index.md) — what each is for, and how they differ.
+- [CHAI checklist](frameworks/chai-checklist.md) — all 41 criteria.
+- [OPTICA checklist](frameworks/optica-checklist.md) — all 77 items, paraphrased.
+- [Crosswalk](crosswalk.md) — item-by-item, including the honest finding that
+  **no OPTICA item fully discharges a CHAI criterion**.
+- [Does any of this work?](frameworks/evidence.md) — the evidence base, and the
+  gap in it.
+
 ## Where to go next
 
 - [Compliance rules](compliance-rules.md) — how each status is computed, and how

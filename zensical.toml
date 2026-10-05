@@ -12,10 +12,20 @@ edit_uri = "edit/main/docs/"
 nav = [
   { "Home" = "index.md" },
   { "Open the dashboard" = "app/index.html" },
+  { "The frameworks" = [
+    "frameworks/index.md",
+    "frameworks/chai.md",
+    "frameworks/chai-checklist.md",
+    "frameworks/optica.md",
+    "frameworks/optica-checklist.md",
+    "frameworks/evidence.md",
+  ] },
+  { "Crosswalk" = "crosswalk.md" },
   { "Compliance rules" = "compliance-rules.md" },
   { "Python exports" = "exports.md" },
   { "Self-hosting" = "self-hosting.md" },
   { "Notice & license" = "notice.md" },
+  { "chai: namespace" = "ns/index.md" },
 ]
 
 [project.theme]

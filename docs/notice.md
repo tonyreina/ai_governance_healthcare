@@ -19,14 +19,20 @@ endorsed by, or certified by the Coalition for Health AI (CHAI).
   written for this project. They are **not** the text of CHAI's Responsible AI
   Checklist.
 - The model card uses the section and field names of the CHAI Applied Model Card
-  template (draft v0.1). CHAI distributes that template under CC BY-NC-ND 4.0.
+  template (Draft Nov 2024, v0.1). CHAI distributes that template under
+  **CC BY-ND 4.0** (Attribution, No Derivatives).
 
-!!! danger "Check CHAI's terms before commercial use"
+!!! danger "No Derivatives is the constraint, not commercial use"
 
-    If you use this tool commercially or reproduce CHAI's template text, review
-    CHAI's license terms first. The Apache 2.0 license on this repository covers
-    this project's own code and prose — it cannot and does not relicense CHAI's
-    material.
+    CC BY-ND 4.0 permits redistribution "for any purpose, even commercially", so
+    using this tool commercially is not restricted by CHAI's licence. What the
+    licence forbids is distributing a **modified version** of CHAI's material.
+
+    This tool uses the template's section and field names to structure output it
+    generates itself. If you intend to publish something closer to CHAI's
+    template, read [the licence](https://creativecommons.org/licenses/by-nd/4.0/)
+    first. The Apache 2.0 licence on this repository covers this project's own
+    code and prose — it cannot and does not relicense CHAI's material.
 
 ## What reports are, and are not
 

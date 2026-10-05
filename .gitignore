@@ -5,6 +5,12 @@ site/
 # pixi
 .pixi/
 
+# Source papers. AIcs2300269_Optica.pdf is NEJM AI, "For personal use only.
+# No other uses without permission." It must never be committed to this public
+# repository. Ignore all PDFs rather than naming one file, so a differently
+# named copy cannot slip through.
+*.pdf
+
 # WSL / Windows metadata
 *:Zone.Identifier
 

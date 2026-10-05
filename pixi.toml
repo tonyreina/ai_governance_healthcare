@@ -13,15 +13,30 @@ prek = "*"
 rumdl = "*"
 pypdf = ">=6.19.0, <7"
 mlcroissant = ">=1.1.1, <2"
+playwright = ">=1.63.0, <2"
+ruff = ">=0.16.10, <0.17"
 
 [tasks]
 docs-serve = "zensical serve"
 docs-build = "zensical build --clean --strict"
-lint = "rumdl check ."
-lint-fix = "rumdl check --fix ."
-gen-docs = { depends-on = ["gen-chai-docs", "gen-optica-docs"] }
+lint = { depends-on = ["lint-md", "lint-py"] }
+lint-md = "rumdl check ."
+lint-py = "ruff check ."
+lint-fix = { depends-on = ["lint-md-fix", "lint-py-fix", "format-py"] }
+lint-md-fix = "rumdl check --fix ."
+lint-py-fix = "ruff check --fix ."
+format-py = "ruff format ."
+# Generated artifacts. `gen-docs` regenerates everything derived from
+# data/optica_items.json and the app itself, then rebuilds the dashboard.
+gen-docs = { depends-on = ["gen-chai-docs", "gen-optica-docs", "gen-optica-module", "build-app"] }
 gen-chai-docs = "python scripts/gen_chai_checklist.py"
 gen-optica-docs = "python scripts/gen_optica_checklist.py"
+gen-optica-module = "python scripts/gen_optica_module.py"
+
+# The dashboard: sources live in app/, docs/app/index.html is generated.
+build-app = "python scripts/build_app.py"
+check-app = "python scripts/check_app.py"
+test-app = "python tests/test_optica.py"
 check-homographs = "python scripts/check_homographs.py"
 hooks-install = "prek install"
 check = "prek run --all-files"

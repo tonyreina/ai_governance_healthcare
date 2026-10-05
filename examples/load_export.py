@@ -6,6 +6,7 @@ Usage:
 Needs only the standard library. If pandas is installed, also prints the open
 gaps as a DataFrame.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,7 +24,9 @@ def load(path: str | Path) -> dict:
 
 def open_gaps(export: dict) -> list[dict]:
     """Checklist items that are not met, partial, or unanswered."""
-    return [c for c in export["checklist"] if c["status"] in (None, "notmet", "partial")]
+    return [
+        c for c in export["checklist"] if c["status"] in (None, "notmet", "partial")
+    ]
 
 
 def summarize(export: dict) -> str:
@@ -55,7 +58,11 @@ def main(argv: list[str]) -> int:
     gaps = pd.DataFrame(open_gaps(export))
     if not gaps.empty:
         print("\nOpen gaps:")
-        print(gaps[["stage", "principle", "status", "owner", "due", "criterion"]].to_string(index=False))
+        print(
+            gaps[
+                ["stage", "principle", "status", "owner", "due", "criterion"]
+            ].to_string(index=False)
+        )
     return 0
 
 

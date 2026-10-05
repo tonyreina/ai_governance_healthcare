@@ -1,6 +1,73 @@
 # Self-hosting
 
-All persistence goes through two small classes in `docs/app/index.html`,
+## How the app is built
+
+`docs/app/index.html` is **generated**. Do not edit it.
+
+The dashboard has to ship as one self-contained file: it runs as a Claude
+artifact, it is opened straight off disk with no server, and it is published to
+GitHub Pages. But a single 1,400-line file holding the CSS, two governance
+frameworks and all the rendering is not maintainable. So the source is split
+under `app/` and concatenated by `scripts/build_app.py`:
+
+```text
+app/
+  index.html                   shell, with CSS and JS insertion markers
+  css/app.css
+  js/
+    00-core/                   framework-agnostic: util, model, stores,
+                               state, writes, DOM helpers
+    10-frameworks/
+      00-registry.js           the framework contract
+      05-project/              project setup (not owned by any framework)
+      10-chai/                 definition, rules, views, registration
+      20-optica/               the same four files, independently
+    20-app/                    shell, dashboard, exports, events, boot
+```
+
+```bash
+pixi run build-app     # app/ -> docs/app/index.html
+pixi run check-app     # syntax + duplicate-declaration checks
+pixi run test-app      # end-to-end browser tests
+```
+
+A prek hook rebuilds on any change under `app/`, so the generated file can never
+go stale.
+
+## Adding a framework
+
+A framework is a directory under `app/js/10-frameworks/` whose last file calls
+`registerFramework()` with:
+
+| Field | Purpose |
+|---|---|
+| `id`, `label` | identity, used in data keys and the UI |
+| `enabled(p)` | is it switched on for this project? |
+| `views(p)` | rail entries, in order |
+| `render(view, p)` | markup for one view |
+| `blank()` | extra keys for a new project |
+| `normalize(p)` | repair shape on load; must be idempotent |
+
+Nothing else in the app names a framework. The rail, the router and the pager
+read only the registry.
+
+!!! warning "One framework owns the status"
+
+    CHAI is always enabled and owns the compliance status, the readiness scores
+    and the dashboard. That is deliberate: the dashboard needs **one** status,
+    and averaging two frameworks' judgements would produce a number that means
+    nothing.
+
+    Optional frameworks never propagate status in either direction. An OPTICA
+    answer cannot move a CHAI score, and vice versa. The frameworks ask
+    different parties for different evidence at different moments, and no OPTICA
+    item fully discharges a CHAI criterion — see the [crosswalk](crosswalk.md).
+    Evidence can be cited in both; a judgement in one is never a judgement in
+    the other.
+
+## Storage
+
+All persistence goes through two small classes in `app/js/00-core/20-stores.js`,
 `DbStore` and `LocalStore`, which implement one interface:
 
 | Method | Purpose |
@@ -21,6 +88,82 @@ it at boot.
     `LocalStore` has no concept of a user, so checkpoint sign-offs it records
     are self-asserted. If sign-offs need to carry weight for audit, your backend
     must supply an authenticated identity, as the artifact database does.
+
+## The Docker Compose stack
+
+`compose.yaml` in the repository root runs the whole thing on one host: the
+proxy, the API that implements the six methods above, and Postgres.
+
+```bash
+cp .env.example .env     # or: make env
+pixi run build-app       # regenerates docs/app/index.html from app/
+docker compose up -d     # or: make up
+```
+
+Then open `http://localhost:8080/`.
+
+| File | What it is |
+|---|---|
+| `compose.yaml` | The stack. Production-shaped: no port on the API, none on the database. |
+| `compose.dev.yaml` | Opt-in override: fixed dev identity, hot reload, ports on `127.0.0.1`. |
+| `proxy/Caddyfile` | Serves the dashboard, proxies `/api`, owns the identity header. |
+| `proxy/Dockerfile` | Bakes the Caddyfile and the built dashboard into an image for the clouds. |
+| `.env.example` | Every variable, commented. Copy to `.env`; it is git-ignored. |
+| `Makefile` | `make dev`, `make backup`, `make check-isolation`. |
+
+### Identity comes from the proxy
+
+The API does not authenticate anybody. The proxy deletes any
+`X-Auth-Request-User`, `-Name` or `-Email` the browser sent, then sets them
+from a source you configure in `.env`:
+
+```bash
+# local development: a literal string
+IDENTITY_ID_SOURCE=dev@localhost
+
+# behind a cloud SSO front door: the header it sets
+# IDENTITY_ID_SOURCE={http.request.header.X-Goog-Authenticated-User-Id}
+# IDENTITY_ID_SOURCE={http.request.header.X-Amzn-Oidc-Identity}
+# IDENTITY_ID_SOURCE={http.request.header.X-Ms-Client-Principal-Id}
+```
+
+Headers the proxy does not own pass through untouched, so an API that prefers
+to verify a signed assertion itself — the IAP JWT, `x-amzn-oidc-data`,
+`X-MS-CLIENT-PRINCIPAL` — still receives it. See
+[Deploying with SSO](deploy.md) for running this on Google Cloud, AWS or Azure.
+
+!!! danger "The API must be unreachable except through the proxy"
+
+    This is not hardening, it is the security model. Anyone who can open a TCP
+    connection to the API sets the identity header themselves and becomes
+    whoever they like, including signing off a checkpoint in a colleague's
+    name.
+
+    `compose.yaml` enforces it with networking rather than with a convention:
+    the API publishes no host port, the only network it shares with anything
+    internet-facing has the proxy as its sole other member, and Postgres sits
+    on an `internal: true` network with no route off the host at all.
+
+    `make check-isolation` asserts all of this against a running stack. Run it
+    after any change to the networking, and keep it in whatever runs after a
+    deploy.
+
+    `compose.dev.yaml` deliberately breaks this by publishing the API on
+    `127.0.0.1:8000`. That is why it is a named override rather than
+    `compose.override.yaml`, which `docker compose up` would pick up silently.
+
+### The data survives `docker compose down`
+
+Postgres writes to the named volume `pgdata`.
+
+```bash
+docker compose down        # containers and networks go; pgdata stays
+docker compose down -v     # pgdata is destroyed, with no undo
+make backup                # pg_dump through the running server -> backups/
+```
+
+Back up with `make backup`, not by copying the volume's files: a live cluster
+copied file-by-file gives a torn snapshot that may not restore.
 
 ## Deploying this site
 

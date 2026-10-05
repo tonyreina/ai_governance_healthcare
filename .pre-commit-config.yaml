@@ -22,6 +22,15 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
 
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      # Lint first, then format: ruff-check --fix can rewrite code, and
+      # ruff-format should have the last word on layout.
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
   - repo: https://github.com/rvben/rumdl-pre-commit
     rev: v0.2.78
     hooks:
@@ -51,7 +60,25 @@ repos:
         entry: pixi run gen-docs
         language: system
         pass_filenames: false
-        files: '^(docs/app/index\.html|data/optica_items\.json|scripts/gen_.*\.py)$'
+        files: '^(data/optica_items\.json|scripts/gen_.*\.py)$'
+
+      # Rebuilds the single-file dashboard from app/. prek fails the run if
+      # this changes docs/app/index.html, so the generated file can never be
+      # stale relative to its sources.
+      - id: build-app
+        name: rebuild the dashboard from app/
+        entry: pixi run build-app
+        language: system
+        pass_filenames: false
+        files: '^(app/|scripts/build_app\.py$)'
+
+      # Syntax and duplicate-declaration checks on the concatenated bundle.
+      - id: check-app
+        name: check the built dashboard
+        entry: pixi run check-app
+        language: system
+        pass_filenames: false
+        files: '^(app/|docs/app/index\.html$|scripts/(build|check)_app\.py$)'
 
       - id: zensical-build
         name: zensical build (strict)

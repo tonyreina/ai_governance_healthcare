@@ -59,7 +59,8 @@ def main() -> int:
         "| Label | Meaning |",
         "|---|---|",
         "| **OPTICA only** | No CHAI criterion asks for any part of this |",
-        "| **partial** | CHAI touches it but asks for materially less, or asks a different party |",
+        "| **partial** | CHAI touches it but asks for materially less, "
+        "or asks a different party |",
         "",
         "There are no *equivalent* rows. No OPTICA item fully discharges a CHAI",
         "criterion — see the [crosswalk](../crosswalk.md) for why that matters.",

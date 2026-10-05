@@ -1,0 +1,20 @@
+# Ruff: linter and formatter for this project's Python.
+# Targets the floor the pixi environment guarantees.
+target-version = "py311"
+line-length = 88
+
+exclude = [".pixi", "site", ".cache", "server/migrations"]
+
+[lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # import sorting
+    "UP",       # pyupgrade
+    "B",        # bugbear
+    "SIM",      # simplify
+    "RUF",      # ruff's own
+]
+
+[format]
+docstring-code-format = true

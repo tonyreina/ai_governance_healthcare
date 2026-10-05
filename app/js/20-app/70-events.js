@@ -1,0 +1,112 @@
+/* ============================================================
+   Events
+   ============================================================ */
+document.addEventListener("click",async e=>{
+  const row=e.target.closest(".prow");
+  const t=e.target.closest("button");
+  if(!t && row){ openProject(row.dataset.open); return; }
+  if(!t) return;
+  if(t.dataset.open){ openProject(t.dataset.open); return; }
+  if(t.dataset.home){ goHome(); return; }
+  if(t.dataset.go){ go(t.dataset.go); return; }
+  if(t.dataset.framework && !RO){
+    const f=frameworkById(t.dataset.framework);
+    if(f && f.id==="optica") setOpticaEnabled(!f.enabled(S));
+    return;
+  }
+  if(t.dataset.filter){ UI.filter=t.dataset.filter; saveUI(); updateDashboard(); document.querySelector(`[data-filter="${UI.filter}"]`)?.focus(); return; }
+  if(t.dataset.set && !RO){
+    const id=t.dataset.set, store=t.dataset.store||"items";
+    const cur=((get(store)||{})[id]||{}).status||"";
+    const val = cur===t.dataset.s ? "" : t.dataset.s;
+    edit(`${store}.${id}.status`, val);
+    const li=t.closest(".ci");
+    li.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.s===val)));
+    if((val==="partial"||val==="notmet") && !openItems.has(id)){ openItems.add(id); li.classList.add("open"); const m=li.querySelector(".more"); m.textContent="Hide details"; m.setAttribute("aria-expanded","true"); }
+    renderRail(); return;
+  }
+  if(t.dataset.toggle){
+    const id=t.dataset.toggle, li=t.closest(".ci"); const open=!openItems.has(id);
+    open?openItems.add(id):openItems.delete(id);
+    li.classList.toggle("open",open); t.textContent=open?"Hide details":"Evidence & owner"; t.setAttribute("aria-expanded",String(open));
+    if(open && !RO) li.querySelector("textarea").focus();
+    return;
+  }
+  if(t.dataset.gate && !RO){
+    const k=t.dataset.gate, g=S.gates[k]||{};
+    const val = g.decision===t.dataset.d ? "" : t.dataset.d;
+    const now=new Date().toISOString();
+    const patch={gates:{[k]:{decision:val, signedBy:val?(ME.id||null):null, signedAt:val?now:null, date: val ? (g.date||TODAY()) : (g.date||"")}}};
+    deepMerge(S,patch); const st=stamp(); Object.assign(S,st);
+    queuePatch(CUR, Object.assign(patch,st));
+    writeLog(CUR, val?`${GATES[k].title}: ${val}`:`${GATES[k].title}: decision cleared`);
+    renderRail(); renderMain(false); return;
+  }
+  if(t.dataset.delmetric!=null && !RO){ S.metrics.splice(+t.dataset.delmetric,1); saveMetrics(); renderMain(false); renderLabel(); return; }
+  const a=t.dataset.act; if(!a) return;
+  if(a==="new"){ const f=document.getElementById("newform"); if(f){ f.hidden=false; document.getElementById("newname").focus(); } return; }
+  if(a==="new-cancel"){ document.getElementById("newform").hidden=true; return; }
+  if(a==="samples"){ t.disabled=true; await loadSamples(); return; }
+  if(a==="legacy"){
+    try{ const j=JSON.parse(localStorage.getItem("chai-review-v1")); const p=normalize(Object.assign(blankProject(j.meta.solution),{meta:j.meta,items:j.items||{},gates:j.gates||{},metrics:j.metrics||[],card:j.card||{}}));
+      Object.values(p.items).forEach(x=>{ if(x) delete x._open; });
+      const id=await createProject(p,"Imported from a review saved in this browser"); if(id){ localStorage.setItem("chai-legacy-imported","1"); document.getElementById("legacyBanner")?.remove(); toast("Review added to the workspace"); }
+    }catch(err){ toast("Couldn't read the earlier review"); }
+    return;
+  }
+  if(a==="legacy-dismiss"){ try{localStorage.setItem("chai-legacy-imported","1");}catch(e){} document.getElementById("legacyBanner")?.remove(); return; }
+  if(a==="import"){ document.getElementById("importFile").click(); return; }
+  if(a==="dl-csv"){ download(`ai-governance-portfolio-${TODAY()}.csv`, exportCSV()); return; }
+  if(!S) return;
+  if(a==="addmetric"){ S.metrics.push({cat:METRIC_CATS[0],name:"",value:"",ci:"",pop:""}); saveMetrics(); renderMain(false); const ins=document.querySelectorAll('.mtable input[aria-label="Metric"]'); ins[ins.length-1]?.focus(); }
+  else if(a==="example"){ exampleInto(S); const st=stamp(); queuePatch(CUR,Object.assign({meta:clone(S.meta),items:clone(S.items),gates:clone(S.gates),metrics:clone(S.metrics),card:clone(S.card),cardUpdatedAt:S.cardUpdatedAt},st)); writeLog(CUR,"Example data filled in"); renderProject(false); toast("Example filled in"); }
+  else if(a==="archive"){ const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?"Project archived":"Project restored"); }
+  else if(a==="delete"){ if(!confirm(`Delete "${S.meta.solution||"this project"}" for everyone? This can't be undone. Archive it instead to keep the record.`)) return;
+    const id=CUR; delete pending[id]; clearTimeout(timers[id]);
+    try{ await STORE.remove(id); goHome(); toast("Project deleted"); }catch(err){ toast("Couldn't delete the project"); } }
+  else if(a==="newreview"){ const now=new Date().toISOString(); const patch={gates:{D:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); writeLog(CUR,`Checkpoint D: periodic review recorded (${S.gates.D.decision})`); renderRail(); renderMain(false); toast("Periodic review recorded"); }
+  else if(a==="dl-html") download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML());
+  else if(a==="dl-md") download(`${slug(S.meta.solution)}-chai-review.md`, exportMD());
+  else if(a==="dl-json") download(`${slug(S.meta.solution)}-chai-review.json`, JSON.stringify(projectJSON(S),null,2));
+  else if(a==="print") window.print();
+});
+document.addEventListener("submit",async e=>{
+  if(e.target.id!=="newform") return; e.preventDefault();
+  const name=document.getElementById("newname").value.trim(); if(!name){ document.getElementById("newname").focus(); return; }
+  const id=await createProject(blankProject(name),"Project created");
+  if(id){ const wait=()=>PROJECTS.has(id)?openProject(id,"setup"):setTimeout(wait,120); wait(); }
+});
+document.addEventListener("input",e=>{
+  const el=e.target;
+  if(el.id==="q"){ UI.q=el.value; updateDashboard(); return; }
+  const p=el.dataset && el.dataset.bind; if(!p || RO || !S) return;
+  edit(p, el.value);
+  if(p.startsWith("meta.")||p.startsWith("card.")||p.startsWith("metrics.")) renderLabel();
+  if(p==="meta.solution"||p.startsWith("card.")) renderRail();
+});
+document.addEventListener("change",e=>{
+  const el=e.target; if(el.tagName==="SELECT" && el.dataset.bind && S && !RO){ edit(el.dataset.bind, el.value); renderLabel(); renderRail(); }
+});
+document.getElementById("brandBtn").onclick=()=>goHome();
+document.getElementById("goReport").onclick=()=>{ if(S) go("report"); };
+document.getElementById("importFile").onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    const j=JSON.parse(await f.text()); const st=j._state||j;
+    if(!st.meta||!st.items) throw new Error("not a review");
+    const p=normalize(Object.assign(blankProject(st.meta.solution), clone(st))); delete p.id;
+    Object.values(p.items).forEach(x=>{ if(x) delete x._open; }); delete p.view;
+    p.updatedAt=new Date().toISOString(); p.updatedBy=ME.id||null;
+    const id=await createProject(p,"Imported from a JSON export");
+    if(id) toast("Project imported");
+  }catch(err){ toast("That file isn't a project export from this tool"); }
+  e.target.value="";
+};
+const panel=document.getElementById("panel");
+document.getElementById("openPreview").onclick=()=>{ renderLabel(); panel.classList.add("open"); document.getElementById("closePreview").focus(); };
+document.getElementById("closePreview").onclick=()=>panel.classList.remove("open");
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") panel.classList.remove("open"); });
+window.addEventListener("pagehide",()=>{ Object.keys(pending).forEach(flush); });
+
+let toastT;
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),2400); }

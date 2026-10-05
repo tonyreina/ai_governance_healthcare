@@ -18,11 +18,12 @@ Example:
 
 Requires: fairlearn, pandas.
 """
+
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 FAIRNESS = "Fairness & equity"
 CATEGORIES = {"Usefulness, usability & efficacy", FAIRNESS, "Safety & reliability"}
@@ -34,8 +35,9 @@ def _group_label(group) -> str:
     return str(group)
 
 
-def metricframe_to_rows(mf, category: str = FAIRNESS, digits: int = 3,
-                        include_overall: bool = True) -> list[dict]:
+def metricframe_to_rows(
+    mf, category: str = FAIRNESS, digits: int = 3, include_overall: bool = True
+) -> list[dict]:
     """Turn a fairlearn MetricFrame into metric rows for the tool."""
     if category not in CATEGORIES:
         raise ValueError(f"category must be one of {sorted(CATEGORIES)}")
@@ -69,8 +71,13 @@ def load(path: str | Path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def add_metrics(export: dict, rows: Iterable[dict], replace_category: str | None = None) -> dict:
-    """Append rows to the export. Optionally drop existing rows of one category first."""
+def add_metrics(
+    export: dict, rows: Iterable[dict], replace_category: str | None = None
+) -> dict:
+    """Append rows to the export.
+
+    Optionally drops existing rows of one category first.
+    """
     state = export["_state"]
     metrics = state.setdefault("metrics", [])
     if replace_category:

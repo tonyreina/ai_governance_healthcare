@@ -73,18 +73,9 @@ CONTEXT: dict[str, Any] = {
     "citeAs": "cr:citeAs",
     "column": "cr:column",
     "conformsTo": "dct:conformsTo",
-    "data": {
-        "@id": "cr:data",
-        "@type": "@json"
-    },
-    "dataType": {
-        "@id": "cr:dataType",
-        "@type": "@vocab"
-    },
-    "examples": {
-        "@id": "cr:examples",
-        "@type": "@json"
-    },
+    "data": {"@id": "cr:data", "@type": "@json"},
+    "dataType": {"@id": "cr:dataType", "@type": "@vocab"},
+    "examples": {"@id": "cr:examples", "@type": "@json"},
     "extract": "cr:extract",
     "field": "cr:field",
     "fileProperty": "cr:fileProperty",
@@ -108,13 +99,15 @@ CONTEXT: dict[str, Any] = {
     "source": "cr:source",
     "subField": "cr:subField",
     "transform": "cr:transform",
-    "chai": CHAI_NS
+    "chai": CHAI_NS,
 }
 
-DATE_RANGE = re.compile(
-    r"(20\d{2}(?:-\d{2})?(?:-\d{2})?)\s*(?:to|–|—|-|through|until)\s*(20\d{2}(?:-\d{2})?(?:-\d{2})?)",
-    re.I,
-)
+# The en and em dashes are deliberate, not typos: a date range in a free-text
+# field is written "2019-01 to 2023-06", "2019-01 \u2013 2023-06" or with an em
+# dash about equally often, and all three have to match.
+_YEAR_MONTH = r"(20\d{2}(?:-\d{2})?(?:-\d{2})?)"
+_RANGE_SEP = r"(?:to|\u2013|\u2014|-|through|until)"
+DATE_RANGE = re.compile(rf"{_YEAR_MONTH}\s*{_RANGE_SEP}\s*{_YEAR_MONTH}", re.I)
 
 
 def slugify(text: str) -> str:
@@ -171,8 +164,7 @@ def build(
         )
 
     doc["description"] = join_parts(
-        f"Development and validation data extract underlying "
-        f"“{solution}”.",
+        f"Development and validation data extract underlying “{solution}”.",
         card.get("summary"),
         "This record describes the DATA. The AI solution it supports is "
         "described under `about`; the governance review it came from is linked "
@@ -181,7 +173,10 @@ def build(
 
     # ---- provenance / responsibility -------------------------------------
     if meta.get("developer"):
-        creator: dict[str, Any] = {"@type": "sc:Organization", "name": meta["developer"]}
+        creator: dict[str, Any] = {
+            "@type": "sc:Organization",
+            "name": meta["developer"],
+        }
         if meta.get("sourcing"):
             creator["description"] = f"Sourcing: {meta['sourcing']}"
         doc["creator"] = creator
@@ -203,7 +198,9 @@ def build(
     if card.get("releaseDate"):
         doc["datePublished"] = card["releaseDate"]
     if card.get("keywords"):
-        doc["keywords"] = [k.strip() for k in re.split(r"[,;]", card["keywords"]) if k.strip()]
+        doc["keywords"] = [
+            k.strip() for k in re.split(r"[,;]", card["keywords"]) if k.strip()
+        ]
 
     # sdLicense covers THIS METADATA RECORD, which this project does license.
     # `license` -- the licence of the clinical data itself -- is deliberately
@@ -251,7 +248,9 @@ def build(
     # limitations on reuse of this extract, so they are merged rather than
     # mapped to separate properties that do not exist.
     limitations = join_parts(
-        f"Targeted population: {card['population']}" if card.get("population") else None,
+        f"Targeted population: {card['population']}"
+        if card.get("population")
+        else None,
         f"Cautioned out-of-scope settings and uses: {card['outOfScope']}"
         if card.get("outOfScope")
         else None,
@@ -318,13 +317,18 @@ def build(
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("export", type=Path, help="project JSON export from the dashboard")
     ap.add_argument("-o", "--output", type=Path, help="write here instead of stdout")
     ap.add_argument(
         "--include-cohort-detail",
         action="store_true",
-        help="publish the development-data characterization verbatim (may carry PHI risk)",
+        help=(
+            "publish the development-data characterization verbatim "
+            "(may carry PHI risk)"
+        ),
     )
     ap.add_argument(
         "--profile",

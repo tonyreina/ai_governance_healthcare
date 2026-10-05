@@ -1,3 +1,6 @@
+<!-- GENERATED FILE - do not edit.
+     Built from app/ by scripts/build_app.py (pixi run build-app).
+     Edit the sources under app/, then rebuild. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -334,118 +337,6 @@ body.ro .ro-hide{display:none!important}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* ============================================================
-   Content model
-   Checklist items are paraphrased summaries organized around the
-   CHAI six-stage lifecycle and five principles. They are not the
-   official CHAI Responsible AI Checklist text.
-   ============================================================ */
-const PRINCIPLES = {
-  U:{name:"Usefulness, usability & efficacy"},
-  F:{name:"Fairness"},
-  S:{name:"Safety & reliability"},
-  T:{name:"Transparency & accountability"},
-  P:{name:"Security & privacy"}
-};
-const STAGES = [
-  {id:"s1",n:1,title:"Define the problem & plan",blurb:"Agree on the clinical or operational problem, confirm AI is the right tool, and name who is accountable before anything is built or bought.",items:[
-    ["U","Problem statement and target outcome agreed with clinical and operational stakeholders"],
-    ["U","Current-state or root-cause analysis shows AI is an appropriate intervention, not just a possible one"],
-    ["U","Success measures and a baseline to compare against are defined"],
-    ["F","Affected patient populations identified, including groups at risk of being underserved or harmed"],
-    ["S","Potential harms and failure modes listed, with severity and likelihood"],
-    ["T","Accountable owner, governance body, and decision rights named"],
-    ["P","Data needs, privacy, consent, and regulatory constraints scoped"]
-  ]},
-  {id:"s2",n:2,title:"Design the AI system",blurb:"Specify how the system fits into care: who uses it, where in the workflow, what it outputs, and what happens when it is wrong.",items:[
-    ["U","End users took part in workflow and interface design"],
-    ["U","Intended use, users, and care setting documented, with out-of-scope uses listed"],
-    ["F","Subgroups and fairness criteria for evaluation pre-specified"],
-    ["S","Decision thresholds defined and clinically justified"],
-    ["S","Human oversight and override path designed into the workflow"],
-    ["T","Pathway for reporting safety issues and harms drafted, naming who reports to whom"],
-    ["P","Threat model, access controls, and data flows designed"]
-  ]},
-  {id:"s3",n:3,title:"Engineer the AI solution",blurb:"Build or configure the model with traceable data and documented choices, so the assessment stage has something it can verify.",items:[
-    ["T","Data provenance and known data limitations documented"],
-    ["F","Demographic and socio-demographic make-up of development data characterized"],
-    ["F","Bias mitigation approach chosen and documented"],
-    ["S","Data quality checks and handling of missing data documented"],
-    ["T","Version control in place for datasets, code, and model artifacts"],
-    ["P","De-identification or other privacy-enhancing techniques applied where appropriate"],
-    ["S","People responsible for monitoring data and model behavior designated"]
-  ]},
-  {id:"s4",n:4,title:"Assess",blurb:"Validate the solution locally before patients are exposed to it. Record key metrics below; they flow into the model card.",items:[
-    ["U","Performance validated on local data representative of the deployment population"],
-    ["F","Performance compared across demographic subgroups, with gaps explained"],
-    ["S","Calibration checked, not only discrimination"],
-    ["S","Silent (shadow) evaluation run in the live environment"],
-    ["S","Installation qualification completed, where applicable"],
-    ["T","Explanations of outputs are suited to the intended users"],
-    ["P","Security review or vendor security assessment completed"],
-    ["T","Safety reporting pathway updated with what assessment revealed"]
-  ], metrics:true},
-  {id:"s5",n:5,title:"Pilot",blurb:"Run a small, time-boxed pilot to learn whether the solution helps in real care, for whom, and at what cost to staff.",items:[
-    ["U","Pilot scope, sites, duration, and stop rules defined"],
-    ["U","Usability and workflow fit assessed with frontline users"],
-    ["U","Real-world effect on outcomes or process measured against baseline"],
-    ["F","Pilot results checked for differences across patient groups"],
-    ["S","Adverse events and near misses tracked and reviewed"],
-    ["T","Users trained, and the approach to patient disclosure decided"]
-  ]},
-  {id:"s6",n:6,title:"Deploy & monitor",blurb:"Scale up with monitoring, change control, and a plan for when to retrain or retire.",items:[
-    ["S","Performance and drift monitoring live, with alert thresholds and an owner"],
-    ["F","Subgroup performance monitored on an ongoing basis"],
-    ["T","Audit schedule and change control set, with a revised model card for each version"],
-    ["S","Incident response, rollback, and retirement criteria documented"],
-    ["P","Access reviews and security patching scheduled"],
-    ["U","Value to patients and staff re-evaluated periodically"]
-  ]}
-];
-STAGES.forEach(s=>s.items=s.items.map((it,i)=>({id:`${s.id}-${i+1}`,p:it[0],text:it[1]})));
-
-const GATES = {
-  A:{after:"s1",title:"Checkpoint A",q:"Approve moving to design?",help:"Is the problem worth solving with AI, and is the plan sound enough to start design?",options:["Proceed","Proceed with conditions","Revise and resubmit","Stop"]},
-  B:{after:"s4",title:"Checkpoint B",q:"Approve a pilot?",help:"Has local assessment shown the solution is safe, effective, and fair enough to expose a small group of patients to it?",options:["Proceed","Proceed with conditions","Revise and resubmit","Stop"]},
-  C:{after:"s5",title:"Checkpoint C",q:"Approve deployment at scale?",help:"Did the pilot show real benefit without unacceptable harm or disparity?",options:["Proceed","Proceed with conditions","Revise and resubmit","Stop"]},
-  D:{after:"s6",title:"Checkpoint D",q:"Periodic review decision",help:"Based on monitoring, should the solution continue as is, change, or be retired? Record a new review each cycle; the next due date is set from it.",options:["Continue","Continue with changes","Retrain or revise","Retire"]}
-};
-
-const CARD = [
-  {sec:"Identity",fields:[
-    ["name","Name","",0],["developer","Developer","",0],["contact","Inquiries or to report an issue","Email or phone",0],
-    ["releaseStage","Release stage","e.g. Pilot, General availability",0],["releaseDate","Release date","",0],["version","Version","Tie the card to a software version",0],
-    ["availability","Global availability","",0],["regulatory","Regulatory approval, if applicable","e.g. FDA 510(k) number, or not a device",0],
-    ["summary","Summary","The most important things a clinician or buyer should know",1],["keywords","Keywords","",0]]},
-  {sec:"Uses and directions",fields:[
-    ["intendedUse","Intended use and workflow","",1],["users","Primary intended users","",0],["howTo","How to use","",1],
-    ["population","Targeted patient population","",1],["outOfScope","Cautioned out-of-scope settings and use cases","",1]]},
-  {sec:"Warnings",fields:[
-    ["risks","Known risks and limitations","",1],["biases","Known biases or ethical considerations","",1],["riskLevel","Clinical risk level","e.g. Low, Moderate, High, with a one-line reason",0]]},
-  {sec:"Trust ingredients",fields:[
-    ["outputs","Outcome(s) and output(s)","",1],["modelType","Model type","",0],["foundation","Foundation models used, if applicable","",0],
-    ["inputSource","Input data source","",1],["dataType","Input and output data types","",0],["devData","Development data characterization","Size, dates, sites, demographics",1],
-    ["biasMitigation","Bias mitigation approaches","",1],["maintenance","Ongoing maintenance","Monitoring, retraining cadence, owner",1],
-    ["security","Security and compliance practices or accreditations","",1]]},
-  {sec:"Resources",fields:[
-    ["evalRefs","Evaluation references","",1],["trials","Clinical trials","",0],["pubs","Peer-reviewed publications","",1],
-    ["reimbursement","Reimbursement status","",0],["consent","Patient consent or disclosure","",1]]}
-];
-const CARD_FIELDS = CARD.flatMap(s=>s.fields.map(f=>f[0]));
-const CORE_CARD = ["intendedUse","users","population","outOfScope","risks","riskLevel","outputs","inputSource","maintenance"];
-const CARD_LABEL = Object.fromEntries(CARD.flatMap(s=>s.fields.map(f=>[f[0],f[1]])));
-const METRIC_CATS = ["Usefulness, usability & efficacy","Fairness & equity","Safety & reliability"];
-
-const VIEWS = [
-  {id:"setup",kind:"setup",label:"Project setup"},
-  {id:"s1",kind:"stage"},{id:"gA",kind:"gate",gate:"A"},
-  {id:"s2",kind:"stage"},{id:"s3",kind:"stage"},{id:"s4",kind:"stage"},{id:"gB",kind:"gate",gate:"B"},
-  {id:"s5",kind:"stage"},{id:"gC",kind:"gate",gate:"C"},
-  {id:"s6",kind:"stage"},{id:"gD",kind:"gate",gate:"D"},
-  {id:"card",kind:"card",label:"Applied model card"},
-  {id:"report",kind:"report",label:"Report"}
-];
-
-/* ============================================================
    Utilities
    ============================================================ */
 const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -465,94 +356,32 @@ function ago(iso){ if(!iso) return ""; const d=new Date(iso); if(isNaN(d)) retur
 const newId = ()=> "p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
 /* ============================================================
-   Project model
+   Core: the project document
+   Framework-agnostic. Knows a project has meta, items, gates,
+   metrics and a card -- not what any of them mean.
    ============================================================ */
 const blankMeta = ()=>({solution:"",org:"",developer:"",sourcing:"",sponsor:"",reviewers:"",riskTier:"",reviewCadence:"",startDate:"",scope:""});
 function blankProject(name){
   const now=new Date().toISOString();
-  return {meta:{...blankMeta(),solution:name||""}, items:{}, gates:{A:{},B:{},C:{},D:{}}, metrics:[], card:{},
+  return {meta:{...blankMeta(),solution:name||""}, ...frameworkBlank(), metrics:[], card:{},
     archived:false, createdAt:now, createdBy:ME.id||null, updatedAt:now, updatedBy:ME.id||null, cardUpdatedAt:null};
 }
 function normalize(p){
-  p.meta=Object.assign(blankMeta(),p.meta||{}); p.items=p.items||{}; p.gates=Object.assign({A:{},B:{},C:{},D:{}},p.gates||{});
-  p.metrics=Array.isArray(p.metrics)?p.metrics:[]; p.card=p.card||{}; return p;
+  p.meta=Object.assign(blankMeta(),p.meta||{});
+  p.metrics=Array.isArray(p.metrics)?p.metrics:[]; p.card=p.card||{};
+  frameworkNormalize(p); return p;
 }
 const cardValOf = (p,k) => ((p.card||{})[k]||"").trim() || (k==="name"?(p.meta.solution||"").trim():"") || (k==="developer"?(p.meta.developer||"").trim():"");
 
 const STATUS = {met:"Met",partial:"Partial",notmet:"Not met",na:"N/A"};
 const VAL = {met:1,partial:.5,notmet:0};
-function allItems(){ return STAGES.flatMap(s=>s.items.map(it=>({...it,stage:s}))); }
+
+// Generic: scores any list of {id} against any items map. Framework rules
+// decide WHICH list to pass; this does not know.
 function scoreOf(list, items){
   items=items||S.items; let sum=0,n=0,answered=0;
   list.forEach(it=>{ const st=(items[it.id]||{}).status; if(st) answered++; if(st==="na") return; n++; sum+=VAL[st]||0; });
   return {pct:n?Math.round(sum/n*100):0,answered,total:list.length,applicable:n};
-}
-function gapsUpTo(p,stageId){
-  const idx=STAGES.findIndex(s=>s.id===stageId);
-  return STAGES.slice(0,idx+1).flatMap(s=>s.items.filter(it=>{const st=(p.items[it.id]||{}).status; return !st||st==="notmet";}).map(it=>({...it,stage:s})));
-}
-const dec = (p,k)=> ((p.gates||{})[k]||{}).decision||"";
-const isGo = d => /^(Proceed|Continue)/.test(d||"");
-function phase(p){
-  if([dec(p,"A"),dec(p,"B"),dec(p,"C")].includes("Stop")) return {key:"retired",label:"Stopped"};
-  if(dec(p,"D")==="Retire") return {key:"retired",label:"Retired"};
-  if(isGo(dec(p,"C"))) return {key:"deployed",label:"Deployed",stage:6};
-  if(isGo(dec(p,"B"))) return {key:"pilot",label:"Pilot",stage:5};
-  if(isGo(dec(p,"A"))) return {key:"build",label:"Design, build & assess",stage:2};
-  return {key:"intake",label:"Intake & planning",stage:1};
-}
-function cadenceMonths(p){ const n=parseInt(p.meta.reviewCadence,10); return n>0?n:(p.meta.riskTier==="High"?6:12); }
-function nextReview(p){
-  if(phase(p).key!=="deployed") return null;
-  const base = parseDay(dec(p,"D") ? p.gates.D.date : "") || parseDay(p.gates.C.date);
-  if(!base) return null;
-  return ymd(addMonths(base,cadenceMonths(p)));
-}
-function latestGo(p){
-  let best=null;
-  ["A","B","C","D"].forEach(k=>{ const g=p.gates[k]||{}; if(isGo(g.decision)){ const d=parseDay(g.date); if(d && (!best||d>best.d)) best={k,d}; }});
-  return best;
-}
-
-/* Compliance rules. Red = out of compliance, amber = needs update. */
-function flags(p){
-  const F=[]; const ph=phase(p); const today=parseDay(TODAY());
-  if(ph.key==="retired") return F;
-  const live = ph.key==="deployed", piloting = ph.key==="pilot";
-  const items=allItems();
-  const overdue = items.filter(it=>{const d=p.items[it.id]||{}; const due=parseDay(d.due); return due && due<today && d.status!=="met" && d.status!=="na";});
-  if(overdue.length) F.push({sev:(live||piloting)?"red":"amber",text:`${overdue.length} action${overdue.length>1?"s":""} past due`});
-  if(live){
-    const notmet=items.filter(it=>(p.items[it.id]||{}).status==="notmet").length;
-    if(notmet) F.push({sev:"red",text:`Live with ${notmet} criteri${notmet>1?"a":"on"} not met`});
-    const nr=nextReview(p);
-    if(!nr) F.push({sev:"red",text:"Live with no deployment date recorded at Checkpoint C"});
-    else { const d=parseDay(nr), left=daysBetween(today,d);
-      if(left<0) F.push({sev:"red",text:`Periodic review overdue since ${fmtDay(nr)}`});
-      else if(left<=30) F.push({sev:"amber",text:`Periodic review due ${fmtDay(nr)}`}); }
-    if(dec(p,"D")==="Retrain or revise") F.push({sev:"amber",text:"Last review asked for retraining or revision"});
-  }
-  if(live||piloting){
-    const missing=CORE_CARD.filter(k=>!cardValOf(p,k));
-    if(missing.length) F.push({sev:live?"red":"amber",text:`Model card missing ${missing.length} core field${missing.length>1?"s":""}`});
-    const lg=latestGo(p); const cu=p.cardUpdatedAt?new Date(p.cardUpdatedAt):null;
-    if(lg && (!cu || cu < lg.d)) F.push({sev:"amber",text:`Model card not updated since ${GATES[lg.k].title}`});
-    if(!p.metrics.some(m=>m.name||m.value)) F.push({sev:"amber",text:"No key metrics recorded"});
-  }
-  ["A","B","C","D"].forEach(k=>{ const g=p.gates[k]||{};
-    if(isGo(g.decision) && !(g.rationale||"").trim()){
-      if(/conditions|changes/.test(g.decision)) F.push({sev:"amber",text:`${GATES[k].title}: conditional approval with no conditions recorded`});
-      else if(gapsUpTo(p,GATES[k].after).length) F.push({sev:"amber",text:`${GATES[k].title}: approved with open criteria and no rationale`});
-    }});
-  if(!live && p.updatedAt){ const idle=daysBetween(new Date(p.updatedAt),new Date()); if(idle>90) F.push({sev:"amber",text:`No activity in ${idle} days`}); }
-  return F.sort((a,b)=>(a.sev==="red"?0:1)-(b.sev==="red"?0:1));
-}
-function statusOf(p){
-  const ph=phase(p); if(ph.key==="retired") return {key:"retired",label:ph.label};
-  const f=flags(p);
-  if(f.some(x=>x.sev==="red")) return {key:"red",label:"Out of compliance"};
-  if(f.length) return {key:"amber",label:"Needs update"};
-  return {key:"green",label:"On track"};
 }
 
 /* ============================================================
@@ -669,33 +498,11 @@ async function createProject(data,logText){
 }
 
 /* ============================================================
-   Rendering: project rail, views, label
+   Core: DOM helpers
+   Form fields, focus preservation and small formatters. No
+   knowledge of any framework.
    ============================================================ */
 const get = (path)=> path.split(".").reduce((o,k)=>o==null?undefined:o[k], S);
-const shortDecision = d => ({"Proceed with conditions":"Conditional","Revise and resubmit":"Revise","Continue with changes":"Changes","Retrain or revise":"Retrain"}[d]||d);
-
-function renderRail(){
-  const ol=document.getElementById("rail");
-  const rows = VIEWS.map(v=>{
-    const cur = UI.view===v.id ? ' aria-current="step"':'';
-    if(v.kind==="stage"){
-      const s=STAGES.find(x=>x.id===v.id), c=scoreOf(s.items);
-      return `<li><button data-go="${v.id}"${cur}><span class="num">${s.n}</span><span>${esc(s.title)}</span><span class="meta ${c.answered===c.total?"done":""}">${c.answered}/${c.total}</span></button></li>`;
-    }
-    if(v.kind==="gate"){
-      const d=(S.gates[v.gate]||{}).decision||"";
-      const cls = !d?"":(/Stop|Retire|Revise|Retrain/.test(d)?"warn":"done");
-      return `<li class="gate"><button data-go="${v.id}"${cur}><span class="num"><span class="diamond" aria-hidden="true"></span></span><span>${GATES[v.gate].title}</span><span class="meta ${cls}">${d?esc(shortDecision(d)):"open"}</span></button></li>`;
-    }
-    if(v.kind==="setup") return `<li><button data-go="setup"${cur}><span class="num">0</span><span>${v.label}</span><span class="meta"></span></button></li><li class="sep" role="presentation"></li>`;
-    if(v.kind==="card"){ const filled=CARD_FIELDS.filter(k=>cardValOf(S,k)).length;
-      return `<li class="sep" role="presentation"></li><li><button data-go="card"${cur}><span class="num" aria-hidden="true">≡</span><span>${v.label}</span><span class="meta">${filled}/${CARD_FIELDS.length}</span></button></li>`; }
-    return `<li><button data-go="report"${cur}><span class="num" aria-hidden="true">✓</span><span>${v.label}</span><span class="meta"></span></button></li>`;
-  }).join("");
-  ol.innerHTML = `<li class="home-link"><button data-home="1"><span class="num" aria-hidden="true">←</span><span>All projects</span></button></li><li class="sep" role="presentation"></li>` + rows;
-  document.getElementById("projName").textContent = S.meta.solution || "Untitled AI solution";
-}
-
 function field(path,label,hint,long,opts){
   const v=esc(get(path)||""); const id="f_"+path.replace(/\./g,"_");
   let input;
@@ -705,15 +512,118 @@ function field(path,label,hint,long,opts){
   return `<div class="field${long?" wide":""}"><label for="${id}">${esc(label)}</label>${hint?`<span class="hint">${esc(hint)}</span>`:""}${input}</div>`;
 }
 function pager(){
-  const i=VIEWS.findIndex(v=>v.id===UI.view);
-  const prev=VIEWS[i-1], next=VIEWS[i+1];
-  const name=v=>v? (v.kind==="stage"?`Stage ${STAGES.find(s=>s.id===v.id).n}`: v.kind==="gate"?GATES[v.gate].title : v.label):"";
+  // Views come from the registry, so the pager walks whatever the active
+  // frameworks contributed. `short` lets a view give the pager a terser name
+  // than its rail label; otherwise the label is used.
+  const views=activeViews();
+  const i=views.findIndex(v=>v.id===UI.view);
+  const prev=views[i-1], next=views[i+1];
+  const name=v=>v?(v.short||v.label||""):"";
   return `<div class="pager">${prev?`<button class="btn" data-go="${prev.id}">Back to ${esc(name(prev))}</button>`:`<button class="btn" data-home="1">Back to all projects</button>`}${next?`<button class="btn primary" data-go="${next.id}">Continue to ${esc(name(next))}</button>`:""}</div>`;
 }
-function historyHTML(){
-  if(!LOG.length) return `<p style="font-size:14px;color:var(--muted)">No recorded events yet.</p>`;
-  return `<ul class="history">${LOG.slice(0,25).map(e=>`<li><time>${esc(fmtDay((e.at||"").slice(0,10)))}</time><span>${esc(e.text)} <span style="color:var(--muted)">by ${who(e.by)}</span></span></li>`).join("")}</ul>`;
+function focusKey(el){
+  if(!el||!el.dataset) return null; const d=el.dataset;
+  if(d.set) return `[data-set="${d.set}"][data-s="${d.s}"]`;
+  if(d.gate) return `[data-gate="${d.gate}"][data-d="${CSS.escape(d.d)}"]`;
+  if(d.toggle) return `[data-toggle="${d.toggle}"]`;
+  if(d.act) return `[data-act="${d.act}"]`;
+  return null;
 }
+function editingInMain(){ const a=document.activeElement, m=document.getElementById("main"); return a && m.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); }
+function syncInputs(){
+  document.querySelectorAll("#main [data-bind]").forEach(el=>{ if(el===document.activeElement) return; const v=get(el.dataset.bind)??""; if(el.value!==v) el.value=v; });
+  document.querySelectorAll("#main [data-set]").forEach(b=>b.setAttribute("aria-pressed",String((S.items[b.dataset.set]||{}).status===b.dataset.s)));
+}
+function barCls(p){ return p>=80?"":p>=50?"mid":"low"; }
+
+/* ============================================================
+   Framework registry
+   A framework is a self-contained checklist: its own items, its own
+   views, its own progress. Frameworks never read each other, and the
+   app shell never names one. Adding a third means adding a directory
+   under app/js/10-frameworks/ that calls registerFramework().
+
+   The contract:
+     id        string, stable, used in data keys and the DOM
+     label     short display name
+     enabled   (p) => bool    is it switched on for this project?
+     views     (p) => [view]  rail entries, in order
+     render    (view, p) => html
+     blank     () => object   extra keys merged into a new project
+     normalize (p) => void    repair shape on load; must be idempotent
+
+   A view is {id, kind, label, num, meta, cls, sep}. The shell renders
+   the rail from these fields alone; `kind` is the framework's own
+   business and is passed back to render() untouched.
+   ============================================================ */
+const FRAMEWORKS = [];
+
+function registerFramework(f) {
+  if (FRAMEWORKS.some(x => x.id === f.id)) throw new Error(`framework ${f.id} already registered`);
+  FRAMEWORKS.push(f);
+  return f;
+}
+
+const frameworkById = id => FRAMEWORKS.find(f => f.id === id);
+
+/* Frameworks switched on for a project. CHAI is always on: it is the
+   spine the compliance status and the dashboard are computed from.
+   Others are opt-in per project. */
+function activeFrameworks(p) {
+  const proj = p || S;
+  return FRAMEWORKS.filter(f => { try { return f.enabled(proj); } catch (e) { return false; } });
+}
+
+/* Every rail entry, in framework registration order, each tagged with
+   the framework that owns it so the shell can route back without a
+   lookup table. */
+function activeViews(p) {
+  const proj = p || S;
+  return activeFrameworks(proj).flatMap(f =>
+    (f.views(proj) || []).map(v => ({ ...v, fw: f }))
+  );
+}
+
+const viewById = (id, p) => activeViews(p).find(v => v.id === id);
+
+/* Extra top-level keys a new project needs. Existing projects without
+   them stay valid: every framework's normalize() has to cope with its
+   own keys being absent, which is what keeps old exports importable. */
+function frameworkBlank() {
+  return FRAMEWORKS.reduce((acc, f) => Object.assign(acc, f.blank ? f.blank() : {}), {});
+}
+
+function frameworkNormalize(p) {
+  FRAMEWORKS.forEach(f => { if (f.normalize) f.normalize(p); });
+  return p;
+}
+
+/* ============================================================
+   Project setup
+   The project itself: who is reviewing what, the history, and which
+   optional frameworks are switched on. This is not CHAI's screen --
+   it belongs to the project, which is why it lives outside the
+   framework directories and registers first so it heads the rail.
+
+   The compliance banner does read CHAI's flags(). That is deliberate
+   and documented: CHAI is the spine the dashboard status comes from,
+   and only one framework can own that. See docs/crosswalk.md.
+   ============================================================ */
+function frameworkToggles(){
+  const optional = FRAMEWORKS.filter(f => f.id !== "chai" && f.id !== "project");
+  if(!optional.length) return "";
+  const rows = optional.map(f=>{
+    const on = f.enabled(S);
+    return `<li style="display:flex;align-items:center;gap:10px;padding:6px 0">
+      <button class="btn${on?" primary":""}" data-framework="${esc(f.id)}" aria-pressed="${on}">${on?"On":"Off"}</button>
+      <span><b>${esc(f.label)}</b> \u2014 ${on?"its views appear in the rail below CHAI's":"77 adoption questions, answered by five stakeholders"}</span>
+    </li>`;
+  }).join("");
+  return `<h2 class="ro-hide">Frameworks</h2>
+  <p class="ro-hide" style="font-size:13px;color:var(--muted)">CHAI always runs. Switching another framework on adds its questions alongside; answers are kept if you switch it off again, and neither framework changes the other's status.</p>
+  <ul class="ro-hide" style="list-style:none;padding:0;margin:0">${rows}</ul>`;
+}
+
 function renderSetup(){
   const f=flags(S), st=statusOf(S), nr=nextReview(S);
   const empty = !Object.keys(S.items).length && !Object.keys(S.card).length;
@@ -733,6 +643,8 @@ function renderSetup(){
     ${field("meta.reviewers","Review team","Names and roles, e.g. CMIO, data science, nursing informatics, compliance, patient representative",1)}
     ${field("meta.scope","Scope of this review","Sites, units, and versions in scope",1)}
   </div>
+  ${frameworkToggles()}
+
   <h2>History</h2>
   ${historyHTML()}
   <h2 class="ro-hide">Manage</h2>
@@ -743,6 +655,200 @@ function renderSetup(){
   </div>
   ${pager()}`;
 }
+
+registerFramework({
+  id: "project",
+  label: "Project",
+  enabled: () => true,
+  blank: () => ({}),
+  views: () => [{ id: "setup", kind: "setup", label: "Project setup", num: 0, sep: "after" }],
+  render: () => renderSetup(),
+});
+
+/* ============================================================
+   Content model
+   Checklist items are paraphrased summaries organized around the
+   CHAI six-stage lifecycle and five principles. They are not the
+   official CHAI Responsible AI Checklist text.
+   ============================================================ */
+const PRINCIPLES = {
+  U:{name:"Usefulness, usability & efficacy"},
+  F:{name:"Fairness"},
+  S:{name:"Safety & reliability"},
+  T:{name:"Transparency & accountability"},
+  P:{name:"Security & privacy"}
+};
+const STAGES = [
+  {id:"s1",n:1,title:"Define the problem & plan",blurb:"Agree on the clinical or operational problem, confirm AI is the right tool, and name who is accountable before anything is built or bought.",items:[
+    ["U","Problem statement and target outcome agreed with clinical and operational stakeholders"],
+    ["U","Current-state or root-cause analysis shows AI is an appropriate intervention, not just a possible one"],
+    ["U","Success measures and a baseline to compare against are defined"],
+    ["F","Affected patient populations identified, including groups at risk of being underserved or harmed"],
+    ["S","Potential harms and failure modes listed, with severity and likelihood"],
+    ["T","Accountable owner, governance body, and decision rights named"],
+    ["P","Data needs, privacy, consent, and regulatory constraints scoped"]
+  ]},
+  {id:"s2",n:2,title:"Design the AI system",blurb:"Specify how the system fits into care: who uses it, where in the workflow, what it outputs, and what happens when it is wrong.",items:[
+    ["U","End users took part in workflow and interface design"],
+    ["U","Intended use, users, and care setting documented, with out-of-scope uses listed"],
+    ["F","Subgroups and fairness criteria for evaluation pre-specified"],
+    ["S","Decision thresholds defined and clinically justified"],
+    ["S","Human oversight and override path designed into the workflow"],
+    ["T","Pathway for reporting safety issues and harms drafted, naming who reports to whom"],
+    ["P","Threat model, access controls, and data flows designed"]
+  ]},
+  {id:"s3",n:3,title:"Engineer the AI solution",blurb:"Build or configure the model with traceable data and documented choices, so the assessment stage has something it can verify.",items:[
+    ["T","Data provenance and known data limitations documented"],
+    ["F","Demographic and socio-demographic make-up of development data characterized"],
+    ["F","Bias mitigation approach chosen and documented"],
+    ["S","Data quality checks and handling of missing data documented"],
+    ["T","Version control in place for datasets, code, and model artifacts"],
+    ["P","De-identification or other privacy-enhancing techniques applied where appropriate"],
+    ["S","People responsible for monitoring data and model behavior designated"]
+  ]},
+  {id:"s4",n:4,title:"Assess",blurb:"Validate the solution locally before patients are exposed to it. Record key metrics below; they flow into the model card.",items:[
+    ["U","Performance validated on local data representative of the deployment population"],
+    ["F","Performance compared across demographic subgroups, with gaps explained"],
+    ["S","Calibration checked, not only discrimination"],
+    ["S","Silent (shadow) evaluation run in the live environment"],
+    ["S","Installation qualification completed, where applicable"],
+    ["T","Explanations of outputs are suited to the intended users"],
+    ["P","Security review or vendor security assessment completed"],
+    ["T","Safety reporting pathway updated with what assessment revealed"]
+  ], metrics:true},
+  {id:"s5",n:5,title:"Pilot",blurb:"Run a small, time-boxed pilot to learn whether the solution helps in real care, for whom, and at what cost to staff.",items:[
+    ["U","Pilot scope, sites, duration, and stop rules defined"],
+    ["U","Usability and workflow fit assessed with frontline users"],
+    ["U","Real-world effect on outcomes or process measured against baseline"],
+    ["F","Pilot results checked for differences across patient groups"],
+    ["S","Adverse events and near misses tracked and reviewed"],
+    ["T","Users trained, and the approach to patient disclosure decided"]
+  ]},
+  {id:"s6",n:6,title:"Deploy & monitor",blurb:"Scale up with monitoring, change control, and a plan for when to retrain or retire.",items:[
+    ["S","Performance and drift monitoring live, with alert thresholds and an owner"],
+    ["F","Subgroup performance monitored on an ongoing basis"],
+    ["T","Audit schedule and change control set, with a revised model card for each version"],
+    ["S","Incident response, rollback, and retirement criteria documented"],
+    ["P","Access reviews and security patching scheduled"],
+    ["U","Value to patients and staff re-evaluated periodically"]
+  ]}
+];
+STAGES.forEach(s=>s.items=s.items.map((it,i)=>({id:`${s.id}-${i+1}`,p:it[0],text:it[1]})));
+
+const GATES = {
+  A:{after:"s1",title:"Checkpoint A",q:"Approve moving to design?",help:"Is the problem worth solving with AI, and is the plan sound enough to start design?",options:["Proceed","Proceed with conditions","Revise and resubmit","Stop"]},
+  B:{after:"s4",title:"Checkpoint B",q:"Approve a pilot?",help:"Has local assessment shown the solution is safe, effective, and fair enough to expose a small group of patients to it?",options:["Proceed","Proceed with conditions","Revise and resubmit","Stop"]},
+  C:{after:"s5",title:"Checkpoint C",q:"Approve deployment at scale?",help:"Did the pilot show real benefit without unacceptable harm or disparity?",options:["Proceed","Proceed with conditions","Revise and resubmit","Stop"]},
+  D:{after:"s6",title:"Checkpoint D",q:"Periodic review decision",help:"Based on monitoring, should the solution continue as is, change, or be retired? Record a new review each cycle; the next due date is set from it.",options:["Continue","Continue with changes","Retrain or revise","Retire"]}
+};
+
+const CARD = [
+  {sec:"Identity",fields:[
+    ["name","Name","",0],["developer","Developer","",0],["contact","Inquiries or to report an issue","Email or phone",0],
+    ["releaseStage","Release stage","e.g. Pilot, General availability",0],["releaseDate","Release date","",0],["version","Version","Tie the card to a software version",0],
+    ["availability","Global availability","",0],["regulatory","Regulatory approval, if applicable","e.g. FDA 510(k) number, or not a device",0],
+    ["summary","Summary","The most important things a clinician or buyer should know",1],["keywords","Keywords","",0]]},
+  {sec:"Uses and directions",fields:[
+    ["intendedUse","Intended use and workflow","",1],["users","Primary intended users","",0],["howTo","How to use","",1],
+    ["population","Targeted patient population","",1],["outOfScope","Cautioned out-of-scope settings and use cases","",1]]},
+  {sec:"Warnings",fields:[
+    ["risks","Known risks and limitations","",1],["biases","Known biases or ethical considerations","",1],["riskLevel","Clinical risk level","e.g. Low, Moderate, High, with a one-line reason",0]]},
+  {sec:"Trust ingredients",fields:[
+    ["outputs","Outcome(s) and output(s)","",1],["modelType","Model type","",0],["foundation","Foundation models used, if applicable","",0],
+    ["inputSource","Input data source","",1],["dataType","Input and output data types","",0],["devData","Development data characterization","Size, dates, sites, demographics",1],
+    ["biasMitigation","Bias mitigation approaches","",1],["maintenance","Ongoing maintenance","Monitoring, retraining cadence, owner",1],
+    ["security","Security and compliance practices or accreditations","",1]]},
+  {sec:"Resources",fields:[
+    ["evalRefs","Evaluation references","",1],["trials","Clinical trials","",0],["pubs","Peer-reviewed publications","",1],
+    ["reimbursement","Reimbursement status","",0],["consent","Patient consent or disclosure","",1]]}
+];
+const CARD_FIELDS = CARD.flatMap(s=>s.fields.map(f=>f[0]));
+const CORE_CARD = ["intendedUse","users","population","outOfScope","risks","riskLevel","outputs","inputSource","maintenance"];
+const CARD_LABEL = Object.fromEntries(CARD.flatMap(s=>s.fields.map(f=>[f[0],f[1]])));
+const METRIC_CATS = ["Usefulness, usability & efficacy","Fairness & equity","Safety & reliability"];
+
+/* ============================================================
+   CHAI: lifecycle rules
+   Phase, review cadence, compliance flags and status. These read
+   STAGES and GATES from 00-definition.js and are CHAI's alone;
+   nothing here is shared with another framework.
+   ============================================================ */
+function allItems(){ return STAGES.flatMap(s=>s.items.map(it=>({...it,stage:s}))); }
+function gapsUpTo(p,stageId){
+  const idx=STAGES.findIndex(s=>s.id===stageId);
+  return STAGES.slice(0,idx+1).flatMap(s=>s.items.filter(it=>{const st=(p.items[it.id]||{}).status; return !st||st==="notmet";}).map(it=>({...it,stage:s})));
+}
+const dec = (p,k)=> ((p.gates||{})[k]||{}).decision||"";
+const isGo = d => /^(Proceed|Continue)/.test(d||"");
+function phase(p){
+  if([dec(p,"A"),dec(p,"B"),dec(p,"C")].includes("Stop")) return {key:"retired",label:"Stopped"};
+  if(dec(p,"D")==="Retire") return {key:"retired",label:"Retired"};
+  if(isGo(dec(p,"C"))) return {key:"deployed",label:"Deployed",stage:6};
+  if(isGo(dec(p,"B"))) return {key:"pilot",label:"Pilot",stage:5};
+  if(isGo(dec(p,"A"))) return {key:"build",label:"Design, build & assess",stage:2};
+  return {key:"intake",label:"Intake & planning",stage:1};
+}
+function cadenceMonths(p){ const n=parseInt(p.meta.reviewCadence,10); return n>0?n:(p.meta.riskTier==="High"?6:12); }
+function nextReview(p){
+  if(phase(p).key!=="deployed") return null;
+  const base = parseDay(dec(p,"D") ? p.gates.D.date : "") || parseDay(p.gates.C.date);
+  if(!base) return null;
+  return ymd(addMonths(base,cadenceMonths(p)));
+}
+function latestGo(p){
+  let best=null;
+  ["A","B","C","D"].forEach(k=>{ const g=p.gates[k]||{}; if(isGo(g.decision)){ const d=parseDay(g.date); if(d && (!best||d>best.d)) best={k,d}; }});
+  return best;
+}
+
+/* Compliance rules. Red = out of compliance, amber = needs update. */
+function flags(p){
+  const F=[]; const ph=phase(p); const today=parseDay(TODAY());
+  if(ph.key==="retired") return F;
+  const live = ph.key==="deployed", piloting = ph.key==="pilot";
+  const items=allItems();
+  const overdue = items.filter(it=>{const d=p.items[it.id]||{}; const due=parseDay(d.due); return due && due<today && d.status!=="met" && d.status!=="na";});
+  if(overdue.length) F.push({sev:(live||piloting)?"red":"amber",text:`${overdue.length} action${overdue.length>1?"s":""} past due`});
+  if(live){
+    const notmet=items.filter(it=>(p.items[it.id]||{}).status==="notmet").length;
+    if(notmet) F.push({sev:"red",text:`Live with ${notmet} criteri${notmet>1?"a":"on"} not met`});
+    const nr=nextReview(p);
+    if(!nr) F.push({sev:"red",text:"Live with no deployment date recorded at Checkpoint C"});
+    else { const d=parseDay(nr), left=daysBetween(today,d);
+      if(left<0) F.push({sev:"red",text:`Periodic review overdue since ${fmtDay(nr)}`});
+      else if(left<=30) F.push({sev:"amber",text:`Periodic review due ${fmtDay(nr)}`}); }
+    if(dec(p,"D")==="Retrain or revise") F.push({sev:"amber",text:"Last review asked for retraining or revision"});
+  }
+  if(live||piloting){
+    const missing=CORE_CARD.filter(k=>!cardValOf(p,k));
+    if(missing.length) F.push({sev:live?"red":"amber",text:`Model card missing ${missing.length} core field${missing.length>1?"s":""}`});
+    const lg=latestGo(p); const cu=p.cardUpdatedAt?new Date(p.cardUpdatedAt):null;
+    if(lg && (!cu || cu < lg.d)) F.push({sev:"amber",text:`Model card not updated since ${GATES[lg.k].title}`});
+    if(!p.metrics.some(m=>m.name||m.value)) F.push({sev:"amber",text:"No key metrics recorded"});
+  }
+  ["A","B","C","D"].forEach(k=>{ const g=p.gates[k]||{};
+    if(isGo(g.decision) && !(g.rationale||"").trim()){
+      if(/conditions|changes/.test(g.decision)) F.push({sev:"amber",text:`${GATES[k].title}: conditional approval with no conditions recorded`});
+      else if(gapsUpTo(p,GATES[k].after).length) F.push({sev:"amber",text:`${GATES[k].title}: approved with open criteria and no rationale`});
+    }});
+  if(!live && p.updatedAt){ const idle=daysBetween(new Date(p.updatedAt),new Date()); if(idle>90) F.push({sev:"amber",text:`No activity in ${idle} days`}); }
+  return F.sort((a,b)=>(a.sev==="red"?0:1)-(b.sev==="red"?0:1));
+}
+function statusOf(p){
+  const ph=phase(p); if(ph.key==="retired") return {key:"retired",label:ph.label};
+  const f=flags(p);
+  if(f.some(x=>x.sev==="red")) return {key:"red",label:"Out of compliance"};
+  if(f.length) return {key:"amber",label:"Needs update"};
+  return {key:"green",label:"On track"};
+}
+
+/* ============================================================
+   CHAI: views
+   Every screen that renders CHAI content -- stages, checkpoints,
+   the applied model card, and the report.
+   ============================================================ */
+const shortDecision = d => ({"Proceed with conditions":"Conditional","Revise and resubmit":"Revise","Continue with changes":"Changes","Retrain or revise":"Retrain"}[d]||d);
+
 function renderStage(s){
   const c=scoreOf(s.items);
   return `<p class="eyebrow">Stage ${s.n} of 6</p><h1>${esc(s.title)}</h1>
@@ -866,7 +972,10 @@ function labelHTML(p){
 function renderLabel(){ if(S) document.getElementById("labelHost").innerHTML = labelHTML(); }
 
 /* ---------- report ---------- */
-function barCls(p){ return p>=80?"":p>=50?"mid":"low"; }
+function historyHTML(){
+  if(!LOG.length) return `<p style="font-size:14px;color:var(--muted)">No recorded events yet.</p>`;
+  return `<ul class="history">${LOG.slice(0,25).map(e=>`<li><time>${esc(fmtDay((e.at||"").slice(0,10)))}</time><span>${esc(e.text)} <span style="color:var(--muted)">by ${who(e.by)}</span></span></li>`).join("")}</ul>`;
+}
 function reportBody(names){
   const nm = id => names ? esc(id?(NAMES[id]||"someone"):"someone") : who(id);
   const all=allItems(); const ov=scoreOf(all);
@@ -929,39 +1038,354 @@ function renderReport(){
   </div>`;
 }
 
-function focusKey(el){
-  if(!el||!el.dataset) return null; const d=el.dataset;
-  if(d.set) return `[data-set="${d.set}"][data-s="${d.s}"]`;
-  if(d.gate) return `[data-gate="${d.gate}"][data-d="${CSS.escape(d.d)}"]`;
-  if(d.toggle) return `[data-toggle="${d.toggle}"]`;
-  if(d.act) return `[data-act="${d.act}"]`;
-  return null;
+/* ============================================================
+   CHAI: registration
+   Declares CHAI to the shell. This is the only file that has to
+   change when a CHAI screen is added or reordered.
+
+   CHAI is always enabled. It owns the project document's `items`
+   and `gates` keys, the compliance status on the dashboard, and the
+   applied model card -- so the tool is a CHAI tool with other
+   frameworks alongside, not a neutral host of several equals. That
+   is a deliberate choice: the dashboard needs ONE status, and
+   mixing two frameworks' judgements into one number would be
+   meaningless. See docs/crosswalk.md.
+   ============================================================ */
+registerFramework({
+  id: "chai",
+  label: "CHAI",
+
+  enabled: () => true,
+
+  blank: () => ({ items: {}, gates: { A: {}, B: {}, C: {}, D: {} } }),
+
+  normalize(p) {
+    p.items = p.items || {};
+    p.gates = Object.assign({ A: {}, B: {}, C: {}, D: {} }, p.gates || {});
+  },
+
+  views(p) {
+    const out = [];
+    STAGES.forEach(s => {
+      out.push({
+        id: s.id, kind: "stage", label: s.title, num: s.n, short: `Stage ${s.n}`,
+        meta: () => { const c = scoreOf(s.items, p.items); return `${c.answered}/${c.total}`; },
+        metaCls: () => { const c = scoreOf(s.items, p.items); return c.answered === c.total ? "done" : ""; },
+      });
+      Object.entries(GATES).filter(([, g]) => g.after === s.id).forEach(([key, g]) => {
+        out.push({
+          id: "g" + key, kind: "gate", gate: key, label: g.title, cls: "gate",
+          numHTML: '<span class="diamond" aria-hidden="true"></span>',
+          meta: () => { const d = (p.gates[key] || {}).decision || ""; return d ? esc(shortDecision(d)) : "open"; },
+          metaCls: () => { const d = (p.gates[key] || {}).decision || ""; return !d ? "" : (/Stop|Retire|Revise|Retrain/.test(d) ? "warn" : "done"); },
+        });
+      });
+    });
+    out.push({
+      id: "card", kind: "card", label: "Applied model card", glyph: "≡", sep: "before",
+      meta: () => `${CARD_FIELDS.filter(k => cardValOf(p, k)).length}/${CARD_FIELDS.length}`,
+    });
+    out.push({ id: "report", kind: "report", label: "Report", glyph: "✓" });
+    return out;
+  },
+
+  render(v) {
+    if (v.kind === "stage") return renderStage(STAGES.find(s => s.id === v.id));
+    if (v.kind === "gate") return renderGate(v.gate);
+    if (v.kind === "card") return renderCardForm();
+    return renderReport();
+  },
+});
+
+/* ============================================================
+   OPTICA: content
+   GENERATED by scripts/gen_optica_module.py from
+   data/optica_items.json -- do not edit by hand.
+
+   Item wording is this project's own paraphrase. The OPTICA paper
+   (NEJM AI 2024) is copyright Massachusetts Medical Society and
+   marked for personal use only; its text is not reproduced here or
+   anywhere in this repository.
+
+   Item keys are dot-free ("7-11", not "7.11") because the app's
+   edit()/get() helpers split state paths on ".", so a dotted key
+   cannot be addressed. The dotted form is display only.
+   ============================================================ */
+const OPTICA = {"domains":{"A":"Clinical need specification","B":"Data exploration","C":"Development & performance evaluation","D":"Deployment & monitoring plan"},"chapters":[{"n":1,"domain":"A","title":"Defining the clinical need","purpose":"Pin down, in concrete terms, the care problem the proposed AI system is supposed to fix, how work is done today versus how it would be done afterwards, what the system must emit, and the measurable bar it has to clear to be worth adopting.","items":[{"key":"1-1","num":"1.1","text":"State the specific care-delivery problem that this system is meant to address.","who":"adopter","stage":"A","rel":"equivalent","chai":["s1-1"]},{"key":"1-2","num":"1.2","text":"Describe how this task is handled today — who decides what, at which points, using which information — and spell out the harms, costs, or inefficiencies the status quo produces.","who":"adopter","stage":"A","rel":"partial","chai":["s1-2","s1-3"]},{"key":"1-3","num":"1.3","text":"Lay out the revised workflow as it would run once the AI system is in place.","who":"adopter","stage":"A","rel":"partial","chai":["s2-1","s2-2","s2-5"]},{"key":"1-4","num":"1.4","text":"Say what kind of result the system is expected to produce — generated prose, a probability or category derived from input data, or an estimate of how an outcome would shift under a given intervention — bearing in mind that each of these commits the project to a different analytic approach.","who":"either","stage":"A","rel":"partial","chai":["s2-2"]},{"key":"1-5","num":"1.5","text":"Which performance measures actually matter for this use, and how good do the numbers have to be before adoption is defensible? Statistical or data-science input is worth soliciting here.","who":"adopter","stage":"A","rel":"partial","chai":["s1-3","s2-4"]},{"key":"1-6","num":"1.6","text":"Can the gain expected from rolling this out be expressed in numbers?","who":"adopter","stage":"A","rel":"partial","chai":["s1-3","s6-6"]}]},{"n":2,"domain":"A","title":"Exploring alternative solutions","purpose":"Check the proposed system against everything else that could meet the same need, so the choice rests on a documented comparison rather than on the first option that came to the organization's attention.","items":[{"key":"2-1","num":"2.1","text":"Survey what else already addresses this need — commercial offerings, approaches reported in the literature, and tools built in-house — and record what each one does and what it would cost. Procurement or business-development help may be useful here.","who":"adopter","stage":"A","rel":"partial","chai":["s1-2"]},{"key":"2-2","num":"2.2","text":"Where alternatives do exist, how do they compare on performance, and does any of them clear the bar set in item 1.5?","who":"adopter","stage":"A","rel":"optica-only","chai":[]},{"key":"2-3","num":"2.3","text":"When more than one option would be acceptable, what actually separates them? Identify what each brings that the others do not, and any distinguishing feature that tips the decision toward one of them.","who":"adopter","stage":"A","rel":"optica-only","chai":[]}]},{"n":3,"domain":"B","title":"Population characterization","purpose":"Establish who the model was built on and whether those patients plausibly stand in for the people this organization would actually run it on.","items":[{"key":"3-1","num":"3.1","text":"Identify whose records went into building the model: the eligibility and disqualification rules that bounded the cohort, plus a profile of the care environment those patients were drawn from.","who":"developer","stage":"B","rel":"partial","chai":["s3-1"]},{"key":"3-2","num":"3.2","text":"State how many patients the development cohort contained.","who":"developer","stage":"B","rel":"partial","chai":["s3-2"]},{"key":"3-3","num":"3.3","text":"Summarize what that cohort looked like, reporting the spread of its principal variables the way a baseline-characteristics table would.","who":"developer","stage":"B","rel":"partial","chai":["s3-2"]},{"key":"3-4","num":"3.4","text":"Explain the partitioning scheme that separated patients into fitting, tuning, and held-out evaluation groups.","who":"developer","stage":"B","rel":"optica-only","chai":[]},{"key":"3-5","num":"3.5","text":"Check that each subgroup whose care could differ was represented in sufficient numbers to support a claim about it. Which subgroups matter is use-case specific, and typically includes disease severity strata, deprivation or payer status, and the usual demographic axes.","who":"developer","stage":"B","rel":"partial","chai":["s3-2","s2-3"]},{"key":"3-6","num":"3.6","text":"From a clinician's standpoint, decide whether the people and care context behind the model's training and testing resemble the patients this organization would apply it to.","who":"adopter","stage":"C","rel":"partial","chai":["s4-1","s1-4"]}]},{"n":4,"domain":"B","title":"Input data","purpose":"Pin down exactly what the model consumes, then verify the organization can supply all of it, in the right form, at the moment of execution.","items":[{"key":"4-1","num":"4.1","text":"Enumerate every variable the model consumes, and for the development data describe how each was captured and how its values were spread.","who":"developer","stage":"B","rel":"partial","chai":["s3-1"]},{"key":"4-2","num":"4.2","text":"Specify the shape and encoding in which the model requires its inputs to arrive.","who":"developer","stage":"B","rel":"optica-only","chai":[]},{"key":"4-3","num":"4.3","text":"Pin down the moment in the care process at which the model is meant to fire, which doubles as the cutoff beyond which no input may be used.","who":"developer","stage":"B","rel":"partial","chai":["s2-2"]},{"key":"4-4","num":"4.4","text":"Describe the treatment of absent values when the model was fitted, and prescribe how absences should be treated once it is running live.","who":"developer","stage":"B","rel":"partial","chai":["s3-4"]},{"key":"4-5","num":"4.5","text":"Describe the treatment of out-of-range or outlying values during fitting, and the rule to apply to them in production.","who":"developer","stage":"B","rel":"partial","chai":["s3-4"]},{"key":"4-6","num":"4.6","text":"From a clinical viewpoint, judge whether the model is being fed the information a clinician would consider essential for the job it is meant to do.","who":"adopter","stage":"C","rel":"optica-only","chai":[]},{"key":"4-7","num":"4.7","text":"Audit the organization's own data holdings for each input the model needs, confirm they can be supplied in the required encoding, and profile how those variables are distributed and captured locally.","who":"adopter","stage":"D","rel":"partial","chai":["s1-7","s4-1"]},{"key":"4-8","num":"4.8","text":"Confirm each required input will actually be on hand at the moment and in the setting where the model is supposed to run, not merely present somewhere in retrospective archives.","who":"adopter","stage":"D","rel":"partial","chai":["s2-7","s4-4"]},{"key":"4-9","num":"4.9","text":"Weigh whether the value distributions of the developer's training inputs sit close enough to the locally observed ones for a clinician to be comfortable.","who":"adopter","stage":"F","rel":"partial","chai":["s4-1","s6-1"]},{"key":"4-10","num":"4.10","text":"Weigh whether the way the training inputs were generated and recorded matches how this organization generates and records them.","who":"adopter","stage":"F","rel":"partial","chai":["s3-1"]}]},{"n":5,"domain":"B","title":"Output data","purpose":"Characterize what the model emits and the target it was trained against, then check that same target exists locally and behaves similarly.","items":[{"key":"5-1","num":"5.1","text":"State what the model emits, in two parts: the substance of the result (for example a written summary, a continuous risk estimate, or a category assigned to a clinical finding) and its data type (free text, numeric, or categorical).","who":"developer","stage":"B","rel":"partial","chai":["s2-4"]},{"key":"5-2","num":"5.2","text":"Explain how the target the model learns to produce was operationalized, and give its key descriptive properties, for example how frequently the labeled event occurred.","who":"developer","stage":"B","rel":"partial","chai":["s3-1"]},{"key":"5-3","num":"5.3","text":"Where the model forecasts something, state the window over which the forecast event was ascertained.","who":"developer","stage":"B","rel":"optica-only","chai":[]},{"key":"5-4","num":"5.4","text":"Judge clinically whether the target the model was taught to produce, as characterized in the three preceding items, is both pertinent to the stated need and dependable as a label.","who":"adopter","stage":"C","rel":"partial","chai":["s1-1"]},{"key":"5-5","num":"5.5","text":"Determine whether the organization's own data carry the model's target variable too, and if so profile it against the properties the developer reported.","who":"adopter","stage":"D","rel":"partial","chai":["s4-1","s1-3"]},{"key":"5-6","num":"5.6","text":"Weigh whether the target's distribution locally sits close enough to the developer's reported distribution for a clinician to accept.","who":"adopter","stage":"F","rel":"partial","chai":["s4-3","s2-4"]}]},{"n":6,"domain":"C","title":"Development process","purpose":"Open up how the model was actually built so that a reviewer can judge whether the training methodology was sound and free of the classic traps that inflate apparent quality.","items":[{"key":"6-1","num":"6.1","text":"Describe the modeling approach behind the solution and how it was fitted — which family of algorithm it belongs to and what the training procedure looked like.","who":"developer","stage":"B","rel":"optica-only","chai":[]},{"key":"6-2","num":"6.2","text":"Confirm that the algorithm class chosen is a sensible match for the kind of output the solution emits.","who":"developer","stage":"B","rel":"optica-only","chai":[]},{"key":"6-3","num":"6.3","text":"Where the solution forecasts a future event, explain how subjects whose observation ended early were treated during training, and confirm that this was handled deliberately rather than by default.","who":"developer","stage":"B","rel":"partial","chai":["s3-4"]},{"key":"6-4","num":"6.4","text":"Explain the safeguards that kept information about the outcome from contaminating the predictor variables, and confirm this risk was actively tested for rather than assumed away.","who":"developer","stage":"B","rel":"optica-only","chai":[]},{"key":"6-5","num":"6.5","text":"Describe what was done to detect and reduce inequitable or skewed behavior across groups, and confirm the issue received deliberate attention during development.","who":"developer","stage":"B","rel":"partial","chai":["s3-3","s4-2"]},{"key":"6-6","num":"6.6","text":"State whether practicing clinicians and other subject-matter specialists took part in building the solution, and in what capacity.","who":"developer","stage":"B","rel":"partial","chai":["s2-1","s1-1"]}]},{"n":7,"domain":"C","title":"Performance","purpose":"Establish what the solution's accuracy actually is — as reported, as benchmarked against alternatives, as re-tested on local data, and as observed in a pilot — and whether it clears the bar the clinical lead set at the outset.","items":[{"key":"7-1","num":"7.1","text":"Report how well the solution scored on historical data, using measures appropriate to the kind of model it is.","who":"developer","stage":"B","rel":"partial","chai":["s4-1","s4-3"]},{"key":"7-2","num":"7.2","text":"Break those measured results down across the patient subgroups that matter clinically.","who":"developer","stage":"B","rel":"partial","chai":["s4-2"]},{"key":"7-3","num":"7.3","text":"Characterize the dataset on which these results were measured.","who":"developer","stage":"B","rel":"partial","chai":["s3-1","s3-2"]},{"key":"7-4","num":"7.4","text":"State whether the evaluation sample preserves the real-world balance of outcomes or was deliberately resampled, since rebalancing distorts any metric that depends on how common the outcome is.","who":"developer","stage":"B","rel":"optica-only","chai":[]},{"key":"7-5","num":"7.5","text":"Report any evaluation carried out in settings beyond the one that supplied the training data, and what the results were there.","who":"developer","stage":"B","rel":"partial","chai":["s4-1"]},{"key":"7-6","num":"7.6","text":"Share any evidence of how the solution has behaved in live clinical use elsewhere, including where that experience comes from.","who":"developer","stage":"B","rel":"optica-only","chai":[]},{"key":"7-7","num":"7.7","text":"Judge whether the reported results clear the metric thresholds the clinical lead specified when the need was first defined.","who":"adopter","stage":"C","rel":"partial","chai":["s1-3"]},{"key":"7-8","num":"7.8","text":"Assess whether these results look credible and competitive when set beside the alternative solutions surveyed earlier.","who":"adopter","stage":"C","rel":"optica-only","chai":[]},{"key":"7-9","num":"7.9","text":"Determine whether the organization's own historical records could support an in-house evaluation of the solution, and estimate what mounting one would cost in effort.","who":"adopter","stage":"D","rel":"partial","chai":["s1-7","s4-1"]},{"key":"7-10","num":"7.10","text":"If an in-house retrospective test goes ahead, confirm whether the data it would consume match exactly what the live system would actually receive at runtime.","who":"adopter","stage":"D","rel":"partial","chai":["s4-4"]},{"key":"7-11","num":"7.11","text":"Where a local retrospective test was actually carried out, give the clinical verdict on whether its results were good enough.","who":"adopter","stage":"F","rel":"partial","chai":["s4-1"]},{"key":"7-12","num":"7.12","text":"Where a limited trial run was judged worthwhile before full rollout, summarize what it revealed about accuracy, day-to-day workability and how users received it.","who":"adopter","stage":"F","rel":"partial","chai":["s5-1","s5-2","s5-3"]}]},{"n":8,"domain":"C","title":"Explainability","purpose":"Determine whether the solution can account for its outputs both model-wide and case by case, and whether those accounts stand up to clinical scrutiny.","items":[{"key":"8-1","num":"8.1","text":"Identify which variables drive the model's behavior overall, or account for why such a ranking cannot be produced.","who":"developer","stage":"B","rel":"partial","chai":["s4-6"]},{"key":"8-2","num":"8.2","text":"State whether the solution can justify the result it produces for one specific case, and illustrate with worked examples spanning different kinds of patients.","who":"developer","stage":"B","rel":"partial","chai":["s4-6"]},{"key":"8-3","num":"8.3","text":"Give a clinician's verdict on whether the model-wide and per-case explanations hold up medically.","who":"adopter","stage":"C","rel":"partial","chai":["s4-6"]}]},{"n":9,"domain":"C","title":"Regulations, data security & privacy","purpose":"Confirm the solution can be fielded lawfully and safely — regulatory conformity, honesty with patients, protection of data against attack, and respect for privacy rules.","items":[{"key":"9-1","num":"9.1","text":"Establish whether the solution satisfies the regulatory rules that apply in this jurisdiction and this institution, drawing on legal counsel and the information security lead.","who":"adopter","stage":"C","rel":"partial","chai":["s1-7"]},{"key":"9-2","num":"9.2","text":"Decide whether patients are told clearly enough that an algorithm plays a part in their care, with legal input on what disclosure is actually owed.","who":"adopter","stage":"C","rel":"partial","chai":["s5-6","s1-7"]},{"key":"9-3","num":"9.3","text":"Verify that the solution meets the institution's requirements for safeguarding data and withstanding attack, with the information security lead involved.","who":"adopter","stage":"D","rel":"equivalent","chai":["s4-7"]},{"key":"9-4","num":"9.4","text":"Confirm that the solution's handling of identifiable information satisfies the privacy rules that apply locally, again with the information security lead involved.","who":"adopter","stage":"D","rel":"partial","chai":["s1-7","s3-6"]}]},{"n":10,"domain":"D","title":"Deployment plan","purpose":"Pins down how the solution will actually be wired into clinical work and into the organization's technical stack - where it surfaces, who acts on it, and what has to be built to serve it.","items":[{"key":"10-1","num":"10.1","text":"Pinpoint where along the care pathway the tool fires - which encounter, decision point, or step of the existing process it attaches to.","who":"adopter","stage":"C","rel":"partial","chai":["s2-2","s2-1"]},{"key":"10-2","num":"10.2","text":"Name the host application or screen where clinicians will actually see the result, and describe how using it is meant to feel day to day - how discoverable it is, how many clicks it costs, how reliably it is on hand.","who":"adopter","stage":"C","rel":"partial","chai":["s2-1","s5-2"]},{"key":"10-3","num":"10.3","text":"State whether a named human clinician stands between the model and the patient, owning the choice to act on a result or set it aside.","who":"adopter","stage":"C","rel":"partial","chai":["s2-5","s1-6"]},{"key":"10-4","num":"10.4","text":"If each result has to arrive with its rationale attached, work out how that supporting explanation gets rendered inside the host system next to the result itself.","who":"adopter","stage":"C","rel":"partial","chai":["s4-6"]},{"key":"10-5","num":"10.5","text":"Determine whether fresh interfaces or middleware must be built to carry results from whatever serves the model over to the system that will display them.","who":"either","stage":"E","rel":"partial","chai":["s2-7","s4-5"]},{"key":"10-6","num":"10.6","text":"Identify the host hardware the model will execute on and confirm its compute and memory headroom are adequate for the expected load.","who":"either","stage":"E","rel":"partial","chai":["s4-5"]},{"key":"10-7","num":"10.7","text":"Confirm that every input feed reaches that execution environment promptly enough to be useful, and flag which feeds must arrive live rather than on a batch schedule.","who":"either","stage":"E","rel":"partial","chai":["s3-4"]}]},{"n":11,"domain":"D","title":"Monitoring plan","purpose":"Establishes how the system will be watched once live, so that drift in its inputs, its outputs, its accuracy, or the underlying medical knowledge is caught rather than discovered late.","items":[{"key":"11-1","num":"11.1","text":"From the builder's standpoint, state the cadence at which the model has to be refreshed or refit.","who":"developer","stage":"B","rel":"partial","chai":["s6-3"]},{"key":"11-2","num":"11.2","text":"Say whether the system refits itself automatically in the field, and if it does, describe how each refreshed version's quality gets verified before it influences care.","who":"developer","stage":"B","rel":"partial","chai":["s6-3"]},{"key":"11-3","num":"11.3","text":"Lay out how incoming feature values will be watched for drift or outright breakage once the system is running.","who":"adopter","stage":"E","rel":"partial","chai":["s6-1"]},{"key":"11-4","num":"11.4","text":"Lay out the equivalent watch on what the model emits, so that shifts in the distribution of its results surface early.","who":"adopter","stage":"E","rel":"partial","chai":["s6-1","s6-4"]},{"key":"11-5","num":"11.5","text":"From the clinical side, state how often the medical content baked into the solution - guidelines, thresholds, standards of care - needs refreshing.","who":"adopter","stage":"F","rel":"partial","chai":["s6-3"]},{"key":"11-6","num":"11.6","text":"Set out how the solution's accuracy will keep being measured after go-live, not only before it.","who":"either","stage":"F","rel":"partial","chai":["s6-1","s6-2"]}]},{"n":12,"domain":"D","title":"Evaluation plan","purpose":"Settles in advance how the deployment's real-world benefit and harm will be measured, fed back and reported.","items":[{"key":"12-1","num":"12.1","text":"Define what counts as success for this rollout - the outcome measures the deployment itself will be judged on.","who":"adopter","stage":"F","rel":"equivalent","chai":["s1-3"]},{"key":"12-2","num":"12.2","text":"Describe the study design that will test whether the rollout genuinely helped - and whether it harmed anyone along the way.","who":"adopter","stage":"F","rel":"partial","chai":["s5-3","s5-5"]},{"key":"12-3","num":"12.3","text":"Check whether the rollout itself can be structured up front - staggered, randomized, phased by site - so that its effect can later be measured credibly.","who":"adopter","stage":"F","rel":"partial","chai":["s5-1"]},{"key":"12-4","num":"12.4","text":"Decide how you will capture what users actually think of it - perceived usefulness, friction, trust.","who":"adopter","stage":"F","rel":"partial","chai":["s5-2","s6-6"]},{"key":"12-5","num":"12.5","text":"Decide who writes up the evaluation findings, how often, and to whom they go.","who":"adopter","stage":"F","rel":"partial","chai":["s6-3","s2-6"]}]},{"n":13,"domain":"D","title":"Organizational AI strategy fit","purpose":"Gives the organization's AI leadership the final word on the quality of the answers, the merit of the solution, and its fit with the wider AI strategy.","items":[{"key":"13-1","num":"13.1","text":"Step back and judge how well the rest of the checklist was actually answered - depth, candor, and what was left open.","who":"adopter","stage":"G","rel":"optica-only","chai":[]},{"key":"13-2","num":"13.2","text":"Give an overall opinion on the proposed system itself, and on whether it genuinely answers the need stated at the very outset.","who":"adopter","stage":"G","rel":"partial","chai":["s1-2","s1-6"]},{"key":"13-3","num":"13.3","text":"Judge the fit with where the organization is heading on AI overall, including knock-on effects that reach beyond this one deployment.","who":"adopter","stage":"G","rel":"optica-only","chai":[]}]}]};
+const OPTICA_ITEMS = OPTICA.chapters.flatMap(c => c.items.map(i => ({ ...i, chapter: c })));
+
+/* ============================================================
+   OPTICA: rules
+   OPTICA's own progress, kept strictly apart from CHAI's.
+
+   Two rules decide everything here, both from docs/crosswalk.md:
+
+   1. NO STATUS PROPAGATION, in either direction. Evidence is shared
+      by citing it; judgement never is. No OPTICA answer may change a
+      CHAI criterion's status or a readiness percentage, and none of
+      this feeds flags() or statusOf(). Breaking that would silently
+      re-gate every existing project.
+
+   2. A DECLINE IS A DISTINCT STATE. OPTICA accepts a reasoned "we
+      chose not to" as a complete answer for some items; CHAI's
+      local-validation obligations are unconditional. So "declined"
+      is tracked separately and never folded into the percentage as
+      though it were met.
+   ============================================================ */
+const OPTICA_STATUS = { met: "Answered", partial: "Partial", notmet: "Outstanding", declined: "Declined", na: "N/A" };
+const OPTICA_VAL = { met: 1, partial: 0.5, notmet: 0, declined: 0 };
+
+const opticaOn = p => !!((p || S).optica || {}).enabled;
+const opticaAnswers = p => ((p || S).optica || {}).answers || {};
+const opticaAnswer = (p, key) => opticaAnswers(p)[key] || {};
+
+/* Progress over any list of OPTICA items. Declines are counted as
+   answered (the stakeholder did respond) but contribute nothing to
+   the percentage, and are reported separately so they stay visible. */
+function opticaScore(items, p) {
+  const answers = opticaAnswers(p);
+  let sum = 0, n = 0, answered = 0, declined = 0;
+  items.forEach(it => {
+    const st = (answers[it.key] || {}).status;
+    if (st) answered++;
+    if (st === "declined") { declined++; return; }
+    if (st === "na") return;
+    n++; sum += OPTICA_VAL[st] || 0;
+  });
+  return { pct: n ? Math.round(sum / n * 100) : 0, answered, total: items.length, applicable: n, declined };
 }
-function renderMain(focusTop){
-  const v=VIEWS.find(x=>x.id===UI.view)||VIEWS[0];
-  const m=document.getElementById("main");
-  const fk = focusTop?null:focusKey(document.activeElement);
-  if(v.kind==="setup") m.innerHTML=renderSetup();
-  else if(v.kind==="stage") m.innerHTML=renderStage(STAGES.find(s=>s.id===v.id));
-  else if(v.kind==="gate") m.innerHTML=renderGate(v.gate);
-  else if(v.kind==="card") m.innerHTML=renderCardForm();
-  else m.innerHTML=renderReport();
-  if(v.kind==="report") updateDlUI();
+
+/* Who still owes answers. OPTICA assigns each item to one of five
+   stakeholders and runs them in sequence, so "which stakeholder is
+   blocking" is the question that actually moves a review along --
+   and ~a third of the items can only be answered by the vendor. */
+function opticaByProducer(p) {
+  const answers = opticaAnswers(p);
+  const out = {};
+  OPTICA_ITEMS.forEach(it => {
+    const who = it.who || "unassigned";
+    const b = out[who] || (out[who] = { who, total: 0, answered: 0, outstanding: [] });
+    b.total++;
+    if ((answers[it.key] || {}).status) b.answered++;
+    else b.outstanding.push(it);
+  });
+  return Object.values(out).sort((a, b) => b.total - a.total);
+}
+
+const opticaOutstanding = p => OPTICA_ITEMS.filter(it => !(opticaAnswer(p, it.key).status));
+
+/* ============================================================
+   OPTICA: views
+   One screen per chapter, plus an overview that answers the
+   question OPTICA's stakeholder relay actually turns on: who owes
+   the next answers.
+
+   Markup reuses the CHAI checklist classes (.ci, .seg, .checklist)
+   so no new CSS is needed and the two checklists look like one
+   tool. The state path differs -- optica.answers.<key> rather than
+   items.<id> -- which is what keeps the data cleanly separable.
+   ============================================================ */
+const OPTICA_PRODUCER_LABEL = {
+  adopter: "Your organization",
+  developer: "The solution's developer",
+  either: "Either party",
+};
+
+function opticaItemHTML(it) {
+  const d = opticaAnswer(S, it.key);
+  const st = d.status || "";
+  const open = openItems.has(it.key);
+  const late = d.due && parseDay(d.due) < parseDay(TODAY()) && st !== "met" && st !== "na";
+  const notes = (d.evidence || d.owner || d.due || d.declineReason) && !open
+    ? `<span class="has-notes">${late ? `<b style="color:var(--red)">overdue ${esc(fmtDay(d.due))}</b>` : "notes added"}</span>` : "";
+  const chai = it.chai && it.chai.length
+    ? `<span class="pchip" title="Partially covered by CHAI ${esc(it.chai.join(", "))}">${esc(it.chai[0])}</span>`
+    : `<span class="pchip" title="No CHAI criterion covers this">—</span>`;
+
+  return `<li class="ci${open ? " open" : ""}" data-item="${esc(it.key)}">
+    <div class="ci-row">
+      ${chai}
+      <div class="ci-text">${esc(it.text)}<button class="more" data-toggle="${esc(it.key)}" aria-expanded="${open}">${open ? "Hide details" : "Evidence & owner"}</button>${notes}</div>
+      <div class="seg" role="group" aria-label="Status">${Object.entries(OPTICA_STATUS).map(([k, l]) =>
+        `<button data-set="${esc(it.key)}" data-store="optica.answers" data-s="${k}" aria-pressed="${st === k}">${l}</button>`).join("")}</div>
+    </div>
+    <div class="ci-detail">
+      <div><label for="oev_${esc(it.key)}">Evidence or notes</label><textarea id="oev_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.evidence">${esc(d.evidence || "")}</textarea></div>
+      <div><label for="oow_${esc(it.key)}">Owner</label><input type="text" id="oow_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.owner" value="${esc(d.owner || "")}"></div>
+      <div><label for="odu_${esc(it.key)}">Due</label><input type="date" id="odu_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.due" value="${esc(d.due || "")}"></div>
+      ${st === "declined" ? `<div class="wide"><label for="odr_${esc(it.key)}">Why this was declined</label><textarea id="odr_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.declineReason">${esc(d.declineReason || "")}</textarea></div>` : ""}
+    </div>
+  </li>`;
+}
+
+function renderOpticaChapter(n) {
+  const c = OPTICA.chapters.find(x => x.n === n);
+  const s = opticaScore(c.items, S);
+  const vendor = c.items.filter(i => i.who === "developer").length;
+  return `<p class="eyebrow">OPTICA chapter ${c.n} of 13 · domain ${c.domain}</p>
+  <h1>${esc(c.title)}</h1>
+  ${c.purpose ? `<p class="lede">${esc(c.purpose)}</p>` : ""}
+  <div class="legend">
+    <span>Questions are this project's paraphrase of OPTICA, not its published wording.</span>
+  </div>
+  ${vendor ? `<p style="font-size:13px;color:var(--muted)">${vendor} of ${c.items.length} item${vendor === 1 ? "" : "s"} here can only be answered by the solution's developer.</p>` : ""}
+  <ol class="checklist">${c.items.map(opticaItemHTML).join("")}</ol>
+  <p style="font-size:13px;color:var(--muted);margin-top:10px">${s.answered} of ${s.total} answered${s.declined ? `, ${s.declined} declined` : ""}. The chip on each row names the CHAI criterion that partially covers it, or a dash where none does.</p>
+  ${pager()}`;
+}
+
+function renderOpticaOverview() {
+  const all = opticaScore(OPTICA_ITEMS, S);
+  const byWho = opticaByProducer(S);
+  const rows = byWho.map(b => `<tr>
+      <td>${esc(OPTICA_PRODUCER_LABEL[b.who] || b.who)}</td>
+      <td>${b.answered}/${b.total}</td>
+      <td>${b.outstanding.length ? esc(b.outstanding.slice(0, 6).map(i => i.num).join(", ")) + (b.outstanding.length > 6 ? ` +${b.outstanding.length - 6} more` : "") : "—"}</td>
+    </tr>`).join("");
+
+  return `<p class="eyebrow">OPTICA</p>
+  <h1>Adoption review</h1>
+  <p class="lede">77 items in 13 chapters, answered by five stakeholders in sequence. OPTICA asks whether <em>this</em> organization should adopt <em>this</em> solution; it runs alongside the CHAI lifecycle and never changes it.</p>
+
+  <div class="cards">
+    <div class="card"><h3>Answered</h3><p class="big">${all.answered}/${all.total}</p></div>
+    <div class="card"><h3>Progress</h3><p class="big">${all.pct}%</p></div>
+    <div class="card"><h3>Declined</h3><p class="big">${all.declined}</p></div>
+  </div>
+
+  <h2>Who owes the next answers</h2>
+  <p style="font-size:13px;color:var(--muted)">OPTICA is a relay: each stage is completed by one stakeholder before the next begins. Outstanding items are listed by the party that can answer them.</p>
+  <table class="tbl"><thead><tr><th>Stakeholder</th><th>Answered</th><th>Outstanding</th></tr></thead><tbody>${rows}</tbody></table>
+
+  <div class="note">
+    <p><b>OPTICA answers never change CHAI status.</b> The two checklists ask different parties for different evidence at different moments, and no OPTICA item fully discharges a CHAI criterion. Evidence can be cited in both; a judgement in one is not a judgement in the other.</p>
+  </div>
+  ${pager()}`;
+}
+
+function renderOpticaOff() {
+  return `<p class="eyebrow">OPTICA</p><h1>Adoption review</h1>
+  <p class="lede">OPTICA is not switched on for this project.</p>
+  <p>Turn it on in <button class="btn" data-go="setup">Project setup</button> to add its 77 adoption questions alongside the CHAI lifecycle.</p>`;
+}
+
+/* ============================================================
+   OPTICA: registration
+   Opt-in per project. A project that has never switched OPTICA on
+   carries no `optica` key at all, so existing exports stay valid
+   and teams that only run CHAI never see 77 extra rows.
+   ============================================================ */
+registerFramework({
+  id: "optica",
+  label: "OPTICA",
+
+  enabled: p => opticaOn(p),
+
+  // Deliberately empty: a new project does NOT get an optica key.
+  // It appears the first time someone switches the framework on.
+  blank: () => ({}),
+
+  normalize(p) {
+    if (!p.optica) return;
+    p.optica.enabled = !!p.optica.enabled;
+    p.optica.answers = p.optica.answers || {};
+  },
+
+  views(p) {
+    const out = [{
+      id: "optica", kind: "overview", label: "OPTICA adoption review",
+      glyph: "◇", sep: "before",
+      meta: () => { const s = opticaScore(OPTICA_ITEMS, p); return `${s.answered}/${s.total}`; },
+      metaCls: () => { const s = opticaScore(OPTICA_ITEMS, p); return s.answered === s.total ? "done" : ""; },
+      short: "OPTICA",
+    }];
+    OPTICA.chapters.forEach(c => {
+      out.push({
+        id: "o" + c.n, kind: "chapter", chapter: c.n, label: c.title, num: c.n,
+        short: `OPTICA ${c.n}`,
+        meta: () => { const s = opticaScore(c.items, p); return `${s.answered}/${s.total}`; },
+        metaCls: () => { const s = opticaScore(c.items, p); return s.answered === s.total ? "done" : ""; },
+      });
+    });
+    return out;
+  },
+
+  render(v) {
+    if (!opticaOn(S)) return renderOpticaOff();
+    return v.kind === "chapter" ? renderOpticaChapter(v.chapter) : renderOpticaOverview();
+  },
+});
+
+/* Switching the framework on or off for the open project. Turning it
+   off keeps every answer: it only hides the views, so a team that
+   pauses an OPTICA review does not lose the work. */
+function setOpticaEnabled(on) {
+  if (RO || !S) return;
+  if (!S.optica) S.optica = { enabled: false, answers: {} };
+  edit("optica.enabled", !!on);
+  writeLog(CUR, `${on ? "Enabled" : "Disabled"} the OPTICA adoption review`);
+  if (!on && String(UI.view).startsWith("o")) go("setup");
+  else renderProject(false);
+}
+
+/* ============================================================
+   App shell: rail and routing
+   Builds the step rail from whatever views the active frameworks
+   contribute, and dispatches rendering back to the framework that
+   owns the current view. Nothing here names CHAI or OPTICA.
+   ============================================================ */
+function railRow(v) {
+  const cur = UI.view === v.id ? ' aria-current="step"' : "";
+  const meta = typeof v.meta === "function" ? v.meta() : (v.meta || "");
+  // numHTML lets a view supply its own marker element (the checkpoint
+  // diamond); glyph covers the common case of a single character.
+  const num = v.numHTML ? `<span class="num">${v.numHTML}</span>`
+    : v.num == null ? `<span class="num" aria-hidden="true">${esc(v.glyph || "•")}</span>`
+    : `<span class="num">${esc(String(v.num))}</span>`;
+  // A view that computes a state class always gets the separating space, even
+  // when the class is empty this render; a view with no metaCls gets none.
+  // That reproduces the markup the hand-written rail emitted exactly.
+  const metaCls = v.metaCls ? ` ${esc(v.metaCls())}` : "";
+  const li = `<li${v.cls ? ` class="${v.cls}"` : ""}><button data-go="${esc(v.id)}"${cur}>`
+    + `${num}<span>${esc(v.label)}</span>`
+    + `<span class="meta${metaCls}">${meta}</span></button></li>`;
+  const sep = `<li class="sep" role="presentation"></li>`;
+  return (v.sep === "before" ? sep : "") + li + (v.sep === "after" ? sep : "");
+}
+
+function renderRail() {
+  const ol = document.getElementById("rail");
+  const home = `<li class="home-link"><button data-home="1">`
+    + `<span class="num" aria-hidden="true">←</span><span>All projects</span></button></li>`
+    + `<li class="sep" role="presentation"></li>`;
+  ol.innerHTML = home + activeViews().map(railRow).join("");
+  document.getElementById("projName").textContent = S.meta.solution || "Untitled AI solution";
+}
+
+function renderMain(focusTop) {
+  const views = activeViews();
+  const v = views.find(x => x.id === UI.view) || views[0];
+  const m = document.getElementById("main");
+  const fk = focusTop ? null : focusKey(document.activeElement);
+
+  m.innerHTML = v.fw.render(v, S);
+  if (v.kind === "report") updateDlUI();
+
   applyRO(m);
   resolveNames(m);
-  if(focusTop){ window.scrollTo({top:0}); m.focus({preventScroll:true}); }
-  else if(fk){ const el=m.querySelector(fk); if(el) el.focus({preventScroll:true}); }
+  if (focusTop) { window.scrollTo({ top: 0 }); m.focus({ preventScroll: true }); }
+  else if (fk) { const el = m.querySelector(fk); if (el) el.focus({ preventScroll: true }); }
 }
-function renderProject(focusTop){ document.body.classList.remove("home"); renderRail(); renderMain(focusTop); renderLabel(); }
-function editingInMain(){ const a=document.activeElement, m=document.getElementById("main"); return a && m.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); }
-function syncInputs(){
-  document.querySelectorAll("#main [data-bind]").forEach(el=>{ if(el===document.activeElement) return; const v=get(el.dataset.bind)??""; if(el.value!==v) el.value=v; });
-  document.querySelectorAll("#main [data-set]").forEach(b=>b.setAttribute("aria-pressed",String((S.items[b.dataset.set]||{}).status===b.dataset.s)));
+
+function renderProject(focusTop) {
+  document.body.classList.remove("home");
+  renderRail(); renderMain(focusTop); renderLabel();
 }
-function softRefresh(){
+
+function softRefresh() {
   renderRail(); renderLabel();
-  if(editingInMain()) syncInputs();
-  else { const y=window.scrollY; renderMain(false); window.scrollTo(0,y); }
+  if (editingInMain()) syncInputs();
+  else { const y = window.scrollY; renderMain(false); window.scrollTo(0, y); }
 }
 
 /* ============================================================
@@ -1069,7 +1493,7 @@ function go(view){ UI.view=view; saveUI(); renderRail(); renderMain(true); docum
    Data arrival
    ============================================================ */
 function onProjects(list){
-  PROJECTS=new Map(list.map(p=>[p.id,normalize(p)])); 
+  PROJECTS=new Map(list.map(p=>[p.id,normalize(p)]));
   const first=!LOADED; LOADED=true;
   if(first && UI.project && PROJECTS.has(UI.project) && !CUR){ openProject(UI.project,UI.view); return; }
   if(CUR){
@@ -1259,11 +1683,17 @@ document.addEventListener("click",async e=>{
   if(t.dataset.open){ openProject(t.dataset.open); return; }
   if(t.dataset.home){ goHome(); return; }
   if(t.dataset.go){ go(t.dataset.go); return; }
+  if(t.dataset.framework && !RO){
+    const f=frameworkById(t.dataset.framework);
+    if(f && f.id==="optica") setOpticaEnabled(!f.enabled(S));
+    return;
+  }
   if(t.dataset.filter){ UI.filter=t.dataset.filter; saveUI(); updateDashboard(); document.querySelector(`[data-filter="${UI.filter}"]`)?.focus(); return; }
   if(t.dataset.set && !RO){
-    const id=t.dataset.set, cur=(S.items[id]||{}).status||"";
+    const id=t.dataset.set, store=t.dataset.store||"items";
+    const cur=((get(store)||{})[id]||{}).status||"";
     const val = cur===t.dataset.s ? "" : t.dataset.s;
-    edit(`items.${id}.status`, val);
+    edit(`${store}.${id}.status`, val);
     const li=t.closest(".ci");
     li.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.s===val)));
     if((val==="partial"||val==="notmet") && !openItems.has(id)){ openItems.add(id); li.classList.add("open"); const m=li.querySelector(".more"); m.textContent="Hide details"; m.setAttribute("aria-expanded","true"); }

@@ -23,7 +23,7 @@ PRINCIPLE_RE = re.compile(r'(\w):\{name:"(.*?)"\}')
 # closing brace is not always adjacent to the array.
 STAGE_RE = re.compile(
     r'\{id:"(s\d)",n:(\d),title:"(.*?)",blurb:"(.*?)",items:\[(.*?)\]'
-    r'(?:\s*,\s*metrics:true)?\s*\}',
+    r"(?:\s*,\s*metrics:true)?\s*\}",
     re.S,
 )
 ITEM_RE = re.compile(r'\["(\w)","(.*?)"\]')
@@ -33,7 +33,9 @@ def main() -> int:
     html = APP.read_text(encoding="utf-8")
 
     principles = dict(
-        PRINCIPLE_RE.findall(html[html.index("const PRINCIPLES") : html.index("const STAGES")])
+        PRINCIPLE_RE.findall(
+            html[html.index("const PRINCIPLES") : html.index("const STAGES")]
+        )
     )
     stages_src = html[html.index("const STAGES") : html.index("const GATES")]
     stages = STAGE_RE.findall(stages_src)
@@ -48,7 +50,7 @@ def main() -> int:
         "The 41 criteria this tool tracks, in the order the dashboard presents",
         "them. Each is tagged with the CHAI principle it serves.",
         "",
-        "!!! info \"Generated file\"",
+        '!!! info "Generated file"',
         "",
         "    This page is generated from the app by `scripts/gen_chai_checklist.py`",
         "    (`pixi run gen-docs`), so it cannot drift from the checklist the tool",
@@ -85,7 +87,7 @@ def main() -> int:
         for i, (p, text) in enumerate(items, 1):
             lines.append(f"| {n}.{i} | {text} | **{p}** |")
 
-    lines += ["", f"---", "", f"**{total} criteria in total.**", ""]
+    lines += ["", "---", "", f"**{total} criteria in total.**", ""]
 
     OUT.write_text("\n".join(lines), encoding="utf-8")
     print(f"wrote {OUT.relative_to(ROOT)} ({total} criteria, {len(stages)} stages)")

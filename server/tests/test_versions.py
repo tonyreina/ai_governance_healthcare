@@ -283,3 +283,86 @@ class TestPurge:
                     "UPDATE project_version SET purged_at = now() "
                     "WHERE project_id = 'pvp5'"
                 )
+
+
+@requires_db
+class TestReusedProjectIds:
+    """A deleted project's history must not merge with a new project's.
+
+    Snapshots outlive their project and ids are caller-chosen, so creating a
+    project with a previously-used id produced one history containing two
+    unrelated records -- with the new record's revision 1 silently dropped by
+    ON CONFLICT DO NOTHING, which is what made it invisible.
+    """
+
+    async def test_a_reused_id_starts_a_fresh_history(self, client: AsyncClient):
+        # First incarnation: three revisions.
+        await client.post("/api/projects/pr1", json={"meta": {"solution": "First"}})
+        await client.patch("/api/projects/pr1", json={"meta": {"org": "Alpha"}})
+        await client.patch("/api/projects/pr1", json={"meta": {"org": "Beta"}})
+        assert [
+            v["rev"] for v in (await client.get("/api/projects/pr1/versions")).json()
+        ] == [
+            3,
+            2,
+            1,
+        ]
+        await client.delete("/api/projects/pr1")
+
+        # Second incarnation, same id.
+        await client.post("/api/projects/pr1", json={"meta": {"solution": "Second"}})
+        await client.patch("/api/projects/pr1", json={"meta": {"org": "Gamma"}})
+
+        versions = (await client.get("/api/projects/pr1/versions")).json()
+        assert [v["rev"] for v in versions] == [2, 1], (
+            "the new project's history must stand alone, starting at rev 1"
+        )
+
+        first = (await client.get("/api/projects/pr1/versions/1")).json()
+        assert first["doc"]["meta"]["solution"] == "Second", (
+            "rev 1 must be the NEW project's first revision, not the old one's"
+        )
+        assert first["purged"] is False
+
+        second = (await client.get("/api/projects/pr1/versions/2")).json()
+        assert second["doc"]["meta"]["org"] == "Gamma"
+
+    async def test_the_old_history_is_not_reachable_through_the_new_id(
+        self, client: AsyncClient
+    ):
+        await client.post("/api/projects/pr2", json={"meta": {"solution": "Old"}})
+        for org in ("A", "B", "C"):
+            await client.patch("/api/projects/pr2", json={"meta": {"org": org}})
+        await client.delete("/api/projects/pr2")
+
+        await client.post("/api/projects/pr2", json={"meta": {"solution": "New"}})
+        versions = (await client.get("/api/projects/pr2/versions")).json()
+        assert len(versions) == 1
+        docs = [
+            (await client.get(f"/api/projects/pr2/versions/{v['rev']}")).json()["doc"]
+            for v in versions
+        ]
+        assert all(d["meta"]["solution"] == "New" for d in docs)
+
+    async def test_purging_a_reused_id_leaves_the_other_incarnation_alone(
+        self, client: AsyncClient
+    ):
+        """Purge is scoped to the incarnation being read, not the id."""
+        await client.post("/api/projects/pr3", json={"meta": {"solution": "Old"}})
+        await client.delete("/api/projects/pr3")
+        await client.post("/api/projects/pr3", json={"meta": {"solution": "New"}})
+
+        assert (await client.delete("/api/projects/pr3/versions")).status_code == 204
+
+        # The live incarnation is purged...
+        current = (await client.get("/api/projects/pr3/versions")).json()
+        assert all(v["purged"] for v in current)
+
+        # ...and the old one still has its content, untouched.
+        async with client.app.state.db.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT doc, purged_at FROM project_version WHERE project_id = 'pr3'"
+            )
+        unpurged = [r for r in rows if r["purged_at"] is None]
+        assert len(unpurged) == 1
+        assert unpurged[0]["doc"]["meta"]["solution"] == "Old"

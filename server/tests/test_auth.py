@@ -323,3 +323,92 @@ def test_unknown_identity_mode_fails_at_startup(monkeypatch) -> None:
     monkeypatch.setenv("IDENTITY_MODE", "gcp")
     with pytest.raises(RuntimeError, match="IDENTITY_MODE"):
         Settings.from_env()
+
+
+class TestInsecureAuthIsGuarded:
+    """A log line is not a guard.
+
+    DEV_INSECURE_AUTH authenticates every request as one fixed user;
+    REQUIRE_IDENTITY=false turns off access control for everyone. Both used to
+    be guarded only by a startup warning, so one stale variable in a task
+    definition was a full compromise. They are now refused unless the process
+    binds loopback or a second, differently-named variable says so too.
+    """
+
+    def _from_env(self, monkeypatch, **env: str) -> Settings:
+        for key in (
+            "DEV_INSECURE_AUTH",
+            "REQUIRE_IDENTITY",
+            "I_UNDERSTAND_THIS_IS_INSECURE",
+            "HOST",
+            "IDENTITY_MODE",
+            "IDENTITY_AUDIENCE",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        return Settings.from_env()
+
+    def test_dev_auth_off_loopback_is_refused(self, monkeypatch):
+        with pytest.raises(RuntimeError, match="Refusing to start"):
+            self._from_env(monkeypatch, DEV_INSECURE_AUTH="1", HOST="0.0.0.0")
+
+    def test_anonymous_access_off_loopback_is_refused(self, monkeypatch):
+        with pytest.raises(RuntimeError, match="Refusing to start"):
+            self._from_env(monkeypatch, REQUIRE_IDENTITY="false", HOST="0.0.0.0")
+
+    def test_the_message_names_the_variable_and_the_way_out(self, monkeypatch):
+        with pytest.raises(RuntimeError) as exc:
+            self._from_env(monkeypatch, DEV_INSECURE_AUTH="1", HOST="0.0.0.0")
+        text = str(exc.value)
+        assert "DEV_INSECURE_AUTH" in text
+        assert "HOST=127.0.0.1" in text
+        assert "I_UNDERSTAND_THIS_IS_INSECURE" in text
+
+    def test_dev_auth_on_loopback_is_allowed(self, monkeypatch):
+        settings = self._from_env(monkeypatch, DEV_INSECURE_AUTH="1", HOST="127.0.0.1")
+        assert settings.dev_insecure_auth
+        assert settings.auth_mode == "DEV-INSECURE"
+
+    def test_an_explicit_acknowledgment_is_honored(self, monkeypatch):
+        settings = self._from_env(
+            monkeypatch,
+            DEV_INSECURE_AUTH="1",
+            HOST="0.0.0.0",
+            I_UNDERSTAND_THIS_IS_INSECURE="1",
+        )
+        assert settings.dev_insecure_auth
+
+    def test_a_normal_deployment_is_unaffected(self, monkeypatch):
+        settings = self._from_env(monkeypatch, HOST="0.0.0.0")
+        assert settings.require_identity
+        assert not settings.dev_insecure_auth
+
+
+class TestNetworkLocksApplyInDevMode:
+    """DEV_INSECURE_AUTH should weaken one layer, not all three.
+
+    The dev short-circuit used to return before _check_peer and
+    _check_shared_secret ran, so setting it also disabled TRUSTED_PROXY_CIDR
+    and PROXY_SHARED_SECRET -- the two controls documented as defense in depth
+    for exactly this situation.
+    """
+
+    async def test_the_shared_secret_is_still_required(self):
+        response = await call(
+            make_settings(dev_insecure_auth=True, proxy_shared_secret="s3kr1t")
+        )
+        assert response.status_code == 403
+
+    async def test_a_correct_shared_secret_still_gets_the_dev_identity(self):
+        response = await call(
+            make_settings(dev_insecure_auth=True, proxy_shared_secret="s3kr1t"),
+            headers={"X-Proxy-Secret": "s3kr1t"},
+        )
+        assert response.status_code == 200
+        assert response.json()["dev"] is True
+
+    async def test_without_a_shared_secret_dev_mode_is_unchanged(self):
+        response = await call(make_settings(dev_insecure_auth=True))
+        assert response.status_code == 200
+        assert response.json()["dev"] is True

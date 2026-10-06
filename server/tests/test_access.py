@@ -214,3 +214,85 @@ class TestEnforcementDisabled:
         )
         r = await open_client.patch("/api/projects/popen", json={"meta": {"org": "x"}})
         assert r.status_code == 200
+
+
+@requires_db
+class TestArchiveIsOwnerOnly:
+    """The browser says owner-only; the server must agree.
+
+    15-access.js gates archive on canOwn(), but the server saw
+    `{"archived": true}` as an ordinary field in a deep-merge patch and
+    accepted it from any writer. A rule enforced only in the browser is a
+    label, not a control.
+    """
+
+    async def _project(self, client: AsyncClient, pid: str) -> None:
+        response = await client.post(
+            f"/api/projects/{pid}",
+            json={
+                "meta": {"solution": "Guarded"},
+                "archived": False,
+                "access": {
+                    "owners": [TEST_EMAIL],
+                    "writers": ["writer@x"],
+                    "readers": ["reader@x"],
+                },
+            },
+        )
+        assert response.status_code == 201
+
+    def _as(self, client: AsyncClient, email: str) -> AsyncClient:
+        from httpx import ASGITransport
+
+        return AsyncClient(
+            transport=ASGITransport(app=client.app),
+            base_url="http://api.test",
+            headers={"X-Forwarded-Email": email},
+        )
+
+    async def test_a_writer_cannot_archive(self, client: AsyncClient):
+        await self._project(client, "pa1")
+        async with self._as(client, "writer@x") as writer:
+            response = await writer.patch("/api/projects/pa1", json={"archived": True})
+        assert response.status_code == 403
+        assert "owner" in response.json()["detail"].lower()
+        live = (await client.get("/api/projects")).json()
+        assert next(p for p in live if p["id"] == "pa1")["archived"] is False
+
+    async def test_a_writer_cannot_restore(self, client: AsyncClient):
+        await self._project(client, "pa2")
+        assert (
+            await client.patch("/api/projects/pa2", json={"archived": True})
+        ).status_code == 200
+        async with self._as(client, "writer@x") as writer:
+            response = await writer.patch("/api/projects/pa2", json={"archived": False})
+        assert response.status_code == 403
+
+    async def test_an_owner_can_archive(self, client: AsyncClient):
+        await self._project(client, "pa3")
+        response = await client.patch("/api/projects/pa3", json={"archived": True})
+        assert response.status_code == 200
+        assert response.json()["archived"] is True
+
+    async def test_a_writer_can_still_edit_everything_else(self, client: AsyncClient):
+        await self._project(client, "pa4")
+        async with self._as(client, "writer@x") as writer:
+            response = await writer.patch(
+                "/api/projects/pa4",
+                json={"items": {"s4-1": {"status": "met"}}},
+            )
+        assert response.status_code == 200
+
+    async def test_a_no_op_archived_field_is_not_a_403(self, client: AsyncClient):
+        """The browser re-sends unchanged fields alongside real edits.
+
+        Failing those would turn an ordinary save into a permission error.
+        """
+        await self._project(client, "pa5")
+        async with self._as(client, "writer@x") as writer:
+            response = await writer.patch(
+                "/api/projects/pa5",
+                json={"archived": False, "meta": {"org": "St Elsewhere"}},
+            )
+        assert response.status_code == 200
+        assert response.json()["meta"]["org"] == "St Elsewhere"

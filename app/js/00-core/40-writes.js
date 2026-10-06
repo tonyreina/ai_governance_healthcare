@@ -113,15 +113,76 @@ function saveMetrics(){
   const now=new Date().toISOString(); S.cardUpdatedAt=now; const st=stamp(); Object.assign(S,st);
   queuePatch(CUR, Object.assign({metrics:clone(S.metrics), cardUpdatedAt:now}, st));
 }
-function writeLog(pid,text){ if(RO) return; STORE.log(pid,{at:new Date().toISOString(),by:ME.id||null,text}).catch(()=>{}); }
+/* Append one audit entry.
+
+   This used to end in `.catch(()=>{})`. A log that can silently lose entries
+   while continuing to look complete is worse than no log: a reviewer cannot
+   tell a quiet period from a dropped write, and the whole point of the record
+   is that someone will rely on it a year later.
+
+   So a failure is retried, and a failure that survives the retries is said
+   out loud rather than swallowed. The entry is kept in `logQueue` across
+   retries so a transient outage does not lose it. */
+const logQueue = [];
+let logDraining = false;
+
+function writeLog(pid,text){
+  if(RO) return;
+  logQueue.push({pid, entry:{at:new Date().toISOString(), by:ME.id||null, text}, tries:0});
+  drainLog();
+}
+
+async function drainLog(){
+  if(logDraining || !logQueue.length) return;
+  logDraining = true;
+  try{
+    while(logQueue.length){
+      const item = logQueue[0];
+      try{
+        await STORE.log(item.pid, item.entry);
+        logQueue.shift();
+      }catch(e){
+        const code = e && e.code;
+        // A permission failure or a project that is gone will not succeed on
+        // a retry. Drop the item, but say so: the user just did something the
+        // record now does not show.
+        if(code === "permission_denied" || code === "not_found"){
+          logQueue.shift();
+          setSaved("Audit entry not recorded");
+          toast("That change was saved, but could not be added to the audit log.");
+          continue;
+        }
+        if(++item.tries >= 5){
+          logQueue.shift();
+          setSaved("Audit entry not recorded");
+          toast("That change was saved, but could not be added to the audit log.");
+          continue;
+        }
+        // Back off and let a later call pick it up.
+        logDraining = false;
+        setTimeout(drainLog, 400 * item.tries + Math.random() * 300);
+        return;
+      }
+    }
+  } finally {
+    logDraining = false;
+  }
+}
+
+/* Entries still in flight, for the unload path. */
+const pendingLogCount = () => logQueue.length;
 
 async function createProject(data,logText){
   if(RO) return null;
   const id=newId();
   try{
     await STORE.create(id,data);
-    STORE.log(id,{at:new Date().toISOString(),by:ME.id||null,
-      text:logText||"Project created", hash:contentHash(data)}).catch(()=>{});
+    // Goes through the same queue as every other entry, so a transient
+    // failure here is retried rather than dropped. See writeLog().
+    logQueue.push({pid:id, tries:0, entry:{
+      at:new Date().toISOString(), by:ME.id||null,
+      text:logText||"Project created", hash:contentHash(data)}});
+    drainLog();
     return id;
   }
   catch(e){ toast(e&&e.code==="quota_exceeded"?"The workspace is full. Archive or delete old projects.":"Couldn't create the project"); return null; }

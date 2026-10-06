@@ -30,7 +30,12 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, status
 from fastapi.responses import StreamingResponse
 
-from .access import can_read, guard_access_change, require
+from .access import (
+    can_read,
+    guard_access_change,
+    guard_owner_only_fields,
+    require,
+)
 from .auth import Identity, identity_from_request
 from .config import Settings
 from .db import Database
@@ -188,7 +193,7 @@ async def create_project(
                 INSERT INTO projects (id, doc, created_by, updated_by)
                 VALUES ($1, $2, $3, $3)
                 ON CONFLICT (id) DO NOTHING
-                RETURNING id
+                RETURNING id, incarnation
                 """,
             project_id,
             doc,
@@ -199,7 +204,7 @@ async def create_project(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Project {project_id!r} already exists.",
             )
-        await _snapshot(conn, project_id, 1, doc, identity.id)
+        await _snapshot(conn, project_id, row["incarnation"], 1, doc, identity.id)
         await broker.publish(Event(PROJECT_CREATED, project_id), conn)
     log.info("project %s created by %s", project_id, identity.id)
     return ProjectOut.from_row(project_id, doc)
@@ -236,7 +241,8 @@ async def patch_project(
     patch = body.root
     async with db.acquire() as conn, conn.transaction():
         row = await conn.fetchrow(
-            "SELECT doc FROM projects WHERE id = $1 FOR UPDATE", project_id
+            "SELECT doc, incarnation FROM projects WHERE id = $1 FOR UPDATE",
+            project_id,
         )
         if row is None:
             raise HTTPException(
@@ -247,6 +253,7 @@ async def patch_project(
         enforced = settings.require_identity
         require(before, identity.id, "write", enforced=enforced)
         guard_access_change(before, patch, identity.id, enforced=enforced)
+        guard_owner_only_fields(before, patch, identity.id, enforced=enforced)
         document = merged(before, patch)
         rev = await conn.fetchval(
             """
@@ -259,7 +266,9 @@ async def patch_project(
             document,
             identity.id,
         )
-        await _snapshot(conn, project_id, rev, document, identity.id)
+        await _snapshot(
+            conn, project_id, row["incarnation"], rev, document, identity.id
+        )
         await broker.publish(Event(PROJECT_UPDATED, project_id), conn)
     return ProjectOut.from_row(project_id, document)
 
@@ -342,7 +351,12 @@ def content_md5(doc: dict[str, Any]) -> str:
 
 
 async def _snapshot(
-    conn: Any, project_id: str, rev: int, doc: dict[str, Any], by: str | None
+    conn: Any,
+    project_id: str,
+    incarnation: Any,
+    rev: int,
+    doc: dict[str, Any],
+    by: str | None,
 ) -> None:
     """Record one immutable version. Caller supplies the open transaction.
 
@@ -352,14 +366,20 @@ async def _snapshot(
     could reach the API. See ``003_version_access.sql``.
     """
     access = doc.get("access") if isinstance(doc.get("access"), dict) else {}
+    # No ON CONFLICT. A conflict here means two snapshots claim the same
+    # (project, incarnation, revision), which cannot happen while the caller
+    # holds the row lock -- so if it does, something is wrong and the write
+    # should fail loudly. The previous DO NOTHING silently dropped the rev 1 of
+    # a project that reused a deleted id, leaving a history with a missing
+    # first revision and no indication of it.
     await conn.execute(
         """
         INSERT INTO project_version
-               (project_id, rev, doc, content_md5, changed_by, access)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (project_id, rev) DO NOTHING
+               (project_id, incarnation, rev, doc, content_md5, changed_by, access)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         """,
         project_id,
+        incarnation,
         rev,
         doc,
         content_md5(doc),
@@ -368,33 +388,42 @@ async def _snapshot(
     )
 
 
-async def _version_gate(conn: Any, project_id: str) -> dict[str, Any] | None:
-    """The document whose access list governs reads of this project's history.
+async def _version_gate(
+    conn: Any, project_id: str
+) -> tuple[dict[str, Any], Any] | None:
+    """Which history to read, and the access list that governs reading it.
 
-    The live project when there is one. Otherwise the access list recorded on
-    the most recent snapshot, so deleting a project does not turn its history
-    into a public record. ``None`` means there is no history at all, which the
-    caller turns into a 404.
+    Returns ``(doc_for_access_check, incarnation)``, or ``None`` when there is
+    no history at all -- which the caller turns into a 404.
 
-    Rows written before ``003_version_access.sql`` have a NULL access snapshot
-    and read as unclaimed, i.e. unrestricted -- which is the state they were
-    already in. Nothing becomes more open than it was.
+    The incarnation matters as much as the access list. Project ids are
+    caller-chosen and snapshots outlive their project, so one id can have two
+    unrelated histories: the deleted project's, and the one someone created
+    afterwards reusing the id. Reads are scoped to the LIVE project's
+    incarnation when there is one, and to the most recent incarnation
+    otherwise, so a reused id never shows two records merged into one.
+
+    Access comes from the live project where there is one, and otherwise from
+    the access list recorded on that incarnation's most recent snapshot -- so
+    deleting a project does not turn its history into a public record.
     """
-    live = await conn.fetchrow("SELECT doc FROM projects WHERE id = $1", project_id)
+    live = await conn.fetchrow(
+        "SELECT doc, incarnation FROM projects WHERE id = $1", project_id
+    )
     if live is not None:
-        return live["doc"] or {}
+        return (live["doc"] or {}), live["incarnation"]
     row = await conn.fetchrow(
         """
-        SELECT access FROM project_version
+        SELECT access, incarnation FROM project_version
          WHERE project_id = $1
-         ORDER BY rev DESC
+         ORDER BY changed_at DESC, rev DESC
          LIMIT 1
         """,
         project_id,
     )
     if row is None:
         return None
-    return {"access": row["access"] or {}}
+    return {"access": row["access"] or {}}, row["incarnation"]
 
 
 # --- version history --------------------------------------------------------
@@ -424,15 +453,17 @@ async def list_versions(
         gate = await _version_gate(conn, project_id)
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
-        require(gate, identity.id, "read", enforced=settings.require_identity)
+        doc, incarnation = gate
+        require(doc, identity.id, "read", enforced=settings.require_identity)
         rows = await conn.fetch(
             """
             SELECT rev, content_md5, changed_by, changed_at, purged_at, purged_by
               FROM project_version
-             WHERE project_id = $1
+             WHERE project_id = $1 AND incarnation = $2
              ORDER BY rev DESC
             """,
             project_id,
+            incarnation,
         )
     return [
         {
@@ -472,14 +503,16 @@ async def read_version(
         gate = await _version_gate(conn, project_id)
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
-        require(gate, identity.id, "read", enforced=settings.require_identity)
+        doc, incarnation = gate
+        require(doc, identity.id, "read", enforced=settings.require_identity)
         row = await conn.fetchrow(
             """
             SELECT rev, doc, content_md5, changed_by, changed_at, purged_at, purged_by
               FROM project_version
-             WHERE project_id = $1 AND rev = $2
+             WHERE project_id = $1 AND incarnation = $2 AND rev = $3
             """,
             project_id,
+            incarnation,
             rev,
         )
     if row is None:
@@ -533,18 +566,22 @@ async def purge_versions(
         gate = await _version_gate(conn, project_id)
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
-        require(gate, identity.id, "own", enforced=settings.require_identity)
+        doc, incarnation = gate
+        require(doc, identity.id, "own", enforced=settings.require_identity)
         purged = await conn.fetchval(
             """
             WITH redacted AS (
                 UPDATE project_version
-                   SET doc = '{}'::jsonb, purged_at = now(), purged_by = $2
-                 WHERE project_id = $1 AND purged_at IS NULL
+                   SET doc = '{}'::jsonb, purged_at = now(), purged_by = $3
+                 WHERE project_id = $1
+                   AND incarnation = $2
+                   AND purged_at IS NULL
              RETURNING 1
             )
             SELECT count(*) FROM redacted
             """,
             project_id,
+            incarnation,
             identity.id,
         )
     log.warning(

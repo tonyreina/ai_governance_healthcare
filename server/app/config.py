@@ -150,8 +150,24 @@ class Settings:
 
     require_identity: bool = True
 
+    # A second, differently-named variable that must ALSO be set before either
+    # kill switch above is honored off loopback. One typo'd variable in a task
+    # definition should not be the whole of the authentication system.
+    insecure_auth_acknowledged: bool = False
+
+    # The address uvicorn is told to bind. Read here only so the startup check
+    # can tell "a laptop" from "something with a route to it".
+    bind_host: str = "0.0.0.0"
+
     # --- transport --------------------------------------------------------
     cors_origins: list[str] = field(default_factory=list)
+
+    # Sec-Fetch-Site values accepted on a state-changing request. "same-origin"
+    # covers the app talking to its own API. "none" is a user typing the URL or
+    # a bookmark, which cannot carry an attacker's body. "same-site" is NOT
+    # included by default: a sibling subdomain is a different trust boundary,
+    # and a hospital intranet has many of them.
+    csrf_trusted_sites: frozenset[str] = frozenset({"same-origin", "none"})
     proxy_shared_secret: str = ""
     proxy_secret_header: str = "X-Proxy-Secret"
     trusted_proxy_cidrs: list[str] = field(default_factory=list)
@@ -188,6 +204,8 @@ class Settings:
         So this is fatal rather than a warning: a misconfiguration that only
         weakens security is precisely the kind that survives in production.
         """
+        self._reject_unguarded_insecure_auth()
+
         if self.identity_audience and self.identity_header_format != "jwt":
             raise RuntimeError(
                 "IDENTITY_AUDIENCE is set but IDENTITY_HEADER_FORMAT is "
@@ -197,6 +215,61 @@ class Settings:
                 "x-amzn-oidc-data, X-MS-TOKEN-AAD-ID-TOKEN), or unset "
                 "IDENTITY_AUDIENCE. See docs/deploy.md."
             )
+
+    @property
+    def _binds_loopback_only(self) -> bool:
+        """Is this process reachable only from its own machine?
+
+        Treated as the one place the kill switches below are tolerable. Note
+        that a container binding 127.0.0.1 inside its own namespace is not
+        reachable from the host either, so this is conservative in the right
+        direction: it says "safe" less often than it could.
+        """
+        return self.bind_host in {"127.0.0.1", "::1", "localhost"}
+
+    def _reject_unguarded_insecure_auth(self) -> None:
+        """Refuse to start with authentication off and a route to the world.
+
+        ``DEV_INSECURE_AUTH`` authenticates every request as one fixed user.
+        ``REQUIRE_IDENTITY=false`` turns off per-project access control for
+        everyone. Each was previously guarded by a log line, and a log line is
+        not a guard: a single stale variable in a task definition, a Helm
+        values file or a copied .env is a full compromise, and nobody reads
+        container logs at 3am.
+
+        So: either bind to loopback -- a laptop, which is what the flags are
+        for -- or say so twice, with a variable whose name cannot be set by
+        accident. The banner still prints; this is what makes it enforceable.
+        """
+        if self._binds_loopback_only or self.insecure_auth_acknowledged:
+            return
+
+        reasons = []
+        if self.dev_insecure_auth:
+            reasons.append(
+                "DEV_INSECURE_AUTH is on, so EVERY request is authenticated as "
+                f"{self.dev_identity_email!r} and the identity header is ignored"
+            )
+        if not self.require_identity:
+            reasons.append(
+                "REQUIRE_IDENTITY is false, so requests with no identity are "
+                "served as 'anonymous' and per-project access control is not "
+                "enforced for anyone"
+            )
+        if not reasons:
+            return
+
+        raise RuntimeError(
+            "Refusing to start.\n\n  "
+            + "\n  ".join(f"- {r}." for r in reasons)
+            + f"\n\n  This process binds {self.bind_host}, which is not loopback, "
+            "so anyone who\n  can reach the port is affected.\n\n"
+            "  If this is a laptop, bind loopback: HOST=127.0.0.1\n"
+            "  If you genuinely intend this, set I_UNDERSTAND_THIS_IS_INSECURE=1 "
+            "as well.\n"
+            "  Otherwise unset the variable above -- which is almost certainly "
+            "what you want."
+        )
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -235,12 +308,17 @@ class Settings:
             identity_jwt_name_claim=_str("IDENTITY_JWT_NAME_CLAIM", "name"),
             identity_jwt_id_claim=_str("IDENTITY_JWT_ID_CLAIM", "sub"),
             dev_insecure_auth=_bool("DEV_INSECURE_AUTH", False),
+            insecure_auth_acknowledged=_bool("I_UNDERSTAND_THIS_IS_INSECURE", False),
+            bind_host=_str("HOST", "0.0.0.0"),
             dev_identity_email=_alias(
                 "DEV_IDENTITY_EMAIL", "DEV_IDENTITY_ID", "dev@localhost"
             ),
             dev_identity_name=_str("DEV_IDENTITY_NAME", "Local Dev (INSECURE)"),
             require_identity=_bool("REQUIRE_IDENTITY", True),
             cors_origins=_csv("CORS_ORIGINS"),
+            csrf_trusted_sites=frozenset(
+                _csv("CSRF_TRUSTED_SITES") or ["same-origin", "none"]
+            ),
             proxy_shared_secret=_str("PROXY_SHARED_SECRET"),
             proxy_secret_header=_str("PROXY_SECRET_HEADER", "X-Proxy-Secret"),
             trusted_proxy_cidrs=_csv("TRUSTED_PROXY_CIDR"),

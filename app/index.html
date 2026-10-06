@@ -4,9 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Health AI assurance review</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- No webfont link, deliberately.
+
+     This file is the dashboard for a hospital's governance records. Fetching
+     a stylesheet from fonts.googleapis.com meant every page load announced
+     itself to a third party, from a tool whose entire subject is where
+     regulated data goes -- and it failed to render properly on the
+     egress-filtered networks this is most likely to run on.
+
+     --sans and --display in the stylesheet already name complete fallback
+     stacks ending in system-ui, so the typography degrades to the platform
+     UI face rather than to Times. Inline a base64 @font-face subset here if
+     the exact faces ever matter more than this does.
+
+     Keeping this file free of third-party origins is also what lets the
+     Content-Security-Policy in proxy/Caddyfile be as tight as it is. -->
 <style>
 /*@CSS@*/
 </style>

@@ -41,7 +41,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-__all__ = ["deep_merge", "is_obj", "merged"]
+__all__ = ["MAX_DEPTH", "TooDeep", "deep_merge", "is_obj", "merged"]
 
 
 def is_obj(value: Any) -> bool:
@@ -54,15 +54,31 @@ def is_obj(value: Any) -> bool:
     return isinstance(value, dict)
 
 
-def deep_merge(target: dict[str, Any], src: dict[str, Any]) -> dict[str, Any]:
+MAX_DEPTH = 64
+"""Deeper than any real governance document and far short of Python's
+recursion limit. The JSON parser rejects most pathological nesting first, so
+this is a backstop rather than the main defense -- but a RecursionError here
+surfaces as a 500 on a write that looked ordinary, and a clear 400 is a better
+answer than that."""
+
+
+class TooDeep(ValueError):
+    """A patch nested deeper than :data:`MAX_DEPTH`."""
+
+
+def deep_merge(
+    target: dict[str, Any], src: dict[str, Any], _depth: int = 0
+) -> dict[str, Any]:
     """Merge ``src`` into ``target`` in place and return ``target``.
 
     Recurses only where both sides are objects; everything else is replaced
     with a deep copy, so the result never aliases ``src``.
     """
+    if _depth > MAX_DEPTH:
+        raise TooDeep(f"patch nests deeper than {MAX_DEPTH} levels")
     for key, value in src.items():
         if is_obj(value) and is_obj(target.get(key)):
-            deep_merge(target[key], value)
+            deep_merge(target[key], value, _depth + 1)
         else:
             target[key] = copy.deepcopy(value)
     return target

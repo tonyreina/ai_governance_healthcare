@@ -14,7 +14,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from app.merge import deep_merge, is_obj, merged
+from app.merge import MAX_DEPTH, TooDeep, deep_merge, is_obj, merged
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UTIL_JS = REPO_ROOT / "app" / "js" / "00-core" / "00-util.js"
@@ -207,3 +207,42 @@ def test_parity_with_the_browsers_deepmerge(tmp_path: Path) -> None:
             f"  python: {py_result}\n"
             f"  js:     {js_result}"
         )
+
+
+class TestDepthBound:
+    """A bound, so a pathological patch is a 400 rather than a 500.
+
+    Python's JSON parser rejects most deeply-nested payloads first, so this is
+    a backstop. It matters because a RecursionError surfaces as an unhandled
+    500 on a write that looked ordinary, and because _canonical() runs AFTER
+    the caller has been told the write was accepted.
+    """
+
+    def test_a_reasonable_depth_is_fine(self) -> None:
+        patch: dict = {}
+        node = patch
+        for _ in range(MAX_DEPTH - 2):
+            node["n"] = {}
+            node = node["n"]
+        node["leaf"] = 1
+        assert merged({}, patch)
+
+    def test_past_the_bound_raises_rather_than_recursing(self) -> None:
+        patch: dict = {}
+        node = patch
+        for _ in range(MAX_DEPTH + 10):
+            node["n"] = {}
+            node = node["n"]
+        base = json.loads(json.dumps(patch))  # both sides objects, so it recurses
+        with pytest.raises(TooDeep):
+            merged(base, patch)
+
+    def test_the_error_names_the_limit(self) -> None:
+        patch: dict = {}
+        node = patch
+        for _ in range(MAX_DEPTH + 10):
+            node["n"] = {}
+            node = node["n"]
+        base = json.loads(json.dumps(patch))
+        with pytest.raises(TooDeep, match=str(MAX_DEPTH)):
+            merged(base, patch)

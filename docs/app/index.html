@@ -7,9 +7,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Health AI assurance review</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- No webfont link, deliberately.
+
+     This file is the dashboard for a hospital's governance records. Fetching
+     a stylesheet from fonts.googleapis.com meant every page load announced
+     itself to a third party, from a tool whose entire subject is where
+     regulated data goes -- and it failed to render properly on the
+     egress-filtered networks this is most likely to run on.
+
+     --sans and --display in the stylesheet already name complete fallback
+     stacks ending in system-ui, so the typography degrades to the platform
+     UI face rather than to Times. Inline a base64 @font-face subset here if
+     the exact faces ever matter more than this does.
+
+     Keeping this file free of third-party origins is also what lets the
+     Content-Security-Policy in proxy/Caddyfile be as tight as it is. -->
 <style>
 :root{
   --paper:#EDF1F2; --surface:#FFFFFF; --sunk:#E3E9EB; --ink:#13233A; --muted:#55667A; --rule:#C9D3D9;
@@ -850,22 +862,64 @@ function queuePatch(pid,patch){
   setSaved("Saving…");
   clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid),550);
 }
-async function flush(pid,retry){
-  if(flushing[pid]){ clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid),300); return; }
+/* Send one project's pending patch.
+
+   The patch is REMOVED from `pending` before the request and put back if the
+   request fails, rather than being deleted outright. It used to be deleted up
+   front and restored for exactly one error code on exactly the first attempt,
+   so a 403, a 404, or a second consecutive outage discarded the user's typing
+   while telling them to "try again" -- with nothing left to try again with.
+
+   `attempt` counts retries for backoff. Anything still pending when this
+   returns is merged on top, so an edit made DURING the request is not lost
+   either. */
+const MAX_SAVE_ATTEMPTS = 6;
+
+async function flush(pid,attempt){
+  if(flushing[pid]){ clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid,attempt),300); return; }
   const p=pending[pid]; if(!p) return; delete pending[pid];
   flushing[pid]=true;
+  const restore = ()=>{ pending[pid] = deepMerge(p, pending[pid]||{}); };
   try{
     await STORE.update(pid,p);
     if(!pending[pid]) setSaved(MODE==="shared"?"Saved to shared workspace":"Saved in this browser");
   }
   catch(e){
     const c=e&&e.code;
-    if(c==="unavailable" && !retry){ pending[pid]=deepMerge(p,pending[pid]||{}); flushing[pid]=false; setTimeout(()=>flush(pid,true),800+Math.random()*700); return; }
-    if(c==="invalid_argument"){ setReadOnly(true); toast("You can view this workspace but not edit it"); }
-    else if(c==="quota_exceeded"){ toast("The workspace is full. Archive or delete old projects."); }
-    else if(c==="revoked"){ setReadOnly(true); }
-    else toast("Couldn't save. Check your connection and try again.");
-    setSaved("Not saved");
+    const n=(attempt||0)+1;
+
+    // Transient: keep the edit and come back for it.
+    if(c==="unavailable" && n < MAX_SAVE_ATTEMPTS){
+      restore();
+      flushing[pid]=false;
+      setSaved("Not saved yet \u2014 retrying");
+      setTimeout(()=>flush(pid,n), Math.min(8000, 400*Math.pow(2,n)) + Math.random()*400);
+      return;
+    }
+
+    // Permanent, and about permission rather than connectivity. Keep the
+    // edit anyway: the user can still see and copy what they wrote, which
+    // they cannot do if we drop it.
+    if(c==="permission_denied" || c==="invalid_argument" || c==="revoked"){
+      restore();
+      setReadOnly(true);
+      toast("Your access to this project changed. Your latest edits could not be saved.");
+      setSaved("Not saved \u2014 no longer editable");
+    }
+    else if(c==="not_found"){
+      toast("This project no longer exists, so your last edits could not be saved.");
+      setSaved("Not saved");
+    }
+    else if(c==="quota_exceeded"){
+      restore();
+      toast("The workspace is full. Archive or delete old projects.");
+      setSaved("Not saved \u2014 workspace full");
+    }
+    else {
+      restore();
+      toast("Couldn't save. Your changes are still here; check your connection.");
+      setSaved("Not saved");
+    }
   } finally { flushing[pid]=false; }
 }
 function patchFromPath(path,val){
@@ -2464,7 +2518,13 @@ ${css}`;
 function exportHTML(){
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(S.meta.solution||"AI solution")} – CHAI assurance review</title>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- No webfont link. The exported report is the artifact that gets emailed
+     around a hospital and opened on clinical workstations, and a stylesheet
+     link meant every one of those opens contacted a third party, carrying the
+     referrer and the viewer's address, from a document containing vendor
+     assessments and clinical rationale. STANDALONE_CSS() goes to real trouble
+     to inline everything else; this was the one hole left in it. The font
+     stacks below end in system-ui. -->
 <style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}</main></body></html>`;
 }
 /* PDF, via the browser's own print-to-PDF.

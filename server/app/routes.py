@@ -31,6 +31,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, 
 from fastapi.responses import StreamingResponse
 
 from .access import (
+    access_of,
     can_read,
     guard_access_change,
     guard_owner_only_fields,
@@ -46,8 +47,10 @@ from .events import (
     PROJECT_UPDATED,
     Event,
     EventBroker,
+    TooManyStreams,
 )
-from .merge import merged
+from .merge import MAX_DEPTH as MERGE_MAX_DEPTH
+from .merge import TooDeep, merged
 from .models import (
     HealthOut,
     LogEntryIn,
@@ -98,6 +101,23 @@ def get_identity(
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds")
+
+
+def _audience(doc: dict[str, Any], settings: Settings) -> frozenset[str] | None:
+    """Who may be told that this project changed.
+
+    ``None`` means everyone, which is correct in exactly two cases: identity
+    is disabled, so there is nobody to check a list against; or the project is
+    unclaimed, which access.py already treats as unrestricted. Otherwise it is
+    the union of the three role lists -- the same set ``can_read`` would admit.
+    """
+    if not settings.require_identity:
+        return None
+    access = access_of(doc)
+    everyone = access["owners"] + access["writers"] + access["readers"]
+    if not access["owners"]:
+        return None  # unclaimed: unrestricted, per access.py
+    return frozenset(everyone)
 
 
 # --- health and identity ----------------------------------------------------
@@ -205,7 +225,10 @@ async def create_project(
                 detail=f"Project {project_id!r} already exists.",
             )
         await _snapshot(conn, project_id, row["incarnation"], 1, doc, identity.id)
-        await broker.publish(Event(PROJECT_CREATED, project_id), conn)
+        await broker.publish(
+            Event(PROJECT_CREATED, project_id, audience=_audience(doc, settings)),
+            conn,
+        )
     log.info("project %s created by %s", project_id, identity.id)
     return ProjectOut.from_row(project_id, doc)
 
@@ -254,7 +277,10 @@ async def patch_project(
         require(before, identity.id, "write", enforced=enforced)
         guard_access_change(before, patch, identity.id, enforced=enforced)
         guard_owner_only_fields(before, patch, identity.id, enforced=enforced)
-        document = merged(before, patch)
+        try:
+            document = merged(before, patch)
+        except TooDeep as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
         rev = await conn.fetchval(
             """
                 UPDATE projects
@@ -269,7 +295,14 @@ async def patch_project(
         await _snapshot(
             conn, project_id, row["incarnation"], rev, document, identity.id
         )
-        await broker.publish(Event(PROJECT_UPDATED, project_id), conn)
+        await broker.publish(
+            Event(
+                PROJECT_UPDATED,
+                project_id,
+                audience=_audience(document, settings),
+            ),
+            conn,
+        )
     return ProjectOut.from_row(project_id, document)
 
 
@@ -309,7 +342,20 @@ async def delete_project(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No project {project_id!r}.",
             )
-        await broker.publish(Event(PROJECT_DELETED, project_id), conn)
+        # The audience comes from the document as it was BEFORE the delete:
+        # afterwards there is no access list to read, and defaulting to
+        # "everyone" at that point would announce the deletion of a record
+        # most subscribers were never allowed to know about.
+        await broker.publish(
+            Event(
+                PROJECT_DELETED,
+                project_id,
+                audience=_audience(current["doc"] or {}, settings)
+                if current is not None
+                else None,
+            ),
+            conn,
+        )
     log.info("project %s deleted by %s", project_id, identity.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -325,14 +371,23 @@ _HASH_SKIP = frozenset(
 )
 
 
-def _canonical(value: Any) -> Any:
-    """Deterministic shape: keys sorted at every depth, volatile keys dropped."""
+def _canonical(value: Any, _depth: int = 0) -> Any:
+    """Deterministic shape: keys sorted at every depth, volatile keys dropped.
+
+    Bounded for the same reason deep_merge is: this runs on every write, and
+    a RecursionError here would fail the snapshot of a document the caller
+    had already been told was accepted.
+    """
+    if _depth > MERGE_MAX_DEPTH:
+        raise TooDeep(f"document nests deeper than {MERGE_MAX_DEPTH} levels")
     if isinstance(value, dict):
         return {
-            k: _canonical(v) for k, v in sorted(value.items()) if k not in _HASH_SKIP
+            k: _canonical(v, _depth + 1)
+            for k, v in sorted(value.items())
+            if k not in _HASH_SKIP
         }
     if isinstance(value, list):
-        return [_canonical(v) for v in value]
+        return [_canonical(v, _depth + 1) for v in value]
     return value
 
 
@@ -695,7 +750,16 @@ async def append_log(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No project {project_id!r}.",
             ) from exc
-        await broker.publish(Event(LOG_APPENDED, project_id), conn)
+        await broker.publish(
+            Event(
+                LOG_APPENDED,
+                project_id,
+                audience=_audience(
+                    (target["doc"] or {}) if target is not None else {}, settings
+                ),
+            ),
+            conn,
+        )
     return LogEntryOut(**entry)
 
 
@@ -707,7 +771,7 @@ async def events(
     request: Request,
     broker: EventBroker = Depends(get_broker),
     settings: Settings = Depends(get_settings),
-    _: Identity = Depends(get_identity),
+    identity: Identity = Depends(get_identity),
 ) -> StreamingResponse:
     """One ``text/event-stream`` event per change, for as long as you hold it.
 
@@ -715,13 +779,30 @@ async def events(
     ``NOTIFY``'s 8000-byte payload cap no matter how large a project grows. The
     client refetches what changed.
 
+    **Filtered per subscriber.** A stream only carries changes to projects its
+    holder can read. Without that, every authenticated user learned the id and
+    the change cadence of every project in the portfolio, including the ones
+    ``GET /api/projects`` correctly filtered out of their view.
+
     The comment heartbeat matters more than it looks: Cloud Run, an ALB and
     Azure Front Door all close an idle connection, and an SSE stream with
     nothing to say is indistinguishable from a dead one until a byte moves.
     """
 
+    # Registered BEFORE the StreamingResponse is built. FastAPI constructs the
+    # response eagerly and runs the generator afterwards, so refusing inside
+    # the generator would mean sending 200 and then an error body.
+    try:
+        subscriber = broker.attach(identity.id)
+    except TooManyStreams as exc:
+        log.warning("refused an event stream: %s", exc)
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many open event streams for this user. Close some tabs.",
+        ) from exc
+
     async def stream() -> AsyncIterator[str]:
-        async with broker.subscribe() as queue:
+        try:
             # Tell EventSource how long to wait before reconnecting, and send
             # one frame immediately so proxies that buffer until first byte
             # release the response headers.
@@ -732,12 +813,15 @@ async def events(
                     return
                 try:
                     event = await asyncio.wait_for(
-                        queue.get(), timeout=settings.sse_keepalive_seconds
+                        subscriber.queue.get(),
+                        timeout=settings.sse_keepalive_seconds,
                     )
                 except TimeoutError:
                     yield ": ping\n\n"
                     continue
                 yield event.sse()
+        finally:
+            broker.detach(subscriber)
 
     return StreamingResponse(
         stream(),

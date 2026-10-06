@@ -72,7 +72,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info("RUN_MIGRATIONS=false: assuming the schema is already current")
 
     broker = EventBroker(
-        db, channel=settings.events_channel, queue_size=settings.sse_queue_size
+        db,
+        channel=settings.events_channel,
+        queue_size=settings.sse_queue_size,
+        max_streams_per_user=settings.sse_max_streams_per_user,
     )
     await broker.start()
 

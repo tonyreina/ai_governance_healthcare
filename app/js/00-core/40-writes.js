@@ -9,22 +9,64 @@ function queuePatch(pid,patch){
   setSaved("Saving…");
   clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid),550);
 }
-async function flush(pid,retry){
-  if(flushing[pid]){ clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid),300); return; }
+/* Send one project's pending patch.
+
+   The patch is REMOVED from `pending` before the request and put back if the
+   request fails, rather than being deleted outright. It used to be deleted up
+   front and restored for exactly one error code on exactly the first attempt,
+   so a 403, a 404, or a second consecutive outage discarded the user's typing
+   while telling them to "try again" -- with nothing left to try again with.
+
+   `attempt` counts retries for backoff. Anything still pending when this
+   returns is merged on top, so an edit made DURING the request is not lost
+   either. */
+const MAX_SAVE_ATTEMPTS = 6;
+
+async function flush(pid,attempt){
+  if(flushing[pid]){ clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid,attempt),300); return; }
   const p=pending[pid]; if(!p) return; delete pending[pid];
   flushing[pid]=true;
+  const restore = ()=>{ pending[pid] = deepMerge(p, pending[pid]||{}); };
   try{
     await STORE.update(pid,p);
     if(!pending[pid]) setSaved(MODE==="shared"?"Saved to shared workspace":"Saved in this browser");
   }
   catch(e){
     const c=e&&e.code;
-    if(c==="unavailable" && !retry){ pending[pid]=deepMerge(p,pending[pid]||{}); flushing[pid]=false; setTimeout(()=>flush(pid,true),800+Math.random()*700); return; }
-    if(c==="invalid_argument"){ setReadOnly(true); toast("You can view this workspace but not edit it"); }
-    else if(c==="quota_exceeded"){ toast("The workspace is full. Archive or delete old projects."); }
-    else if(c==="revoked"){ setReadOnly(true); }
-    else toast("Couldn't save. Check your connection and try again.");
-    setSaved("Not saved");
+    const n=(attempt||0)+1;
+
+    // Transient: keep the edit and come back for it.
+    if(c==="unavailable" && n < MAX_SAVE_ATTEMPTS){
+      restore();
+      flushing[pid]=false;
+      setSaved("Not saved yet \u2014 retrying");
+      setTimeout(()=>flush(pid,n), Math.min(8000, 400*Math.pow(2,n)) + Math.random()*400);
+      return;
+    }
+
+    // Permanent, and about permission rather than connectivity. Keep the
+    // edit anyway: the user can still see and copy what they wrote, which
+    // they cannot do if we drop it.
+    if(c==="permission_denied" || c==="invalid_argument" || c==="revoked"){
+      restore();
+      setReadOnly(true);
+      toast("Your access to this project changed. Your latest edits could not be saved.");
+      setSaved("Not saved \u2014 no longer editable");
+    }
+    else if(c==="not_found"){
+      toast("This project no longer exists, so your last edits could not be saved.");
+      setSaved("Not saved");
+    }
+    else if(c==="quota_exceeded"){
+      restore();
+      toast("The workspace is full. Archive or delete old projects.");
+      setSaved("Not saved \u2014 workspace full");
+    }
+    else {
+      restore();
+      toast("Couldn't save. Your changes are still here; check your connection.");
+      setSaved("Not saved");
+    }
   } finally { flushing[pid]=false; }
 }
 function patchFromPath(path,val){

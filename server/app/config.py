@@ -178,6 +178,7 @@ class Settings:
     events_channel: str = "chai_events"
     sse_keepalive_seconds: float = 15.0
     sse_queue_size: int = 256
+    sse_max_streams_per_user: int = 8
 
     # --- misc -------------------------------------------------------------
     version: str = "0.1.0"
@@ -327,6 +328,7 @@ class Settings:
             events_channel=_str("EVENTS_CHANNEL", "chai_events"),
             sse_keepalive_seconds=float(_int("SSE_KEEPALIVE_SECONDS", 15)),
             sse_queue_size=_int("SSE_QUEUE_SIZE", 256),
+            sse_max_streams_per_user=_int("SSE_MAX_STREAMS_PER_USER", 8),
             version=_str("APP_VERSION", "0.1.0"),
             log_page_size=_int("LOG_PAGE_SIZE", 60),
         )

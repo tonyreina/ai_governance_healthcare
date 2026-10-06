@@ -13,7 +13,13 @@ ${css}`;
 function exportHTML(){
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(S.meta.solution||"AI solution")} – CHAI assurance review</title>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- No webfont link. The exported report is the artifact that gets emailed
+     around a hospital and opened on clinical workstations, and a stylesheet
+     link meant every one of those opens contacted a third party, carrying the
+     referrer and the viewer's address, from a document containing vendor
+     assessments and clinical rationale. STANDALONE_CSS() goes to real trouble
+     to inline everything else; this was the one hole left in it. The font
+     stacks below end in system-ui. -->
 <style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}</main></body></html>`;
 }
 /* PDF, via the browser's own print-to-PDF.

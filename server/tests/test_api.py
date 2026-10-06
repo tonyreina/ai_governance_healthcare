@@ -55,7 +55,12 @@ async def test_every_response_carries_the_auth_mode(client: AsyncClient) -> None
 async def test_create_returns_the_document_with_its_id(client: AsyncClient) -> None:
     response = await client.post("/api/projects/pnew1", json={"meta": {"org": "X"}})
     assert response.status_code == 201
-    assert response.json() == {"id": "pnew1", "meta": {"org": "X"}}
+    body = response.json()
+    assert body["id"] == "pnew1"
+    assert body["meta"] == {"org": "X"}
+    # The server stamps the creator as owner. A project created with no owner
+    # would read as "unclaimed", which means unrestricted -- see app/access.py.
+    assert body["access"]["owners"] == [TEST_EMAIL]
 
 
 async def test_duplicate_create_is_409(client: AsyncClient, project: str) -> None:

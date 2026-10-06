@@ -28,6 +28,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, status
 from fastapi.responses import StreamingResponse
 
+from .access import can_read, guard_access_change, require
 from .auth import Identity, identity_from_request
 from .config import Settings
 from .db import Database
@@ -127,7 +128,8 @@ async def me(identity: Identity = Depends(get_identity)) -> MeOut:
 @router.get("/projects", response_model=list[ProjectOut], tags=["projects"])
 async def list_projects(
     db: Database = Depends(get_db),
-    _: Identity = Depends(get_identity),
+    identity: Identity = Depends(get_identity),
+    settings: Settings = Depends(get_settings),
 ) -> list[ProjectOut]:
     """Every project, as ``{id, ...document}``.
 
@@ -139,7 +141,12 @@ async def list_projects(
         rows = await conn.fetch(
             "SELECT id, doc FROM projects ORDER BY updated_at DESC, id ASC"
         )
-    return [ProjectOut.from_row(row["id"], row["doc"] or {}) for row in rows]
+    enforced = settings.require_identity
+    return [
+        ProjectOut.from_row(row["id"], row["doc"] or {})
+        for row in rows
+        if can_read(row["doc"] or {}, identity.id, enforced=enforced)
+    ]
 
 
 @router.post(
@@ -154,6 +161,7 @@ async def create_project(
     db: Database = Depends(get_db),
     broker: EventBroker = Depends(get_broker),
     identity: Identity = Depends(get_identity),
+    settings: Settings = Depends(get_settings),
 ) -> ProjectOut:
     """Create a project. 409 if the id is taken.
 
@@ -163,6 +171,15 @@ async def create_project(
     of a clean 409.
     """
     doc = dict(body.root)
+    access = doc.get("access") if isinstance(doc.get("access"), dict) else {}
+    # Whoever creates a project owns it. A project created with no owner would
+    # be "unclaimed", which means unrestricted -- an open record from birth.
+    if settings.require_identity and identity.id and not access.get("owners"):
+        doc["access"] = {
+            "owners": [identity.id],
+            "writers": list(access.get("writers") or []),
+            "readers": list(access.get("readers") or []),
+        }
     async with db.acquire() as conn, conn.transaction():
         row = await conn.fetchrow(
             """
@@ -192,6 +209,7 @@ async def patch_project(
     db: Database = Depends(get_db),
     broker: EventBroker = Depends(get_broker),
     identity: Identity = Depends(get_identity),
+    settings: Settings = Depends(get_settings),
 ) -> ProjectOut:
     """Deep-merge the body into the stored document.
 
@@ -222,7 +240,11 @@ async def patch_project(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No project {project_id!r}.",
             )
-        document = merged(row["doc"] or {}, patch)
+        before = row["doc"] or {}
+        enforced = settings.require_identity
+        require(before, identity.id, "write", enforced=enforced)
+        guard_access_change(before, patch, identity.id, enforced=enforced)
+        document = merged(before, patch)
         await conn.execute(
             """
                 UPDATE projects
@@ -247,6 +269,7 @@ async def delete_project(
     db: Database = Depends(get_db),
     broker: EventBroker = Depends(get_broker),
     identity: Identity = Depends(get_identity),
+    settings: Settings = Depends(get_settings),
 ) -> Response:
     """Delete a project and its log.
 
@@ -254,6 +277,16 @@ async def delete_project(
     rows are ever removed -- there is no endpoint that deletes an entry.
     """
     async with db.acquire() as conn, conn.transaction():
+        current = await conn.fetchrow(
+            "SELECT doc FROM projects WHERE id = $1 FOR UPDATE", project_id
+        )
+        if current is not None:
+            require(
+                current["doc"] or {},
+                identity.id,
+                "own",
+                enforced=settings.require_identity,
+            )
         row = await conn.fetchrow(
             "DELETE FROM projects WHERE id = $1 RETURNING id", project_id
         )
@@ -279,7 +312,7 @@ async def read_log(
     project_id: str = ProjectId,
     db: Database = Depends(get_db),
     settings: Settings = Depends(get_settings),
-    _: Identity = Depends(get_identity),
+    identity: Identity = Depends(get_identity),
 ) -> list[LogEntryOut]:
     """The newest entries, descending by ``at`` -- what ``subscribeLog`` shows.
 
@@ -289,6 +322,19 @@ async def read_log(
     did on purpose.
     """
     async with db.acquire() as conn:
+        # The log is the project's history; seeing it is seeing the project.
+        # A missing project still returns an empty list rather than 404 -- see
+        # the docstring -- so an absent row is not an access failure.
+        owner_row = await conn.fetchrow(
+            "SELECT doc FROM projects WHERE id = $1", project_id
+        )
+        if owner_row is not None:
+            require(
+                owner_row["doc"] or {},
+                identity.id,
+                "read",
+                enforced=settings.require_identity,
+            )
         rows = await conn.fetch(
             """
             SELECT entry FROM project_log
@@ -314,6 +360,7 @@ async def append_log(
     db: Database = Depends(get_db),
     broker: EventBroker = Depends(get_broker),
     identity: Identity = Depends(get_identity),
+    settings: Settings = Depends(get_settings),
 ) -> LogEntryOut:
     """Append one entry. There is no update and no delete, by design.
 
@@ -329,6 +376,16 @@ async def append_log(
     entry["by"] = identity.id
 
     async with db.acquire() as conn, conn.transaction():
+        target = await conn.fetchrow(
+            "SELECT doc FROM projects WHERE id = $1", project_id
+        )
+        if target is not None:
+            require(
+                target["doc"] or {},
+                identity.id,
+                "write",
+                enforced=settings.require_identity,
+            )
         try:
             await conn.execute(
                 """

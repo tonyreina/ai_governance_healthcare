@@ -4,11 +4,16 @@
    knowledge of any framework.
    ============================================================ */
 const get = (path)=> path.split(".").reduce((o,k)=>o==null?undefined:o[k], S);
-function field(path,label,hint,long,opts){
+function field(path,label,hint,long,opts,kind){
   const v=esc(get(path)||""); const id="f_"+path.replace(/\./g,"_");
   let input;
   if(opts) input=`<select id="${id}" data-bind="${path}"><option value="">Choose…</option>${opts.map(o=>`<option${get(path)===o?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
   else if(long) input=`<textarea id="${id}" data-bind="${path}" rows="3">${v}</textarea>`;
+  // `date` gives the browser's own picker and its validation. Asking someone
+  // to type YYYY-MM-DD invites 03/04/2026, which is two different dates
+  // depending on where the reader is -- not a good property for the date a
+  // governance decision was taken.
+  else if(kind==="date") input=`<input type="date" id="${id}" data-bind="${path}" value="${v}">`;
   else input=`<input type="text" id="${id}" data-bind="${path}" value="${v}">`;
   return `<div class="field${long?" wide":""}"><label for="${id}">${esc(label)}</label>${hint?`<span class="hint">${esc(hint)}</span>`:""}${input}</div>`;
 }

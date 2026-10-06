@@ -39,7 +39,7 @@ function renderSetup(){
     ${field("meta.sponsor","Clinical sponsor","Accountable clinical owner",0)}
     ${field("meta.riskTier","Risk tier","Your organization's own triage",0,["Low","Moderate","High"])}
     ${field("meta.reviewCadence","Periodic review cadence once live","Defaults to 6 months for high risk, otherwise 12",0,["3 months","6 months","12 months","24 months"])}
-    ${field("meta.startDate","Review start date","YYYY-MM-DD",0)}
+    ${field("meta.startDate","Review start date","",0,null,"date")}
     ${field("meta.reviewers","Review team","Names and roles, e.g. CMIO, data science, nursing informatics, compliance, patient representative",1)}
     ${field("meta.scope","Scope of this review","Sites, units, and versions in scope",1)}
   </div>

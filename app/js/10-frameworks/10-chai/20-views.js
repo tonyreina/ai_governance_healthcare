@@ -123,7 +123,7 @@ function renderGate(key){
     <div class="decisions" role="group" aria-label="Decision">${G.options.map(o=>`<button data-gate="${key}" data-d="${esc(o)}" aria-pressed="${g.decision===o}">${esc(o)}</button>`).join("")}</div>
     <div class="fields">
       ${field(`gates.${key}.by`,"Decided by","Committee, or name and role",0)}
-      ${field(`gates.${key}.date`,"Decision date","YYYY-MM-DD",0)}
+      ${field(`gates.${key}.date`,"Decision date","",0,null,"date")}
       ${field(`gates.${key}.rationale`,"Rationale and conditions","What the decision rests on, conditions attached, and when it will be revisited",1)}
     </div>
     ${g.decision?`<p class="signed">Recorded by ${who(g.signedBy)}${g.signedAt?` on ${esc(fmtDay(g.signedAt.slice(0,10)))}`:""}.${nr?` Next periodic review due ${esc(fmtDay(nr))}.`:""}</p>`:""}

@@ -729,11 +729,16 @@ async function createProject(data,logText){
    knowledge of any framework.
    ============================================================ */
 const get = (path)=> path.split(".").reduce((o,k)=>o==null?undefined:o[k], S);
-function field(path,label,hint,long,opts){
+function field(path,label,hint,long,opts,kind){
   const v=esc(get(path)||""); const id="f_"+path.replace(/\./g,"_");
   let input;
   if(opts) input=`<select id="${id}" data-bind="${path}"><option value="">Choose…</option>${opts.map(o=>`<option${get(path)===o?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
   else if(long) input=`<textarea id="${id}" data-bind="${path}" rows="3">${v}</textarea>`;
+  // `date` gives the browser's own picker and its validation. Asking someone
+  // to type YYYY-MM-DD invites 03/04/2026, which is two different dates
+  // depending on where the reader is -- not a good property for the date a
+  // governance decision was taken.
+  else if(kind==="date") input=`<input type="date" id="${id}" data-bind="${path}" value="${v}">`;
   else input=`<input type="text" id="${id}" data-bind="${path}" value="${v}">`;
   return `<div class="field${long?" wide":""}"><label for="${id}">${esc(label)}</label>${hint?`<span class="hint">${esc(hint)}</span>`:""}${input}</div>`;
 }
@@ -865,7 +870,7 @@ function renderSetup(){
     ${field("meta.sponsor","Clinical sponsor","Accountable clinical owner",0)}
     ${field("meta.riskTier","Risk tier","Your organization's own triage",0,["Low","Moderate","High"])}
     ${field("meta.reviewCadence","Periodic review cadence once live","Defaults to 6 months for high risk, otherwise 12",0,["3 months","6 months","12 months","24 months"])}
-    ${field("meta.startDate","Review start date","YYYY-MM-DD",0)}
+    ${field("meta.startDate","Review start date","",0,null,"date")}
     ${field("meta.reviewers","Review team","Names and roles, e.g. CMIO, data science, nursing informatics, compliance, patient representative",1)}
     ${field("meta.scope","Scope of this review","Sites, units, and versions in scope",1)}
   </div>
@@ -1257,7 +1262,7 @@ function renderGate(key){
     <div class="decisions" role="group" aria-label="Decision">${G.options.map(o=>`<button data-gate="${key}" data-d="${esc(o)}" aria-pressed="${g.decision===o}">${esc(o)}</button>`).join("")}</div>
     <div class="fields">
       ${field(`gates.${key}.by`,"Decided by","Committee, or name and role",0)}
-      ${field(`gates.${key}.date`,"Decision date","YYYY-MM-DD",0)}
+      ${field(`gates.${key}.date`,"Decision date","",0,null,"date")}
       ${field(`gates.${key}.rationale`,"Rationale and conditions","What the decision rests on, conditions attached, and when it will be revisited",1)}
     </div>
     ${g.decision?`<p class="signed">Recorded by ${who(g.signedBy)}${g.signedAt?` on ${esc(fmtDay(g.signedAt.slice(0,10)))}`:""}.${nr?` Next periodic review due ${esc(fmtDay(nr))}.`:""}</p>`:""}

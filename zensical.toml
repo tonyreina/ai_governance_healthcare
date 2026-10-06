@@ -16,6 +16,7 @@ nav = [
     "frameworks/index.md",
     "frameworks/chai.md",
     "frameworks/chai-checklist.md",
+    "frameworks/chai-metrics.md",
     "frameworks/optica.md",
     "frameworks/optica-checklist.md",
     "frameworks/evidence.md",

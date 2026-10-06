@@ -42,6 +42,22 @@ document.addEventListener("click",async e=>{
     writeLog(CUR, val?`${GATES[k].title}: ${val}`:`${GATES[k].title}: decision cleared`);
     renderRail(); renderMain(false); return;
   }
+  // Add a CHAI-recommended metric. Name and category only: the value, the
+  // interval and the population are measurements the organization has to make,
+  // and pre-filling them would be inventing results.
+  if(t.dataset.te && !RO){
+    const name=t.dataset.te;
+    if(!S.metrics.some(m=>(m.name||"").trim().toLowerCase()===name.trim().toLowerCase())){
+      S.metrics.push({cat:t.dataset.teCat||METRIC_CATS[0],name,value:"",ci:"",pop:""});
+      saveMetrics();
+    }
+    renderMain(false); renderLabel();
+    // Put the cursor where the user now has to type.
+    const rows=[...document.querySelectorAll('.mtable input[aria-label="Metric"]')];
+    const row=rows.find(i=>i.value===name);
+    if(row) row.closest("tr").querySelector('input[aria-label="Value"]').focus();
+    return;
+  }
   if(t.dataset.delmetric!=null && !RO){ S.metrics.splice(+t.dataset.delmetric,1); saveMetrics(); renderMain(false); renderLabel(); return; }
   const a=t.dataset.act; if(!a) return;
   if(a==="new"){ const f=document.getElementById("newform"); if(f){ f.hidden=false; document.getElementById("newname").focus(); } return; }
@@ -86,7 +102,11 @@ document.addEventListener("input",e=>{
   if(p==="meta.solution"||p.startsWith("card.")) renderRail();
 });
 document.addEventListener("change",e=>{
-  const el=e.target; if(el.tagName==="SELECT" && el.dataset.bind && S && !RO){ edit(el.dataset.bind, el.value); renderLabel(); renderRail(); }
+  const el=e.target;
+  // The use-case picker is stored on the project, so the chosen framework
+  // persists and the suggestions are there next time someone opens stage 4.
+  if(el.dataset && el.dataset.teUse!=null && S && !RO){ edit("meta.chaiUseCase", el.value); renderMain(false); return; }
+  if(el.tagName==="SELECT" && el.dataset.bind && S && !RO){ edit(el.dataset.bind, el.value); renderLabel(); renderRail(); }
 });
 document.getElementById("brandBtn").onclick=()=>goHome();
 document.getElementById("goReport").onclick=()=>{ if(S) go("report"); };

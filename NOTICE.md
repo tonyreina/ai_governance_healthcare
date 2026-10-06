@@ -15,6 +15,10 @@ endorsed by, or certified by the Coalition for Health AI (CHAI).
   described in CHAI's Assurance Standards Guide.
 - The checklist criteria in this tool are original, paraphrased summaries written
   for this project. They are **not** the text of CHAI's Responsible AI Checklist.
+- CHAI's use-case **Testing & Evaluation Frameworks** are published under
+  **CC BY 4.0**, which permits reproduction with attribution. Their metric
+  names, benchmarks and descriptions ARE reproduced in this tool and on
+  [CHAI metrics](docs/frameworks/chai-metrics.md), attributed to CHAI.
 - The model card uses the section and field names of the CHAI Applied Model Card
   template (Draft Nov 2024, v0.1). CHAI distributes that template under
   **CC BY-ND 4.0** — Attribution, No Derivatives. That license permits

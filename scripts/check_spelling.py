@@ -43,6 +43,19 @@ SKIP_DIRS = {
 # --fix would rewrite the keys to match their values, quietly turning the
 # dictionary into identity mappings and disabling the check.
 SELF = Path(__file__).resolve()
+
+# Files that reproduce third-party text verbatim. CHAI's Testing & Evaluation
+# content is CC BY 4.0 and quoted exactly; "correcting" its spelling would
+# misquote the source, which is worse than an inconsistent spelling. These are
+# generated from upstream, so a fix here would be overwritten anyway.
+QUOTED_VERBATIM = {
+    "data/chai_te_metrics.json",
+    "docs/frameworks/chai-metrics.md",
+    "app/js/10-frameworks/10-chai/05-te-metrics.js",
+    # The built dashboard concatenates all of the above. Its own sources under
+    # app/ ARE checked, so nothing of ours escapes review by being in here.
+    "docs/app/index.html",
+}
 CHECK_SUFFIXES = {
     ".md",
     ".py",
@@ -206,6 +219,17 @@ PATTERN = re.compile(
 URLISH = re.compile(r"(https?://\S+|\b[\w.-]+/[\w./-]+)")
 
 
+def skip(path: Path) -> bool:
+    """This file (it IS the word list) and anything quoted verbatim."""
+    resolved = path.resolve()
+    if resolved == SELF:
+        return True
+    try:
+        return str(resolved.relative_to(ROOT)) in QUOTED_VERBATIM
+    except ValueError:
+        return False
+
+
 def load_allowlist() -> list[str]:
     if not ALLOWLIST.exists():
         return []
@@ -308,7 +332,7 @@ def main(argv: list[str]) -> int:
     if do_fix:
         total = 0
         for path in targets(argv):
-            if path.is_file() and path.resolve() != SELF:
+            if path.is_file() and not skip(path):
                 n = fix(path, allow)
                 if n:
                     try:
@@ -323,7 +347,7 @@ def main(argv: list[str]) -> int:
     problems = [
         msg
         for path in targets(argv)
-        if path.is_file() and path.resolve() != SELF
+        if path.is_file() and not skip(path)
         for msg in check(path, allow)
     ]
 

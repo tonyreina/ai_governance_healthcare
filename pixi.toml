@@ -28,10 +28,12 @@ lint-py-fix = "ruff check --fix ."
 format-py = "ruff format ."
 # Generated artifacts. `gen-docs` regenerates everything derived from
 # data/optica_items.json and the app itself, then rebuilds the dashboard.
-gen-docs = { depends-on = ["gen-chai-docs", "gen-optica-docs", "gen-optica-module", "build-app"] }
+gen-docs = { depends-on = ["gen-chai-docs", "gen-optica-docs", "gen-optica-module", "gen-te-page", "build-app"] }
 gen-chai-docs = "python scripts/gen_chai_checklist.py"
 gen-optica-docs = "python scripts/gen_optica_checklist.py"
 gen-optica-module = "python scripts/gen_optica_module.py"
+gen-chai-metrics = "python scripts/gen_chai_metrics.py"
+gen-te-page = "python scripts/gen_te_page.py"
 
 # The dashboard: sources live in app/, docs/app/index.html is generated.
 build-app = "python scripts/build_app.py"
@@ -39,6 +41,7 @@ check-app = "python scripts/check_app.py"
 test-app = "python tests/test_optica.py"
 test-stack = "python tests/test_stack.py"
 test-pdf = "python tests/test_pdf.py"
+test-te = "python tests/test_te_metrics.py"
 check-homographs = "python scripts/check_homographs.py"
 check-spelling = "python scripts/check_spelling.py"
 check-chai = "python scripts/check_chai_updates.py"

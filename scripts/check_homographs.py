@@ -32,7 +32,24 @@ CONFUSABLE_RANGES: list[tuple[int, int, str]] = [
 ]
 
 
+# Greek letters that no Latin character resembles. These are standard
+# mathematical notation -- Krippendorff's alpha, Cohen's kappa, a summation
+# sign -- and flagging them makes the checker wrong on legitimate text, which
+# is how a linter gets switched off. The Latin-lookalike Greek letters are NOT
+# in this set and are still reported: omicron and nu for lowercase, and the
+# capitals that mimic Latin ones (Alpha, Beta, Epsilon, Zeta, Eta, Iota, Kappa,
+# Mu, Nu, Omicron, Rho, Tau, Upsilon, Chi).
+MATHEMATICAL_GREEK = set(
+    "\u03b1\u03b2\u03b3\u03b4\u03b5\u03b6\u03b7\u03b8"  # alpha..theta
+    "\u03ba\u03bb\u03bc"  # kappa, lambda, mu (iota is a Latin lookalike)
+    "\u03be\u03c0\u03c1\u03c3\u03c2\u03c4\u03c6\u03c7\u03c8\u03c9"  # xi..omega
+    "\u0393\u0394\u0398\u039b\u039e\u03a0\u03a3\u03a6\u03a8\u03a9"  # Gamma..Omega
+)
+
+
 def confusable_script(code: int) -> str | None:
+    if chr(code) in MATHEMATICAL_GREEK:
+        return None
     for low, high, name in CONFUSABLE_RANGES:
         if low <= code <= high:
             return name

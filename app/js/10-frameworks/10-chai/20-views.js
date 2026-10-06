@@ -46,7 +46,62 @@ function metricsHTML(){
     <td><button class="icon-btn ro-hide" data-delmetric="${i}" aria-label="Remove metric">Remove</button></td></tr>`).join("")}
   </tbody></table></div>
   ${S.metrics.length?"":`<p style="font-size:14px;color:var(--muted)">No metrics yet. Add the ones your team will stand behind.</p>`}
-  <button class="btn ro-hide" data-act="addmetric" style="margin-top:10px">Add metric</button>`;
+  <button class="btn ro-hide" data-act="addmetric" style="margin-top:10px">Add metric</button>
+  ${teSuggestHTML()}`;
+}
+
+/* CHAI publishes a consensus set of methods and metrics per use case, and says
+   to consult them when completing the Applied Model Card. This is that moment,
+   so the list is offered here rather than left on another website.
+
+   Picking one fills in the name and category only. The value, the interval and
+   the population are the organization's own measurements; pre-filling those
+   would be inventing results. */
+function teSuggestHTML(){
+  const chosen = (S.meta||{}).chaiUseCase || "";
+  const uc = CHAI_TE[chosen];
+  const options = Object.entries(CHAI_TE)
+    .map(([k,v])=>`<option value="${esc(k)}"${k===chosen?" selected":""}>${esc(v.label)}</option>`)
+    .join("");
+
+  let body;
+  if(!uc){
+    body = `<p style="font-size:13px;color:var(--muted);margin:8px 0 0">
+      Choose a use case to see the methods and metrics CHAI's workgroups agreed on for it.</p>`;
+  } else {
+    const byCat = {};
+    uc.metrics.forEach(m=>{ (byCat[m.cat] = byCat[m.cat] || []).push(m); });
+    const have = new Set(S.metrics.map(m=>(m.name||"").trim().toLowerCase()));
+    body = METRIC_CATS.filter(c=>byCat[c]).map(c=>`
+      <p style="font-size:12.5px;font-weight:700;margin:12px 0 4px">${esc(c)}</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${byCat[c].map(m=>{
+          const added = have.has(m.name.trim().toLowerCase());
+          const note = [m.when, m.who].filter(Boolean).join(" \u00b7 ");
+          return `<button class="btn ro-hide" data-te="${esc(m.name)}" data-te-cat="${esc(c)}"
+            ${added?"disabled":""} style="font-size:12px;padding:4px 9px"
+            title="${esc(note||"Recommended by CHAI for this use case")}">${added?"\u2713 ":""}${esc(m.name)}</button>`;
+        }).join("")}
+      </div>`).join("")
+      + `<p style="font-size:12px;color:var(--muted);margin:12px 0 0">
+        ${uc.metrics.length} methods and metrics, reproduced under CC BY 4.0 from
+        <a href="${esc(uc.url)}" target="_blank" rel="noopener">CHAI's ${esc(uc.label)} T&amp;E framework</a>,
+        &copy; 2025 Coalition for Health AI. Follow the link for each one's description,
+        rationale, benchmark and supporting literature.</p>`;
+  }
+
+  return `<details class="fallback ro-hide" style="margin-top:16px"${chosen?" open":""}>
+    <summary style="cursor:pointer;font-size:14px;font-weight:600">Suggested metrics from CHAI</summary>
+    <p style="font-size:13px;color:var(--muted);margin:8px 0">
+      CHAI's guidance is to review the use-case Testing &amp; Evaluation framework when
+      completing the model card. Selecting a metric adds its name and category;
+      the value and population stay yours to measure.</p>
+    <label for="teUse" style="font-size:12.5px;font-weight:700">Use case</label>
+    <select id="teUse" data-te-use style="margin-left:8px">
+      <option value="">Select a use case</option>${options}
+    </select>
+    ${body}
+  </details>`;
 }
 function renderGate(key){
   const G=GATES[key], g=S.gates[key]||{};

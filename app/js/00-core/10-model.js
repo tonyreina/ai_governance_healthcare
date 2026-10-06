@@ -3,7 +3,7 @@
    Framework-agnostic. Knows a project has meta, items, gates,
    metrics and a card -- not what any of them mean.
    ============================================================ */
-const blankMeta = ()=>({solution:"",org:"",developer:"",sourcing:"",sponsor:"",reviewers:"",riskTier:"",reviewCadence:"",startDate:"",scope:""});
+const blankMeta = ()=>({solution:"",org:"",developer:"",sourcing:"",sponsor:"",reviewers:"",riskTier:"",reviewCadence:"",startDate:"",scope:"",chaiUseCase:""});
 function blankProject(name){
   const now=new Date().toISOString();
   return {meta:{...blankMeta(),solution:name||""}, ...frameworkBlank(), metrics:[], card:{},

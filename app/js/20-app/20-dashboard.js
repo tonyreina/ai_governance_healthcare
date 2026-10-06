@@ -90,6 +90,7 @@ function updateDashboard(){
   resolveNames(host);
 }
 function goHome(){
+  flushAllChanges();
   if(CUR && pending[CUR]) flush(CUR);
   if(unsubLog){ unsubLog(); unsubLog=null; }
   CUR=null; S=null; LOG=[]; openItems.clear(); saveUI();
@@ -97,6 +98,7 @@ function goHome(){
   renderDashboardShell(); window.scrollTo({top:0});
 }
 function openProject(id,view){
+  flushAllChanges();          // leaving a project ends any edit in progress
   const p=PROJECTS.get(id); if(!p) return;
   if(unsubLog){ unsubLog(); unsubLog=null; }
   CUR=id; S=normalize(clone(p)); LOG=[]; openItems.clear();
@@ -109,4 +111,4 @@ function openProject(id,view){
   unsubLog=STORE.subscribeLog(id,l=>{ LOG=l||[]; if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
   renderProject(true);
 }
-function go(view){ UI.view=view; saveUI(); renderRail(); renderMain(true); document.getElementById("panel").classList.remove("open"); }
+function go(view){ flushAllChanges(); UI.view=view; saveUI(); renderRail(); renderMain(true); document.getElementById("panel").classList.remove("open"); }

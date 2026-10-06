@@ -797,7 +797,6 @@ async function flush(pid,retry){
   flushing[pid]=true;
   try{
     await STORE.update(pid,p);
-    flushChanges(pid);
     if(!pending[pid]) setSaved(MODE==="shared"?"Saved to shared workspace":"Saved in this browser");
   }
   catch(e){
@@ -829,18 +828,41 @@ function edit(path,val){
   const st=stamp(); S.updatedAt=st.updatedAt; S.updatedBy=st.updatedBy;
   queuePatch(CUR, Object.assign(patch,st));
   bufferChange(CUR, path, before);
+  // Typing is the ONLY continuous edit: it arrives one character at a time
+  // and is not finished until focus leaves. Everything else -- a status
+  // button, a dropdown, a date, a programmatic change -- is complete the
+  // moment it happens, so it is described straight away.
+  //
+  // Expressed as "flush unless typing" rather than by listing the discrete
+  // controls, because a list would need extending every time a control is
+  // added, and the one that got missed would silently stop logging.
+  if(!TYPING) flushChanges(CUR, path);
 }
 
 /* Changelog coalescing.
 
-   edit() runs on every keystroke, so logging there wrote one entry per
-   character -- forty entries to record one sentence, which makes the audit
-   trail useless exactly when someone needs to read it.
+   One entry per completed edit, not per keystroke and not per save.
 
-   Instead the ORIGINAL value of each touched path is kept until the save
-   settles, and one entry per path is written at flush. "One entry per field
-   per save" is also the honest unit: it is what actually reached the store. */
+   Two earlier versions were wrong in instructive ways. Logging inside edit()
+   wrote one entry per character: forty entries to record one sentence, burying
+   the record it exists to document. Logging at save-flush was better but still
+   split a sentence in two whenever the typist paused longer than the 550ms
+   save debounce -- which is just "stopped to think mid-sentence", a completely
+   normal thing to do.
+
+   So the trigger is the edit being FINISHED, which for a text field means
+   focus leaving it. Saving still debounces independently: data is written
+   while you type, and the changelog describes what you wrote once you are
+   done. The two concerns were conflated; they are now separate.
+
+   Discrete controls -- a status button, a dropdown, a date picker -- are
+   complete the moment they change, so they flush immediately. */
 const changeBuf = {};
+
+/* True only while an `input` event from a text field is being handled.
+   Set around the edit() call in the input handler, nowhere else. */
+let TYPING = false;
+const setTyping = v => { TYPING = !!v; };
 
 function bufferChange(pid, path, before){
   if(RO) return;
@@ -849,14 +871,25 @@ function bufferChange(pid, path, before){
   if(!(path in buf)) buf[path] = before;
 }
 
-function flushChanges(pid){
+/* Write the entry for one path, or for every buffered path when no path is
+   given. Called on blur, when leaving a view, and before the page unloads --
+   anywhere an in-progress edit stops being in progress. */
+function flushChanges(pid, path){
   const buf = changeBuf[pid];
   if(!buf) return;
-  delete changeBuf[pid];
-  for(const path of Object.keys(buf)){
-    const now = path.startsWith("metrics.") ? clone(S && S.metrics) : (S ? get(path) : undefined);
-    logChange(pid, path, buf[path], now, S);
+  const paths = path ? (path in buf ? [path] : []) : Object.keys(buf);
+  for(const key of paths){
+    const before = buf[key];
+    delete buf[key];
+    const now = key.startsWith("metrics.") ? clone(S && S.metrics) : (S ? get(key) : undefined);
+    logChange(pid, key, before, now, S);
   }
+  if(!Object.keys(buf).length) delete changeBuf[pid];
+}
+
+/* Everything in flight, for every project. */
+function flushAllChanges(){
+  Object.keys(changeBuf).forEach(pid => flushChanges(pid));
 }
 function saveMetrics(){
   const now=new Date().toISOString(); S.cardUpdatedAt=now; const st=stamp(); Object.assign(S,st);
@@ -2187,6 +2220,7 @@ function updateDashboard(){
   resolveNames(host);
 }
 function goHome(){
+  flushAllChanges();
   if(CUR && pending[CUR]) flush(CUR);
   if(unsubLog){ unsubLog(); unsubLog=null; }
   CUR=null; S=null; LOG=[]; openItems.clear(); saveUI();
@@ -2194,6 +2228,7 @@ function goHome(){
   renderDashboardShell(); window.scrollTo({top:0});
 }
 function openProject(id,view){
+  flushAllChanges();          // leaving a project ends any edit in progress
   const p=PROJECTS.get(id); if(!p) return;
   if(unsubLog){ unsubLog(); unsubLog=null; }
   CUR=id; S=normalize(clone(p)); LOG=[]; openItems.clear();
@@ -2206,7 +2241,7 @@ function openProject(id,view){
   unsubLog=STORE.subscribeLog(id,l=>{ LOG=l||[]; if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
   renderProject(true);
 }
-function go(view){ UI.view=view; saveUI(); renderRail(); renderMain(true); document.getElementById("panel").classList.remove("open"); }
+function go(view){ flushAllChanges(); UI.view=view; saveUI(); renderRail(); renderMain(true); document.getElementById("panel").classList.remove("open"); }
 
 /* ============================================================
    Data arrival
@@ -2789,17 +2824,39 @@ document.addEventListener("input",e=>{
   const el=e.target;
   if(el.id==="q"){ UI.q=el.value; updateDashboard(); return; }
   const p=el.dataset && el.dataset.bind; if(!p || RO || !S) return;
-  edit(p, el.value);
+  // Mark this as live typing so the changelog waits for the field to be
+  // finished rather than describing each keystroke.
+  setTyping(true);
+  try{ edit(p, el.value); } finally { setTyping(false); }
   if(p.startsWith("meta.")||p.startsWith("card.")||p.startsWith("metrics.")) renderLabel();
   if(p==="meta.solution"||p.startsWith("card.")) renderRail();
 });
+/* A text edit is finished when focus leaves the field. Capture phase, because
+   `blur` does not bubble. This is what turns a sentence into one changelog
+   entry regardless of how long the typist paused in the middle of it. */
+document.addEventListener("blur", e=>{
+  const el=e.target;
+  const p=el && el.dataset && el.dataset.bind;
+  if(p && CUR) flushChanges(CUR, p);
+}, true);
+
 document.addEventListener("change",e=>{
   const el=e.target;
   // The use-case picker is stored on the project, so the chosen framework
   // persists and the suggestions are there next time someone opens stage 4.
   if(el.dataset && el.dataset.teUse!=null && S && !RO){ edit("meta.chaiUseCase", el.value); renderMain(false); return; }
-  if(el.tagName==="SELECT" && el.dataset.bind && S && !RO){ edit(el.dataset.bind, el.value); renderLabel(); renderRail(); }
+  if(el.dataset && el.dataset.bind && S && !RO && (el.tagName==="SELECT" || el.type==="date")){
+    edit(el.dataset.bind, el.value);   // discrete: edit() flushes it already
+    renderLabel(); renderRail();
+  }
 });
+/* An edit still in the buffer when the page goes away would never be
+   described. pagehide covers closing, navigating and mobile backgrounding;
+   visibilitychange catches a tab switch, which is a common way to stop
+   mid-sentence. */
+addEventListener("pagehide", flushAllChanges);
+addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="hidden") flushAllChanges(); });
+
 document.getElementById("brandBtn").onclick=()=>goHome();
 document.getElementById("goReport").onclick=()=>{ if(S) go("report"); };
 document.getElementById("importFile").onchange=async e=>{

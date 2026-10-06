@@ -15,7 +15,6 @@ async function flush(pid,retry){
   flushing[pid]=true;
   try{
     await STORE.update(pid,p);
-    flushChanges(pid);
     if(!pending[pid]) setSaved(MODE==="shared"?"Saved to shared workspace":"Saved in this browser");
   }
   catch(e){
@@ -47,18 +46,41 @@ function edit(path,val){
   const st=stamp(); S.updatedAt=st.updatedAt; S.updatedBy=st.updatedBy;
   queuePatch(CUR, Object.assign(patch,st));
   bufferChange(CUR, path, before);
+  // Typing is the ONLY continuous edit: it arrives one character at a time
+  // and is not finished until focus leaves. Everything else -- a status
+  // button, a dropdown, a date, a programmatic change -- is complete the
+  // moment it happens, so it is described straight away.
+  //
+  // Expressed as "flush unless typing" rather than by listing the discrete
+  // controls, because a list would need extending every time a control is
+  // added, and the one that got missed would silently stop logging.
+  if(!TYPING) flushChanges(CUR, path);
 }
 
 /* Changelog coalescing.
 
-   edit() runs on every keystroke, so logging there wrote one entry per
-   character -- forty entries to record one sentence, which makes the audit
-   trail useless exactly when someone needs to read it.
+   One entry per completed edit, not per keystroke and not per save.
 
-   Instead the ORIGINAL value of each touched path is kept until the save
-   settles, and one entry per path is written at flush. "One entry per field
-   per save" is also the honest unit: it is what actually reached the store. */
+   Two earlier versions were wrong in instructive ways. Logging inside edit()
+   wrote one entry per character: forty entries to record one sentence, burying
+   the record it exists to document. Logging at save-flush was better but still
+   split a sentence in two whenever the typist paused longer than the 550ms
+   save debounce -- which is just "stopped to think mid-sentence", a completely
+   normal thing to do.
+
+   So the trigger is the edit being FINISHED, which for a text field means
+   focus leaving it. Saving still debounces independently: data is written
+   while you type, and the changelog describes what you wrote once you are
+   done. The two concerns were conflated; they are now separate.
+
+   Discrete controls -- a status button, a dropdown, a date picker -- are
+   complete the moment they change, so they flush immediately. */
 const changeBuf = {};
+
+/* True only while an `input` event from a text field is being handled.
+   Set around the edit() call in the input handler, nowhere else. */
+let TYPING = false;
+const setTyping = v => { TYPING = !!v; };
 
 function bufferChange(pid, path, before){
   if(RO) return;
@@ -67,14 +89,25 @@ function bufferChange(pid, path, before){
   if(!(path in buf)) buf[path] = before;
 }
 
-function flushChanges(pid){
+/* Write the entry for one path, or for every buffered path when no path is
+   given. Called on blur, when leaving a view, and before the page unloads --
+   anywhere an in-progress edit stops being in progress. */
+function flushChanges(pid, path){
   const buf = changeBuf[pid];
   if(!buf) return;
-  delete changeBuf[pid];
-  for(const path of Object.keys(buf)){
-    const now = path.startsWith("metrics.") ? clone(S && S.metrics) : (S ? get(path) : undefined);
-    logChange(pid, path, buf[path], now, S);
+  const paths = path ? (path in buf ? [path] : []) : Object.keys(buf);
+  for(const key of paths){
+    const before = buf[key];
+    delete buf[key];
+    const now = key.startsWith("metrics.") ? clone(S && S.metrics) : (S ? get(key) : undefined);
+    logChange(pid, key, before, now, S);
   }
+  if(!Object.keys(buf).length) delete changeBuf[pid];
+}
+
+/* Everything in flight, for every project. */
+function flushAllChanges(){
+  Object.keys(changeBuf).forEach(pid => flushChanges(pid));
 }
 function saveMetrics(){
   const now=new Date().toISOString(); S.cardUpdatedAt=now; const st=stamp(); Object.assign(S,st);

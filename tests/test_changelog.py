@@ -72,17 +72,31 @@ def main() -> int:
         page.click('[data-toggle="s1-1"]')
         page.wait_for_timeout(300)
 
-        before = page.evaluate("LOG.length")
-        page.click('[data-bind="items.s1-1.evidence"]')
-        page.keyboard.type(PHRASE, delay=15)
-        page.wait_for_timeout(2500)
-        added = page.evaluate("LOG.length") - before
+        def added(fn, settle: int = 900) -> int:
+            n = page.evaluate("LOG.length")
+            fn()
+            page.wait_for_timeout(settle)
+            return page.evaluate("LOG.length") - n
+
+        # The case that broke two earlier versions: a sentence typed with
+        # pauses longer than the save debounce. Nothing should be logged until
+        # the field is finished, however long the typist stops to think.
+        def type_with_pauses() -> None:
+            page.click('[data-bind="items.s1-1.evidence"]')
+            page.keyboard.type("the vendor confirmed ", delay=12)
+            page.wait_for_timeout(1700)
+            page.keyboard.type(PHRASE, delay=12)
+            page.wait_for_timeout(1700)
 
         check(
-            f"typing {len(PHRASE)} characters adds one entry, not one per key",
-            added == 1,
-            f"added {added}",
+            "typing with long pauses logs nothing yet",
+            added(type_with_pauses, settle=200) == 0,
         )
+        check(
+            "leaving the field logs exactly one entry",
+            added(lambda: page.click("h1")) == 1,
+        )
+
         latest = page.evaluate("LOG[0]")
         check(
             "the entry records the whole edit",
@@ -94,6 +108,39 @@ def main() -> int:
             latest.get("change", {}).get("path") == "items.s1-1.evidence",
         )
         check("the entry carries a fingerprint", bool(latest.get("hash")))
+
+        # Saving is independent of logging: data must reach the store while
+        # the field is still focused.
+        page.click('[data-bind="items.s1-1.owner"]')
+        page.keyboard.type("Procurement", delay=12)
+        page.wait_for_timeout(1400)
+        check(
+            "text is saved while still being typed",
+            page.evaluate(f"(PROJECTS.get({pid!r}).items['s1-1']||{{}}).owner")
+            == "Procurement",
+        )
+        page.click("h1")
+        page.wait_for_timeout(600)
+
+        print("\nDiscrete controls log immediately")
+        check(
+            "status button",
+            added(lambda: page.click('[data-set="s1-4"][data-s="notmet"]')) == 1,
+        )
+        page.evaluate("go('setup')")
+        page.wait_for_timeout(500)
+        check(
+            "dropdown",
+            added(lambda: page.select_option('[data-bind="meta.riskTier"]', "Low"))
+            == 1,
+        )
+        check(
+            "date picker",
+            added(lambda: page.fill('[data-bind="meta.startDate"]', "2026-03-01")) == 1,
+        )
+
+        page.evaluate("go('s1')")
+        page.wait_for_timeout(400)
 
         print("\nReadability")
         check(

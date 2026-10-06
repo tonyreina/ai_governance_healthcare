@@ -133,17 +133,39 @@ document.addEventListener("input",e=>{
   const el=e.target;
   if(el.id==="q"){ UI.q=el.value; updateDashboard(); return; }
   const p=el.dataset && el.dataset.bind; if(!p || RO || !S) return;
-  edit(p, el.value);
+  // Mark this as live typing so the changelog waits for the field to be
+  // finished rather than describing each keystroke.
+  setTyping(true);
+  try{ edit(p, el.value); } finally { setTyping(false); }
   if(p.startsWith("meta.")||p.startsWith("card.")||p.startsWith("metrics.")) renderLabel();
   if(p==="meta.solution"||p.startsWith("card.")) renderRail();
 });
+/* A text edit is finished when focus leaves the field. Capture phase, because
+   `blur` does not bubble. This is what turns a sentence into one changelog
+   entry regardless of how long the typist paused in the middle of it. */
+document.addEventListener("blur", e=>{
+  const el=e.target;
+  const p=el && el.dataset && el.dataset.bind;
+  if(p && CUR) flushChanges(CUR, p);
+}, true);
+
 document.addEventListener("change",e=>{
   const el=e.target;
   // The use-case picker is stored on the project, so the chosen framework
   // persists and the suggestions are there next time someone opens stage 4.
   if(el.dataset && el.dataset.teUse!=null && S && !RO){ edit("meta.chaiUseCase", el.value); renderMain(false); return; }
-  if(el.tagName==="SELECT" && el.dataset.bind && S && !RO){ edit(el.dataset.bind, el.value); renderLabel(); renderRail(); }
+  if(el.dataset && el.dataset.bind && S && !RO && (el.tagName==="SELECT" || el.type==="date")){
+    edit(el.dataset.bind, el.value);   // discrete: edit() flushes it already
+    renderLabel(); renderRail();
+  }
 });
+/* An edit still in the buffer when the page goes away would never be
+   described. pagehide covers closing, navigating and mobile backgrounding;
+   visibilitychange catches a tab switch, which is a common way to stop
+   mid-sentence. */
+addEventListener("pagehide", flushAllChanges);
+addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="hidden") flushAllChanges(); });
+
 document.getElementById("brandBtn").onclick=()=>goHome();
 document.getElementById("goReport").onclick=()=>{ if(S) go("report"); };
 document.getElementById("importFile").onchange=async e=>{

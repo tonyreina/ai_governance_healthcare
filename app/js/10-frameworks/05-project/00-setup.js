@@ -64,8 +64,13 @@ registerFramework({
   label: "Project",
   enabled: () => true,
   blank: () => ({}),
-  views: () => [{ id: "setup", kind: "setup", label: "Project setup", num: 0, sep: "after" }],
-  render: () => renderSetup(),
+  views: () => [
+    { id: "setup", kind: "setup", label: "Project setup", num: 0, sep: "after" },
+    { id: "changelog", kind: "changelog", label: "Changelog", glyph: "\u21bb",
+      short: "the changelog", order: "end", sep: "before",
+      meta: () => LOG.length ? String(LOG.length) : "" },
+  ],
+  render: v => v.kind === "changelog" ? changelogHTML() : renderSetup(),
 });
 
 
@@ -114,3 +119,72 @@ const roleNote = () => {
   const r = roleOf(S);
   return r ? `You have ${ROLE_LABEL[r].toLowerCase()}.` : "You are not listed on this project.";
 };
+
+
+/* ============================================================
+   Changelog view
+   The audit trail, rendered as what changed rather than that
+   something did. Grouped by day, because "what happened at this
+   meeting" is how a committee reads it.
+   ============================================================ */
+function changelogHTML(){
+  const now = contentHash(S);
+
+  if(!LOG.length){
+    return `<p class="eyebrow">Audit trail</p><h1>Changelog</h1>
+    <p class="lede">Every change to this record, with who made it and when.</p>
+    <div class="note"><p>No changes recorded yet.</p></div>
+    ${fingerprintHTML(now)}
+    ${pager()}`;
+  }
+
+  // Group by calendar day. The log arrives newest-first and stays that way.
+  const days = [];
+  LOG.forEach(e=>{
+    const day = (e.at||"").slice(0,10);
+    const last = days[days.length-1];
+    if(last && last.day===day) last.entries.push(e);
+    else days.push({day, entries:[e]});
+  });
+
+  const rows = days.map(d=>`
+    <h2 style="font-size:15px;margin:18px 0 6px">${esc(fmtDay(d.day)||"Undated")}</h2>
+    <ul class="history">${d.entries.map(e=>{
+      const c = e.change;
+      const detail = c
+        ? `<div class="small" style="color:var(--muted);margin-top:2px">
+             <code>${esc(c.path)}</code></div>`
+        : "";
+      return `<li>
+        <time>${esc((e.at||"").slice(11,16))}</time>
+        <span>${esc(e.text)}
+          <span style="color:var(--muted)">by ${who(e.by)}</span>
+          ${e.hash?`<span class="small" style="color:var(--muted)" title="Record fingerprint after this change">\u00b7 ${esc(shortHash(e.hash))}</span>`:""}
+          ${detail}</span>
+      </li>`;}).join("")}</ul>`).join("");
+
+  return `<p class="eyebrow">Audit trail</p><h1>Changelog</h1>
+  <p class="lede">Every change to this record, with who made it and when.
+  ${LOG.length>=60?"The newest 60 are shown; older entries stay in the store.":""}</p>
+  ${rows}
+  ${fingerprintHTML(now)}
+  ${pager()}`;
+}
+
+/* The record's current fingerprint, with the caveat attached. A hash
+   printed without saying what it proves will be read as proving more
+   than it does. */
+function fingerprintHTML(md5hex){
+  return `<h2 style="font-size:15px;margin-top:22px">Record fingerprint</h2>
+  <p style="font-size:13px;color:var(--muted)">A fingerprint of this record's
+  contents right now. Quote it alongside an exported report to tie the report to
+  the exact state it came from. Volatile fields, such as the last-saved
+  timestamp, are excluded so the fingerprint only moves when something
+  substantive does.</p>
+  <p><code style="font-size:13px">MD5 ${esc(md5hex)}</code></p>
+  <div class="note"><p><b>This detects change, not tampering.</b> MD5 has been
+  collision-broken since 2004, and anyone who can edit the record can also
+  recompute its fingerprint. It answers "is this the same version?" and must not
+  be offered as evidence that a record was not altered. A SHA-256 travels in the
+  JSON export for anyone who needs the stronger property.</p></div>`;
+}

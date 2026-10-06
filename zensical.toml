@@ -21,6 +21,7 @@ nav = [
     "frameworks/optica-checklist.md",
     "frameworks/evidence.md",
   ] },
+  { "Running it" = "running.md" },
   { "Crosswalk" = "crosswalk.md" },
   { "Compliance rules" = "compliance-rules.md" },
   { "Python exports" = "exports.md" },

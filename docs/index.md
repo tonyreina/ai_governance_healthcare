@@ -41,14 +41,18 @@ python3 -m http.server 8000 --directory docs
 # then visit http://localhost:8000/app/
 ```
 
-## Storage modes
+## Where it runs
 
-The tool picks its storage backend based on where it is running.
+The tool picks its storage backend from where it is running, and the modes are
+**not equivalent**: access control, version history and shared editing need a
+backend. See [Running it](running.md) for the full comparison and how to run
+everything locally.
 
-| Where it runs | Storage | Shared between people? |
-|---|---|---|
-| Published as a Claude artifact | Artifact database (`claude.use("db")`) | Yes, live, with per-user sign-off |
-| Opened directly / GitHub Pages | Browser `localStorage` | No, one browser only |
+| Where it runs | Storage | Shared? | Access control enforced? |
+|---|---|---|---|
+| Docker stack | PostgreSQL | Yes | **Yes** |
+| Published as a Claude artifact | Artifact database | Yes | Partly |
+| GitHub Pages / opened directly | Browser `localStorage` | No | No |
 
 !!! warning "Published here, your data stays in your browser"
 

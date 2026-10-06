@@ -401,6 +401,120 @@ function scoreOf(list, items){
 }
 
 /* ============================================================
+   Content hashing
+   A short fingerprint of a project's contents, so a printed report
+   can be tied to the exact record it came from, and so a later
+   reader can tell whether anything moved.
+
+   WHAT MD5 DOES AND DOES NOT DO. It answers "is this the same
+   record?" perfectly well. It does NOT make the record tamper-
+   evident: MD5 has been collision-broken since 2004, and anyone who
+   can change the record can also compute a replacement hash. Treat
+   it as a version fingerprint, not a seal.
+
+   A SHA-256 is computed alongside for anyone who needs the stronger
+   property. It is the one to quote if a hash will ever be offered as
+   evidence that a record was not altered. Both travel with every
+   export so the choice stays with the reader.
+
+   CANONICALIZATION IS THE WHOLE PROBLEM. Two JSON documents with the
+   same contents hash differently if their keys are in a different
+   order, so the input is serialized with keys sorted at every depth.
+   Volatile fields are excluded: a hash that changes when nothing
+   substantive did is a hash nobody will trust. See CANON_SKIP.
+   ============================================================ */
+
+/* Excluded from the fingerprint, each for a reason:
+     updatedAt/updatedBy  touched by every save, including a no-op
+     cardUpdatedAt        same
+     _state               the app's working copy, not the record
+     contentHash          cannot hash a document containing its own hash */
+const CANON_SKIP = new Set([
+  "updatedAt", "updatedBy", "cardUpdatedAt", "_state", "contentHash", "generated",
+]);
+
+/* Deterministic JSON: keys sorted at every level, volatile fields
+   dropped, undefined treated as absent. */
+function canonicalize(value) {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(canonicalize);
+  const out = {};
+  for (const key of Object.keys(value).sort()) {
+    if (CANON_SKIP.has(key)) continue;
+    const v = value[key];
+    if (v !== undefined) out[key] = canonicalize(v);
+  }
+  return out;
+}
+
+const canonicalJSON = doc => JSON.stringify(canonicalize(doc));
+
+/* MD5, implemented here because browsers do not provide it:
+   crypto.subtle offers SHA family digests only, and deliberately so.
+   Compact RFC 1321 implementation over a UTF-8 byte array. */
+function md5(input) {
+  const bytes = new TextEncoder().encode(input);
+  const S = [7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
+             5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+             4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
+             6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21];
+  const K = new Uint32Array(64);
+  for (let i = 0; i < 64; i++) K[i] = Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296);
+
+  const bitLen = bytes.length * 8;
+  const padded = new Uint8Array((((bytes.length + 8) >> 6) + 1) * 64);
+  padded.set(bytes);
+  padded[bytes.length] = 0x80;
+  new DataView(padded.buffer).setUint32(padded.length - 8, bitLen >>> 0, true);
+  new DataView(padded.buffer).setUint32(padded.length - 4, Math.floor(bitLen / 4294967296), true);
+
+  let [a0, b0, c0, d0] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
+  const view = new DataView(padded.buffer);
+
+  for (let chunk = 0; chunk < padded.length; chunk += 64) {
+    const M = new Uint32Array(16);
+    for (let i = 0; i < 16; i++) M[i] = view.getUint32(chunk + i * 4, true);
+    let [A, B, C, D] = [a0, b0, c0, d0];
+    for (let i = 0; i < 64; i++) {
+      let F, g;
+      if (i < 16) { F = (B & C) | (~B & D); g = i; }
+      else if (i < 32) { F = (D & B) | (~D & C); g = (5 * i + 1) % 16; }
+      else if (i < 48) { F = B ^ C ^ D; g = (3 * i + 5) % 16; }
+      else { F = C ^ (B | ~D); g = (7 * i) % 16; }
+      F = (F + A + K[i] + M[g]) >>> 0;
+      A = D; D = C; C = B;
+      B = (B + (((F << S[i]) | (F >>> (32 - S[i]))) >>> 0)) >>> 0;
+    }
+    a0 = (a0 + A) >>> 0; b0 = (b0 + B) >>> 0;
+    c0 = (c0 + C) >>> 0; d0 = (d0 + D) >>> 0;
+  }
+
+  const hex = n => [0, 8, 16, 24].map(s => ((n >>> s) & 0xff).toString(16).padStart(2, "0")).join("");
+  return hex(a0) + hex(b0) + hex(c0) + hex(d0);
+}
+
+async function sha256(input) {
+  if (!(globalThis.crypto && crypto.subtle)) return "";   // file:// in some browsers
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+/* The fingerprint of a project, synchronously for MD5. */
+function contentHash(doc) {
+  return md5(canonicalJSON(doc));
+}
+
+/* Both digests, for exports. Async because SHA-256 is. */
+async function contentHashes(doc) {
+  const canon = canonicalJSON(doc);
+  return { md5: md5(canon), sha256: await sha256(canon), bytes: canon.length };
+}
+
+/* Short form for display. Enough to distinguish versions by eye,
+   and labeled as a prefix so nobody quotes it as the whole digest. */
+const shortHash = h => (h || "").slice(0, 10);
+
+/* ============================================================
    Access control
    Three roles, held per project:
 
@@ -681,7 +795,11 @@ async function flush(pid,retry){
   if(flushing[pid]){ clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid),300); return; }
   const p=pending[pid]; if(!p) return; delete pending[pid];
   flushing[pid]=true;
-  try{ await STORE.update(pid,p); if(!pending[pid]) setSaved(MODE==="shared"?"Saved to shared workspace":"Saved in this browser"); }
+  try{
+    await STORE.update(pid,p);
+    flushChanges(pid);
+    if(!pending[pid]) setSaved(MODE==="shared"?"Saved to shared workspace":"Saved in this browser");
+  }
   catch(e){
     const c=e&&e.code;
     if(c==="unavailable" && !retry){ pending[pid]=deepMerge(p,pending[pid]||{}); flushing[pid]=false; setTimeout(()=>flush(pid,true),800+Math.random()*700); return; }
@@ -702,6 +820,7 @@ function setLocal(path,val){
   o[ks[ks.length-1]]=val;
 }
 function edit(path,val){
+  const before = path.startsWith("metrics.") ? clone(S.metrics) : clone(get(path));
   setLocal(path,val);
   let patch;
   if(path.startsWith("metrics.")) patch={metrics:clone(S.metrics), cardUpdatedAt:new Date().toISOString()};
@@ -709,6 +828,35 @@ function edit(path,val){
   if(patch.cardUpdatedAt) S.cardUpdatedAt=patch.cardUpdatedAt;
   const st=stamp(); S.updatedAt=st.updatedAt; S.updatedBy=st.updatedBy;
   queuePatch(CUR, Object.assign(patch,st));
+  bufferChange(CUR, path, before);
+}
+
+/* Changelog coalescing.
+
+   edit() runs on every keystroke, so logging there wrote one entry per
+   character -- forty entries to record one sentence, which makes the audit
+   trail useless exactly when someone needs to read it.
+
+   Instead the ORIGINAL value of each touched path is kept until the save
+   settles, and one entry per path is written at flush. "One entry per field
+   per save" is also the honest unit: it is what actually reached the store. */
+const changeBuf = {};
+
+function bufferChange(pid, path, before){
+  if(RO) return;
+  const buf = changeBuf[pid] || (changeBuf[pid] = {});
+  // Keep the earliest value only; later keystrokes are the same edit.
+  if(!(path in buf)) buf[path] = before;
+}
+
+function flushChanges(pid){
+  const buf = changeBuf[pid];
+  if(!buf) return;
+  delete changeBuf[pid];
+  for(const path of Object.keys(buf)){
+    const now = path.startsWith("metrics.") ? clone(S && S.metrics) : (S ? get(path) : undefined);
+    logChange(pid, path, buf[path], now, S);
+  }
 }
 function saveMetrics(){
   const now=new Date().toISOString(); S.cardUpdatedAt=now; const st=stamp(); Object.assign(S,st);
@@ -719,8 +867,138 @@ function writeLog(pid,text){ if(RO) return; STORE.log(pid,{at:new Date().toISOSt
 async function createProject(data,logText){
   if(RO) return null;
   const id=newId();
-  try{ await STORE.create(id,data); writeLog(id,logText||"Project created"); return id; }
+  try{
+    await STORE.create(id,data);
+    STORE.log(id,{at:new Date().toISOString(),by:ME.id||null,
+      text:logText||"Project created", hash:contentHash(data)}).catch(()=>{});
+    return id;
+  }
   catch(e){ toast(e&&e.code==="quota_exceeded"?"The workspace is full. Archive or delete old projects.":"Couldn't create the project"); return null; }
+}
+
+/* ============================================================
+   Changelog
+   What changed, who changed it, when, and what the record hashed to
+   afterwards.
+
+   The audit log already existed, but it recorded prose: "Archived",
+   "Project created". That answers "something happened" and not "what
+   is different now", which is the question a reviewer asks six
+   months later when a checkpoint decision is challenged.
+
+   So every edit is described in the terms the user sees -- the
+   criterion's own text, the checkpoint's title, the model-card
+   field's label -- rather than as a state path. A reader should not
+   have to know that `gates.B.decision` is Checkpoint B.
+
+   Entries are written through the store's existing log, which means
+   this works in all three backends rather than only the one with a
+   database. The server additionally keeps full snapshots; see
+   server/migrations/002_versions.sql.
+   ============================================================ */
+
+/* Human labels for state paths. Anything not matched here falls back
+   to a cleaned-up path, so a new field still logs something useful
+   rather than nothing. */
+function describePath(path) {
+  const parts = String(path).split(".");
+
+  if (parts[0] === "items") {
+    const id = parts[1];
+    const item = (typeof allItems === "function" ? allItems() : []).find(i => i.id === id);
+    const what = { status: "status", evidence: "evidence", owner: "owner", due: "due date" }[parts[2]] || parts[2];
+    return item ? `${what} of “${item.text}”` : `${what} of criterion ${id}`;
+  }
+
+  if (parts[0] === "gates") {
+    const gate = GATES[parts[1]];
+    const what = { decision: "decision", by: "decided by", date: "decision date",
+                   rationale: "rationale", conditions: "conditions" }[parts[2]] || parts[2];
+    return gate ? `${what} for ${gate.title}` : `${what} for checkpoint ${parts[1]}`;
+  }
+
+  if (parts[0] === "card") {
+    return `model card: ${CARD_LABEL[parts[1]] || parts[1]}`;
+  }
+
+  if (parts[0] === "optica" && parts[1] === "answers") {
+    const key = parts[2];
+    const item = (typeof OPTICA_ITEMS !== "undefined" ? OPTICA_ITEMS : []).find(i => i.key === key);
+    const what = { status: "status", evidence: "evidence", owner: "owner",
+                   due: "due date", declineReason: "reason for declining" }[parts[3]] || parts[3];
+    return item ? `OPTICA ${item.num}: ${what}` : `OPTICA ${key}: ${what}`;
+  }
+
+  if (parts[0] === "meta") {
+    const labels = { solution: "solution name", org: "organization", developer: "developer",
+      sourcing: "sourcing", sponsor: "clinical sponsor", riskTier: "risk tier",
+      reviewCadence: "review cadence", startDate: "review start date",
+      reviewers: "review team", scope: "scope", chaiUseCase: "CHAI use case" };
+    return labels[parts[1]] || parts[1];
+  }
+
+  if (parts[0] === "metrics") return "key metrics";
+  if (parts[0] === "access") return "who has access";
+  if (parts[0] === "archived") return "archived state";
+  return parts.join(" › ");
+}
+
+/* Values as a reader would recognize them. Statuses get their label,
+   long text is elided rather than dumped into a log line. */
+function describeValue(path, value) {
+  if (value === undefined || value === null || value === "") return "empty";
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? "" : "s"}`;
+  if (typeof value === "object") return "updated";
+
+  const text = String(value);
+  if (/\.status$/.test(path)) {
+    return STATUS[text] || (typeof OPTICA_STATUS !== "undefined" ? OPTICA_STATUS[text] : "") || text;
+  }
+  return text.length > 60 ? `“${text.slice(0, 57)}…”` : `“${text}”`;
+}
+
+/* One log entry per edit, carrying enough to reconstruct what moved.
+   `from` and `to` are kept as well as the prose, so a later version of
+   this tool can render a better diff from old entries. */
+function logChange(pid, path, from, to, doc) {
+  if (RO) return;
+  const same = JSON.stringify(from ?? null) === JSON.stringify(to ?? null);
+  if (same) return;   // a save that changed nothing is not a change
+
+  const entry = {
+    at: new Date().toISOString(),
+    by: ME.id || null,
+    text: `Changed ${describePath(path)}: ${describeValue(path, from)} → ${describeValue(path, to)}`,
+    change: {
+      path,
+      from: from === undefined ? null : from,
+      to: to === undefined ? null : to,
+    },
+  };
+  if (doc) entry.hash = contentHash(doc);
+  STORE.log(pid, entry).catch(() => {});
+}
+
+/* Compare two whole documents and list what differs, for the version
+   history where only snapshots are available. Returns leaf-level
+   paths, which is the granularity a reviewer wants: "the decision
+   changed", not "the gates object changed". */
+function diffDocs(before, after, prefix = "", out = []) {
+  const a = before && typeof before === "object" ? before : {};
+  const b = after && typeof after === "object" ? after : {};
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (CANON_SKIP.has(key)) continue;
+    const path = prefix ? `${prefix}.${key}` : key;
+    const av = a[key], bv = b[key];
+    const bothObjects = av && bv && typeof av === "object" && typeof bv === "object"
+      && !Array.isArray(av) && !Array.isArray(bv);
+    if (bothObjects) diffDocs(av, bv, path, out);
+    else if (JSON.stringify(av ?? null) !== JSON.stringify(bv ?? null)) {
+      out.push({ path, from: av ?? null, to: bv ?? null });
+    }
+  }
+  return out;
 }
 
 /* ============================================================
@@ -810,9 +1088,13 @@ function activeFrameworks(p) {
    lookup table. */
 function activeViews(p) {
   const proj = p || S;
-  return activeFrameworks(proj).flatMap(f =>
+  const all = activeFrameworks(proj).flatMap(f =>
     (f.views(proj) || []).map(v => ({ ...v, fw: f }))
   );
+  // A view may declare `order: "end"` to sit after everything else, whichever
+  // framework contributed it. Used by reference views -- the changelog is not
+  // a step in the review and should not interrupt the numbered sequence.
+  return [...all.filter(v => v.order !== "end"), ...all.filter(v => v.order === "end")];
 }
 
 const viewById = (id, p) => activeViews(p).find(v => v.id === id);
@@ -895,8 +1177,13 @@ registerFramework({
   label: "Project",
   enabled: () => true,
   blank: () => ({}),
-  views: () => [{ id: "setup", kind: "setup", label: "Project setup", num: 0, sep: "after" }],
-  render: () => renderSetup(),
+  views: () => [
+    { id: "setup", kind: "setup", label: "Project setup", num: 0, sep: "after" },
+    { id: "changelog", kind: "changelog", label: "Changelog", glyph: "\u21bb",
+      short: "the changelog", order: "end", sep: "before",
+      meta: () => LOG.length ? String(LOG.length) : "" },
+  ],
+  render: v => v.kind === "changelog" ? changelogHTML() : renderSetup(),
 });
 
 
@@ -945,6 +1232,75 @@ const roleNote = () => {
   const r = roleOf(S);
   return r ? `You have ${ROLE_LABEL[r].toLowerCase()}.` : "You are not listed on this project.";
 };
+
+
+/* ============================================================
+   Changelog view
+   The audit trail, rendered as what changed rather than that
+   something did. Grouped by day, because "what happened at this
+   meeting" is how a committee reads it.
+   ============================================================ */
+function changelogHTML(){
+  const now = contentHash(S);
+
+  if(!LOG.length){
+    return `<p class="eyebrow">Audit trail</p><h1>Changelog</h1>
+    <p class="lede">Every change to this record, with who made it and when.</p>
+    <div class="note"><p>No changes recorded yet.</p></div>
+    ${fingerprintHTML(now)}
+    ${pager()}`;
+  }
+
+  // Group by calendar day. The log arrives newest-first and stays that way.
+  const days = [];
+  LOG.forEach(e=>{
+    const day = (e.at||"").slice(0,10);
+    const last = days[days.length-1];
+    if(last && last.day===day) last.entries.push(e);
+    else days.push({day, entries:[e]});
+  });
+
+  const rows = days.map(d=>`
+    <h2 style="font-size:15px;margin:18px 0 6px">${esc(fmtDay(d.day)||"Undated")}</h2>
+    <ul class="history">${d.entries.map(e=>{
+      const c = e.change;
+      const detail = c
+        ? `<div class="small" style="color:var(--muted);margin-top:2px">
+             <code>${esc(c.path)}</code></div>`
+        : "";
+      return `<li>
+        <time>${esc((e.at||"").slice(11,16))}</time>
+        <span>${esc(e.text)}
+          <span style="color:var(--muted)">by ${who(e.by)}</span>
+          ${e.hash?`<span class="small" style="color:var(--muted)" title="Record fingerprint after this change">\u00b7 ${esc(shortHash(e.hash))}</span>`:""}
+          ${detail}</span>
+      </li>`;}).join("")}</ul>`).join("");
+
+  return `<p class="eyebrow">Audit trail</p><h1>Changelog</h1>
+  <p class="lede">Every change to this record, with who made it and when.
+  ${LOG.length>=60?"The newest 60 are shown; older entries stay in the store.":""}</p>
+  ${rows}
+  ${fingerprintHTML(now)}
+  ${pager()}`;
+}
+
+/* The record's current fingerprint, with the caveat attached. A hash
+   printed without saying what it proves will be read as proving more
+   than it does. */
+function fingerprintHTML(md5hex){
+  return `<h2 style="font-size:15px;margin-top:22px">Record fingerprint</h2>
+  <p style="font-size:13px;color:var(--muted)">A fingerprint of this record's
+  contents right now. Quote it alongside an exported report to tie the report to
+  the exact state it came from. Volatile fields, such as the last-saved
+  timestamp, are excluded so the fingerprint only moves when something
+  substantive does.</p>
+  <p><code style="font-size:13px">MD5 ${esc(md5hex)}</code></p>
+  <div class="note"><p><b>This detects change, not tampering.</b> MD5 has been
+  collision-broken since 2004, and anyone who can edit the record can also
+  recompute its fingerprint. It answers "is this the same version?" and must not
+  be offered as evidence that a record was not altered. A SHA-256 travels in the
+  JSON export for anyone who needs the stronger property.</p></div>`;
+}
 
 /* ============================================================
    Content model

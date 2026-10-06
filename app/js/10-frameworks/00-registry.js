@@ -41,9 +41,13 @@ function activeFrameworks(p) {
    lookup table. */
 function activeViews(p) {
   const proj = p || S;
-  return activeFrameworks(proj).flatMap(f =>
+  const all = activeFrameworks(proj).flatMap(f =>
     (f.views(proj) || []).map(v => ({ ...v, fw: f }))
   );
+  // A view may declare `order: "end"` to sit after everything else, whichever
+  // framework contributed it. Used by reference views -- the changelog is not
+  // a step in the review and should not interrupt the numbered sequence.
+  return [...all.filter(v => v.order !== "end"), ...all.filter(v => v.order === "end")];
 }
 
 const viewById = (id, p) => activeViews(p).find(v => v.id === id);

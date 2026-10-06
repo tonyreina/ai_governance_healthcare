@@ -1,0 +1,146 @@
+# Running it
+
+The dashboard runs in three places, and **they are not equivalent**. Pick by
+what you need, not by what is easiest to open.
+
+## Which mode does what
+
+| | GitHub Pages / open a file | Claude artifact | Docker stack |
+|---|---|---|---|
+| Storage | Browser `localStorage` | Artifact database | PostgreSQL |
+| Shared between people | **No** | Yes | Yes |
+| Survives clearing site data | **No** | Yes | Yes |
+| Signed-in identity | **None** | Yes | Yes, from your SSO |
+| Access control enforced | **No** | Partly | **Yes, server-side** |
+| Checkpoint sign-off means something | **No, self-asserted** | Yes | Yes |
+| Version snapshots | No | No | **Yes** |
+| Live updates between people | No | Yes | Yes |
+| Both checklists, model card, metrics | Yes | Yes | Yes |
+| All exports, including PDF | Yes | Yes | Yes |
+| Changelog | Yes, this browser | Yes | Yes |
+| Record fingerprint | Yes | Yes | Yes |
+
+!!! danger "The published site is a demonstration, not a system of record"
+
+    <https://tonyreina.github.io/ai_governance_healthcare/app/> stores
+    everything in **your browser**. Nobody else can see it, it does not survive
+    clearing site data, and there is no signed-in user — so a checkpoint
+    sign-off there records a name nobody checked.
+
+    It is the right way to evaluate the tool. It is the wrong way to keep a
+    governance record. For that, run the stack below.
+
+## Everything working, locally
+
+`docker compose up` gives you the full system: PostgreSQL, the API with access
+control enforced, a proxy supplying identity, and the dashboard served from the
+same origin so it finds the API automatically.
+
+```bash
+git clone https://github.com/tonyreina/ai_governance_healthcare
+cd ai_governance_healthcare
+
+cp .env.example .env
+# Set POSTGRES_PASSWORD. Compose refuses to start without it, on purpose.
+
+pixi run build-app          # build the dashboard from app/
+docker compose up -d --build
+
+open http://localhost:8080
+```
+
+The dashboard should show **Shared workspace** rather than *This browser only*.
+If it says the latter, the API is not answering — check `docker compose logs api`.
+
+!!! warning "Changing POSTGRES_PASSWORD later will not work"
+
+    PostgreSQL applies `POSTGRES_PASSWORD` **only when it initializes an empty
+    data directory**. Change it after the first run and the database keeps the
+    old credentials while the API uses the new ones, which shows up as:
+
+    ```text
+    database not ready: password authentication failed for user "chai"
+    ```
+
+    The fix destroys the data, so be sure that is what you want:
+
+    ```bash
+    docker compose down -v      # removes the volume AND everything in it
+    docker compose up -d --build
+    ```
+
+    For a real deployment, rotate the password in PostgreSQL itself
+    (`ALTER ROLE chai WITH PASSWORD ...`) and then update `.env`.
+
+### What to try
+
+Things that only work in this mode:
+
+- **Access control.** Open a project, go to *Project setup → Access*. You are
+  the owner because you created it. Grant someone else write or read access and
+  watch the Manage buttons change for them.
+- **Version history.** Make a few edits, then:
+
+    ```bash
+    curl -s localhost:8080/api/projects/<id>/versions | python -m json.tool
+    ```
+
+    Every revision, with its fingerprint, who made it and when.
+- **Live updates.** Open the dashboard in two windows and change something in
+  one. The other updates without a refresh.
+- **Identity cannot be forged.** The proxy strips any identity header the
+  client sends and sets its own:
+
+    ```bash
+    curl -H "X-Auth-Request-Email: ceo@hospital.example" localhost:8080/api/me
+    # still answers with the proxy's identity, not yours
+    ```
+
+### Development mode
+
+Hot reload, and the API and database published on localhost for inspection:
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up -d
+```
+
+Named explicitly rather than `compose.override.yaml`, so a plain
+`docker compose up` can never pick it up by accident.
+
+!!! warning "The local proxy mints one fixed identity"
+
+    Locally the proxy sets a single development identity for every request, so
+    everything you do is the same person. That is enough to exercise ownership
+    and the audit trail, but to see two users with different roles you need a
+    real identity provider in front — see
+    [Deploying with SSO](deploy.md).
+
+## Stopping and cleaning up
+
+```bash
+docker compose down            # stop; the database volume survives
+docker compose down -v         # stop and DELETE the database
+```
+
+## Running the tests
+
+```bash
+pixi run check          # every lint and build hook
+pixi run test-app       # the dashboard, in a real browser
+pixi run test-access    # roles and the delete confirmation
+pixi run test-te        # the CHAI metric picker
+pixi run test-pdf       # renders a real PDF and reads it back
+pixi run test-stack     # end to end against a running stack
+```
+
+The server's own suite needs a PostgreSQL to test against, because what it
+tests *is* the database's behavior — a row lock serializing two writers, a
+trigger refusing to rewrite history:
+
+```bash
+docker compose up -d db
+cd server
+TEST_DATABASE_URL=postgresql://chai:<password>@localhost:5432/chai pytest
+```
+
+Without `TEST_DATABASE_URL` those tests skip and say why.

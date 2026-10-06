@@ -19,6 +19,8 @@ changed.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json as _json
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -197,6 +199,7 @@ async def create_project(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Project {project_id!r} already exists.",
             )
+        await _snapshot(conn, project_id, 1, doc, identity.id)
         await broker.publish(Event(PROJECT_CREATED, project_id), conn)
     log.info("project %s created by %s", project_id, identity.id)
     return ProjectOut.from_row(project_id, doc)
@@ -245,16 +248,18 @@ async def patch_project(
         require(before, identity.id, "write", enforced=enforced)
         guard_access_change(before, patch, identity.id, enforced=enforced)
         document = merged(before, patch)
-        await conn.execute(
+        rev = await conn.fetchval(
             """
                 UPDATE projects
                    SET doc = $2, rev = rev + 1, updated_at = now(), updated_by = $3
                  WHERE id = $1
+             RETURNING rev
                 """,
             project_id,
             document,
             identity.id,
         )
+        await _snapshot(conn, project_id, rev, document, identity.id)
         await broker.publish(Event(PROJECT_UPDATED, project_id), conn)
     return ProjectOut.from_row(project_id, document)
 
@@ -298,6 +303,152 @@ async def delete_project(
         await broker.publish(Event(PROJECT_DELETED, project_id), conn)
     log.info("project %s deleted by %s", project_id, identity.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- version history --------------------------------------------------------
+
+# Excluded from the fingerprint. Must match CANON_SKIP in
+# app/js/00-core/12-hash.js, or the browser and the server will disagree about
+# what the same record hashes to -- which is worse than having no hash, because
+# it looks like evidence of a change that did not happen.
+_HASH_SKIP = frozenset(
+    {"updatedAt", "updatedBy", "cardUpdatedAt", "_state", "contentHash", "generated"}
+)
+
+
+def _canonical(value: Any) -> Any:
+    """Deterministic shape: keys sorted at every depth, volatile keys dropped."""
+    if isinstance(value, dict):
+        return {
+            k: _canonical(v) for k, v in sorted(value.items()) if k not in _HASH_SKIP
+        }
+    if isinstance(value, list):
+        return [_canonical(v) for v in value]
+    return value
+
+
+def content_md5(doc: dict[str, Any]) -> str:
+    """The same fingerprint the browser computes, over the same canonical form.
+
+    MD5 because that is what the record is labeled with; it answers "is this
+    the same version?" and nothing stronger. It is not a tamper seal, and
+    anything that presents it as one is wrong -- see the note in the app's
+    changelog view.
+    """
+    canon = _json.dumps(
+        _canonical(doc), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return hashlib.md5(canon.encode("utf-8")).hexdigest()
+
+
+async def _snapshot(
+    conn: Any, project_id: str, rev: int, doc: dict[str, Any], by: str | None
+) -> None:
+    """Record one immutable version. Caller supplies the open transaction."""
+    await conn.execute(
+        """
+        INSERT INTO project_version (project_id, rev, doc, content_md5, changed_by)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (project_id, rev) DO NOTHING
+        """,
+        project_id,
+        rev,
+        doc,
+        content_md5(doc),
+        by,
+    )
+
+
+# --- version history --------------------------------------------------------
+
+
+@router.get("/projects/{project_id}/versions", tags=["versions"])
+async def list_versions(
+    project_id: str = ProjectId,
+    db: Database = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    identity: Identity = Depends(get_identity),
+) -> list[dict[str, Any]]:
+    """Every recorded revision of this project, newest first.
+
+    Metadata only -- revision, fingerprint, who, when. The documents
+    themselves are fetched one at a time, because returning fifty full
+    snapshots to render a list is a lot of bytes for a column of dates.
+
+    Access is checked against the LIVE project. A deleted project keeps its
+    versions on purpose (see 002_versions.sql), and in that case there is no
+    live document to check, so the history of a deleted project is readable by
+    anyone who can reach the API. That is the intended trade: "it was deleted,
+    and here is what it said" is the audit answer, and a deleted record cannot
+    tell you who used to own it.
+    """
+    async with db.acquire() as conn:
+        live = await conn.fetchrow("SELECT doc FROM projects WHERE id = $1", project_id)
+        if live is not None:
+            require(
+                live["doc"] or {},
+                identity.id,
+                "read",
+                enforced=settings.require_identity,
+            )
+        rows = await conn.fetch(
+            """
+            SELECT rev, content_md5, changed_by, changed_at
+              FROM project_version
+             WHERE project_id = $1
+             ORDER BY rev DESC
+            """,
+            project_id,
+        )
+    return [
+        {
+            "rev": r["rev"],
+            "md5": r["content_md5"],
+            "by": r["changed_by"],
+            "at": r["changed_at"].isoformat(),
+        }
+        for r in rows
+    ]
+
+
+@router.get("/projects/{project_id}/versions/{rev}", tags=["versions"])
+async def read_version(
+    project_id: str = ProjectId,
+    rev: int = 0,
+    db: Database = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    identity: Identity = Depends(get_identity),
+) -> dict[str, Any]:
+    """One revision, exactly as it was stored, with its fingerprint."""
+    async with db.acquire() as conn:
+        live = await conn.fetchrow("SELECT doc FROM projects WHERE id = $1", project_id)
+        if live is not None:
+            require(
+                live["doc"] or {},
+                identity.id,
+                "read",
+                enforced=settings.require_identity,
+            )
+        row = await conn.fetchrow(
+            """
+            SELECT rev, doc, content_md5, changed_by, changed_at
+              FROM project_version
+             WHERE project_id = $1 AND rev = $2
+            """,
+            project_id,
+            rev,
+        )
+    if row is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"No revision {rev} of {project_id!r}."
+        )
+    return {
+        "rev": row["rev"],
+        "md5": row["content_md5"],
+        "by": row["changed_by"],
+        "at": row["changed_at"].isoformat(),
+        "doc": row["doc"],
+    }
 
 
 # --- audit log --------------------------------------------------------------

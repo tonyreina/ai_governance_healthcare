@@ -1,0 +1,124 @@
+/* ============================================================
+   Changelog
+   What changed, who changed it, when, and what the record hashed to
+   afterwards.
+
+   The audit log already existed, but it recorded prose: "Archived",
+   "Project created". That answers "something happened" and not "what
+   is different now", which is the question a reviewer asks six
+   months later when a checkpoint decision is challenged.
+
+   So every edit is described in the terms the user sees -- the
+   criterion's own text, the checkpoint's title, the model-card
+   field's label -- rather than as a state path. A reader should not
+   have to know that `gates.B.decision` is Checkpoint B.
+
+   Entries are written through the store's existing log, which means
+   this works in all three backends rather than only the one with a
+   database. The server additionally keeps full snapshots; see
+   server/migrations/002_versions.sql.
+   ============================================================ */
+
+/* Human labels for state paths. Anything not matched here falls back
+   to a cleaned-up path, so a new field still logs something useful
+   rather than nothing. */
+function describePath(path) {
+  const parts = String(path).split(".");
+
+  if (parts[0] === "items") {
+    const id = parts[1];
+    const item = (typeof allItems === "function" ? allItems() : []).find(i => i.id === id);
+    const what = { status: "status", evidence: "evidence", owner: "owner", due: "due date" }[parts[2]] || parts[2];
+    return item ? `${what} of “${item.text}”` : `${what} of criterion ${id}`;
+  }
+
+  if (parts[0] === "gates") {
+    const gate = GATES[parts[1]];
+    const what = { decision: "decision", by: "decided by", date: "decision date",
+                   rationale: "rationale", conditions: "conditions" }[parts[2]] || parts[2];
+    return gate ? `${what} for ${gate.title}` : `${what} for checkpoint ${parts[1]}`;
+  }
+
+  if (parts[0] === "card") {
+    return `model card: ${CARD_LABEL[parts[1]] || parts[1]}`;
+  }
+
+  if (parts[0] === "optica" && parts[1] === "answers") {
+    const key = parts[2];
+    const item = (typeof OPTICA_ITEMS !== "undefined" ? OPTICA_ITEMS : []).find(i => i.key === key);
+    const what = { status: "status", evidence: "evidence", owner: "owner",
+                   due: "due date", declineReason: "reason for declining" }[parts[3]] || parts[3];
+    return item ? `OPTICA ${item.num}: ${what}` : `OPTICA ${key}: ${what}`;
+  }
+
+  if (parts[0] === "meta") {
+    const labels = { solution: "solution name", org: "organization", developer: "developer",
+      sourcing: "sourcing", sponsor: "clinical sponsor", riskTier: "risk tier",
+      reviewCadence: "review cadence", startDate: "review start date",
+      reviewers: "review team", scope: "scope", chaiUseCase: "CHAI use case" };
+    return labels[parts[1]] || parts[1];
+  }
+
+  if (parts[0] === "metrics") return "key metrics";
+  if (parts[0] === "access") return "who has access";
+  if (parts[0] === "archived") return "archived state";
+  return parts.join(" › ");
+}
+
+/* Values as a reader would recognize them. Statuses get their label,
+   long text is elided rather than dumped into a log line. */
+function describeValue(path, value) {
+  if (value === undefined || value === null || value === "") return "empty";
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? "" : "s"}`;
+  if (typeof value === "object") return "updated";
+
+  const text = String(value);
+  if (/\.status$/.test(path)) {
+    return STATUS[text] || (typeof OPTICA_STATUS !== "undefined" ? OPTICA_STATUS[text] : "") || text;
+  }
+  return text.length > 60 ? `“${text.slice(0, 57)}…”` : `“${text}”`;
+}
+
+/* One log entry per edit, carrying enough to reconstruct what moved.
+   `from` and `to` are kept as well as the prose, so a later version of
+   this tool can render a better diff from old entries. */
+function logChange(pid, path, from, to, doc) {
+  if (RO) return;
+  const same = JSON.stringify(from ?? null) === JSON.stringify(to ?? null);
+  if (same) return;   // a save that changed nothing is not a change
+
+  const entry = {
+    at: new Date().toISOString(),
+    by: ME.id || null,
+    text: `Changed ${describePath(path)}: ${describeValue(path, from)} → ${describeValue(path, to)}`,
+    change: {
+      path,
+      from: from === undefined ? null : from,
+      to: to === undefined ? null : to,
+    },
+  };
+  if (doc) entry.hash = contentHash(doc);
+  STORE.log(pid, entry).catch(() => {});
+}
+
+/* Compare two whole documents and list what differs, for the version
+   history where only snapshots are available. Returns leaf-level
+   paths, which is the granularity a reviewer wants: "the decision
+   changed", not "the gates object changed". */
+function diffDocs(before, after, prefix = "", out = []) {
+  const a = before && typeof before === "object" ? before : {};
+  const b = after && typeof after === "object" ? after : {};
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (CANON_SKIP.has(key)) continue;
+    const path = prefix ? `${prefix}.${key}` : key;
+    const av = a[key], bv = b[key];
+    const bothObjects = av && bv && typeof av === "object" && typeof bv === "object"
+      && !Array.isArray(av) && !Array.isArray(bv);
+    if (bothObjects) diffDocs(av, bv, path, out);
+    else if (JSON.stringify(av ?? null) !== JSON.stringify(bv ?? null)) {
+      out.push({ path, from: av ?? null, to: bv ?? null });
+    }
+  }
+  return out;
+}

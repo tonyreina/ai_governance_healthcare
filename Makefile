@@ -19,7 +19,7 @@ POSTGRES_DB   ?= chai
 HTTP_PORT     ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help env up dev down logs ps config build-app shell psql backup restore prune check-isolation
+.PHONY: help env preflight up dev down logs ps config build-app shell psql backup restore prune check-isolation
 
 help:  ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -28,17 +28,33 @@ help:  ## Show this help
 env: .env  ## Create .env from .env.example if it is missing
 .env:
 	@cp .env.example .env
-	@echo ".env created from .env.example -- edit POSTGRES_PASSWORD before deploying."
+	@echo ".env created from .env.example. It is deliberately incomplete:"
+	@echo "  POSTGRES_PASSWORD   empty  -> openssl rand -base64 32"
+	@echo "  IDENTITY_ID_SOURCE  empty  -> set to your SSO front door's header"
+	@echo "`make up` will tell you what is still missing. For a laptop, `make dev`."
+
+preflight:  ## Check .env for settings that would deploy insecurely
+	@python3 scripts/preflight.py
 
 build-app:  ## Rebuild docs/app/index.html from app/ (runs on the host, not in Docker)
 	pixi run build-app
 
-up: env  ## Production-shaped stack: no exposed API, no exposed database
+up: env preflight  ## Production-shaped stack: no exposed API, no exposed database
 	$(COMPOSE) up -d
 	@echo "Dashboard: http://localhost:$(HTTP_PORT)/"
 
+# POSTGRES_PASSWORD is supplied here rather than left to .env. The base file
+# guards it with `${VAR:?...}`, and compose resolves that during interpolation
+# of compose.yaml -- BEFORE compose.dev.yaml's default can override it. So an
+# empty password in .env (which is what the template ships, on purpose) stops
+# `make dev` too, for a stack that has no business needing a real one. Read the
+# .env value if there is one, fall back to the dev-only string otherwise.
 dev: env  ## Development stack: fixed dev identity, hot reload, exposed ports
-	$(DEV) up
+	@PW="$$(sed -n 's/^POSTGRES_PASSWORD=//p' .env | tr -d '\"'\''')"; \
+	 ID="$$(sed -n 's/^DEV_IDENTITY_ID=//p' .env | tr -d '\"'\''')"; \
+	 POSTGRES_PASSWORD="$${PW:-dev-only-not-a-secret}" \
+	 IDENTITY_ID_SOURCE="$${ID:-dev@localhost}" \
+	 $(DEV) up
 
 down:  ## Stop and remove containers. The pgdata volume SURVIVES this.
 	$(COMPOSE) down

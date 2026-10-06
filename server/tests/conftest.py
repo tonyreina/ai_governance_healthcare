@@ -77,8 +77,21 @@ async def client(settings: Settings) -> AsyncIterator[AsyncClient]:
         # so the bigserial in project_log restarts and assertions about order
         # are not affected by earlier tests.
         async with app.state.db.acquire() as conn:
+            # project_version is listed explicitly: it has no foreign key to
+            # projects, on purpose (002_versions.sql), so CASCADE does not
+            # reach it and its rows survived between tests. A snapshot left
+            # behind by an earlier test collides with the new rev 1 of a
+            # project reusing the same id, and the ON CONFLICT swallows it --
+            # so the leak showed up as a test that passed or failed depending
+            # on what ran before it.
+            #
+            # TRUNCATE rather than DELETE so the bigserial in project_log
+            # restarts and assertions about order are not affected by earlier
+            # tests. It also does not fire the row-level triggers that
+            # (correctly) refuse DELETE on project_version.
             await conn.execute(
-                "TRUNCATE project_log, projects RESTART IDENTITY CASCADE"
+                "TRUNCATE project_version, project_log, projects "
+                "RESTART IDENTITY CASCADE"
             )
         transport = ASGITransport(app=app)
         async with AsyncClient(

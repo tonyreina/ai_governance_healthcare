@@ -103,16 +103,68 @@ class ApiStore{
 /* Event names the API emits. Keep in step with server/app/events.py. */
 ApiStore.EVENTS = ["project.created","project.updated","project.deleted","log.appended","resync"];
 
-/* Is a self-hosted backend serving this page? Short timeout: on GitHub Pages
-   the request 404s immediately, and the user should not wait on it. */
+/* Is a self-hosted backend serving this page, and if not, WHY not?
+
+   This used to return null for every failure, and boot treated null as
+   "no server here, use localStorage". That conflated three situations that
+   must not be treated alike:
+
+     - a genuinely static host (GitHub Pages, a file:// open) -- localStorage
+       is correct;
+     - a self-hosted stack whose API is restarting, slow, or behind a proxy
+       having a bad minute -- falling back silently strands the user's work in
+       a browser-local store their colleagues cannot see and no audit log
+       records;
+     - a self-hosted stack that AUTHENTICATED the user and said NO (401/403) --
+       falling back hands a denied user a working private workspace, which is
+       access control failing open.
+
+   So the verdict is explicit and boot decides. Verdicts:
+
+     ok          a healthy API answered; `health` carries its payload
+     denied      the front door or the API refused this user (401/403)
+     unreachable something is there but did not answer in time
+     error       something answered with a server error
+     absent      nothing API-shaped here; a static host
+
+   Short timeout because on a static host the request 404s immediately and the
+   user should not wait on it. */
 async function detectApi(base){
+  base = base || "/api";
   try{
     const ctl = new AbortController();
     const t = setTimeout(()=>ctl.abort(), 2500);
-    const r = await fetch((base||"/api")+"/health",{signal:ctl.signal,credentials:"same-origin"});
+    const r = await fetch(base+"/health",{signal:ctl.signal,credentials:"same-origin"});
     clearTimeout(t);
-    if(!r.ok) return null;
+    if(r.status===401 || r.status===403) return {verdict:"denied", status:r.status};
+    if(r.status>=500) return {verdict:"error", status:r.status};
+    if(!r.ok) return {verdict:"absent", status:r.status};
+    // A static host serving an HTML 404 page with a 200, or anything else
+    // that is not our health payload, lands in the catch below or here.
     const j = await r.json();
-    return j && j.status==="ok" ? j : null;
-  }catch(e){ return null; }
+    return j && j.status==="ok" ? {verdict:"ok", health:j} : {verdict:"absent"};
+  }catch(e){
+    // AbortError means the timeout fired: something may well be there. A
+    // network TypeError or a JSON parse failure means there is nothing
+    // API-shaped at this origin.
+    return {verdict: (e && e.name==="AbortError") ? "unreachable" : "absent"};
+  }
+}
+
+/* Has this origin ever served a working API to this browser?
+
+   Without this, a self-hosted deployment whose API is down for thirty seconds
+   is indistinguishable from GitHub Pages, and the safe choice would be to
+   refuse to start anywhere -- including on the static host where localStorage
+   is the whole point. Remembering that we have seen a real API here lets the
+   app refuse in the one place refusing is right.
+
+   A per-origin key, because the same build is served from both. */
+const API_SEEN_KEY = "chai-api-origin-seen";
+function apiSeenHere(){
+  try{ return localStorage.getItem(API_SEEN_KEY) === location.origin; }
+  catch(e){ return false; }
+}
+function rememberApiHere(){
+  try{ localStorage.setItem(API_SEEN_KEY, location.origin); }catch(e){}
 }

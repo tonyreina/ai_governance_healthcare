@@ -296,6 +296,13 @@ body.home main{max-width:1240px;margin:0 auto;width:100%}
 .history{list-style:none;margin:0;padding:0;max-width:820px;font-size:13.5px;border-top:1px solid var(--rule)}
 .history li{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:7px 0;border-bottom:1px solid var(--rule)}
 .history time{color:var(--muted);font-variant-numeric:tabular-nums}
+/* Standing warning for the browser-only storage mode. Not dismissible: it
+   describes a property of where the data is going, which does not stop being
+   true because somebody clicked an x. */
+.storage-warning{background:var(--amber-soft);border-bottom:1px solid var(--amber);color:var(--ink);padding:8px 18px;font-size:13px;line-height:1.45;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.storage-warning b{color:var(--amber)}
+.storage-warning .sw-detail{color:var(--muted)}
+@media print{.storage-warning{display:none}}
 .banner{background:var(--teal-soft);border-left:3px solid var(--teal);padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin:0 0 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 body.ro .ro-hide{display:none!important}
 

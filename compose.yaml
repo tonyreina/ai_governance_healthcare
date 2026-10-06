@@ -158,9 +158,13 @@ services:
     restart: unless-stopped
 
     ports:
-      # The one way in. Bind to 127.0.0.1 by setting HTTP_BIND=127.0.0.1 if the
-      # host is multi-homed and something else terminates TLS in front.
-      - "${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-8080}:80"
+      # The one way in, and bound to LOOPBACK by default. This stack speaks
+      # plain HTTP (SITE_ADDRESS=http://:80), so a default of 0.0.0.0 would
+      # serve a governance record to the whole subnet in cleartext on first
+      # run. Set HTTP_BIND=0.0.0.0 only once something terminates TLS in
+      # front -- the cloud SSO front door, or Caddy itself with SITE_ADDRESS
+      # set to a hostname.
+      - "${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8080}:80"
 
     networks:
       - edge

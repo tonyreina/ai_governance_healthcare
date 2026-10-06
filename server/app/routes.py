@@ -132,11 +132,16 @@ async def health(
     Every platform in ``docs/deploy.md`` health-checks this from inside the
     load balancer, where no identity header exists yet. It returns nothing
     about any project, any user, or the database's address.
+
+    The database check is cached for a couple of seconds. Being both
+    unauthenticated and exempt from the rate limiter, an uncached one let
+    anyone who could reach the port pull a connection from a pool of ten as
+    fast as they liked. See :meth:`Database.ping_cached`.
     """
     return HealthOut(
         status="ok",
         version=settings.version,
-        database="up" if await db.ping() else "down",
+        database="up" if await db.ping_cached() else "down",
         auth_mode=settings.auth_mode,
     )
 

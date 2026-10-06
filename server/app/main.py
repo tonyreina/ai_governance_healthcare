@@ -30,10 +30,12 @@ import time
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.requests import ClientDisconnect
 
 from .auth import log_auth_posture
 from .config import Settings
@@ -52,17 +54,72 @@ API_CSP = (
 HSTS_VALUE = "max-age=31536000; includeSubDomains"
 
 
-class FixedWindowRateLimiter:
-    def __init__(self, window_seconds: int, max_requests: int) -> None:
+class SlidingWindowRateLimiter:
+    """Per-key request accounting over a moving window.
+
+    Named for what it does: entries are discarded once they fall outside
+    ``window_seconds`` of *now*, so the window slides. A true fixed window
+    resets on a wall-clock boundary and lets a caller spend two full
+    allowances across it.
+
+    **In-process, and so per-replica.** With N replicas behind a load
+    balancer the effective ceiling is N x ``max_requests``, because nothing is
+    shared between them. That is a deliberate trade: a shared counter means
+    Redis, or a round trip to PostgreSQL on every request, and this limiter
+    exists to blunt a runaway client rather than to meter an API. Size the
+    limit for one replica and treat the total as approximate. The hard
+    protections are elsewhere -- the body cap below, the SSE stream cap, and
+    the network isolation that keeps unauthenticated traffic out entirely.
+
+    **Bounded memory.** Keys are swept once per window. Without that the
+    dictionary grew by one entry for every distinct identity or source
+    address ever seen and never shrank, which for IP-keyed traffic is an
+    attacker-controlled leak: 200k addresses meant 200k permanently retained
+    keys.
+    """
+
+    def __init__(
+        self,
+        window_seconds: int,
+        max_requests: int,
+        *,
+        max_keys: int = 50_000,
+    ) -> None:
         self.window_seconds = max(1, window_seconds)
         self.max_requests = max(1, max_requests)
+        self.max_keys = max(1, max_keys)
         self._events: dict[str, deque[float]] = defaultdict(deque)
         self._lock = asyncio.Lock()
+        self._last_sweep = time.monotonic()
+
+    def _sweep(self, now: float) -> None:
+        """Drop keys with nothing left inside the window. Caller holds the lock."""
+        cutoff = now - self.window_seconds
+        stale = [
+            key
+            for key, bucket in self._events.items()
+            if not bucket or bucket[-1] <= cutoff
+        ]
+        for key in stale:
+            del self._events[key]
+        self._last_sweep = now
+        if len(self._events) > self.max_keys:
+            # Everything here is live traffic inside one window, so this is a
+            # flood from many sources rather than accumulated residue. Say so
+            # once per sweep; the limiter keeps working.
+            log.warning(
+                "rate limiter is tracking %d active keys (above max_keys=%d); "
+                "this looks like distributed traffic rather than one client",
+                len(self._events),
+                self.max_keys,
+            )
 
     async def allow(self, key: str) -> bool:
         now = time.monotonic()
         cutoff = now - self.window_seconds
         async with self._lock:
+            if now - self._last_sweep >= self.window_seconds:
+                self._sweep(now)
             bucket = self._events[key]
             while bucket and bucket[0] <= cutoff:
                 bucket.popleft()
@@ -70,6 +127,14 @@ class FixedWindowRateLimiter:
                 return False
             bucket.append(now)
             return True
+
+    @property
+    def tracked_keys(self) -> int:
+        return len(self._events)
+
+
+# Kept so an operator's existing import or reference does not break.
+FixedWindowRateLimiter = SlidingWindowRateLimiter
 
 
 def _is_api_path(path: str) -> bool:
@@ -97,6 +162,96 @@ def _rate_limit_key(request: Request, settings: Settings) -> str:
         return f"id:{identity.lower()}"
     host = request.client.host if request.client else "unknown"
     return f"ip:{host}"
+
+
+class BodySizeLimitMiddleware:
+    """Reject an oversize request body, as ASGI middleware rather than HTTP.
+
+    This cannot be a ``@app.middleware("http")`` function, and the reason is
+    worth recording because the first version was one and looked correct.
+
+    Starlette's ``BaseHTTPMiddleware`` hands the downstream app its own
+    receive channel. A dispatch function that reads the body to measure it --
+    with ``await request.body()`` or by draining ``request.stream()`` -- has
+    consumed it, and assigning ``request._receive`` puts it back only on the
+    middleware's OWN ``Request`` object. The route constructs a new one and
+    sees nothing. The result was that any request without a Content-Length,
+    which is every chunked request, reached the route with an EMPTY body and
+    failed validation with a 422 that had nothing to do with what was sent.
+    Content-Length requests were unaffected, which is why the browser app and
+    the original tests never showed it.
+
+    Wrapping ``receive`` at the ASGI level measures the body without
+    consuming it: each chunk is counted and passed straight through. Nothing
+    is buffered, so the limit is enforced on the first chunk that crosses it
+    rather than after the whole body has been read into memory.
+    """
+
+    def __init__(self, app: Any, *, limit: int) -> None:
+        self.app = app
+        self.limit = max(1, limit)
+
+    async def _reject(self, send: Any) -> None:
+        response = JSONResponse(
+            status_code=413,
+            content={"detail": f"Request body exceeds the {self.limit}-byte limit."},
+        )
+        await response({"type": "http"}, lambda: {"type": "http.request"}, send)
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if (
+            scope["type"] != "http"
+            or scope.get("method") not in BODY_METHODS
+            or not _is_api_path(scope.get("path", ""))
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        # Declared size: reject before a single byte is read.
+        for name, value in scope.get("headers", []):
+            if name == b"content-length":
+                try:
+                    declared = int(value)
+                except ValueError:
+                    declared = self.limit + 1
+                if declared > self.limit:
+                    await self._reject(send)
+                    return
+                break
+
+        received = 0
+        rejected = False
+        response_started = False
+
+        async def limited_receive() -> Any:
+            nonlocal received, rejected
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.limit:
+                    rejected = True
+                    # Looks like a dropped connection to the app, which
+                    # Starlette already knows how to unwind. Our 413 goes out
+                    # below instead of whatever it would have replied.
+                    return {"type": "http.disconnect"}
+            return message
+
+        async def guarded_send(message: Any) -> None:
+            nonlocal response_started
+            if rejected:
+                return
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, limited_receive, guarded_send)
+        except ClientDisconnect:
+            if not rejected:
+                raise
+
+        if rejected and not response_started:
+            await self._reject(send)
 
 
 def configure_logging(level: str) -> None:
@@ -163,7 +318,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/api/openapi.json",
     )
     app.state.settings = settings
-    rate_limiter = FixedWindowRateLimiter(
+    rate_limiter = SlidingWindowRateLimiter(
         settings.rate_limit_window_seconds,
         settings.rate_limit_max_requests,
     )
@@ -185,56 +340,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.middleware("http")
     async def api_hardening(request: Request, call_next):  # type: ignore[no-untyped-def]
         path = request.url.path
-        if _is_api_path(path):
-            if request.method in BODY_METHODS:
-                limit = max(1, settings.request_body_limit_bytes)
-                content_length = request.headers.get("content-length")
-                if content_length is not None:
-                    try:
-                        declared = int(content_length)
-                    except ValueError:
-                        declared = limit + 1
-                    if declared > limit:
-                        return JSONResponse(
-                            status_code=413,
-                            content={
-                                "detail": (
-                                    f"Request body exceeds the {limit}-byte limit."
-                                )
-                            },
-                        )
-                else:
-                    body = await request.body()
-                    if len(body) > limit:
-                        return JSONResponse(
-                            status_code=413,
-                            content={
-                                "detail": (
-                                    f"Request body exceeds the {limit}-byte limit."
-                                )
-                            },
-                        )
-
-                    async def receive() -> dict[str, object]:
-                        return {
-                            "type": "http.request",
-                            "body": body,
-                            "more_body": False,
-                        }
-
-                    request._receive = receive
-
-            if request.method != "OPTIONS" and path != "/api/health":
-                key = _rate_limit_key(request, settings)
-                allowed = await rate_limiter.allow(key)
-                if not allowed:
-                    return JSONResponse(
-                        status_code=429,
-                        headers={
-                            "Retry-After": str(settings.rate_limit_window_seconds)
-                        },
-                        content={"detail": "Too many requests; please retry shortly."},
-                    )
+        # /api/health is exempt: every platform in docs/deploy.md probes it
+        # from inside the load balancer. That exemption is why the database
+        # check behind it is cached -- see Database.ping_cached.
+        if _is_api_path(path) and request.method != "OPTIONS" and path != "/api/health":
+            key = _rate_limit_key(request, settings)
+            if not await rate_limiter.allow(key):
+                return JSONResponse(
+                    status_code=429,
+                    headers={"Retry-After": str(settings.rate_limit_window_seconds)},
+                    content={"detail": "Too many requests; please retry shortly."},
+                )
 
         response = await call_next(request)
 
@@ -319,6 +435,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return JSONResponse(
             status_code=500, content={"detail": "Internal server error."}
         )
+
+    # Added last, so it runs FIRST: an oversize body is refused before the
+    # rate limiter, the cross-site check or any route reads a byte of it.
+    app.add_middleware(BodySizeLimitMiddleware, limit=settings.request_body_limit_bytes)
 
     app.include_router(router)
     return app

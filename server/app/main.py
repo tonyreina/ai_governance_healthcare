@@ -24,7 +24,10 @@ while the real peer is what the app sees.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
+from collections import defaultdict, deque
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -42,6 +45,58 @@ log = logging.getLogger("chai")
 
 # Methods that cannot change state, and so need no cross-site check.
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
+API_CSP = (
+    "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+)
+HSTS_VALUE = "max-age=31536000; includeSubDomains"
+
+
+class FixedWindowRateLimiter:
+    def __init__(self, window_seconds: int, max_requests: int) -> None:
+        self.window_seconds = max(1, window_seconds)
+        self.max_requests = max(1, max_requests)
+        self._events: dict[str, deque[float]] = defaultdict(deque)
+        self._lock = asyncio.Lock()
+
+    async def allow(self, key: str) -> bool:
+        now = time.monotonic()
+        cutoff = now - self.window_seconds
+        async with self._lock:
+            bucket = self._events[key]
+            while bucket and bucket[0] <= cutoff:
+                bucket.popleft()
+            if len(bucket) >= self.max_requests:
+                return False
+            bucket.append(now)
+            return True
+
+
+def _is_api_path(path: str) -> bool:
+    return path == "/api" or path.startswith("/api/")
+
+
+def _is_tls(request: Request) -> bool:
+    forwarded = request.headers.get("x-forwarded-proto", "")
+    if forwarded:
+        proto = forwarded.split(",", 1)[0].strip().lower()
+        if proto == "https":
+            return True
+    return request.url.scheme == "https"
+
+
+def _rate_limit_key(request: Request, settings: Settings) -> str:
+    identity = request.headers.get(settings.identity_header, "").strip()
+    if (
+        identity
+        and settings.identity_strip_prefix
+        and identity.startswith(settings.identity_strip_prefix)
+    ):
+        identity = identity[len(settings.identity_strip_prefix) :]
+    if identity:
+        return f"id:{identity.lower()}"
+    host = request.client.host if request.client else "unknown"
+    return f"ip:{host}"
 
 
 def configure_logging(level: str) -> None:
@@ -108,6 +163,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/api/openapi.json",
     )
     app.state.settings = settings
+    rate_limiter = FixedWindowRateLimiter(
+        settings.rate_limit_window_seconds,
+        settings.rate_limit_max_requests,
+    )
 
     if settings.cors_origins:
         log.warning(
@@ -122,6 +181,71 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
             allow_headers=["Content-Type"],
         )
+
+    @app.middleware("http")
+    async def api_hardening(request: Request, call_next):  # type: ignore[no-untyped-def]
+        path = request.url.path
+        if _is_api_path(path):
+            if request.method in BODY_METHODS:
+                limit = max(1, settings.request_body_limit_bytes)
+                content_length = request.headers.get("content-length")
+                if content_length is not None:
+                    try:
+                        declared = int(content_length)
+                    except ValueError:
+                        declared = limit + 1
+                    if declared > limit:
+                        return JSONResponse(
+                            status_code=413,
+                            content={
+                                "detail": (
+                                    f"Request body exceeds the {limit}-byte limit."
+                                )
+                            },
+                        )
+                else:
+                    body = await request.body()
+                    if len(body) > limit:
+                        return JSONResponse(
+                            status_code=413,
+                            content={
+                                "detail": (
+                                    f"Request body exceeds the {limit}-byte limit."
+                                )
+                            },
+                        )
+
+                    async def receive() -> dict[str, object]:
+                        return {
+                            "type": "http.request",
+                            "body": body,
+                            "more_body": False,
+                        }
+
+                    request._receive = receive
+
+            if request.method != "OPTIONS" and path != "/api/health":
+                key = _rate_limit_key(request, settings)
+                allowed = await rate_limiter.allow(key)
+                if not allowed:
+                    return JSONResponse(
+                        status_code=429,
+                        headers={
+                            "Retry-After": str(settings.rate_limit_window_seconds)
+                        },
+                        content={"detail": "Too many requests; please retry shortly."},
+                    )
+
+        response = await call_next(request)
+
+        if _is_api_path(path):
+            response.headers.setdefault("Content-Security-Policy", API_CSP)
+            response.headers.setdefault("X-Content-Type-Options", "nosniff")
+            response.headers.setdefault("X-Frame-Options", "DENY")
+            response.headers.setdefault("Referrer-Policy", "no-referrer")
+            if _is_tls(request):
+                response.headers.setdefault("Strict-Transport-Security", HSTS_VALUE)
+        return response
 
     @app.middleware("http")
     async def reject_cross_site_writes(request: Request, call_next):  # type: ignore[no-untyped-def]

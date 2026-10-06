@@ -171,6 +171,9 @@ class Settings:
     proxy_shared_secret: str = ""
     proxy_secret_header: str = "X-Proxy-Secret"
     trusted_proxy_cidrs: list[str] = field(default_factory=list)
+    request_body_limit_bytes: int = 1_048_576
+    rate_limit_window_seconds: int = 60
+    rate_limit_max_requests: int = 240
     log_level: str = "info"
     port: int = 8000
 
@@ -323,6 +326,9 @@ class Settings:
             proxy_shared_secret=_str("PROXY_SHARED_SECRET"),
             proxy_secret_header=_str("PROXY_SECRET_HEADER", "X-Proxy-Secret"),
             trusted_proxy_cidrs=_csv("TRUSTED_PROXY_CIDR"),
+            request_body_limit_bytes=_int("REQUEST_BODY_LIMIT_BYTES", 1_048_576),
+            rate_limit_window_seconds=_int("RATE_LIMIT_WINDOW_SECONDS", 60),
+            rate_limit_max_requests=_int("RATE_LIMIT_MAX_REQUESTS", 240),
             log_level=_str("LOG_LEVEL", "info").lower(),
             port=_int("PORT", _int("API_PORT", 8000)),
             events_channel=_str("EVENTS_CHANNEL", "chai_events"),

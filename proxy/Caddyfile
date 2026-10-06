@@ -36,7 +36,11 @@
 	# nothing here needs it.
 	admin off
 
-	# Keep the server header generic.
+	# Trust X-Forwarded-For only from private ranges, so {remote_host} in the
+	# access log is the real peer rather than whatever a client claimed. This
+	# affects LOGGING only -- identity never comes from a forwarded header.
+	# (The Server header is removed in the site block below; this directive
+	# has nothing to do with it, despite what the old comment here said.)
 	servers {
 		trusted_proxies static private_ranges
 	}
@@ -54,12 +58,52 @@
 	encode zstd gzip
 
 	# -------------------------------------------------------------------------
+	# Security headers, at the SITE level so /api/* gets them too. They used to
+	# live in the static `handle` block only, which left every JSON response
+	# without so much as nosniff.
+	# -------------------------------------------------------------------------
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		X-Frame-Options "DENY"
+
+		# Caddy serves this over plain HTTP when a cloud front door terminates
+		# TLS, and HSTS on a plaintext response is ignored by browsers -- so
+		# this is harmless there and load-bearing when SITE_ADDRESS is a
+		# hostname and Caddy is the public edge. Add `preload` only once you
+		# are sure every subdomain can do HTTPS, because it is hard to undo.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+		# The dashboard is one file with everything inline and no third-party
+		# origins, so the policy can be this tight. 'unsafe-inline' is required
+		# because the script and style ARE inline; it is not a loosening of an
+		# otherwise-strict policy, it is the whole policy for a single-file app.
+		#
+		# What this buys: any future HTML-injection bug becomes a blocked
+		# request rather than an exfiltration channel, because connect-src and
+		# img-src cannot reach another origin.
+		Content-Security-Policy "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+
+		# Caddy announces itself otherwise. Nothing needs to know.
+		-Server
+	}
+
+	# -------------------------------------------------------------------------
 	# The API, and the identity handoff.
 	#
 	# `route` keeps these in the order written. That order is the security
 	# property: strip first, set second, reject third, forward last.
 	# -------------------------------------------------------------------------
 	handle /api/* {
+		# A project document is a governance record: kilobytes. Nothing
+		# legitimate posts megabytes, and without a cap an authenticated user
+		# can write until the volume fills -- and every such write is also
+		# copied permanently into project_version, where the append-only
+		# trigger prevents reclaiming the space.
+		request_body {
+			max_size 2MB
+		}
+
 		route {
 			# 1. STRIP. Unconditionally remove any copy the client sent. A
 			#    browser that sets X-Auth-Request-User by hand gets it deleted

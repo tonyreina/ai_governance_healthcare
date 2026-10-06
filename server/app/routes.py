@@ -30,7 +30,13 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, status
 from fastapi.responses import StreamingResponse
 
-from .access import can_read, guard_access_change, require
+from .access import (
+    access_of,
+    can_read,
+    guard_access_change,
+    guard_owner_only_fields,
+    require,
+)
 from .auth import Identity, identity_from_request
 from .config import Settings
 from .db import Database
@@ -41,8 +47,10 @@ from .events import (
     PROJECT_UPDATED,
     Event,
     EventBroker,
+    TooManyStreams,
 )
-from .merge import merged
+from .merge import MAX_DEPTH as MERGE_MAX_DEPTH
+from .merge import TooDeep, merged
 from .models import (
     HealthOut,
     LogEntryIn,
@@ -93,6 +101,23 @@ def get_identity(
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds")
+
+
+def _audience(doc: dict[str, Any], settings: Settings) -> frozenset[str] | None:
+    """Who may be told that this project changed.
+
+    ``None`` means everyone, which is correct in exactly two cases: identity
+    is disabled, so there is nobody to check a list against; or the project is
+    unclaimed, which access.py already treats as unrestricted. Otherwise it is
+    the union of the three role lists -- the same set ``can_read`` would admit.
+    """
+    if not settings.require_identity:
+        return None
+    access = access_of(doc)
+    everyone = access["owners"] + access["writers"] + access["readers"]
+    if not access["owners"]:
+        return None  # unclaimed: unrestricted, per access.py
+    return frozenset(everyone)
 
 
 # --- health and identity ----------------------------------------------------
@@ -188,7 +213,7 @@ async def create_project(
                 INSERT INTO projects (id, doc, created_by, updated_by)
                 VALUES ($1, $2, $3, $3)
                 ON CONFLICT (id) DO NOTHING
-                RETURNING id
+                RETURNING id, incarnation
                 """,
             project_id,
             doc,
@@ -199,8 +224,11 @@ async def create_project(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Project {project_id!r} already exists.",
             )
-        await _snapshot(conn, project_id, 1, doc, identity.id)
-        await broker.publish(Event(PROJECT_CREATED, project_id), conn)
+        await _snapshot(conn, project_id, row["incarnation"], 1, doc, identity.id)
+        await broker.publish(
+            Event(PROJECT_CREATED, project_id, audience=_audience(doc, settings)),
+            conn,
+        )
     log.info("project %s created by %s", project_id, identity.id)
     return ProjectOut.from_row(project_id, doc)
 
@@ -236,7 +264,8 @@ async def patch_project(
     patch = body.root
     async with db.acquire() as conn, conn.transaction():
         row = await conn.fetchrow(
-            "SELECT doc FROM projects WHERE id = $1 FOR UPDATE", project_id
+            "SELECT doc, incarnation FROM projects WHERE id = $1 FOR UPDATE",
+            project_id,
         )
         if row is None:
             raise HTTPException(
@@ -247,7 +276,11 @@ async def patch_project(
         enforced = settings.require_identity
         require(before, identity.id, "write", enforced=enforced)
         guard_access_change(before, patch, identity.id, enforced=enforced)
-        document = merged(before, patch)
+        guard_owner_only_fields(before, patch, identity.id, enforced=enforced)
+        try:
+            document = merged(before, patch)
+        except TooDeep as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
         rev = await conn.fetchval(
             """
                 UPDATE projects
@@ -259,8 +292,17 @@ async def patch_project(
             document,
             identity.id,
         )
-        await _snapshot(conn, project_id, rev, document, identity.id)
-        await broker.publish(Event(PROJECT_UPDATED, project_id), conn)
+        await _snapshot(
+            conn, project_id, row["incarnation"], rev, document, identity.id
+        )
+        await broker.publish(
+            Event(
+                PROJECT_UPDATED,
+                project_id,
+                audience=_audience(document, settings),
+            ),
+            conn,
+        )
     return ProjectOut.from_row(project_id, document)
 
 
@@ -300,7 +342,20 @@ async def delete_project(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No project {project_id!r}.",
             )
-        await broker.publish(Event(PROJECT_DELETED, project_id), conn)
+        # The audience comes from the document as it was BEFORE the delete:
+        # afterwards there is no access list to read, and defaulting to
+        # "everyone" at that point would announce the deletion of a record
+        # most subscribers were never allowed to know about.
+        await broker.publish(
+            Event(
+                PROJECT_DELETED,
+                project_id,
+                audience=_audience(current["doc"] or {}, settings)
+                if current is not None
+                else None,
+            ),
+            conn,
+        )
     log.info("project %s deleted by %s", project_id, identity.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -316,14 +371,23 @@ _HASH_SKIP = frozenset(
 )
 
 
-def _canonical(value: Any) -> Any:
-    """Deterministic shape: keys sorted at every depth, volatile keys dropped."""
+def _canonical(value: Any, _depth: int = 0) -> Any:
+    """Deterministic shape: keys sorted at every depth, volatile keys dropped.
+
+    Bounded for the same reason deep_merge is: this runs on every write, and
+    a RecursionError here would fail the snapshot of a document the caller
+    had already been told was accepted.
+    """
+    if _depth > MERGE_MAX_DEPTH:
+        raise TooDeep(f"document nests deeper than {MERGE_MAX_DEPTH} levels")
     if isinstance(value, dict):
         return {
-            k: _canonical(v) for k, v in sorted(value.items()) if k not in _HASH_SKIP
+            k: _canonical(v, _depth + 1)
+            for k, v in sorted(value.items())
+            if k not in _HASH_SKIP
         }
     if isinstance(value, list):
-        return [_canonical(v) for v in value]
+        return [_canonical(v, _depth + 1) for v in value]
     return value
 
 
@@ -342,7 +406,12 @@ def content_md5(doc: dict[str, Any]) -> str:
 
 
 async def _snapshot(
-    conn: Any, project_id: str, rev: int, doc: dict[str, Any], by: str | None
+    conn: Any,
+    project_id: str,
+    incarnation: Any,
+    rev: int,
+    doc: dict[str, Any],
+    by: str | None,
 ) -> None:
     """Record one immutable version. Caller supplies the open transaction.
 
@@ -352,14 +421,20 @@ async def _snapshot(
     could reach the API. See ``003_version_access.sql``.
     """
     access = doc.get("access") if isinstance(doc.get("access"), dict) else {}
+    # No ON CONFLICT. A conflict here means two snapshots claim the same
+    # (project, incarnation, revision), which cannot happen while the caller
+    # holds the row lock -- so if it does, something is wrong and the write
+    # should fail loudly. The previous DO NOTHING silently dropped the rev 1 of
+    # a project that reused a deleted id, leaving a history with a missing
+    # first revision and no indication of it.
     await conn.execute(
         """
         INSERT INTO project_version
-               (project_id, rev, doc, content_md5, changed_by, access)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (project_id, rev) DO NOTHING
+               (project_id, incarnation, rev, doc, content_md5, changed_by, access)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         """,
         project_id,
+        incarnation,
         rev,
         doc,
         content_md5(doc),
@@ -368,33 +443,42 @@ async def _snapshot(
     )
 
 
-async def _version_gate(conn: Any, project_id: str) -> dict[str, Any] | None:
-    """The document whose access list governs reads of this project's history.
+async def _version_gate(
+    conn: Any, project_id: str
+) -> tuple[dict[str, Any], Any] | None:
+    """Which history to read, and the access list that governs reading it.
 
-    The live project when there is one. Otherwise the access list recorded on
-    the most recent snapshot, so deleting a project does not turn its history
-    into a public record. ``None`` means there is no history at all, which the
-    caller turns into a 404.
+    Returns ``(doc_for_access_check, incarnation)``, or ``None`` when there is
+    no history at all -- which the caller turns into a 404.
 
-    Rows written before ``003_version_access.sql`` have a NULL access snapshot
-    and read as unclaimed, i.e. unrestricted -- which is the state they were
-    already in. Nothing becomes more open than it was.
+    The incarnation matters as much as the access list. Project ids are
+    caller-chosen and snapshots outlive their project, so one id can have two
+    unrelated histories: the deleted project's, and the one someone created
+    afterwards reusing the id. Reads are scoped to the LIVE project's
+    incarnation when there is one, and to the most recent incarnation
+    otherwise, so a reused id never shows two records merged into one.
+
+    Access comes from the live project where there is one, and otherwise from
+    the access list recorded on that incarnation's most recent snapshot -- so
+    deleting a project does not turn its history into a public record.
     """
-    live = await conn.fetchrow("SELECT doc FROM projects WHERE id = $1", project_id)
+    live = await conn.fetchrow(
+        "SELECT doc, incarnation FROM projects WHERE id = $1", project_id
+    )
     if live is not None:
-        return live["doc"] or {}
+        return (live["doc"] or {}), live["incarnation"]
     row = await conn.fetchrow(
         """
-        SELECT access FROM project_version
+        SELECT access, incarnation FROM project_version
          WHERE project_id = $1
-         ORDER BY rev DESC
+         ORDER BY changed_at DESC, rev DESC
          LIMIT 1
         """,
         project_id,
     )
     if row is None:
         return None
-    return {"access": row["access"] or {}}
+    return {"access": row["access"] or {}}, row["incarnation"]
 
 
 # --- version history --------------------------------------------------------
@@ -424,15 +508,17 @@ async def list_versions(
         gate = await _version_gate(conn, project_id)
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
-        require(gate, identity.id, "read", enforced=settings.require_identity)
+        doc, incarnation = gate
+        require(doc, identity.id, "read", enforced=settings.require_identity)
         rows = await conn.fetch(
             """
             SELECT rev, content_md5, changed_by, changed_at, purged_at, purged_by
               FROM project_version
-             WHERE project_id = $1
+             WHERE project_id = $1 AND incarnation = $2
              ORDER BY rev DESC
             """,
             project_id,
+            incarnation,
         )
     return [
         {
@@ -472,14 +558,16 @@ async def read_version(
         gate = await _version_gate(conn, project_id)
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
-        require(gate, identity.id, "read", enforced=settings.require_identity)
+        doc, incarnation = gate
+        require(doc, identity.id, "read", enforced=settings.require_identity)
         row = await conn.fetchrow(
             """
             SELECT rev, doc, content_md5, changed_by, changed_at, purged_at, purged_by
               FROM project_version
-             WHERE project_id = $1 AND rev = $2
+             WHERE project_id = $1 AND incarnation = $2 AND rev = $3
             """,
             project_id,
+            incarnation,
             rev,
         )
     if row is None:
@@ -533,18 +621,22 @@ async def purge_versions(
         gate = await _version_gate(conn, project_id)
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
-        require(gate, identity.id, "own", enforced=settings.require_identity)
+        doc, incarnation = gate
+        require(doc, identity.id, "own", enforced=settings.require_identity)
         purged = await conn.fetchval(
             """
             WITH redacted AS (
                 UPDATE project_version
-                   SET doc = '{}'::jsonb, purged_at = now(), purged_by = $2
-                 WHERE project_id = $1 AND purged_at IS NULL
+                   SET doc = '{}'::jsonb, purged_at = now(), purged_by = $3
+                 WHERE project_id = $1
+                   AND incarnation = $2
+                   AND purged_at IS NULL
              RETURNING 1
             )
             SELECT count(*) FROM redacted
             """,
             project_id,
+            incarnation,
             identity.id,
         )
     log.warning(
@@ -658,7 +750,16 @@ async def append_log(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No project {project_id!r}.",
             ) from exc
-        await broker.publish(Event(LOG_APPENDED, project_id), conn)
+        await broker.publish(
+            Event(
+                LOG_APPENDED,
+                project_id,
+                audience=_audience(
+                    (target["doc"] or {}) if target is not None else {}, settings
+                ),
+            ),
+            conn,
+        )
     return LogEntryOut(**entry)
 
 
@@ -670,7 +771,7 @@ async def events(
     request: Request,
     broker: EventBroker = Depends(get_broker),
     settings: Settings = Depends(get_settings),
-    _: Identity = Depends(get_identity),
+    identity: Identity = Depends(get_identity),
 ) -> StreamingResponse:
     """One ``text/event-stream`` event per change, for as long as you hold it.
 
@@ -678,13 +779,30 @@ async def events(
     ``NOTIFY``'s 8000-byte payload cap no matter how large a project grows. The
     client refetches what changed.
 
+    **Filtered per subscriber.** A stream only carries changes to projects its
+    holder can read. Without that, every authenticated user learned the id and
+    the change cadence of every project in the portfolio, including the ones
+    ``GET /api/projects`` correctly filtered out of their view.
+
     The comment heartbeat matters more than it looks: Cloud Run, an ALB and
     Azure Front Door all close an idle connection, and an SSE stream with
     nothing to say is indistinguishable from a dead one until a byte moves.
     """
 
+    # Registered BEFORE the StreamingResponse is built. FastAPI constructs the
+    # response eagerly and runs the generator afterwards, so refusing inside
+    # the generator would mean sending 200 and then an error body.
+    try:
+        subscriber = broker.attach(identity.id)
+    except TooManyStreams as exc:
+        log.warning("refused an event stream: %s", exc)
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many open event streams for this user. Close some tabs.",
+        ) from exc
+
     async def stream() -> AsyncIterator[str]:
-        async with broker.subscribe() as queue:
+        try:
             # Tell EventSource how long to wait before reconnecting, and send
             # one frame immediately so proxies that buffer until first byte
             # release the response headers.
@@ -695,12 +813,15 @@ async def events(
                     return
                 try:
                     event = await asyncio.wait_for(
-                        queue.get(), timeout=settings.sse_keepalive_seconds
+                        subscriber.queue.get(),
+                        timeout=settings.sse_keepalive_seconds,
                     )
                 except TimeoutError:
                     yield ": ping\n\n"
                     continue
                 yield event.sse()
+        finally:
+            broker.detach(subscriber)
 
     return StreamingResponse(
         stream(),

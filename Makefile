@@ -19,7 +19,7 @@ POSTGRES_DB   ?= chai
 HTTP_PORT     ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help env preflight up dev down logs ps config build-app shell psql backup restore prune check-isolation
+.PHONY: help env preflight up dev down logs ps config build-app shell psql backup backup-plaintext restore prune check-isolation
 
 help:  ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -74,16 +74,54 @@ shell:  ## Shell in the API container
 psql:  ## Interactive psql inside the database container
 	$(COMPOSE) exec $(DB_SERVICE) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
 
-backup:  ## pg_dump to backups/<timestamp>.sql.gz
-	@mkdir -p $(BACKUP_DIR)
+# Encrypted, because the dump is every governance record, every audit entry
+# and every retained version in one file. BACKUP_PASSPHRASE is required: a
+# plaintext dump sitting in the working directory is 164.310(d)(2)(i) waiting
+# to happen, and making encryption opt-in means it is off.
+#
+# Uses gpg --symmetric, which is present on far more machines than age. Set
+# BACKUP_RETAIN to prune older dumps (default: keep everything).
+backup:  ## Encrypted pg_dump to backups/<timestamp>.sql.gz.gpg
+	@test -n "$(BACKUP_PASSPHRASE)" || { \
+	  echo "BACKUP_PASSPHRASE is not set."; \
+	  echo; \
+	  echo "  The dump contains every record, audit entry and retained"; \
+	  echo "  version. Writing it in the clear is not a backup policy."; \
+	  echo; \
+	  echo "  Generate one and keep it somewhere other than this machine:"; \
+	  echo "    export BACKUP_PASSPHRASE=\"\$$(openssl rand -base64 32)\""; \
+	  echo; \
+	  echo "  make backup-plaintext PLAINTEXT=1   # dev databases only"; \
+	  exit 1; }
+	@mkdir -p $(BACKUP_DIR) && chmod 700 $(BACKUP_DIR)
+	@OUT=$(BACKUP_DIR)/$$(date -u +%Y%m%dT%H%M%SZ).sql.gz.gpg; \
+	 $(COMPOSE) exec -T $(DB_SERVICE) pg_dump -U $(POSTGRES_USER) -d $(POSTGRES_DB) --clean --if-exists \
+	   | gzip \
+	   | gpg --batch --symmetric --cipher-algo AES256 \
+	         --passphrase "$(BACKUP_PASSPHRASE)" --output "$$OUT"; \
+	 chmod 600 "$$OUT"; ls -lh "$$OUT"
+	@if [ -n "$(BACKUP_RETAIN)" ]; then \
+	  ls -1t $(BACKUP_DIR)/*.sql.gz.gpg 2>/dev/null | tail -n +$$(($(BACKUP_RETAIN)+1)) \
+	    | xargs -r rm -v; \
+	fi
+	@echo "Dumped through the running server. Do NOT back this up by copying the volume's files -- a live cluster gives you a torn snapshot."
+	@echo "Keep the passphrase somewhere other than this machine. Without it this file is unrecoverable."
+
+backup-plaintext:  ## UNENCRYPTED pg_dump. Throwaway databases only.
+	@test -n "$(PLAINTEXT)" || { echo "refusing: pass PLAINTEXT=1 to confirm"; exit 1; }
+	@mkdir -p $(BACKUP_DIR) && chmod 700 $(BACKUP_DIR)
 	$(COMPOSE) exec -T $(DB_SERVICE) pg_dump -U $(POSTGRES_USER) -d $(POSTGRES_DB) --clean --if-exists \
 	  | gzip > $(BACKUP_DIR)/$$(date -u +%Y%m%dT%H%M%SZ).sql.gz
-	@ls -lh $(BACKUP_DIR) | tail -1
-	@echo "Dumped through the running server. Do NOT back this up by copying the volume's files -- a live cluster gives you a torn snapshot."
+	@echo "UNENCRYPTED dump written. Do not do this with real records."
 
-restore:  ## Restore a dump: make restore FILE=backups/....sql.gz  (DESTRUCTIVE)
-	@test -n "$(FILE)" || { echo "usage: make restore FILE=backups/<file>.sql.gz"; exit 1; }
-	gunzip -c $(FILE) | $(COMPOSE) exec -T $(DB_SERVICE) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+# Handles both shapes, so an older plaintext dump still restores.
+restore:  ## Restore a dump: make restore FILE=backups/....sql.gz.gpg  (DESTRUCTIVE)
+	@test -n "$(FILE)" || { echo "usage: make restore FILE=backups/<file>.sql.gz.gpg"; exit 1; }
+	@case "$(FILE)" in \
+	  *.gpg) test -n "$(BACKUP_PASSPHRASE)" || { echo "BACKUP_PASSPHRASE is needed to read $(FILE)"; exit 1; }; \
+	         gpg --batch --quiet --decrypt --passphrase "$(BACKUP_PASSPHRASE)" "$(FILE)" ;; \
+	  *)     cat "$(FILE)" ;; \
+	esac | gunzip -c | $(COMPOSE) exec -T $(DB_SERVICE) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
 
 check-isolation:  ## Prove the API is not reachable except through the proxy
 	@echo "1. no published port on api or db:"

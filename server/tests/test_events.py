@@ -18,6 +18,7 @@ import json
 import socket
 from collections.abc import AsyncIterator
 
+import asyncpg
 import pytest
 import uvicorn
 from app.config import Settings
@@ -25,7 +26,7 @@ from app.events import Event
 from app.main import create_app
 from httpx import AsyncClient
 
-from .conftest import TEST_HEADERS, requires_db
+from .conftest import TEST_EMAIL, TEST_HEADERS, requires_db
 
 pytestmark = [requires_db, pytest.mark.db]
 
@@ -191,3 +192,160 @@ def test_sse_framing_is_well_formed() -> None:
         "at": "2026-10-05T12:00:00.000+00:00",
     }
     assert name == "event: project.updated"
+
+
+async def watch_events(
+    url: str, email: str, *, window: float = 2.5
+) -> list[tuple[str, dict]]:
+    """Hold a stream open for `window` seconds and return every frame seen.
+
+    Unlike read_events() this does not wait for a particular event, because
+    the interesting assertion here is usually that NOTHING arrived.
+
+    The loop ends on its own deadline rather than being canceled from the
+    outside by wait_for(). Canceling mid-iteration leaves the connection open
+    as far as uvicorn is concerned, and the server fixture's graceful shutdown
+    then waits on it until the whole test session times out -- which is also
+    why read_events() above returns from inside its loop rather than being
+    canceled.
+
+    The 1s keepalive in the test settings is what makes the deadline prompt: a
+    stream with nothing to say still delivers a `: ping` comment line.
+    """
+    seen: list[tuple[str, dict]] = []
+    deadline = asyncio.get_running_loop().time() + window
+
+    async with AsyncClient(base_url=url, headers={"X-Forwarded-Email": email}) as http:
+        async with http.stream("GET", "/api/events") as response:
+            assert response.status_code == 200
+            name = ""
+            async for line in response.aiter_lines():
+                if line.startswith("event:"):
+                    name = line.split(":", 1)[1].strip()
+                elif line.startswith("data:"):
+                    seen.append((name, json.loads(line.split(":", 1)[1])))
+                if asyncio.get_running_loop().time() >= deadline:
+                    break
+    return seen
+
+
+class TestStreamsAreFiltered:
+    """A stream must only carry ids its holder is allowed to know changed.
+
+    Before this, every authenticated user received project.created/.updated/
+    .deleted/log.appended for every project in the portfolio, including ones
+    GET /api/projects correctly filtered out of their view -- so the id and
+    the change cadence of a restricted record leaked to anyone with an
+    account.
+    """
+
+    async def test_a_stranger_does_not_see_a_restricted_project_change(
+        self, base_url: str
+    ) -> None:
+        async with AsyncClient(base_url=base_url, headers=TEST_HEADERS) as http:
+            await http.post(
+                "/api/projects/pef1",
+                json={
+                    "meta": {"solution": "Restricted"},
+                    "access": {
+                        "owners": [TEST_EMAIL],
+                        "writers": [],
+                        "readers": [],
+                    },
+                },
+            )
+            watcher = asyncio.create_task(watch_events(base_url, "stranger@elsewhere"))
+            await asyncio.sleep(0.5)
+            await http.patch("/api/projects/pef1", json={"meta": {"org": "Secret"}})
+            await http.post("/api/projects/pef1/log", json={"text": "signed off"})
+            seen = await watcher
+
+        names = [name for name, _ in seen]
+        assert names == ["hello"], f"stranger saw {names}"
+
+    async def test_a_reader_does_see_it(self, base_url: str) -> None:
+        async with AsyncClient(base_url=base_url, headers=TEST_HEADERS) as http:
+            await http.post(
+                "/api/projects/pef2",
+                json={
+                    "meta": {"solution": "Shared"},
+                    "access": {
+                        "owners": [TEST_EMAIL],
+                        "writers": [],
+                        "readers": ["reader@x"],
+                    },
+                },
+            )
+            watcher = asyncio.create_task(watch_events(base_url, "reader@x"))
+            await asyncio.sleep(0.5)
+            await http.patch("/api/projects/pef2", json={"meta": {"org": "Visible"}})
+            seen = await watcher
+
+        names = [name for name, _ in seen]
+        assert "project.updated" in names, names
+        assert any(
+            payload.get("id") == "pef2" for name, payload in seen if name != "hello"
+        )
+
+    async def test_an_unclaimed_project_is_visible_to_everyone(
+        self, base_url: str, settings: Settings
+    ) -> None:
+        """Unclaimed means unrestricted, exactly as access.py has it.
+
+        The row is inserted directly rather than created and then stripped of
+        its owner: guard_access_change correctly refuses to remove the last
+        owner, so there is no way to reach this state through the API. It is
+        the state of every project created before access control existed.
+        """
+        conn = await asyncpg.connect(settings.database_url)
+        try:
+            await conn.set_type_codec(
+                "jsonb",
+                encoder=json.dumps,
+                decoder=json.loads,
+                schema="pg_catalog",
+            )
+            await conn.execute(
+                "INSERT INTO projects (id, doc) VALUES ('pef3', $1) "
+                "ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc",
+                {"meta": {"solution": "Legacy"}},
+            )
+        finally:
+            await conn.close()
+
+        async with AsyncClient(base_url=base_url, headers=TEST_HEADERS) as http:
+            watcher = asyncio.create_task(watch_events(base_url, "anyone@elsewhere"))
+            await asyncio.sleep(0.5)
+            assert (
+                await http.patch("/api/projects/pef3", json={"meta": {"org": "X"}})
+            ).status_code == 200
+            seen = await watcher
+
+        assert "project.updated" in [name for name, _ in seen]
+
+
+class TestAudienceNeverLeaves:
+    def test_the_audience_never_reaches_a_client(self) -> None:
+        """to_json() is the SSE frame; to_notify() is the internal payload."""
+        event = Event("project.updated", "p1", "2026-01-01", frozenset({"a@b"}))
+        assert "a@b" not in event.to_json()
+        assert "a@b" not in event.sse()
+        assert "a@b" in event.to_notify(), "other replicas still need it"
+
+    def test_an_audience_survives_a_round_trip_through_notify(self) -> None:
+        event = Event("project.updated", "p1", "2026-01-01", frozenset({"a@b"}))
+        assert Event.from_json(event.to_notify()).audience == frozenset({"a@b"})
+
+    def test_with_time_keeps_the_audience(self) -> None:
+        event = Event("project.updated", "p1", audience=frozenset({"a@b"}))
+        assert event.with_time().audience == frozenset({"a@b"})
+
+    def test_visibility(self) -> None:
+        unrestricted = Event("project.updated", "p1")
+        assert unrestricted.visible_to(None)
+        assert unrestricted.visible_to("anyone@x")
+
+        restricted = Event("project.updated", "p1", audience=frozenset({"a@b"}))
+        assert restricted.visible_to("a@b")
+        assert not restricted.visible_to("c@d")
+        assert not restricted.visible_to(None)

@@ -18,6 +18,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 import asyncpg
 
@@ -51,6 +52,75 @@ def normalize_dsn(dsn: str) -> str:
     return dsn
 
 
+# sslmode values that permit an unencrypted connection. asyncpg's default is
+# "prefer", which tries TLS and SILENTLY ACCEPTS cleartext if the server does
+# not offer it -- the failure mode being that nothing looks wrong.
+_WEAK_SSLMODES = {"disable", "allow", "prefer"}
+
+
+def _dsn_is_internal(dsn: str) -> bool:
+    """Is this DSN reached over a path that does not cross a network?
+
+    Three shapes count:
+
+    * a unix socket -- Cloud SQL's ``?host=/cloudsql/...``;
+    * loopback;
+    * a single-label hostname, i.e. one with no dots. ``@db:5432`` is the
+      compose service name and resolves only on the internal bridge;
+      ``@postgres`` is the same thing on Kubernetes.
+
+    The last one is a judgment call, and it is deliberate. Warning about the
+    default local stack on every boot would train operators to ignore the
+    warning, and the warning exists for the moment somebody edits that DSN to
+    point at a managed instance -- which always has a fully qualified name.
+    A warning nobody reads protects nothing.
+    """
+    parsed = urlsplit(dsn)
+    query = parse_qs(parsed.query)
+    socket_host = (query.get("host") or [""])[0]
+    if socket_host.startswith("/"):
+        return True
+    host = parsed.hostname or ""
+    if host in {"", "localhost", "127.0.0.1", "::1"}:
+        return True
+    return "." not in host and ":" not in host
+
+
+def check_dsn_encryption(dsn: str) -> str | None:
+    """Return a warning when this DSN may carry PHI in cleartext.
+
+    Transmission security is addressable under 45 CFR 164.312(e)(1), and the
+    thing that makes it easy to get wrong here is that the compose DSN -- which
+    is fine on an ``internal: true`` bridge -- is also the template an operator
+    edits when moving to Cloud SQL, RDS or Azure Database for PostgreSQL. At
+    that point the same string crosses a network and ``prefer`` quietly accepts
+    an unencrypted connection.
+    """
+    if _dsn_is_internal(dsn):
+        return None
+    sslmode = (parse_qs(urlsplit(dsn).query).get("sslmode") or [""])[0].lower()
+    if not sslmode:
+        return (
+            "DATABASE_URL has no sslmode and points at a remote host. asyncpg "
+            "defaults to 'prefer', which accepts an UNENCRYPTED connection if "
+            "the server does not offer TLS. Add ?sslmode=verify-full with a CA "
+            "bundle, or at minimum ?sslmode=require."
+        )
+    if sslmode in _WEAK_SSLMODES:
+        return (
+            f"DATABASE_URL has sslmode={sslmode}, which permits an UNENCRYPTED "
+            "connection to a remote host. Use verify-full (preferred) or "
+            "require."
+        )
+    if sslmode == "require":
+        return (
+            "DATABASE_URL has sslmode=require, which encrypts but does NOT "
+            "verify the server's certificate, so it does not protect against "
+            "an active attacker. Prefer verify-full with a CA bundle."
+        )
+    return None
+
+
 async def _init_connection(conn: asyncpg.Connection) -> None:
     """Make ``jsonb`` and ``json`` columns arrive as Python objects."""
     for type_name in ("jsonb", "json"):
@@ -80,6 +150,9 @@ class Database:
                 "container."
             )
         self.dsn = normalize_dsn(dsn)
+        warning = check_dsn_encryption(self.dsn)
+        if warning:
+            log.warning("%s", warning)
         self._min_size = min_size
         self._max_size = max_size
         self._connect_timeout = connect_timeout

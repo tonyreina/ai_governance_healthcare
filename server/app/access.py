@@ -7,7 +7,7 @@ in step: a permission added there and not here is a label, not a rule.
 
 The model, in one line each:
 
-* **owner**  -- delete, archive, and change who else has access
+* **owner**  -- delete, archive, purge history, and change who else has access
 * **writer** -- fill in the review
 * **reader** -- see it, change nothing
 
@@ -116,6 +116,42 @@ def require(
             status.HTTP_403_FORBIDDEN,
             f"You have {held} access to this project; this needs {need}.",
         )
+
+
+# Fields inside the project document that only an owner may change, even
+# though a writer may change everything else in it.
+#
+# These exist because the browser enforces them -- 15-access.js gates archive
+# on canOwn() -- and a rule enforced only in the browser is a label. The server
+# saw `{"archived": true}` as an ordinary field in a deep-merge patch and let
+# any writer set it.
+OWNER_ONLY_FIELDS = ("archived",)
+
+
+def guard_owner_only_fields(
+    before: dict[str, Any],
+    patch: dict[str, Any],
+    user_id: str | None,
+    *,
+    enforced: bool = True,
+) -> None:
+    """Refuse a writer's attempt to change an owner-only field.
+
+    Only fires when the patch would actually CHANGE the value. A no-op patch
+    -- the browser re-sending `archived: false` alongside an unrelated edit --
+    is not an attempt to archive anything, and failing it would turn an
+    ordinary save into a 403.
+    """
+    for field in OWNER_ONLY_FIELDS:
+        if field not in patch:
+            continue
+        if patch[field] == before.get(field):
+            continue
+        if not can_own(before, user_id, enforced=enforced):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                f"Only an owner can change {field!r} on this project.",
+            )
 
 
 def guard_access_change(

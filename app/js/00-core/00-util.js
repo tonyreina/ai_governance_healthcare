@@ -15,4 +15,5 @@ function daysBetween(a,b){ return Math.round((b-a)/86400000); }
 function fmtDay(s){ const d=parseDay(s); return d? d.toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}) : ""; }
 function ago(iso){ if(!iso) return ""; const d=new Date(iso); if(isNaN(d)) return ""; const m=Math.round((Date.now()-d)/60000);
   if(m<1) return "just now"; if(m<60) return `${m} min ago`; const h=Math.round(m/60); if(h<24) return `${h} h ago`; const dd=Math.round(h/24); if(dd<45) return `${dd} days ago`; return fmtDay(iso.slice(0,10)); }
-const newId = ()=> "p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+let _idSeq = 0;
+const newId = ()=> "p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7)+(_idSeq++).toString(36);

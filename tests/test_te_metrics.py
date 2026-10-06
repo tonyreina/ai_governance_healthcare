@@ -94,10 +94,15 @@ def main() -> int:
         # The picker sits inside a collapsed <details> so stage 4 is not
         # dominated by it. Open it the way a user would.
         summary = page.locator("summary", has_text="Suggested metrics from CHAI")
-        check("picker starts collapsed", not page.locator("[data-te-use]").is_visible())
-        summary.click()
-        page.wait_for_timeout(300)
-        check("picker opens on click", page.locator("[data-te-use]").is_visible())
+        preselected = page.evaluate("!!(S.meta && S.meta.chaiUseCase)")
+        check(
+            "picker open iff a use case is already chosen",
+            page.locator("[data-te-use]").is_visible() == preselected,
+        )
+        if not page.locator("[data-te-use]").is_visible():
+            summary.click()
+            page.wait_for_timeout(300)
+        check("picker is reachable", page.locator("[data-te-use]").is_visible())
 
         slug = "prior-authorization-ai-supported-criteria-matching"
         page.select_option("[data-te-use]", slug)

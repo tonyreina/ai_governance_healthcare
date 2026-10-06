@@ -78,7 +78,11 @@ function updateDashboard(){
       <div><span class="pct">${r.score}%</span></div>
       <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">overdue</div>`:""}`:`<span class="small">${phase(p).key==="deployed"?"not set":"not live"}</span>`}</div>
       <div><span class="st ${r.st.key}">${esc(r.st.label)}</span>
-        ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(f.text)}</li>`).join("")}${r.f.length>3?`<li>and ${r.f.length-3} more</li>`:""}</ul>`:""}</div>
+        ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(f.text)}</li>`).join("")}${r.f.length>3?`<li>and ${r.f.length-3} more</li>`:""}</ul>`:""}
+        <button class="icon-btn ro-hide parchive" data-archive="${esc(p.id)}"
+          aria-label="${p.archived?"Restore":"Archive"} ${esc(p.meta.solution||"this project")}"
+          title="${p.archived?"Restore to the active portfolio":"Archive: keeps the record, removes it from the active portfolio"}"
+          >${p.archived?"Restore":"Archive"}</button></div>
     </li>`;}).join("")}</ul>`;
   resolveNames(host);
 }
@@ -93,6 +97,11 @@ function openProject(id,view){
   const p=PROJECTS.get(id); if(!p) return;
   if(unsubLog){ unsubLog(); unsubLog=null; }
   CUR=id; S=normalize(clone(p)); LOG=[]; openItems.clear();
+  // Read-only is a property of this project and this user, not of the
+  // workspace: the same person may own one review and only read another.
+  RO = WORKSPACE_RO || !canWrite(S);
+  document.body.classList.toggle("ro", RO);
+  CAN_DELETE = !WORKSPACE_RO && canOwn(S);
   UI.view=view||"setup"; saveUI();
   unsubLog=STORE.subscribeLog(id,l=>{ LOG=l||[]; if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
   renderProject(true);

@@ -225,8 +225,12 @@ aside.panel{position:sticky;top:calc(env(safe-area-inset-top,0px) + 58px);align-
   .bar .track{grid-column:1/-1;order:3}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.parchive{margin-top:6px;font-size:12px;opacity:.6}
+.parchive:hover{color:var(--ink);background:var(--sunk)}
+.prow:hover .parchive,.parchive:focus-visible{opacity:1}
+
 @media print{
-  .top,nav.rail,aside.panel,.r-actions,.pager,.fallback{display:none!important}
+  .top,nav.rail,aside.panel,.r-actions,.pager,.fallback,.parchive{display:none!important}
   .shell{display:block}
   main{padding:0}
 }
@@ -314,6 +318,15 @@ body.ro .ro-hide{display:none!important}
   .prow > :nth-child(1){grid-column:1/-1}
   .prow > :nth-child(5){grid-column:1/-1}
 }
+
+/* ---------- modal ---------- */
+.modal-backdrop{position:fixed;inset:0;background:rgba(19,35,58,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.modal{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:20px 22px;max-width:480px;width:100%;box-shadow:0 18px 50px rgba(19,35,58,.25)}
+.modal p{font-size:14px;line-height:1.5}
+.modal label{display:block;font-size:13px;font-weight:600;margin-top:12px}
+.modal input{width:100%;margin-top:6px;padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font:inherit;background:var(--paper);color:var(--ink)}
+.modal .btn.danger[disabled]{opacity:.45;cursor:not-allowed}
+@media print{.modal-backdrop{display:none!important}}
 </style>
 </head>
 <body class="home">
@@ -353,7 +366,8 @@ function daysBetween(a,b){ return Math.round((b-a)/86400000); }
 function fmtDay(s){ const d=parseDay(s); return d? d.toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}) : ""; }
 function ago(iso){ if(!iso) return ""; const d=new Date(iso); if(isNaN(d)) return ""; const m=Math.round((Date.now()-d)/60000);
   if(m<1) return "just now"; if(m<60) return `${m} min ago`; const h=Math.round(m/60); if(h<24) return `${h} h ago`; const dd=Math.round(h/24); if(dd<45) return `${dd} days ago`; return fmtDay(iso.slice(0,10)); }
-const newId = ()=> "p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+let _idSeq = 0;
+const newId = ()=> "p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7)+(_idSeq++).toString(36);
 
 /* ============================================================
    Core: the project document
@@ -364,11 +378,13 @@ const blankMeta = ()=>({solution:"",org:"",developer:"",sourcing:"",sponsor:"",r
 function blankProject(name){
   const now=new Date().toISOString();
   return {meta:{...blankMeta(),solution:name||""}, ...frameworkBlank(), metrics:[], card:{},
+    access: ME.id ? {owners:[ME.id], writers:[], readers:[]} : blankAccess(),
     archived:false, createdAt:now, createdBy:ME.id||null, updatedAt:now, updatedBy:ME.id||null, cardUpdatedAt:null};
 }
 function normalize(p){
   p.meta=Object.assign(blankMeta(),p.meta||{});
   p.metrics=Array.isArray(p.metrics)?p.metrics:[]; p.card=p.card||{};
+  p.access=Object.assign(blankAccess(), p.access||{});
   frameworkNormalize(p); return p;
 }
 const cardValOf = (p,k) => ((p.card||{})[k]||"").trim() || (k==="name"?(p.meta.solution||"").trim():"") || (k==="developer"?(p.meta.developer||"").trim():"");
@@ -382,6 +398,120 @@ function scoreOf(list, items){
   items=items||S.items; let sum=0,n=0,answered=0;
   list.forEach(it=>{ const st=(items[it.id]||{}).status; if(st) answered++; if(st==="na") return; n++; sum+=VAL[st]||0; });
   return {pct:n?Math.round(sum/n*100):0,answered,total:list.length,applicable:n};
+}
+
+/* ============================================================
+   Access control
+   Three roles, held per project:
+
+     owner   everything, including deleting, archiving, and
+             changing who else has access
+     writer  fill in the checklist, metrics, model card and
+             checkpoint decisions
+     reader  see the record, change nothing
+
+   WHAT THIS IS AND IS NOT. Everything in this file is user
+   interface. A browser decides what to SHOW; it cannot decide what
+   a server will ACCEPT, because the person using it can edit it.
+   Real enforcement lives in server/app/access.py, which checks the
+   same rules against an identity the proxy supplies and the browser
+   cannot choose. If you add a permission here, add it there too, or
+   you have added a label rather than a control.
+
+   IDENTITY IS A PRECONDITION. Roles mean nothing without a
+   trustworthy answer to "who is this", and the browser-only mode has
+   none: localStorage has no users. In that mode the roles are
+   recorded but not enforced, and the tool says so rather than
+   implying a protection it cannot provide.
+
+   LEGACY PROJECTS STAY OPEN. A project created before this existed
+   has no access list. Treating that as "nobody has access" would
+   lock a team out of its own governance records, so an empty owner
+   list means unrestricted, exactly as before, until somebody claims
+   ownership.
+   ============================================================ */
+const ROLES = ["owner", "writer", "reader"];
+const ROLE_LABEL = { owner: "Owner", writer: "Write access", reader: "Read-only" };
+
+const blankAccess = () => ({ owners: [], writers: [], readers: [] });
+
+function accessOf(p) {
+  const a = (p || {}).access || {};
+  return {
+    owners: Array.isArray(a.owners) ? a.owners : [],
+    writers: Array.isArray(a.writers) ? a.writers : [],
+    readers: Array.isArray(a.readers) ? a.readers : [],
+  };
+}
+
+/* A project nobody has claimed. Open to all, and the state every
+   project created before this feature is in. */
+const unclaimed = p => accessOf(p).owners.length === 0;
+
+/* Whether roles can mean anything here at all. Without an identity
+   there is nobody to check a list against. */
+const identityKnown = () => !!ME.id;
+
+/* The current user's role, or "" for no access. Order matters:
+   the most powerful role a user holds is the one that applies. */
+function roleOf(p, who) {
+  const id = who || ME.id;
+  const a = accessOf(p);
+  if (!id) return unclaimed(p) ? "owner" : "";
+  if (a.owners.includes(id)) return "owner";
+  if (a.writers.includes(id)) return "writer";
+  if (a.readers.includes(id)) return "reader";
+  return "";
+}
+
+/* Permission predicates. Each takes the project, defaulting to the
+   open one. An unclaimed project grants everyone owner rights, which
+   is what keeps existing records usable and lets someone claim them. */
+function canRead(p) {
+  const proj = p || S;
+  if (!proj) return false;
+  if (!identityKnown() || unclaimed(proj)) return true;
+  return !!roleOf(proj);
+}
+
+function canWrite(p) {
+  const proj = p || S;
+  if (!proj) return false;
+  if (!identityKnown() || unclaimed(proj)) return true;
+  return ["owner", "writer"].includes(roleOf(proj));
+}
+
+/* Deleting, archiving and granting access are owner-only, as is
+   anything else that changes who can do what. */
+function canOwn(p) {
+  const proj = p || S;
+  if (!proj) return false;
+  if (!identityKnown() || unclaimed(proj)) return true;
+  return roleOf(proj) === "owner";
+}
+
+/* Grant or revoke. Returns a patch rather than applying one, so the
+   caller decides how it reaches the store. A person holds at most
+   one role: granting a new one removes the others. */
+function accessPatch(p, id, role) {
+  const a = accessOf(p);
+  const next = {
+    owners: a.owners.filter(x => x !== id),
+    writers: a.writers.filter(x => x !== id),
+    readers: a.readers.filter(x => x !== id),
+  };
+  if (role === "owner") next.owners.push(id);
+  else if (role === "writer") next.writers.push(id);
+  else if (role === "reader") next.readers.push(id);
+  return next;
+}
+
+/* Refuse to remove the last owner. A project with no owner reverts to
+   unrestricted, which would silently turn a locked-down record into an
+   open one -- a privilege escalation dressed up as a tidy-up. */
+function wouldOrphan(p, id, role) {
+  const a = accessOf(p);
+  return a.owners.length === 1 && a.owners[0] === id && role !== "owner";
 }
 
 /* ============================================================
@@ -507,6 +637,9 @@ async function detectApi(base){
    App state
    ============================================================ */
 let STORE=null, MODE="connecting", RO=false, CAN_DELETE=true, USER=null;
+// Set when the whole workspace is view-only (an artifact shared read-only).
+// Outranks any per-project role: it is a property of how you got here.
+let WORKSPACE_RO=false;
 const ME={id:null};
 let PROJECTS=new Map(), LOADED=false;
 let CUR=null;              // open project id
@@ -740,11 +873,14 @@ function renderSetup(){
 
   <h2>History</h2>
   ${historyHTML()}
-  <h2 class="ro-hide">Manage</h2>
-  <div class="ro-hide" style="display:flex;flex-wrap:wrap;gap:8px">
-    ${empty?`<button class="btn" data-act="example">Fill with an example</button>`:""}
-    <button class="btn" data-act="archive">${S.archived?"Restore project":"Archive project"}</button>
-    ${CAN_DELETE?`<button class="btn danger" data-act="delete">Delete project</button>`:""}
+  ${accessHTML()}
+
+  <h2>Manage</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    ${empty&&!RO?`<button class="btn" data-act="example">Fill with an example</button>`:""}
+    ${canOwn(S)?`<button class="btn" data-act="archive">${S.archived?"Restore project":"Archive project"}</button>
+    <button class="btn danger" data-act="delete">Delete project</button>`
+    :`<p style="font-size:13px;color:var(--muted);margin:0">Archiving and deleting are owner-only. ${esc(roleNote())}</p>`}
   </div>
   ${pager()}`;
 }
@@ -757,6 +893,53 @@ registerFramework({
   views: () => [{ id: "setup", kind: "setup", label: "Project setup", num: 0, sep: "after" }],
   render: () => renderSetup(),
 });
+
+
+/* Who holds what on this project. Owner-only to change, because
+   granting access is itself a privilege. */
+function accessHTML(){
+  const a=accessOf(S), mine=roleOf(S), owner=canOwn(S);
+  const rows=ROLES.flatMap(role=>a[role+"s"].map(id=>({id,role})));
+
+  if(!identityKnown()){
+    return `<h2>Access</h2>
+    <div class="note"><p><b>Roles are not enforced in this view.</b> This browser
+    has no signed-in user, so there is nobody to check a permission against.
+    Anyone who can open this page can change anything in it. Run the tool with a
+    backend, or publish it as a shared artifact, for access control to mean
+    anything.</p></div>`;
+  }
+
+  const list = rows.length
+    ? `<table class="tbl"><thead><tr><th>Person</th><th>Role</th>${owner?"<th><span class=\"vh\">Change</span></th>":""}</tr></thead><tbody>
+       ${rows.map(r=>`<tr>
+         <td>${who(r.id)}${r.id===ME.id?" <span class=\"small\">(you)</span>":""}</td>
+         <td>${owner?`<select data-role-for="${esc(r.id)}">${ROLES.map(x=>`<option value="${x}"${x===r.role?" selected":""}>${esc(ROLE_LABEL[x])}</option>`).join("")}</select>`:esc(ROLE_LABEL[r.role])}</td>
+         ${owner?`<td><button class="icon-btn" data-revoke="${esc(r.id)}" aria-label="Remove access">Remove</button></td>`:""}
+       </tr>`).join("")}</tbody></table>`
+    : `<p style="font-size:13px;color:var(--muted)">No access list recorded, so this
+       project is open to everyone in the workspace. Claim it to restrict who can
+       change it.</p>`;
+
+  return `<h2>Access</h2>
+  <p style="font-size:13px;color:var(--muted)">Owners can delete, archive and change
+  access. Writers can fill in the review. Readers can see it and change nothing.
+  You are ${esc(mine?ROLE_LABEL[mine].toLowerCase():"not listed")} on this project.</p>
+  ${list}
+  ${owner?`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:10px">
+    <div class="field" style="margin:0"><label for="grantWho">Add someone</label>
+      <input type="text" id="grantWho" placeholder="Their user id" data-grant-id></div>
+    <div class="field" style="margin:0"><label for="grantRole">Role</label>
+      <select id="grantRole" data-grant-role>${ROLES.map(x=>`<option value="${x}">${esc(ROLE_LABEL[x])}</option>`).join("")}</select></div>
+    <button class="btn" data-act="grant">Grant access</button>
+  </div>`:""}
+  ${unclaimed(S)&&identityKnown()?`<button class="btn primary" data-act="claim" style="margin-top:10px">Claim ownership</button>`:""}`;
+}
+
+const roleNote = () => {
+  const r = roleOf(S);
+  return r ? `You have ${ROLE_LABEL[r].toLowerCase()}.` : "You are not listed on this project.";
+};
 
 /* ============================================================
    Content model
@@ -1631,7 +1814,11 @@ function updateDashboard(){
       <div><span class="pct">${r.score}%</span></div>
       <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">overdue</div>`:""}`:`<span class="small">${phase(p).key==="deployed"?"not set":"not live"}</span>`}</div>
       <div><span class="st ${r.st.key}">${esc(r.st.label)}</span>
-        ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(f.text)}</li>`).join("")}${r.f.length>3?`<li>and ${r.f.length-3} more</li>`:""}</ul>`:""}</div>
+        ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(f.text)}</li>`).join("")}${r.f.length>3?`<li>and ${r.f.length-3} more</li>`:""}</ul>`:""}
+        <button class="icon-btn ro-hide parchive" data-archive="${esc(p.id)}"
+          aria-label="${p.archived?"Restore":"Archive"} ${esc(p.meta.solution||"this project")}"
+          title="${p.archived?"Restore to the active portfolio":"Archive: keeps the record, removes it from the active portfolio"}"
+          >${p.archived?"Restore":"Archive"}</button></div>
     </li>`;}).join("")}</ul>`;
   resolveNames(host);
 }
@@ -1646,6 +1833,11 @@ function openProject(id,view){
   const p=PROJECTS.get(id); if(!p) return;
   if(unsubLog){ unsubLog(); unsubLog=null; }
   CUR=id; S=normalize(clone(p)); LOG=[]; openItems.clear();
+  // Read-only is a property of this project and this user, not of the
+  // workspace: the same person may own one review and only read another.
+  RO = WORKSPACE_RO || !canWrite(S);
+  document.body.classList.toggle("ro", RO);
+  CAN_DELETE = !WORKSPACE_RO && canOwn(S);
   UI.view=view||"setup"; saveUI();
   unsubLog=STORE.subscribeLog(id,l=>{ LOG=l||[]; if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
   renderProject(true);
@@ -1823,8 +2015,88 @@ async function download(filename,data){
   }
 }
 
+/* Deleting a project destroys a governance record for everyone, and
+   cannot be undone. A browser confirm() is one reflexive click away
+   from that, and the click that does it looks exactly like every
+   other confirm the user dismisses all day.
+
+   So the name has to be typed. Not as friction for its own sake: it
+   forces the user to read WHICH project they are about to destroy,
+   which is the mistake that actually happens -- deleting the right
+   kind of thing from the wrong row. */
+function openDeleteDialog(){
+  const name = S.meta.solution || "Untitled AI solution";
+  const host = document.createElement("div");
+  host.className = "modal-backdrop";
+  host.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+      <h2 id="delTitle" style="margin-top:0">Delete this project forever?</h2>
+      <p>This destroys the review for <b>everyone</b>: the checklist, every
+      checkpoint decision and its sign-offs, the model card and the audit log.
+      It cannot be undone.</p>
+      <p><b>Archive it instead</b> if you only want it off the active portfolio.
+      Archiving keeps the whole record and can be reversed.</p>
+      <label for="delName">Type <b>${esc(name)}</b> to confirm</label>
+      <input type="text" id="delName" autocomplete="off" spellcheck="false"
+             aria-describedby="delHint">
+      <p id="delHint" class="small" style="color:var(--muted)">The name must match exactly.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn" data-del-cancel>Cancel</button>
+        <button class="btn" data-del-archive>Archive instead</button>
+        <button class="btn danger" data-del-go disabled>Delete forever</button>
+      </div>
+    </div>`;
+  document.body.appendChild(host);
+
+  const field = host.querySelector("#delName");
+  const go = host.querySelector("[data-del-go]");
+  const close = () => { host.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if(e.key === "Escape") close(); };
+
+  field.addEventListener("input", () => { go.disabled = field.value.trim() !== name; });
+  field.addEventListener("keydown", e => { if(e.key === "Enter" && !go.disabled) go.click(); });
+  host.querySelector("[data-del-cancel]").onclick = close;
+  host.addEventListener("click", e => { if(e.target === host) close(); });
+  document.addEventListener("keydown", onKey);
+
+  host.querySelector("[data-del-archive]").onclick = () => {
+    close();
+    const v = !S.archived;
+    S.archived = v;
+    queuePatch(CUR, Object.assign({archived:v}, stamp()));
+    writeLog(CUR, "Archived");
+    renderMain(false);
+    toast("Project archived");
+  };
+
+  go.onclick = async () => {
+    if(field.value.trim() !== name) return;   // belt and braces
+    const id = CUR;
+    go.disabled = true; go.textContent = "Deleting…";
+    close();
+    delete pending[id]; clearTimeout(timers[id]);
+    try{ await STORE.remove(id); goHome(); toast("Project deleted"); }
+    catch(err){ toast("Couldn't delete the project"); }
+  };
+
+  setTimeout(() => field.focus(), 0);
+}
+
 /* ============================================================
    Examples
+   One sample project per CHAI use case, so the portfolio shows the
+   range of things a governance committee actually has in front of
+   it: a retired model, one out of compliance, a couple mid-pilot,
+   and several still in intake.
+
+   Each sample names its CHAI use case, which pre-selects the
+   Testing & Evaluation metric picker at stage 4, and carries a few
+   metrics with CHAI's own metric names so the connection between
+   the two is visible rather than described.
+
+   Samples are declarative: the table below says what state a
+   project is in, and buildSample() assembles it. Adding one means
+   adding a row, not another block of imperative code.
    ============================================================ */
 const EX_CARD={contact:"aigovernance@example.org",releaseStage:"General availability",version:"3.2-local",availability:"United States",regulatory:"Not FDA-cleared; deployed as clinical decision support",
   summary:"Scores adult inpatients every hour for risk of clinical deterioration within 12 hours. Flags patients for nurse review; does not replace clinical judgment.",
@@ -1839,10 +2111,162 @@ const EX_METRICS=[
   {cat:"Fairness & equity",name:"Sensitivity at threshold",value:"0.71",ci:"0.66–0.76",pop:"Age 18–30"},
   {cat:"Fairness & equity",name:"Sensitivity at threshold",value:"0.79",ci:"0.77–0.81",pop:"Age 65+"},
   {cat:"Safety & reliability",name:"Calibration slope",value:"0.94",ci:"",pop:"All adults"}];
+
+const U="Usefulness, usability & efficacy", F="Fairness & equity", SR="Safety & reliability";
+
+/* Each row: how far the review got, what is outstanding, and why.
+   `stages` are filled "met"; `items` overrides individual criteria;
+   `gates` are decisions already taken. `day` offsets are relative to
+   today, so the dashboard's overdue and due-soon states are live. */
+const SAMPLES=[
+  {
+    name:"Sepsis early warning (sample)", use:"sepsis-risk-prediction",
+    meta:{developer:"Example Vendor, Inc.",sourcing:"Purchased from a vendor",sponsor:"Dr. L. Chen, Critical Care",riskTier:"High",reviewCadence:"12 months",scope:"All adult inpatient units"},
+    stages:[1,2,3,4,5,6],
+    items:{"s3-2":["notmet","Vendor declined to share cohort demographics.","Procurement",-20],
+           "s6-2":["partial","Subgroup dashboard built for age and sex only.","Data science",30]},
+    gates:{A:["Proceed",-520],B:["Proceed",-460],C:["Proceed",-400]},
+    card:{summary:"Flags adult inpatients at risk of sepsis for rapid assessment."},
+    metrics:[...EX_METRICS,
+      {cat:U,name:"Area under the curve (AUC)—receiver operating characteristic (ROC) (AUC-ROC)",value:"0.81",ci:"0.79–0.83",pop:"Local validation, 18 months"}],
+    updated:-30, cardAt:-420,
+  },
+  {
+    name:"Ambient clinical documentation (sample)", use:"Ambient-AI",
+    meta:{developer:"Example Scribe Co.",sourcing:"Purchased from a vendor",sponsor:"Dr. M. Okafor, Primary Care",riskTier:"Moderate",scope:"Six primary care clinics"},
+    stages:[1,2,3,4],
+    items:{"s4-2":["partial","Accuracy for non-native English speakers under review.","Clinical informatics",25]},
+    gates:{A:["Proceed",-120],B:["Proceed with conditions",-20]},
+    card:{summary:"Drafts visit notes from ambient audio for clinician review and signature.",intendedUse:"Draft note generation during outpatient visits.",users:"Primary care clinicians",population:"Adult outpatients who consent to recording",outOfScope:"Behavioral health and sensitive visits",risks:"Hallucinated findings; omissions.",riskLevel:"Moderate",outputs:"Draft visit note",inputSource:"Visit audio",maintenance:"Monthly note-quality audit."},
+    metrics:[{cat:SR,name:"Notes with a clinically significant error",value:"1.8%",ci:"",pop:"Silent evaluation, 400 notes"}],
+    updated:-3, cardAt:-60,
+  },
+  {
+    name:"Stroke imaging triage (sample)", use:"clinical-decision-support",
+    meta:{developer:"Internal radiology AI team",sourcing:"Built internally",sponsor:"Dr. P. Nguyen, Neuroradiology",riskTier:"High"},
+    stages:[1],
+    items:{"s2-1":["met"],"s2-2":["met"],"s2-3":["partial","Scanner-vendor subgroups being added.","Radiology AI team",10]},
+    gates:{A:["Proceed",-10]},
+    updated:-1,
+  },
+  {
+    name:"Discharge summary drafting (sample)", use:"patient-discharge-summarization",
+    meta:{developer:"Example Health LLM Co.",sourcing:"Purchased from a vendor",sponsor:"Dr. R. Adeyemi, Hospital Medicine",riskTier:"Moderate",scope:"Medicine and surgery wards, two hospitals"},
+    stages:[1,2,3,4],
+    items:{"s4-1":["partial","Local evaluation on 300 summaries; clinician review ongoing.","Clinical informatics",18],
+           "s4-8":["notmet","Safety reporting route for summary errors not yet agreed.","Patient safety",-5]},
+    gates:{A:["Proceed",-150]},
+    card:{summary:"Drafts a discharge summary from the encounter record for clinician editing and sign-off.",intendedUse:"Draft generation at discharge; the clinician remains the author.",users:"Hospitalists and discharge coordinators",population:"Adults discharged from medicine and surgery wards",outOfScope:"Deaths, transfers to other acute facilities, and against-medical-advice discharges",risks:"Omission of an active problem or a changed medication; fluent text invites less scrutiny.",riskLevel:"Moderate: a clinician signs every summary",outputs:"Draft discharge summary text",inputSource:"Encounter notes, medication list, problem list",maintenance:"Monthly sample audit by hospital medicine."},
+    metrics:[{cat:U,name:"DocLens",value:"0.78",ci:"",pop:"300 local summaries"},
+             {cat:U,name:"BERTScore",value:"0.89",ci:"",pop:"300 local summaries"},
+             {cat:SR,name:"Omission rate of active problems",value:"4.2%",ci:"2.6–6.5%",pop:"Clinician-reviewed sample, n=300"}],
+    updated:-6, cardAt:-20,
+  },
+  {
+    name:"Prior authorization criteria matching (sample)", use:"prior-authorization-ai-supported-criteria-matching",
+    meta:{developer:"Example Payer Systems",sourcing:"Purchased from a vendor",sponsor:"J. Whitfield, Revenue Cycle",riskTier:"Moderate",scope:"Outpatient imaging and infusion authorizations"},
+    stages:[1,2],
+    items:{"s1-5":["partial","Harm register drafted; denial-delay scenarios still to be assessed.","Compliance",12],
+           "s2-5":["notmet","Escalation path for contested matches not designed.","Utilization management",20]},
+    gates:{A:["Proceed with conditions",-45]},
+    card:{summary:"Matches submitted clinical documentation against payer coverage criteria to support, never to replace, a human authorization decision.",intendedUse:"Surfaces which coverage criteria are met and which are unevidenced.",users:"Utilization review nurses",outOfScope:"Any automated denial. Denials remain a human decision.",risks:"Over-reliance on a confident-looking match; policy drift after a payer update.",riskLevel:"Moderate: cannot deny, but can shape a reviewer's attention"},
+    metrics:[{cat:U,name:"Reduce Turnaround Time (TAT)",value:"-31%",ci:"",pop:"Pilot queue vs. prior quarter"},
+             {cat:U,name:"Policy Coverage Completeness",value:"92%",ci:"",pop:"Benchmark policy set"},
+             {cat:F,name:"Predictive Parity (Positive Predictive Value Parity)",value:"0.04",ci:"",pop:"Largest gap across payer line of business"}],
+    updated:-9, cardAt:-30,
+  },
+  {
+    name:"Patient-facing health advice chatbot (sample)", use:"general-health-advice-chatbot",
+    meta:{developer:"Example Digital Front Door",sourcing:"Co-developed",sponsor:"Dr. S. Haddad, Population Health",riskTier:"High",scope:"Public website and patient portal"},
+    stages:[1,2],
+    items:{"s1-5":["partial","Crisis and emergency-symptom scenarios still being enumerated.","Clinical safety",8],
+           "s2-4":["notmet","Escalation threshold for urgent symptoms not yet set.","Clinical safety",6],
+           "s2-6":["notmet","No safety reporting route for harmful advice.","Patient safety",-2]},
+    gates:{A:["Revise and resubmit",-14]},
+    card:{summary:"Answers general health questions for patients, with escalation to a clinician for anything urgent.",population:"Adults using the patient portal",outOfScope:"Diagnosis, medication dosing, emergencies, pediatrics, and mental health crises",risks:"Plausible but wrong advice; failure to escalate an emergency.",riskLevel:"High: unsupervised patient-facing advice"},
+    metrics:[{cat:U,name:"Low-Confidence Trigger Rate; Escalation Success Rate",value:"88%",ci:"",pop:"Escalation success, scripted red-flag set"},
+             {cat:SR,name:"Percentage (%) Uptime",value:"99.4%",ci:"",pop:"Staging, 90 days"}],
+    updated:-2,
+  },
+  {
+    name:"Mental health triage support (sample)", use:"mental-health",
+    meta:{developer:"Example Behavioral AI",sourcing:"Purchased from a vendor",sponsor:"Dr. K. Oyelaran, Behavioral Health",riskTier:"High",scope:"Behavioral health intake line"},
+    stages:[1],
+    items:{"s1-4":["partial","Populations at risk of under-detection not yet characterized.","Behavioral health",15],
+           "s1-5":["notmet","Self-harm failure modes not enumerated.","Clinical safety",-8]},
+    gates:{},
+    card:{summary:"Supports triage of behavioral health intake contacts; never autonomous.",riskLevel:"High: crisis detection failure is a safety event"},
+    metrics:[{cat:F,name:"Cross-Demographic Safety & Quality Disparity Score (CDSQ-DS)",value:"pending",ci:"",pop:"Not yet measured locally"}],
+    updated:-4,
+  },
+  {
+    name:"Clinical trial pre-screening (sample)", use:"clinical-trials",
+    meta:{developer:"Example Research Informatics",sourcing:"Built internally",sponsor:"Dr. T. Lindqvist, Oncology Research",riskTier:"Moderate",scope:"Oncology trials portfolio"},
+    stages:[1,2,3],
+    items:{"s3-5":["partial","Dataset and model artifacts versioned; code not yet.","Research informatics",22]},
+    gates:{A:["Proceed",-200]},
+    card:{summary:"Pre-screens the EHR for patients who may be eligible for an open trial; a coordinator confirms every match.",riskLevel:"Moderate: affects access to research, not direct care"},
+    metrics:[{cat:U,name:"Enrollment Rate",value:"+18%",ci:"",pop:"Pilot arm vs. matched prior period"},
+             {cat:F,name:"Patient-Criterion Fairness-Constrained Matching (Accuracy/Fairness Trade-off Curve)",value:"see report",ci:"",pop:"Race and language subgroups"}],
+    updated:-11, cardAt:-50,
+  },
+  {
+    name:"EHR record search (sample)", use:"electronic-health-record-information-retrieval",
+    meta:{developer:"Example EHR Vendor",sourcing:"Purchased from a vendor",sponsor:"Dr. N. Brightwater, CMIO office",riskTier:"Low",reviewCadence:"24 months",scope:"Enterprise-wide, read-only"},
+    stages:[1,2,3,4,5,6],
+    items:{},
+    gates:{A:["Proceed",-700],B:["Proceed",-640],C:["Proceed",-580],D:["Continue",-200]},
+    card:{summary:"Retrieves and cites passages from a patient's record in response to a clinician's question.",
+      intendedUse:"Answers a clinician's question about one patient by quoting that patient's own record, with a citation to the source note.",
+      users:"Any clinician with existing read access to the record",
+      population:"All patients with a record in the EHR",
+      outOfScope:"Clinical recommendations, summarization across patients, and any population or research query",
+      risks:"A retrieved passage can be accurate but stale; a question can be answered from the wrong encounter.",
+      riskLevel:"Low: retrieval only, always cited to the source document",
+      outputs:"Quoted passages with citations to the source note",
+      inputSource:"The patient's existing EHR documents, respecting the user's access rights",
+      maintenance:"Annual review; citation-accuracy audit each quarter."},
+    metrics:[{cat:U,name:"Citation accuracy",value:"97.1%",ci:"",pop:"Quarterly audit, 500 answers"}],
+    updated:-45, cardAt:-180,
+  },
+  {
+    name:"Autonomous scheduling agent (sample)", use:"agentic",
+    meta:{developer:"Example Agent Labs",sourcing:"Purchased from a vendor",sponsor:"Operations committee",riskTier:"High",scope:"Specialty clinic scheduling"},
+    stages:[1,2,3,4,5],
+    items:{},
+    gates:{A:["Proceed",-300],B:["Proceed",-240],C:["Stop",-30]},
+    card:{summary:"Took scheduling actions on a patient's behalf across several systems.",riskLevel:"High: acted without a human in the loop",risks:"Pilot showed unrecoverable actions with no audit trail."},
+    metrics:[{cat:U,name:"Goal Completion Rate (GCR)",value:"0.74",ci:"",pop:"Pilot, 6 weeks"},
+             {cat:SR,name:"Autonomy Index (AIx)",value:"high",ci:"",pop:"Pilot; flagged at Checkpoint C"}],
+    updated:-30, cardAt:-120,
+  },
+];
+
 function fillItems(p, stages, status){ STAGES.filter(s=>stages.includes(s.n)).forEach(s=>s.items.forEach(it=>p.items[it.id]={status,evidence:"",owner:"",due:""})); }
+
+function buildSample(spec, now){
+  const d=n=>ymd(addDays(now,n)), iso=n=>addDays(now,n).toISOString();
+  const p=blankProject(spec.name);
+  Object.assign(p.meta,{org:"Example Regional Health",chaiUseCase:spec.use||""},spec.meta||{});
+  fillItems(p, spec.stages||[], "met");
+  Object.entries(spec.items||{}).forEach(([id,[status,evidence,owner,due]])=>{
+    p.items[id]={status,evidence:evidence||"",owner:owner||"",due:due==null?"":d(due)};
+  });
+  Object.entries(spec.gates||{}).forEach(([k,[decision,day]])=>{
+    p.gates[k]={decision,by:"AI governance committee",date:d(day),
+      rationale:/Stop|Revise/.test(decision)?"See the review record.":"Met criteria for this stage.",
+      signedBy:ME.id||null,signedAt:iso(day)};
+  });
+  if(spec.card) p.card=Object.assign(spec.use==="sepsis-risk-prediction"?clone(EX_CARD):{}, spec.card);
+  if(spec.metrics) p.metrics=clone(spec.metrics);
+  if(spec.cardAt!=null) p.cardUpdatedAt=iso(spec.cardAt);
+  if(spec.updated!=null) p.updatedAt=iso(spec.updated);
+  return p;
+}
+
 function exampleInto(p){
   const today=new Date(), d=n=>ymd(addDays(today,n));
-  Object.assign(p.meta,{org:p.meta.org||"Example Regional Health",developer:"Example Vendor, Inc.",sourcing:"Purchased from a vendor",sponsor:"Dr. A. Rivera, Hospital Medicine",reviewers:"CMIO; nursing informatics lead; data science lead; compliance officer; patient and family advisor",riskTier:"Moderate",startDate:d(-40),scope:"Adult med-surg units at two hospitals; vendor version 3.2"});
+  Object.assign(p.meta,{org:p.meta.org||"Example Regional Health",developer:"Example Vendor, Inc.",sourcing:"Purchased from a vendor",sponsor:"Dr. A. Rivera, Hospital Medicine",reviewers:"CMIO; nursing informatics lead; data science lead; compliance officer; patient and family advisor",riskTier:"Moderate",startDate:d(-40),scope:"Adult med-surg units at two hospitals; vendor version 3.2",chaiUseCase:"sepsis-risk-prediction"});
   fillItems(p,[1,2],"met");
   p.items["s1-4"]={status:"partial",evidence:"Limited-English-proficiency patients not yet considered.",owner:"Nursing informatics",due:d(21)};
   p.items["s3-1"]={status:"partial",evidence:"Vendor provided a summary only; full provenance requested.",owner:"Procurement",due:d(14)};
@@ -1851,33 +2275,11 @@ function exampleInto(p){
   p.metrics=clone(EX_METRICS);
   p.card=Object.assign(clone(EX_CARD),{releaseStage:"Silent evaluation"}); p.cardUpdatedAt=new Date().toISOString();
 }
+
 async function loadSamples(){
-  const now=new Date(), d=n=>ymd(addDays(now,n)), iso=n=>addDays(now,n).toISOString();
-  // 1: live, review overdue, one criterion not met
-  const a=blankProject("Sepsis early warning (sample)");
-  Object.assign(a.meta,{org:"Example Regional Health",developer:"Example Vendor, Inc.",sourcing:"Purchased from a vendor",sponsor:"Dr. L. Chen, Critical Care",riskTier:"High",reviewCadence:"12 months",scope:"All adult inpatient units"});
-  fillItems(a,[1,2,3,4,5,6],"met");
-  a.items["s3-2"]={status:"notmet",evidence:"Vendor declined to share cohort demographics.",owner:"Procurement",due:d(-20)};
-  a.items["s6-2"]={status:"partial",evidence:"Subgroup dashboard built for age and sex only.",owner:"Data science",due:d(30)};
-  ["A","B","C"].forEach((k,i)=>a.gates[k]={decision:"Proceed",by:"AI governance committee",date:d(-520+i*60),rationale:"Met criteria for this stage.",signedBy:ME.id||null,signedAt:iso(-520+i*60)});
-  a.card=Object.assign(clone(EX_CARD),{summary:"Flags adult inpatients at risk of sepsis for rapid assessment."}); a.metrics=clone(EX_METRICS); a.cardUpdatedAt=iso(-420); a.updatedAt=iso(-30);
-  // 2: pilot, conditional approval without conditions, card stale
-  const b=blankProject("Ambient clinical documentation (sample)");
-  Object.assign(b.meta,{org:"Example Regional Health",developer:"Example Scribe Co.",sourcing:"Purchased from a vendor",sponsor:"Dr. M. Okafor, Primary Care",riskTier:"Moderate",scope:"Six primary care clinics"});
-  fillItems(b,[1,2,3,4],"met"); b.items["s4-2"]={status:"partial",evidence:"Accuracy for non-native English speakers under review.",owner:"Clinical informatics",due:d(25)};
-  b.gates.A={decision:"Proceed",by:"AI governance committee",date:d(-120),rationale:"High clinician burden; good fit.",signedBy:ME.id||null,signedAt:iso(-120)};
-  b.gates.B={decision:"Proceed with conditions",by:"AI governance committee",date:d(-20),rationale:"",signedBy:ME.id||null,signedAt:iso(-20)};
-  b.card={summary:"Drafts visit notes from ambient audio for clinician review and signature.",intendedUse:"Draft note generation during outpatient visits.",users:"Primary care clinicians",population:"Adult outpatients who consent to recording",outOfScope:"Behavioral health and sensitive visits",risks:"Hallucinated findings; omissions.",riskLevel:"Moderate",outputs:"Draft visit note",inputSource:"Visit audio",maintenance:"Monthly note-quality audit."};
-  b.metrics=[{cat:"Safety & reliability",name:"Notes with a clinically significant error",value:"1.8%",ci:"",pop:"Silent evaluation, 400 notes"}];
-  b.cardUpdatedAt=iso(-60); b.updatedAt=iso(-3);
-  // 3: early, on track
-  const c=blankProject("Stroke imaging triage (sample)");
-  Object.assign(c.meta,{org:"Example Regional Health",developer:"Internal radiology AI team",sourcing:"Built internally",sponsor:"Dr. P. Nguyen, Neuroradiology",riskTier:"High"});
-  fillItems(c,[1],"met"); c.items["s2-1"]={status:"met"}; c.items["s2-2"]={status:"met"}; c.items["s2-3"]={status:"partial",evidence:"Scanner-vendor subgroups being added.",owner:"Radiology AI team",due:d(10)};
-  c.gates.A={decision:"Proceed",by:"AI governance committee",date:d(-10),rationale:"Door-to-needle time is a priority metric.",signedBy:ME.id||null,signedAt:iso(-10)};
-  c.updatedAt=iso(-1);
-  for(const p of [a,b,c]) await createProject(p,"Sample project added");
-  toast("Sample projects added");
+  const now=new Date();
+  for(const spec of SAMPLES) await createProject(buildSample(spec, now), "Sample project added");
+  toast(`${SAMPLES.length} sample projects added`);
 }
 
 /* ============================================================
@@ -1888,6 +2290,24 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button");
   if(!t && row){ openProject(row.dataset.open); return; }
   if(!t) return;
+  if(t.dataset.archive && !WORKSPACE_RO){
+    const id=t.dataset.archive, p=PROJECTS.get(id);
+    if(!p) return;
+    if(!canOwn(p)){ toast("Only an owner can archive this project"); return; }
+    const v=!p.archived;
+    p.archived=v;
+    queuePatch(id, Object.assign({archived:v}, stamp()));
+    writeLog(id, v?"Archived":"Restored");
+    updateDashboard();
+    toast(v?"Project archived":"Project restored");
+    return;
+  }
+  if(t.dataset.revoke && canOwn(S)){
+    const id=t.dataset.revoke;
+    if(wouldOrphan(S,id,"")){ toast("A project must keep at least one owner"); return; }
+    S.access=accessPatch(S,id,""); queuePatch(CUR,Object.assign({access:S.access},stamp()));
+    writeLog(CUR,`Removed access for ${id}`); renderMain(false); toast("Access removed"); return;
+  }
   if(t.dataset.open){ openProject(t.dataset.open); return; }
   if(t.dataset.home){ goHome(); return; }
   if(t.dataset.go){ go(t.dataset.go); return; }
@@ -1956,12 +2376,25 @@ document.addEventListener("click",async e=>{
   if(a==="import"){ document.getElementById("importFile").click(); return; }
   if(a==="dl-csv"){ download(`ai-governance-portfolio-${TODAY()}.csv`, exportCSV()); return; }
   if(!S) return;
+  if(a==="claim"){
+    if(!ME.id){ toast("No signed-in user to claim ownership"); return; }
+    S.access=accessPatch(S,ME.id,"owner"); queuePatch(CUR,Object.assign({access:S.access},stamp()));
+    writeLog(CUR,"Claimed ownership"); RO=false; CAN_DELETE=true; renderProject(false); toast("You are now an owner"); return;
+  }
+  if(a==="grant"){
+    if(!canOwn(S)){ toast("Only an owner can grant access"); return; }
+    const el=document.querySelector("[data-grant-id]");
+    const id=el&&el.value?el.value.trim():"";
+    const roleEl=document.querySelector("[data-grant-role]");
+    const role=roleEl?roleEl.value:"reader";
+    if(!id){ toast("Enter a user id"); return; }
+    S.access=accessPatch(S,id,role); queuePatch(CUR,Object.assign({access:S.access},stamp()));
+    writeLog(CUR,`Granted ${ROLE_LABEL[role].toLowerCase()} to ${id}`); renderMain(false); toast("Access granted"); return;
+  }
   if(a==="addmetric"){ S.metrics.push({cat:METRIC_CATS[0],name:"",value:"",ci:"",pop:""}); saveMetrics(); renderMain(false); const ins=document.querySelectorAll('.mtable input[aria-label="Metric"]'); ins[ins.length-1]?.focus(); }
   else if(a==="example"){ exampleInto(S); const st=stamp(); queuePatch(CUR,Object.assign({meta:clone(S.meta),items:clone(S.items),gates:clone(S.gates),metrics:clone(S.metrics),card:clone(S.card),cardUpdatedAt:S.cardUpdatedAt},st)); writeLog(CUR,"Example data filled in"); renderProject(false); toast("Example filled in"); }
-  else if(a==="archive"){ const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?"Project archived":"Project restored"); }
-  else if(a==="delete"){ if(!confirm(`Delete "${S.meta.solution||"this project"}" for everyone? This can't be undone. Archive it instead to keep the record.`)) return;
-    const id=CUR; delete pending[id]; clearTimeout(timers[id]);
-    try{ await STORE.remove(id); goHome(); toast("Project deleted"); }catch(err){ toast("Couldn't delete the project"); } }
+  else if(a==="archive"){ if(!canOwn(S)){ toast("Only an owner can archive this project"); return; } const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?"Project archived":"Project restored"); }
+  else if(a==="delete"){ if(!canOwn(S)){ toast("Only an owner can delete this project"); return; } openDeleteDialog(); }
   else if(a==="newreview"){ const now=new Date().toISOString(); const patch={gates:{D:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); writeLog(CUR,`Checkpoint D: periodic review recorded (${S.gates.D.decision})`); renderRail(); renderMain(false); toast("Periodic review recorded"); }
   else if(a==="dl-html") download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML());
   else if(a==="dl-md") download(`${slug(S.meta.solution)}-chai-review.md`, exportMD());
@@ -2028,7 +2461,7 @@ renderDashboardShell();
   USER=user;
   if(user){
     try{ ME.id = await user.id(); }catch(e){}
-    try{ const c=await user.can("data.write"); if(db && c===false) RO=true; }catch(e){}
+    try{ const c=await user.can("data.write"); if(db && c===false) WORKSPACE_RO=RO=true; }catch(e){}
     try{ CAN_DELETE = (await user.canEdit()) || (await user.isOwner()); }catch(e){ CAN_DELETE=false; }
   }
   if(db){ STORE=new DbStore(db); MODE="shared"; setMode(RO?"View only":"Shared workspace", RO?"ro":"shared"); }

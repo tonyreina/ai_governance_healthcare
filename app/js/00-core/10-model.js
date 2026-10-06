@@ -7,11 +7,13 @@ const blankMeta = ()=>({solution:"",org:"",developer:"",sourcing:"",sponsor:"",r
 function blankProject(name){
   const now=new Date().toISOString();
   return {meta:{...blankMeta(),solution:name||""}, ...frameworkBlank(), metrics:[], card:{},
+    access: ME.id ? {owners:[ME.id], writers:[], readers:[]} : blankAccess(),
     archived:false, createdAt:now, createdBy:ME.id||null, updatedAt:now, updatedBy:ME.id||null, cardUpdatedAt:null};
 }
 function normalize(p){
   p.meta=Object.assign(blankMeta(),p.meta||{});
   p.metrics=Array.isArray(p.metrics)?p.metrics:[]; p.card=p.card||{};
+  p.access=Object.assign(blankAccess(), p.access||{});
   frameworkNormalize(p); return p;
 }
 const cardValOf = (p,k) => ((p.card||{})[k]||"").trim() || (k==="name"?(p.meta.solution||"").trim():"") || (k==="developer"?(p.meta.developer||"").trim():"");

@@ -6,6 +6,24 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button");
   if(!t && row){ openProject(row.dataset.open); return; }
   if(!t) return;
+  if(t.dataset.archive && !WORKSPACE_RO){
+    const id=t.dataset.archive, p=PROJECTS.get(id);
+    if(!p) return;
+    if(!canOwn(p)){ toast("Only an owner can archive this project"); return; }
+    const v=!p.archived;
+    p.archived=v;
+    queuePatch(id, Object.assign({archived:v}, stamp()));
+    writeLog(id, v?"Archived":"Restored");
+    updateDashboard();
+    toast(v?"Project archived":"Project restored");
+    return;
+  }
+  if(t.dataset.revoke && canOwn(S)){
+    const id=t.dataset.revoke;
+    if(wouldOrphan(S,id,"")){ toast("A project must keep at least one owner"); return; }
+    S.access=accessPatch(S,id,""); queuePatch(CUR,Object.assign({access:S.access},stamp()));
+    writeLog(CUR,`Removed access for ${id}`); renderMain(false); toast("Access removed"); return;
+  }
   if(t.dataset.open){ openProject(t.dataset.open); return; }
   if(t.dataset.home){ goHome(); return; }
   if(t.dataset.go){ go(t.dataset.go); return; }
@@ -74,12 +92,25 @@ document.addEventListener("click",async e=>{
   if(a==="import"){ document.getElementById("importFile").click(); return; }
   if(a==="dl-csv"){ download(`ai-governance-portfolio-${TODAY()}.csv`, exportCSV()); return; }
   if(!S) return;
+  if(a==="claim"){
+    if(!ME.id){ toast("No signed-in user to claim ownership"); return; }
+    S.access=accessPatch(S,ME.id,"owner"); queuePatch(CUR,Object.assign({access:S.access},stamp()));
+    writeLog(CUR,"Claimed ownership"); RO=false; CAN_DELETE=true; renderProject(false); toast("You are now an owner"); return;
+  }
+  if(a==="grant"){
+    if(!canOwn(S)){ toast("Only an owner can grant access"); return; }
+    const el=document.querySelector("[data-grant-id]");
+    const id=el&&el.value?el.value.trim():"";
+    const roleEl=document.querySelector("[data-grant-role]");
+    const role=roleEl?roleEl.value:"reader";
+    if(!id){ toast("Enter a user id"); return; }
+    S.access=accessPatch(S,id,role); queuePatch(CUR,Object.assign({access:S.access},stamp()));
+    writeLog(CUR,`Granted ${ROLE_LABEL[role].toLowerCase()} to ${id}`); renderMain(false); toast("Access granted"); return;
+  }
   if(a==="addmetric"){ S.metrics.push({cat:METRIC_CATS[0],name:"",value:"",ci:"",pop:""}); saveMetrics(); renderMain(false); const ins=document.querySelectorAll('.mtable input[aria-label="Metric"]'); ins[ins.length-1]?.focus(); }
   else if(a==="example"){ exampleInto(S); const st=stamp(); queuePatch(CUR,Object.assign({meta:clone(S.meta),items:clone(S.items),gates:clone(S.gates),metrics:clone(S.metrics),card:clone(S.card),cardUpdatedAt:S.cardUpdatedAt},st)); writeLog(CUR,"Example data filled in"); renderProject(false); toast("Example filled in"); }
-  else if(a==="archive"){ const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?"Project archived":"Project restored"); }
-  else if(a==="delete"){ if(!confirm(`Delete "${S.meta.solution||"this project"}" for everyone? This can't be undone. Archive it instead to keep the record.`)) return;
-    const id=CUR; delete pending[id]; clearTimeout(timers[id]);
-    try{ await STORE.remove(id); goHome(); toast("Project deleted"); }catch(err){ toast("Couldn't delete the project"); } }
+  else if(a==="archive"){ if(!canOwn(S)){ toast("Only an owner can archive this project"); return; } const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?"Project archived":"Project restored"); }
+  else if(a==="delete"){ if(!canOwn(S)){ toast("Only an owner can delete this project"); return; } openDeleteDialog(); }
   else if(a==="newreview"){ const now=new Date().toISOString(); const patch={gates:{D:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); writeLog(CUR,`Checkpoint D: periodic review recorded (${S.gates.D.decision})`); renderRail(); renderMain(false); toast("Periodic review recorded"); }
   else if(a==="dl-html") download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML());
   else if(a==="dl-md") download(`${slug(S.meta.solution)}-chai-review.md`, exportMD());

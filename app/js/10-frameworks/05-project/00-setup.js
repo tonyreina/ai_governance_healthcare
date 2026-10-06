@@ -47,11 +47,14 @@ function renderSetup(){
 
   <h2>History</h2>
   ${historyHTML()}
-  <h2 class="ro-hide">Manage</h2>
-  <div class="ro-hide" style="display:flex;flex-wrap:wrap;gap:8px">
-    ${empty?`<button class="btn" data-act="example">Fill with an example</button>`:""}
-    <button class="btn" data-act="archive">${S.archived?"Restore project":"Archive project"}</button>
-    ${CAN_DELETE?`<button class="btn danger" data-act="delete">Delete project</button>`:""}
+  ${accessHTML()}
+
+  <h2>Manage</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    ${empty&&!RO?`<button class="btn" data-act="example">Fill with an example</button>`:""}
+    ${canOwn(S)?`<button class="btn" data-act="archive">${S.archived?"Restore project":"Archive project"}</button>
+    <button class="btn danger" data-act="delete">Delete project</button>`
+    :`<p style="font-size:13px;color:var(--muted);margin:0">Archiving and deleting are owner-only. ${esc(roleNote())}</p>`}
   </div>
   ${pager()}`;
 }
@@ -64,3 +67,50 @@ registerFramework({
   views: () => [{ id: "setup", kind: "setup", label: "Project setup", num: 0, sep: "after" }],
   render: () => renderSetup(),
 });
+
+
+/* Who holds what on this project. Owner-only to change, because
+   granting access is itself a privilege. */
+function accessHTML(){
+  const a=accessOf(S), mine=roleOf(S), owner=canOwn(S);
+  const rows=ROLES.flatMap(role=>a[role+"s"].map(id=>({id,role})));
+
+  if(!identityKnown()){
+    return `<h2>Access</h2>
+    <div class="note"><p><b>Roles are not enforced in this view.</b> This browser
+    has no signed-in user, so there is nobody to check a permission against.
+    Anyone who can open this page can change anything in it. Run the tool with a
+    backend, or publish it as a shared artifact, for access control to mean
+    anything.</p></div>`;
+  }
+
+  const list = rows.length
+    ? `<table class="tbl"><thead><tr><th>Person</th><th>Role</th>${owner?"<th><span class=\"vh\">Change</span></th>":""}</tr></thead><tbody>
+       ${rows.map(r=>`<tr>
+         <td>${who(r.id)}${r.id===ME.id?" <span class=\"small\">(you)</span>":""}</td>
+         <td>${owner?`<select data-role-for="${esc(r.id)}">${ROLES.map(x=>`<option value="${x}"${x===r.role?" selected":""}>${esc(ROLE_LABEL[x])}</option>`).join("")}</select>`:esc(ROLE_LABEL[r.role])}</td>
+         ${owner?`<td><button class="icon-btn" data-revoke="${esc(r.id)}" aria-label="Remove access">Remove</button></td>`:""}
+       </tr>`).join("")}</tbody></table>`
+    : `<p style="font-size:13px;color:var(--muted)">No access list recorded, so this
+       project is open to everyone in the workspace. Claim it to restrict who can
+       change it.</p>`;
+
+  return `<h2>Access</h2>
+  <p style="font-size:13px;color:var(--muted)">Owners can delete, archive and change
+  access. Writers can fill in the review. Readers can see it and change nothing.
+  You are ${esc(mine?ROLE_LABEL[mine].toLowerCase():"not listed")} on this project.</p>
+  ${list}
+  ${owner?`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:10px">
+    <div class="field" style="margin:0"><label for="grantWho">Add someone</label>
+      <input type="text" id="grantWho" placeholder="Their user id" data-grant-id></div>
+    <div class="field" style="margin:0"><label for="grantRole">Role</label>
+      <select id="grantRole" data-grant-role>${ROLES.map(x=>`<option value="${x}">${esc(ROLE_LABEL[x])}</option>`).join("")}</select></div>
+    <button class="btn" data-act="grant">Grant access</button>
+  </div>`:""}
+  ${unclaimed(S)&&identityKnown()?`<button class="btn primary" data-act="claim" style="margin-top:10px">Claim ownership</button>`:""}`;
+}
+
+const roleNote = () => {
+  const r = roleOf(S);
+  return r ? `You have ${ROLE_LABEL[r].toLowerCase()}.` : "You are not listed on this project.";
+};

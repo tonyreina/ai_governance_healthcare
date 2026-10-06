@@ -138,3 +138,70 @@ async function download(filename,data){
     else { DL=null; updateDlUI(); toast("Downloads aren't available here"); }
   }
 }
+
+/* Deleting a project destroys a governance record for everyone, and
+   cannot be undone. A browser confirm() is one reflexive click away
+   from that, and the click that does it looks exactly like every
+   other confirm the user dismisses all day.
+
+   So the name has to be typed. Not as friction for its own sake: it
+   forces the user to read WHICH project they are about to destroy,
+   which is the mistake that actually happens -- deleting the right
+   kind of thing from the wrong row. */
+function openDeleteDialog(){
+  const name = S.meta.solution || "Untitled AI solution";
+  const host = document.createElement("div");
+  host.className = "modal-backdrop";
+  host.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+      <h2 id="delTitle" style="margin-top:0">Delete this project forever?</h2>
+      <p>This destroys the review for <b>everyone</b>: the checklist, every
+      checkpoint decision and its sign-offs, the model card and the audit log.
+      It cannot be undone.</p>
+      <p><b>Archive it instead</b> if you only want it off the active portfolio.
+      Archiving keeps the whole record and can be reversed.</p>
+      <label for="delName">Type <b>${esc(name)}</b> to confirm</label>
+      <input type="text" id="delName" autocomplete="off" spellcheck="false"
+             aria-describedby="delHint">
+      <p id="delHint" class="small" style="color:var(--muted)">The name must match exactly.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn" data-del-cancel>Cancel</button>
+        <button class="btn" data-del-archive>Archive instead</button>
+        <button class="btn danger" data-del-go disabled>Delete forever</button>
+      </div>
+    </div>`;
+  document.body.appendChild(host);
+
+  const field = host.querySelector("#delName");
+  const go = host.querySelector("[data-del-go]");
+  const close = () => { host.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if(e.key === "Escape") close(); };
+
+  field.addEventListener("input", () => { go.disabled = field.value.trim() !== name; });
+  field.addEventListener("keydown", e => { if(e.key === "Enter" && !go.disabled) go.click(); });
+  host.querySelector("[data-del-cancel]").onclick = close;
+  host.addEventListener("click", e => { if(e.target === host) close(); });
+  document.addEventListener("keydown", onKey);
+
+  host.querySelector("[data-del-archive]").onclick = () => {
+    close();
+    const v = !S.archived;
+    S.archived = v;
+    queuePatch(CUR, Object.assign({archived:v}, stamp()));
+    writeLog(CUR, "Archived");
+    renderMain(false);
+    toast("Project archived");
+  };
+
+  go.onclick = async () => {
+    if(field.value.trim() !== name) return;   // belt and braces
+    const id = CUR;
+    go.disabled = true; go.textContent = "Deleting…";
+    close();
+    delete pending[id]; clearTimeout(timers[id]);
+    try{ await STORE.remove(id); goHome(); toast("Project deleted"); }
+    catch(err){ toast("Couldn't delete the project"); }
+  };
+
+  setTimeout(() => field.focus(), 0);
+}

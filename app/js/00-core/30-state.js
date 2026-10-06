@@ -2,6 +2,9 @@
    App state
    ============================================================ */
 let STORE=null, MODE="connecting", RO=false, CAN_DELETE=true, USER=null;
+// Set when the whole workspace is view-only (an artifact shared read-only).
+// Outranks any per-project role: it is a property of how you got here.
+let WORKSPACE_RO=false;
 const ME={id:null};
 let PROJECTS=new Map(), LOADED=false;
 let CUR=null;              // open project id

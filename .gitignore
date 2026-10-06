@@ -30,3 +30,4 @@ venv/
 
 # Local database dumps from `make backup`
 backups/
+build/

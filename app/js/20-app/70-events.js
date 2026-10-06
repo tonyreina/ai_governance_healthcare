@@ -68,6 +68,7 @@ document.addEventListener("click",async e=>{
   else if(a==="dl-html") download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML());
   else if(a==="dl-md") download(`${slug(S.meta.solution)}-chai-review.md`, exportMD());
   else if(a==="dl-json") download(`${slug(S.meta.solution)}-chai-review.json`, JSON.stringify(projectJSON(S),null,2));
+  else if(a==="dl-pdf") exportPDF();
   else if(a==="print") window.print();
 });
 document.addEventListener("submit",async e=>{

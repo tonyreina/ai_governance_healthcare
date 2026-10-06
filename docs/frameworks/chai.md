@@ -1,7 +1,7 @@
 # CHAI
 
 The **Coalition for Health AI (CHAI)** is a US non-profit whose members include
-health systems, technology vendors, academic centres, and patient advocates. Its
+health systems, technology vendors, academic centers, and patient advocates. Its
 published material is the basis of the lifecycle this tool tracks.
 
 !!! info "What is CHAI's, and what is ours"
@@ -20,7 +20,7 @@ published material is the basis of the lifecycle this tool tracks.
 CHAI's framing is that assurance is a lifecycle property, not a gate you pass
 once. A model that was validated at purchase can drift, meet a different patient
 mix than it was built for, or be used for something nobody intended. So the
-material is organised around stages of a solution's life, and the same five
+material is organized around stages of a solution's life, and the same five
 principles are asked at every stage.
 
 Where [OPTICA](optica.md) asks *should this organization adopt this solution*,
@@ -77,19 +77,19 @@ of a solution covering basic information, uses and directions, warnings, "trust
 ingredients", and resources. This tool reproduces its *section and field names*
 and fills them from checklist evidence.
 
-!!! warning "The model card template has a different licence"
+!!! warning "The model card template has a different license"
 
     CHAI distributes the Applied Model Card template under **CC BY-ND 4.0**
     (Attribution, No Derivatives) — not the CC BY 4.0 that covers the content
     repository.
 
-    That licence explicitly permits redistribution "for any purpose, even
+    That license explicitly permits redistribution "for any purpose, even
     commercially", so commercial use is *not* the constraint. **No Derivatives**
     is: you may not distribute a modified version of CHAI's material. This tool
     uses the template's section and field names to structure its own output; it
     does not redistribute CHAI's document. If you plan to publish something
     closer to the template itself, read
-    [the licence](https://creativecommons.org/licenses/by-nd/4.0/) first.
+    [the license](https://creativecommons.org/licenses/by-nd/4.0/) first.
 
 ## Testing & Evaluation Frameworks
 

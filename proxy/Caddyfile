@@ -159,7 +159,7 @@
 				flush_interval -1
 
 				# For the API's access log only. The API must NOT use these
-				# for authorisation -- identity is X-Auth-Request-User and
+				# for authorization -- identity is X-Auth-Request-User and
 				# nothing else. (X-Forwarded-For and X-Forwarded-Proto are set
 				# by Caddy already.)
 				header_up X-Real-IP {remote_host}

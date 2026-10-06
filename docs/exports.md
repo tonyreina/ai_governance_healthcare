@@ -26,6 +26,29 @@ Re-import the resulting file from the dashboard with **Import project JSON**.
     Importing does not merge into the project the file came from — it creates a
     separate one. Retire or delete the original if you meant to replace it.
 
+## PDF
+
+The report screen has a **Download PDF** button. It opens your browser's print
+dialog on the standalone report; choose *Save as PDF*.
+
+!!! note "Why the print dialog rather than a one-click download"
+
+    No PDF library is bundled. Every option weighs hundreds of kilobytes, and
+    the dashboard has to stay one self-contained file small enough to publish
+    as an artifact — a PDF writer would be larger than the whole application.
+
+    Browsers already render HTML to PDF well, with real fonts, selectable text
+    and working links. A canvas-based library gives you an image of a document
+    instead.
+
+What gets printed is exactly the standalone HTML export, rendered in an
+offscreen frame — not the page you are looking at. So the PDF and the HTML
+download are the same document, and the app's own navigation never appears in
+it.
+
+This is also the one export that keeps working where file downloads are
+unavailable, since it goes through the print dialog rather than a download API.
+
 ## Croissant
 
 `examples/croissant_export.py` converts a project export into
@@ -93,6 +116,6 @@ python examples/croissant_export.py export.json --profile biocroissant-draft
 
 This is **off by default and experimental**. Emitting terms under a prefix that
 does not resolve is a real defect in published linked data, defensible only as a
-labelled opt-in. The output carries a `_contextNote` saying so, and still
+labeled opt-in. The output carries a `_contextNote` saying so, and still
 validates. `conformsTo` is an array from the start, so adopting BioCroissant
 properly later means appending one string.

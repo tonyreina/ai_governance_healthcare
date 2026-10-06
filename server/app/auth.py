@@ -25,7 +25,7 @@ Network isolation is the security boundary:
   second ingress port past it.
 * **Compose** -- the ``api`` service publishes no ports; only Caddy does.
 
-Two second locks are available, both off by default and both defence in depth
+Two second locks are available, both off by default and both defense in depth
 rather than a substitute for closing the port:
 
 ``TRUSTED_PROXY_CIDR``

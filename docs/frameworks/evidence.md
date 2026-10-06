@@ -1,7 +1,7 @@
 # Does any of this work?
 
 A governance tool should be honest about its own evidence base. This page
-summarises what is actually known about whether AI governance frameworks change
+summarizes what is actually known about whether AI governance frameworks change
 anything, and what remains unmeasured.
 
 ## External recognition
@@ -16,10 +16,10 @@ Reviewing more than a dozen reporting and evaluation frameworks, it presents
 tool implements:
 
 - **OPTICA**, described as a practical evaluation tool for assessing AI solutions
-  towards adoption, 77 items in 13 chapters and four domains, requiring input
+  toward adoption, 77 items in 13 chapters and four domains, requiring input
   from five designated stakeholders.
 - **CHAI**, described as a tool for AI solution transparency, whose applied model
-  card acts as a standardised "nutrition label" for an AI solution.
+  card acts as a standardized "nutrition label" for an AI solution.
 
 The report notes that OPTICA "embeds requirements for organizational AI
 governance, which include continuing monitoring and impact assessment."
@@ -74,7 +74,7 @@ link from that to clinical benefit is assumed, not demonstrated.
 
 The review's own recommendation is to measure the intermediate stages rather than
 claim the endpoint. That is a reasonable thing to ask of your own governance
-programme too: track whether reviews changed decisions, not merely whether they
+program too: track whether reviews changed decisions, not merely whether they
 were completed.
 
 ## Sources

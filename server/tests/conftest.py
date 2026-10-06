@@ -2,8 +2,8 @@
 
 Two kinds of test live here. The pure ones -- deep-merge semantics, identity
 header parsing -- need nothing but Python and always run. The rest need a real
-PostgreSQL, because what they are testing *is* the database's behaviour: a row
-lock serialising two concurrent PATCHes, a unique constraint producing one 409,
+PostgreSQL, because what they are testing *is* the database's behavior: a row
+lock serializing two concurrent PATCHes, a unique constraint producing one 409,
 a trigger refusing an UPDATE. A fake would test the fake.
 
 Run everything with::

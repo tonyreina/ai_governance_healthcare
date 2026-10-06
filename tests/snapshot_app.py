@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Capture what the dashboard renders, so a refactor can be proved behaviour-safe.
+"""Capture what the dashboard renders, so a refactor can be proved behavior-safe.
 
 Loads a build in a real browser, seeds the built-in example projects, then dumps
 the rail and every view's markup. Two builds that render the same HTML for the
-same data are behaviourally identical for everything a user can see.
+same data are behaviorally identical for everything a user can see.
 
     pixi run python tests/snapshot_app.py <path-to-index.html> <out.json>
 """

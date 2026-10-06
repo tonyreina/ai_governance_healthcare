@@ -68,7 +68,7 @@
      "chaiIds": [
       "s2-2"
      ],
-     "residue": "An up-front commitment to the class of result required - generated prose, a predicted probability or class derived from inputs, or a causal estimate of how an outcome shifts under an intervention - together with an acknowledgement that the choice fixes which modelling and evaluation family applies downstream. CHAI never asks the adopter to declare an output class during need specification; s2-2 documents intended use and out-of-scope uses without naming the analytic type, and the model card's outputs and model-type fields are a developer's description of a finished product rather than a specification the adopter commits to beforehand."
+     "residue": "An up-front commitment to the class of result required - generated prose, a predicted probability or class derived from inputs, or a causal estimate of how an outcome shifts under an intervention - together with an acknowledgment that the choice fixes which modeling and evaluation family applies downstream. CHAI never asks the adopter to declare an output class during need specification; s2-2 documents intended use and out-of-scope uses without naming the analytic type, and the model card's outputs and model-type fields are a developer's description of a finished product rather than a specification the adopter commits to beforehand."
     },
     {
      "id": "1.5",
@@ -421,7 +421,7 @@
       "s4-3",
       "s2-4"
      ],
-     "residue": "A direct comparison of the local outcome distribution, chiefly event rate, against the developer's reported distribution, plus a documented clinical verdict on whether the gap would undermine calibration, the chosen operating threshold, or clinical usefulness. s4-3 is an after-the-fact measurement on an already-assembled system, not a pre-adoption judgement on prevalence shift."
+     "residue": "A direct comparison of the local outcome distribution, chiefly event rate, against the developer's reported distribution, plus a documented clinical verdict on whether the gap would undermine calibration, the chosen operating threshold, or clinical usefulness. s4-3 is an after-the-fact measurement on an already-assembled system, not a pre-adoption judgment on prevalence shift."
     }
    ]
   },
@@ -461,7 +461,7 @@
      "chaiIds": [
       "s3-4"
      ],
-     "residue": "How subjects whose observation window ended early were treated when the training labels were formed - exclusion, censoring-aware loss, competing-risk modelling or imputation - together with the argument that the chosen treatment does not systematically distort the outcome definition."
+     "residue": "How subjects whose observation window ended early were treated when the training labels were formed - exclusion, censoring-aware loss, competing-risk modeling or imputation - together with the argument that the chosen treatment does not systematically distort the outcome definition."
     },
     {
      "id": "6.4",
@@ -668,7 +668,7 @@
      "chaiIds": [
       "s4-6"
      ],
-     "residue": "A model-wide ranking of the variables driving behaviour with the attribution method named - coefficients, SHAP, permutation importance, attention summaries - or a technical justification for why global attribution cannot be produced for this model class."
+     "residue": "A model-wide ranking of the variables driving behavior with the attribution method named - coefficients, SHAP, permutation importance, attention summaries - or a technical justification for why global attribution cannot be produced for this model class."
     },
     {
      "id": "8.2",

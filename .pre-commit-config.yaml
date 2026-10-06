@@ -47,6 +47,15 @@ repos:
       # Blocks non-Latin characters that render like ASCII letters. A URL
       # shared with this project used a Cyrillic o in "who"; that class of
       # substitution is invisible in review and breaks search and anchors.
+      # American English only. The word list lives in the script; a quoted
+      # British spelling is exempted with `spelling-ok` on the line or an
+      # entry in .spelling-allow.
+      - id: check-spelling
+        name: check for British spellings
+        entry: pixi run check-spelling
+        language: system
+        types: [text]
+
       - id: check-homographs
         name: check for confusable characters
         entry: pixi run check-homographs

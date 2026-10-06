@@ -1,11 +1,11 @@
 """Pydantic models for the API surface.
 
-The project document itself is deliberately *not* modelled field by field. The
+The project document itself is deliberately *not* modeled field by field. The
 store contract says to treat it as opaque JSON, and the browser owns its schema
 (``schema/project.schema.json``). Validating it here would mean a server
 deploy every time the checklist grows a field.
 
-What is modelled is the envelope: that a body is a JSON object, that a patch is
+What is modeled is the envelope: that a body is a JSON object, that a patch is
 not empty, and that a log entry carries text.
 """
 

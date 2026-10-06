@@ -82,7 +82,7 @@ function renderOpticaOverview() {
   <table class="tbl"><thead><tr><th>Stakeholder</th><th>Answered</th><th>Outstanding</th></tr></thead><tbody>${rows}</tbody></table>
 
   <div class="note">
-    <p><b>OPTICA answers never change CHAI status.</b> The two checklists ask different parties for different evidence at different moments, and no OPTICA item fully discharges a CHAI criterion. Evidence can be cited in both; a judgement in one is not a judgement in the other.</p>
+    <p><b>OPTICA answers never change CHAI status.</b> The two checklists ask different parties for different evidence at different moments, and no OPTICA item fully discharges a CHAI criterion. Evidence can be cited in both; a judgment in one is not a judgment in the other.</p>
   </div>
   ${pager()}`;
 }

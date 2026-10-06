@@ -16,6 +16,46 @@ function exportHTML(){
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}</main></body></html>`;
 }
+/* PDF, via the browser's own print-to-PDF.
+
+   No PDF library is bundled. Every option (jsPDF, pdfmake, html2pdf) is
+   hundreds of kilobytes, and this dashboard has to stay one self-contained
+   file small enough to publish as an artifact -- a PDF writer would be larger
+   than the entire application. Browsers already render HTML to PDF well, with
+   correct fonts, selectable text and working links, which a canvas-based
+   library does not give you.
+
+   The report is printed from an offscreen iframe holding exactly the
+   standalone HTML export, not from the live page. Printing the page would
+   carry the app's own print stylesheet and its DOM state; this way the PDF and
+   the HTML download are the same document, and what the user sees in the print
+   preview is what the HTML export contains. */
+function exportPDF(){
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.setAttribute("title", "Report for printing");
+  frame.style.cssText = "position:fixed;left:-9999px;top:0;width:820px;height:1160px;border:0";
+  frame.onload = () => {
+    const win = frame.contentWindow;
+    const go = () => {
+      try{ win.focus(); win.print(); }
+      catch(e){ toast("Couldn't open the print dialog"); }
+      // Keep the frame alive briefly: some browsers run print() asynchronously
+      // and removing it immediately cancels the dialog.
+      setTimeout(() => frame.remove(), 60000);
+    };
+    // Wait for the webfonts, or the first page renders in a fallback face.
+    const fonts = win.document.fonts;
+    if(fonts && fonts.ready) fonts.ready.then(go).catch(go);
+    else setTimeout(go, 400);
+  };
+  document.body.appendChild(frame);
+  // srcdoc keeps it same-origin, so contentWindow.print() is reachable; a blob
+  // URL would be a different origin in some browsers and throw.
+  frame.srcdoc = exportHTML();
+  toast("Opening the print dialog. Choose \u201cSave as PDF\u201d.");
+}
+
 function exportMD(){
   const all=allItems(), ov=scoreOf(all), m=S.meta, L=[];
   const st=s=>s?STATUS[s]:"Unanswered";
@@ -66,7 +106,12 @@ let DL=null, dlChecked=false;
 const STANDALONE = !(window.claude && typeof window.claude.use==="function");
 function updateDlUI(){
   const fb=document.getElementById("dlFallback"); if(!fb) return;
-  const btns=[...document.querySelectorAll('#ractions [data-act^="dl-"]')];
+  // dl-pdf is deliberately excluded: it goes through the browser's print
+  // dialog, not the downloads API, so it keeps working in a view where saving
+  // a file does not. Hiding it with the rest would remove the one export still
+  // available exactly when the others are gone.
+  const btns=[...document.querySelectorAll('#ractions [data-act^="dl-"]')]
+    .filter(b=>b.dataset.act!=="dl-pdf");
   if(DL||STANDALONE){ btns.forEach(b=>b.hidden=false); fb.innerHTML=""; return; }
   if(!dlChecked) return;
   btns.forEach(b=>b.hidden=true);

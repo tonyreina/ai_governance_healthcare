@@ -184,6 +184,7 @@ function renderReport(){
   return `<div class="report">
     <div class="r-actions" id="ractions">
       <button class="btn primary" data-act="dl-html">Download report (HTML)</button>
+      <button class="btn" data-act="dl-pdf">Download PDF</button>
       <button class="btn" data-act="dl-md">Download Markdown</button>
       <button class="btn" data-act="dl-json">Download project data (JSON)</button>
       <button class="btn ghost" data-act="print">Print</button>

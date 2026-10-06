@@ -130,7 +130,7 @@ that, depending on the deployment strategy, sits either with the organization
 or with the developer; the previous pass applied that to 10.5-10.7 but not to
 11.3-11.4, which are the same role at the same completion stage. With this fix
 the producer column becomes a pure function of OPTICA's own stakeholder
-assignment rather than a judgement of ours, which is worth more than the two
+assignment rather than a judgment of ours, which is worth more than the two
 items it moves. A second, smaller extension: s2-7 is added to 9.3, since once
 9.3 is no longer an equivalence there is no reason to exclude the data-flow
 review and access-control design that OPTICA 9.3 explicitly demands.
@@ -229,7 +229,7 @@ most decision-relevant disclosure a buyer can receive, has no CHAI home.
 audit of whether the model is fed what the task clinically requires; a verdict
 on the credibility of the dossier itself; and an assessment of portfolio
 overlap, vendor concentration, reusability and precedent. CHAI scopes every
-criterion to the single solution under review and has no slot for a judgement
+criterion to the single solution under review and has no slot for a judgment
 about the quality of the answers given to the others.
 
 **What CHAI asks that OPTICA never does.** Seven criteria are absent outright
@@ -254,7 +254,7 @@ and nine more are touched only in fragments.
 | ------- | ----- | ----------------------------------------------- |
 | s1-6    | T     | Clinical accountability for a result (10.3) and |
 |         |       | a receiving governance body (12.5); no          |
-|         |       | programme owner, no decision rights             |
+|         |       | program owner, no decision rights             |
 | s2-3    | F     | Subgroup adequacy in development data (3.5) and |
 |         |       | vendor strata (7.2); no pre-specified fairness  |
 |         |       | criteria for the adopter's own evaluation       |
@@ -286,13 +286,13 @@ That follows from what each instrument is. OPTICA is a pre-adoption appraisal
 dossier: a structured interrogation of one candidate product and its fit to
 one organization, authored by a relay of named roles and settled by a go/no-go
 decision. Everything in it is a fact about the product, a property of the
-local setting, or a judgement a named person records. A register of harms you
+local setting, or a judgment a named person records. A register of harms you
 have not yet seen, a pathway for incidents that have not yet happened, a
 schedule for reviews that recur after launch - none of these is a fact a buyer
 can read out of a submission, so an instrument built to appraise a submission
 has nowhere to put them.
 
-CHAI is the mirror image. It is a lifecycle assurance programme, and its
+CHAI is the mirror image. It is a lifecycle assurance program, and its
 criteria are written as states the organization must be in at each stage. That
 is exactly why it carries the standing obligations OPTICA cannot, and exactly
 why it does not interrogate the product: it assumes a solution exists and
@@ -311,7 +311,7 @@ coverage numbers suggest.
 | Only the adopting organization|    43 |   56% |
 | Either, depending on hosting  |     5 |    6% |
 
-These are not our judgement. They are OPTICA's own stakeholder column: all 29
+These are not our judgment. They are OPTICA's own stakeholder column: all 29
 items at completion stage B are assigned to the AI solution developer, the
 five MLOps-expert items (10.5-10.7, 11.3, 11.4) are assigned to a role the
 source explicitly defines as sitting with the organization or the developer
@@ -322,7 +322,7 @@ Three consequences for a shared-answer strategy.
 
 **Ten of the 29 vendor items have no CHAI anchor at all** (3.2, 3.4, 4.2, 6.1,
 6.2, 6.3, 6.4, 7.5, 7.6, 8.1). A vendor that has conscientiously completed a
-CHAI programme has had no reason to prepare any of them. These are the
+CHAI program has had no reason to prepare any of them. These are the
 cohort count, the split design, the input specification, four of the six
 development-process questions, the two evidence-base disclosures and global
 feature importance. If your procurement depends on them, they must be written
@@ -346,7 +346,7 @@ reuse is most expensive to administer.
 
 **The gating conflict: CHAI checkpoints against an OPTICA stakeholder relay.**
 CHAI's six stages are a lifecycle. Each is a checkpoint over the whole
-programme, and the question at each gate is whether that stage's criteria are
+program, and the question at each gate is whether that stage's criteria are
 met. OPTICA's seven completion stages are not a lifecycle at all; they are a
 relay that orders *who answers next* - clinical expert (9 items), developer
 (29), clinical review (12), organizational data lead (7), MLOps expert (5),
@@ -363,7 +363,7 @@ across stages A, C, D and F.
 The practical consequence is that no single completion percentage can be
 computed from the other framework's file. An OPTICA dossier can be 100%
 complete while CHAI Stage 1 is still open, because nothing in OPTICA produces
-a harm register (s1-5) or names a programme owner and decision rights (s1-6).
+a harm register (s1-5) or names a program owner and decision rights (s1-6).
 A CHAI Stage 4 sign-off can be complete while most of OPTICA stage B is
 unanswered. Mapping the items does not map the gates, and a governance process
 that reports "we are through CHAI Stage 4, therefore OPTICA chapter 7 is
@@ -374,7 +374,7 @@ OPTICA's performance chapter opens with six vendor items (7.1-7.6) that ask
 for evidence which already exists: retrospective figures with uncertainty
 intervals, stratified tables, the evaluation cohort's composition, the
 sampling design and true event rate, prior external validation, in-production
-behaviour elsewhere. CHAI's assess-stage criteria ask for evidence that does
+behavior elsewhere. CHAI's assess-stage criteria ask for evidence that does
 not yet exist and must be generated locally: s4-1 requires performance
 validated on local data representative of the deployment population.
 
@@ -458,7 +458,7 @@ report them as covered.
    revise it with what assessment revealed (s2-6, s4-8). OPTICA 12.5's
    reporting plan is an effectiveness channel to a governance body, not a
    safety channel.
-3. Name the accountable programme owner, the governance body and the decision
+3. Name the accountable program owner, the governance body and the decision
    rights (s1-6), which OPTICA distributes across 10.3, 12.5 and 13.1 without
    ever consolidating.
 4. Stratify results by patient group after adoption: pilot results (s5-4) and
@@ -483,7 +483,7 @@ is adopting OPTICA: expect to obtain 29 answers from the vendor, of which ten
 correspond to nothing CHAI ever asked for, and to write 16 OPTICA items that
 have no CHAI source at all - the procurement comparison, the model's
 construction, the vendor's evidence base including its negatives, and the
-portfolio judgement. Those 16 are the reason to run OPTICA, not an overhead on
+portfolio judgment. Those 16 are the reason to run OPTICA, not an overhead on
 top of CHAI.
 
 ## How this page was produced

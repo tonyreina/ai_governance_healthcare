@@ -51,7 +51,7 @@ CROISSANT_RAI = "http://mlcommons.org/croissant/RAI/1.0"
 #
 # So this profile is OFF by default and experimental when on. Emitting terms
 # under a prefix that does not resolve is a real defect in published linked
-# data; it is only defensible as an explicit, labelled opt-in.
+# data; it is only defensible as an explicit, labeled opt-in.
 BIOCROISSANT_DRAFT = "http://mlcommons.org/croissant/bio/0.3"
 BIOCROISSANT_CONTEXT_IRI = "https://mlcommons.org/croissant/bio/0.3/context"
 
@@ -203,9 +203,9 @@ def build(
         ]
 
     # sdLicense covers THIS METADATA RECORD, which this project does license.
-    # `license` -- the licence of the clinical data itself -- is deliberately
+    # `license` -- the license of the clinical data itself -- is deliberately
     # left unset: the governance record does not capture one, and guessing a
-    # licence for a patient-data extract would be worse than omitting it.
+    # license for a patient-data extract would be worse than omitting it.
     # mlcroissant warns that `license` is recommended; that warning is correct
     # and the honest resolution is for a human to supply it, not for the
     # exporter to invent one.

@@ -62,7 +62,7 @@ read only the registry.
     answer cannot move a CHAI score, and vice versa. The frameworks ask
     different parties for different evidence at different moments, and no OPTICA
     item fully discharges a CHAI criterion — see the [crosswalk](crosswalk.md).
-    Evidence can be cited in both; a judgement in one is never a judgement in
+    Evidence can be cited in both; a judgment in one is never a judgment in
     the other.
 
 ## Storage
@@ -185,6 +185,29 @@ To build locally:
 pixi run docs-serve    # live preview at http://localhost:8000
 pixi run docs-build    # writes ./site
 ```
+
+## Staying in step with CHAI
+
+This project paraphrases CHAI's lifecycle, mirrors the Applied Model Card's
+field names, and crosswalks both against OPTICA. None of that updates itself.
+
+`.github/workflows/chai-updates.yml` runs weekly, compares
+[CHAI's content repository](https://github.com/coalition-for-health-ai/responsible-ai-content)
+against the snapshot in `data/chai-upstream.json`, and on any difference opens
+a single issue — updated in place, not reopened weekly — assigned to the
+repository owner, listing what moved and which files here derive from it.
+
+```bash
+pixi run check-chai         # compare now; exits 1 if upstream moved
+pixi run check-chai-write   # accept the current upstream as the baseline
+```
+
+!!! warning "Two CHAI documents are not watched"
+
+    The Assurance Standards Guide and the Applied Model Card template are PDFs
+    with no machine-readable version feed. The check cannot see them, and says
+    so in the issue it opens rather than implying full coverage. Check those by
+    hand when the alert fires.
 
 ## Linting and git hooks
 

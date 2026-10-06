@@ -97,7 +97,7 @@ three also set a **signed JWT assertion** alongside it.
 
     So prefer the assertion — the audience check is worth having, and it is the
     header a future verifying implementation will use. But do not treat it as
-    defence in depth today. Closing direct access to the container is the only
+    defense in depth today. Closing direct access to the container is the only
     control actually standing between an attacker and a forged identity.
 
 Google's own documentation is blunt about this: "If an attacker bypasses
@@ -120,7 +120,7 @@ equally direct: "you must verify the signature of `x-amzn-oidc-data`."
     door, and make the front door the only way in. It is a legitimate choice,
     and it is why every section below spends more space on closing direct
     access than on anything else. But it means the network control is not
-    defence in depth. **It is the whole defence.** If the container is
+    defense in depth. **It is the whole defense.** If the container is
     reachable without passing the front door, identity is forgeable.
 
     `IDENTITY_AUDIENCE` does give you one real check: with
@@ -749,7 +749,7 @@ az containerapp auth update \
       `az containerapp ingress update -n chai-api -g chai-rg
       --allow-insecure false`.
 
-For defence in depth, take the app off the public internet entirely and
+For defense in depth, take the app off the public internet entirely and
 front it with Application Gateway or Front Door:
 
 ```bash

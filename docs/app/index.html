@@ -1121,6 +1121,7 @@ function renderReport(){
   return `<div class="report">
     <div class="r-actions" id="ractions">
       <button class="btn primary" data-act="dl-html">Download report (HTML)</button>
+      <button class="btn" data-act="dl-pdf">Download PDF</button>
       <button class="btn" data-act="dl-md">Download Markdown</button>
       <button class="btn" data-act="dl-json">Download project data (JSON)</button>
       <button class="btn ghost" data-act="print">Print</button>
@@ -1214,7 +1215,7 @@ const OPTICA_ITEMS = OPTICA.chapters.flatMap(c => c.items.map(i => ({ ...i, chap
    Two rules decide everything here, both from docs/crosswalk.md:
 
    1. NO STATUS PROPAGATION, in either direction. Evidence is shared
-      by citing it; judgement never is. No OPTICA answer may change a
+      by citing it; judgment never is. No OPTICA answer may change a
       CHAI criterion's status or a readiness percentage, and none of
       this feeds flags() or statusOf(). Breaking that would silently
       re-gate every existing project.
@@ -1351,7 +1352,7 @@ function renderOpticaOverview() {
   <table class="tbl"><thead><tr><th>Stakeholder</th><th>Answered</th><th>Outstanding</th></tr></thead><tbody>${rows}</tbody></table>
 
   <div class="note">
-    <p><b>OPTICA answers never change CHAI status.</b> The two checklists ask different parties for different evidence at different moments, and no OPTICA item fully discharges a CHAI criterion. Evidence can be cited in both; a judgement in one is not a judgement in the other.</p>
+    <p><b>OPTICA answers never change CHAI status.</b> The two checklists ask different parties for different evidence at different moments, and no OPTICA item fully discharges a CHAI criterion. Evidence can be cited in both; a judgment in one is not a judgment in the other.</p>
   </div>
   ${pager()}`;
 }
@@ -1630,6 +1631,46 @@ function exportHTML(){
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}</main></body></html>`;
 }
+/* PDF, via the browser's own print-to-PDF.
+
+   No PDF library is bundled. Every option (jsPDF, pdfmake, html2pdf) is
+   hundreds of kilobytes, and this dashboard has to stay one self-contained
+   file small enough to publish as an artifact -- a PDF writer would be larger
+   than the entire application. Browsers already render HTML to PDF well, with
+   correct fonts, selectable text and working links, which a canvas-based
+   library does not give you.
+
+   The report is printed from an offscreen iframe holding exactly the
+   standalone HTML export, not from the live page. Printing the page would
+   carry the app's own print stylesheet and its DOM state; this way the PDF and
+   the HTML download are the same document, and what the user sees in the print
+   preview is what the HTML export contains. */
+function exportPDF(){
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.setAttribute("title", "Report for printing");
+  frame.style.cssText = "position:fixed;left:-9999px;top:0;width:820px;height:1160px;border:0";
+  frame.onload = () => {
+    const win = frame.contentWindow;
+    const go = () => {
+      try{ win.focus(); win.print(); }
+      catch(e){ toast("Couldn't open the print dialog"); }
+      // Keep the frame alive briefly: some browsers run print() asynchronously
+      // and removing it immediately cancels the dialog.
+      setTimeout(() => frame.remove(), 60000);
+    };
+    // Wait for the webfonts, or the first page renders in a fallback face.
+    const fonts = win.document.fonts;
+    if(fonts && fonts.ready) fonts.ready.then(go).catch(go);
+    else setTimeout(go, 400);
+  };
+  document.body.appendChild(frame);
+  // srcdoc keeps it same-origin, so contentWindow.print() is reachable; a blob
+  // URL would be a different origin in some browsers and throw.
+  frame.srcdoc = exportHTML();
+  toast("Opening the print dialog. Choose \u201cSave as PDF\u201d.");
+}
+
 function exportMD(){
   const all=allItems(), ov=scoreOf(all), m=S.meta, L=[];
   const st=s=>s?STATUS[s]:"Unanswered";
@@ -1680,7 +1721,12 @@ let DL=null, dlChecked=false;
 const STANDALONE = !(window.claude && typeof window.claude.use==="function");
 function updateDlUI(){
   const fb=document.getElementById("dlFallback"); if(!fb) return;
-  const btns=[...document.querySelectorAll('#ractions [data-act^="dl-"]')];
+  // dl-pdf is deliberately excluded: it goes through the browser's print
+  // dialog, not the downloads API, so it keeps working in a view where saving
+  // a file does not. Hiding it with the rest would remove the one export still
+  // available exactly when the others are gone.
+  const btns=[...document.querySelectorAll('#ractions [data-act^="dl-"]')]
+    .filter(b=>b.dataset.act!=="dl-pdf");
   if(DL||STANDALONE){ btns.forEach(b=>b.hidden=false); fb.innerHTML=""; return; }
   if(!dlChecked) return;
   btns.forEach(b=>b.hidden=true);
@@ -1835,6 +1881,7 @@ document.addEventListener("click",async e=>{
   else if(a==="dl-html") download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML());
   else if(a==="dl-md") download(`${slug(S.meta.solution)}-chai-review.md`, exportMD());
   else if(a==="dl-json") download(`${slug(S.meta.solution)}-chai-review.json`, JSON.stringify(projectJSON(S),null,2));
+  else if(a==="dl-pdf") exportPDF();
   else if(a==="print") window.print();
 });
 document.addEventListener("submit",async e=>{

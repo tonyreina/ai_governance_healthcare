@@ -125,8 +125,8 @@ Never set it anywhere a real person's name could end up in an audit log.
 ## Running the tests
 
 The pure tests — merge semantics, identity parsing — need nothing. The rest
-need a real PostgreSQL, because what they test *is* the database's behaviour: a
-row lock serialising concurrent PATCHes, a unique constraint producing one 409,
+need a real PostgreSQL, because what they test *is* the database's behavior: a
+row lock serializing concurrent PATCHes, a unique constraint producing one 409,
 a trigger refusing an `UPDATE`. A fake would test the fake.
 
 ```bash
@@ -146,7 +146,7 @@ app/
   main.py      app factory, lifespan, CORS off, error handler
   config.py    environment -> Settings, with the per-cloud presets
   auth.py      identity from the proxy header; the peer and secret checks
-  db.py        asyncpg pool, DSN normalising, migrations under a lock
+  db.py        asyncpg pool, DSN normalizing, migrations under a lock
   merge.py     the deep merge, mirroring the browser's
   models.py    pydantic models for the envelope, not for the document
   routes.py    every endpoint in the contract

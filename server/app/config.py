@@ -84,7 +84,7 @@ def _str(name: str, default: str = "") -> str:
 def _alias(primary: str, alias: str, default: str = "") -> str:
     """First of two spellings that is set.
 
-    The repository's Docker Compose stack puts Caddy in front and normalises
+    The repository's Docker Compose stack puts Caddy in front and normalizes
     every cloud's header into ``X-Auth-Request-*``, so it configures the API
     with ``AUTH_HEADER_EMAIL`` and friends. Accepting both spellings means the
     same image runs under compose and under a raw cloud front door without a

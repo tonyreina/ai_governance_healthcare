@@ -10,7 +10,7 @@ for different purposes by different people, and they ask different questions.
 | **Items here** | [41 criteria](chai-checklist.md) | [77 items](optica-checklist.md) |
 | **Core question** | Is this being built and run responsibly, continuously? | Should *this* organization adopt *this* solution? |
 | **Spans** | The whole lifecycle, including live monitoring | Adoption decision, including plans for what follows |
-| **Organised by** | Time — what happens when | People — who answers what, in what order |
+| **Organized by** | Time — what happens when | People — who answers what, in what order |
 | **Ends with** | A recurring periodic review | A completed dossier for an approving authority |
 
 !!! quote "WHO put these two side by side"
@@ -37,7 +37,7 @@ This is why the two compose rather than compete, and it is the basis of the
 
 ## Licensing differs too, and it constrains what is on this site
 
-| Source | Licence | What that permits here |
+| Source | License | What that permits here |
 |---|---|---|
 | CHAI [responsible-ai-content](https://github.com/coalition-for-health-ai/responsible-ai-content) | CC BY 4.0 | Quotable with attribution |
 | CHAI Applied Model Card template | CC BY-ND 4.0 | Field *names* used. Commercial use **is** permitted; distributing a modified version of the template is not |

@@ -1,0 +1,96 @@
+name: Watch CHAI for updates
+
+# This project paraphrases CHAI's lifecycle, mirrors the Applied Model Card's
+# field names, and crosswalks both against OPTICA. None of that updates itself,
+# so when CHAI publishes a change the derivations here go quietly stale.
+#
+# Runs weekly, compares upstream against data/chai-upstream.json, and on a
+# difference opens ONE issue (updated in place, never a new one each week) and
+# assigns it to the repository owner so GitHub emails them.
+
+on:
+  schedule:
+    # Mondays at 08:00 UTC. Weekly is the right cadence: CHAI's content repo
+    # changes every few weeks, and a daily check would mostly produce silence.
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write # commit the refreshed snapshot
+  issues: write # open or update the alert issue
+
+concurrency:
+  group: chai-updates
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          locked: true
+
+      - name: Compare upstream against the snapshot
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          pixi run check-chai --body "$RUNNER_TEMP/issue.md" > "$RUNNER_TEMP/out.txt" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/out.txt"
+          # 0 = no change, 1 = changed, 2 = upstream unreachable.
+          if [ "$status" = "2" ]; then
+            echo "Could not reach the CHAI repository." >&2
+            exit 1
+          fi
+          echo "changed=$([ "$status" = "1" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the alert issue
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "CHAI has published changes: review this project's derivations"
+        run: |
+          body="$(cat "$RUNNER_TEMP/issue.md")"
+          existing="$(gh issue list --state open --label chai-upstream \
+            --json number --jq '.[0].number // empty')"
+
+          if [ -n "$existing" ]; then
+            # Update in place rather than opening a new issue every week, which
+            # would train the reader to ignore them.
+            gh issue edit "$existing" --body "$body"
+            gh issue comment "$existing" \
+              --body "Upstream changed again on $(date -u +%Y-%m-%d). Body updated above."
+            echo "updated issue #$existing"
+          else
+            gh label create chai-upstream \
+              --description "CHAI published something this project derives from" \
+              --color FBCA04 2>/dev/null || true
+            gh issue create --title "$TITLE" --body "$body" \
+              --label chai-upstream --assignee "${{ github.repository_owner }}"
+            echo "opened a new issue"
+          fi
+
+      - name: Record the new snapshot
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pixi run check-chai-write || true
+          if git diff --quiet -- data/chai-upstream.json; then
+            echo "snapshot unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/chai-upstream.json
+          git commit -m "Record CHAI upstream snapshot
+
+          Updated by .github/workflows/chai-updates.yml so the next run reports
+          only what changes after this point."
+          git push

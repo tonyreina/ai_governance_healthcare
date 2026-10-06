@@ -5,7 +5,7 @@
    Two rules decide everything here, both from docs/crosswalk.md:
 
    1. NO STATUS PROPAGATION, in either direction. Evidence is shared
-      by citing it; judgement never is. No OPTICA answer may change a
+      by citing it; judgment never is. No OPTICA answer may change a
       CHAI criterion's status or a readiness percentage, and none of
       this feeds flags() or statusOf(). Breaking that would silently
       re-gate every existing project.

@@ -1,0 +1,61 @@
+{
+ "head_date": "2026-09-02T14:29:29Z",
+ "head_message": "Fix formatting for Jennifer Shannon's entry",
+ "head_sha": "4a946d1a5621751238d543f62f6f4e4b1732ce9f",
+ "repo": "coalition-for-health-ai/responsible-ai-content",
+ "use_cases": {
+  "Ambient-AI": {
+   "files": {
+    "t&e-framework.rst": "c392d747dc73457fbc87d3fba3bf05687d625259"
+   }
+  },
+  "agentic": {
+   "files": {
+    "chai_unified_framework_v2.html": "7a38537e93ba6e929aa404f9b2562ad62ddda009",
+    "chai_unified_framework_v2.rst": "0341ecac7f44082d32bd18658b40f388feef00e1",
+    "t&e-framework.rst": "4d3f3a49a9eb97ab3743f93141619c04a93401d0",
+    "unified-framework-pdf.rst": "931184227316dbb772b539cd8c5a5691c3faeff8"
+   }
+  },
+  "clinical-decision-support": {
+   "files": {
+    "t&e-framework.rst": "1c99e5d5ef69a30ae7e3806cb34b6b8724b3e746"
+   }
+  },
+  "clinical-trials": {
+   "files": {
+    "t&e-framework.rst": "f428d7ad1a0f4e906c9cd8f5e81cd26d5a090ee7"
+   }
+  },
+  "electronic-health-record-information-retrieval": {
+   "files": {
+    "t&e-framework.rst": "05cf7ef2277233468a690693316c664bda2bda56"
+   }
+  },
+  "general-health-advice-chatbot": {
+   "files": {
+    "t&e-framework.rst": "5c4e7b96c6df67564795e874d6adbeb2571953bf"
+   }
+  },
+  "mental-health": {
+   "files": {
+    "t&e-framework.rst": "85dcd1b50029170d2ebbebd503f1a0b1bfcb5bf9"
+   }
+  },
+  "patient-discharge-summarization": {
+   "files": {
+    "te.rst": "1a38b66d5f62470ea3414451975d3a229664fab4"
+   }
+  },
+  "prior-authorization-ai-supported-criteria-matching": {
+   "files": {
+    "t&e-framework.rst": "d8ab7caef0b0024556e2a4f855ddcd4e3a640f3b"
+   }
+  },
+  "sepsis-risk-prediction": {
+   "files": {
+    "te.rst": "9cf3f5bf8ccbe181e8cc15f47d5477890b7cfa1a"
+   }
+  }
+ }
+}

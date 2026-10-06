@@ -20,7 +20,9 @@ renderDashboardShell();
     // Self-hosted backend, if this page is served by one. Checked only when
     // there is no artifact database, so the artifact path costs nothing.
     const api = await detectApi("/api");
-    if(api){
+
+    if(api.verdict === "ok"){
+      rememberApiHere();
       STORE=new ApiStore("/api"); MODE="api"; CAN_DELETE=true;
       setMode("Shared workspace","shared");
       // Identity is established by the proxy, so the browser cannot choose it.
@@ -28,8 +30,38 @@ renderDashboardShell();
         const me = await fetch("/api/me",{credentials:"same-origin"}).then(r=>r.json());
         if(me && me.id){ ME.id=me.id; if(me.name) NAMES[me.id]=me.name; }
       }catch(e){}
-    } else {
-      STORE=new LocalStore(); MODE="local"; CAN_DELETE=true; setMode("This browser only","");
+    }
+    else if(api.verdict === "denied"){
+      // The server knows who you are and said no. Falling back here would
+      // hand a denied user a working private workspace -- access control
+      // failing open into a usable app. Stop instead.
+      fatalError(
+        "You do not have access to this workspace",
+        "The governance server refused this sign-in. Your account may not be "
+        + "authorized for this deployment, or your session may have ended.",
+        {mode:"No access", hint:"Signing out and back in may help. If it does not, "
+          + "ask whoever administers this deployment to grant your account access."});
+      return;
+    }
+    else if(api.verdict === "error" || api.verdict === "unreachable" || apiSeenHere()){
+      // This origin has served a real API before, or something is there and
+      // failing. Either way this is a deployment with a server, and browser-
+      // local storage is not a substitute for it: the work would be invisible
+      // to colleagues, absent from the audit log, and stranded on this machine.
+      fatalError(
+        "Cannot reach the governance server",
+        "This workspace is stored on a server, and the app could not reach it. "
+        + "Nothing has been lost -- your projects are on the server.",
+        {hint:"This is usually temporary. If it persists, the API or its database "
+          + "may be down; check with whoever administers this deployment."});
+      return;
+    }
+    else {
+      // Nothing API-shaped at this origin and none ever seen: a genuinely
+      // static host. localStorage is the intended mode here.
+      STORE=new LocalStore(); MODE="local"; CAN_DELETE=true;
+      setMode("This browser only","");
+      showStorageWarning();
     }
   }
   document.body.classList.toggle("ro",RO);

@@ -309,6 +309,13 @@ body.home main{max-width:1240px;margin:0 auto;width:100%}
 .history{list-style:none;margin:0;padding:0;max-width:820px;font-size:13.5px;border-top:1px solid var(--rule)}
 .history li{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:7px 0;border-bottom:1px solid var(--rule)}
 .history time{color:var(--muted);font-variant-numeric:tabular-nums}
+/* Standing warning for the browser-only storage mode. Not dismissible: it
+   describes a property of where the data is going, which does not stop being
+   true because somebody clicked an x. */
+.storage-warning{background:var(--amber-soft);border-bottom:1px solid var(--amber);color:var(--ink);padding:8px 18px;font-size:13px;line-height:1.45;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.storage-warning b{color:var(--amber)}
+.storage-warning .sw-detail{color:var(--muted)}
+@media print{.storage-warning{display:none}}
 .banner{background:var(--teal-soft);border-left:3px solid var(--teal);padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin:0 0 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 body.ro .ro-hide{display:none!important}
 
@@ -733,18 +740,70 @@ class ApiStore{
 /* Event names the API emits. Keep in step with server/app/events.py. */
 ApiStore.EVENTS = ["project.created","project.updated","project.deleted","log.appended","resync"];
 
-/* Is a self-hosted backend serving this page? Short timeout: on GitHub Pages
-   the request 404s immediately, and the user should not wait on it. */
+/* Is a self-hosted backend serving this page, and if not, WHY not?
+
+   This used to return null for every failure, and boot treated null as
+   "no server here, use localStorage". That conflated three situations that
+   must not be treated alike:
+
+     - a genuinely static host (GitHub Pages, a file:// open) -- localStorage
+       is correct;
+     - a self-hosted stack whose API is restarting, slow, or behind a proxy
+       having a bad minute -- falling back silently strands the user's work in
+       a browser-local store their colleagues cannot see and no audit log
+       records;
+     - a self-hosted stack that AUTHENTICATED the user and said NO (401/403) --
+       falling back hands a denied user a working private workspace, which is
+       access control failing open.
+
+   So the verdict is explicit and boot decides. Verdicts:
+
+     ok          a healthy API answered; `health` carries its payload
+     denied      the front door or the API refused this user (401/403)
+     unreachable something is there but did not answer in time
+     error       something answered with a server error
+     absent      nothing API-shaped here; a static host
+
+   Short timeout because on a static host the request 404s immediately and the
+   user should not wait on it. */
 async function detectApi(base){
+  base = base || "/api";
   try{
     const ctl = new AbortController();
     const t = setTimeout(()=>ctl.abort(), 2500);
-    const r = await fetch((base||"/api")+"/health",{signal:ctl.signal,credentials:"same-origin"});
+    const r = await fetch(base+"/health",{signal:ctl.signal,credentials:"same-origin"});
     clearTimeout(t);
-    if(!r.ok) return null;
+    if(r.status===401 || r.status===403) return {verdict:"denied", status:r.status};
+    if(r.status>=500) return {verdict:"error", status:r.status};
+    if(!r.ok) return {verdict:"absent", status:r.status};
+    // A static host serving an HTML 404 page with a 200, or anything else
+    // that is not our health payload, lands in the catch below or here.
     const j = await r.json();
-    return j && j.status==="ok" ? j : null;
-  }catch(e){ return null; }
+    return j && j.status==="ok" ? {verdict:"ok", health:j} : {verdict:"absent"};
+  }catch(e){
+    // AbortError means the timeout fired: something may well be there. A
+    // network TypeError or a JSON parse failure means there is nothing
+    // API-shaped at this origin.
+    return {verdict: (e && e.name==="AbortError") ? "unreachable" : "absent"};
+  }
+}
+
+/* Has this origin ever served a working API to this browser?
+
+   Without this, a self-hosted deployment whose API is down for thirty seconds
+   is indistinguishable from GitHub Pages, and the safe choice would be to
+   refuse to start anywhere -- including on the static host where localStorage
+   is the whole point. Remembering that we have seen a real API here lets the
+   app refuse in the one place refusing is right.
+
+   A per-origin key, because the same build is served from both. */
+const API_SEEN_KEY = "chai-api-origin-seen";
+function apiSeenHere(){
+  try{ return localStorage.getItem(API_SEEN_KEY) === location.origin; }
+  catch(e){ return false; }
+}
+function rememberApiHere(){
+  try{ localStorage.setItem(API_SEEN_KEY, location.origin); }catch(e){}
 }
 
 /* ============================================================
@@ -2273,6 +2332,62 @@ function applyRO(root){
   root.querySelectorAll("[data-set],[data-gate],[data-delmetric]").forEach(e=>e.disabled=true);
 }
 
+/* A blocking failure screen, for when continuing would be worse than stopping.
+
+   There is exactly one situation that warrants this: the page is served by a
+   self-hosted deployment and the app cannot reach its API, or reached it and
+   was refused. The tempting alternative -- quietly switch to browser-local
+   storage -- is what this replaces. It stranded work in a store colleagues
+   could not see, and it handed a user the server had DENIED a fully working
+   private workspace.
+
+   So: no store, no dashboard, no editing. Say which of the two happened,
+   because the remedies are completely different, and offer a retry. */
+function fatalError(title, detail, opts){
+  const o = opts || {};
+  document.body.classList.remove("home");
+  document.body.classList.add("ro");
+  setMode(o.mode || "Not connected", "ro");
+  const rail = document.getElementById("rail");
+  if(rail) rail.innerHTML = "";
+  const m = document.getElementById("main");
+  m.innerHTML = `
+    <div class="empty-state" role="alert">
+      <p class="eyebrow">Cannot start</p>
+      <h1 style="margin-top:4px">${esc(title)}</h1>
+      <p class="lede">${esc(detail)}</p>
+      ${o.hint ? `<p class="small" style="color:var(--muted);max-width:60ch">${esc(o.hint)}</p>` : ""}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn primary" data-act="retry-boot">Try again</button>
+      </div>
+    </div>`;
+  const retry = m.querySelector('[data-act="retry-boot"]');
+  if(retry) retry.onclick = ()=>location.reload();
+}
+
+/* Say, permanently and in the layout rather than in a toast, that this mode
+   stores everything in one browser.
+
+   The storage mode is the single most consequential thing about a deployment
+   of this tool and the least visible: the UI is otherwise identical whether a
+   record is on a shared, access-controlled, audited server or in localStorage
+   on one laptop. A user cannot be expected to infer "do not type a patient
+   identifier here" from a two-word label in the header. */
+function showStorageWarning(){
+  if(document.getElementById("storageWarning")) return;
+  const el = document.createElement("div");
+  el.id = "storageWarning";
+  el.className = "storage-warning";
+  el.setAttribute("role", "note");
+  el.innerHTML = `<b>Saved in this browser only.</b>
+    <span class="sw-detail">Nothing is sent to a server: colleagues cannot see these
+    records, there is no audit log, no access control, and clearing site data
+    deletes them. Do not enter patient-identifiable information.
+    For a shared workspace, deploy the server &mdash; see the deployment guide.</span>`;
+  const header = document.querySelector("header.top");
+  if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
+}
+
 /* ============================================================
    Exports
    ============================================================ */
@@ -2903,7 +3018,9 @@ renderDashboardShell();
     // Self-hosted backend, if this page is served by one. Checked only when
     // there is no artifact database, so the artifact path costs nothing.
     const api = await detectApi("/api");
-    if(api){
+
+    if(api.verdict === "ok"){
+      rememberApiHere();
       STORE=new ApiStore("/api"); MODE="api"; CAN_DELETE=true;
       setMode("Shared workspace","shared");
       // Identity is established by the proxy, so the browser cannot choose it.
@@ -2911,8 +3028,38 @@ renderDashboardShell();
         const me = await fetch("/api/me",{credentials:"same-origin"}).then(r=>r.json());
         if(me && me.id){ ME.id=me.id; if(me.name) NAMES[me.id]=me.name; }
       }catch(e){}
-    } else {
-      STORE=new LocalStore(); MODE="local"; CAN_DELETE=true; setMode("This browser only","");
+    }
+    else if(api.verdict === "denied"){
+      // The server knows who you are and said no. Falling back here would
+      // hand a denied user a working private workspace -- access control
+      // failing open into a usable app. Stop instead.
+      fatalError(
+        "You do not have access to this workspace",
+        "The governance server refused this sign-in. Your account may not be "
+        + "authorized for this deployment, or your session may have ended.",
+        {mode:"No access", hint:"Signing out and back in may help. If it does not, "
+          + "ask whoever administers this deployment to grant your account access."});
+      return;
+    }
+    else if(api.verdict === "error" || api.verdict === "unreachable" || apiSeenHere()){
+      // This origin has served a real API before, or something is there and
+      // failing. Either way this is a deployment with a server, and browser-
+      // local storage is not a substitute for it: the work would be invisible
+      // to colleagues, absent from the audit log, and stranded on this machine.
+      fatalError(
+        "Cannot reach the governance server",
+        "This workspace is stored on a server, and the app could not reach it. "
+        + "Nothing has been lost -- your projects are on the server.",
+        {hint:"This is usually temporary. If it persists, the API or its database "
+          + "may be down; check with whoever administers this deployment."});
+      return;
+    }
+    else {
+      // Nothing API-shaped at this origin and none ever seen: a genuinely
+      // static host. localStorage is the intended mode here.
+      STORE=new LocalStore(); MODE="local"; CAN_DELETE=true;
+      setMode("This browser only","");
+      showStorageWarning();
     }
   }
   document.body.classList.toggle("ro",RO);

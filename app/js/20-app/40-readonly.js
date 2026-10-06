@@ -8,3 +8,59 @@ function applyRO(root){
   root.querySelectorAll("input:not([type=search]),textarea,select").forEach(e=>{ if(!e.closest(".fallback")) e.disabled=true; });
   root.querySelectorAll("[data-set],[data-gate],[data-delmetric]").forEach(e=>e.disabled=true);
 }
+
+/* A blocking failure screen, for when continuing would be worse than stopping.
+
+   There is exactly one situation that warrants this: the page is served by a
+   self-hosted deployment and the app cannot reach its API, or reached it and
+   was refused. The tempting alternative -- quietly switch to browser-local
+   storage -- is what this replaces. It stranded work in a store colleagues
+   could not see, and it handed a user the server had DENIED a fully working
+   private workspace.
+
+   So: no store, no dashboard, no editing. Say which of the two happened,
+   because the remedies are completely different, and offer a retry. */
+function fatalError(title, detail, opts){
+  const o = opts || {};
+  document.body.classList.remove("home");
+  document.body.classList.add("ro");
+  setMode(o.mode || "Not connected", "ro");
+  const rail = document.getElementById("rail");
+  if(rail) rail.innerHTML = "";
+  const m = document.getElementById("main");
+  m.innerHTML = `
+    <div class="empty-state" role="alert">
+      <p class="eyebrow">Cannot start</p>
+      <h1 style="margin-top:4px">${esc(title)}</h1>
+      <p class="lede">${esc(detail)}</p>
+      ${o.hint ? `<p class="small" style="color:var(--muted);max-width:60ch">${esc(o.hint)}</p>` : ""}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn primary" data-act="retry-boot">Try again</button>
+      </div>
+    </div>`;
+  const retry = m.querySelector('[data-act="retry-boot"]');
+  if(retry) retry.onclick = ()=>location.reload();
+}
+
+/* Say, permanently and in the layout rather than in a toast, that this mode
+   stores everything in one browser.
+
+   The storage mode is the single most consequential thing about a deployment
+   of this tool and the least visible: the UI is otherwise identical whether a
+   record is on a shared, access-controlled, audited server or in localStorage
+   on one laptop. A user cannot be expected to infer "do not type a patient
+   identifier here" from a two-word label in the header. */
+function showStorageWarning(){
+  if(document.getElementById("storageWarning")) return;
+  const el = document.createElement("div");
+  el.id = "storageWarning";
+  el.className = "storage-warning";
+  el.setAttribute("role", "note");
+  el.innerHTML = `<b>Saved in this browser only.</b>
+    <span class="sw-detail">Nothing is sent to a server: colleagues cannot see these
+    records, there is no audit log, no access control, and clearing site data
+    deletes them. Do not enter patient-identifiable information.
+    For a shared workspace, deploy the server &mdash; see the deployment guide.</span>`;
+  const header = document.querySelector("header.top");
+  if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
+}

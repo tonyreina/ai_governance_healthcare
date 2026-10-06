@@ -16,34 +16,80 @@ AI solution they evaluate or run, and tracks the whole portfolio on one dashboar
   Card, with a live preview.
 - **Exports**: standalone HTML report, Markdown, JSON (per project) and CSV (portfolio).
 
-No build step, no dependencies: everything is in `docs/app/index.html`.
-
 **Live site:** <https://tonyreina.github.io/ai_governance_healthcare/> —
-documentation, with the dashboard itself at
-[`/app/`](https://tonyreina.github.io/ai_governance_healthcare/app/).
+documentation, with a **demonstration** copy of the dashboard at
+[`/app/`](https://tonyreina.github.io/ai_governance_healthcare/app/). That copy
+stores everything in your browser. It is not a system of record.
 
-## Run it
+## Running it
 
-Open `docs/app/index.html` in a browser, or serve the folder:
+There are three modes and **they are not equivalent**. Only one of them
+enforces access control, keeps an audit log on a server, or produces a
+checkpoint sign-off that means anything.
+
+| | Docker stack | Claude artifact | Open a file / GitHub Pages |
+|---|---|---|---|
+| Storage | PostgreSQL | Artifact database | Browser `localStorage` |
+| Shared between people | Yes | Yes | **No** |
+| Identity | Your hospital SSO | Yes | **None** |
+| Access control enforced | **Yes, server-side** | Partly | **No** |
+| Audit log | Yes, append-only | Yes | This browser only |
+| Version snapshots | **Yes** | No | No |
+
+See [Running it](docs/running.md) for the full comparison.
+
+### Deploy the shared workspace
+
+This is the mode to use for anything you intend to keep. It runs a Caddy front
+door, a FastAPI service and PostgreSQL; sign-in is handled by whatever SSO the
+hospital already has, and the API reads identity from the proxy and nowhere
+else.
+
+```bash
+make env                      # creates .env from the template
+$EDITOR .env                  # set POSTGRES_PASSWORD and IDENTITY_ID_SOURCE
+make up                       # refuses to start on unsafe settings
+```
+
+`.env` ships deliberately incomplete: `make up` runs
+[`scripts/preflight.py`](scripts/preflight.py) first and will tell you exactly
+what is missing and why it matters. The stack binds to loopback by default,
+because it speaks plain HTTP and expects TLS to be terminated in front of it.
+
+- **[Deployment guide](docs/deploy.md)** — Google Cloud (IAP), AWS (ALB + OIDC)
+  and Azure (Easy Auth), each with a *Close the back door* section. Those
+  sections are not hardening; they are the deployment. The API trusts an
+  identity header, so it must be unreachable except through the proxy.
+- **[Self-hosting](docs/self-hosting.md)** — how the app is built, the store
+  contract, and how to back it with something else.
+
+```bash
+make dev          # local stack: fixed dev identity, hot reload, exposed ports
+make check-isolation   # prove the API is not reachable except through the proxy
+make down         # stop. The pgdata volume survives this.
+```
+
+### Evaluate it without deploying anything
+
+The dashboard is also a single self-contained file that runs with no server at
+all. Everything is stored in that one browser: colleagues cannot see it, there
+is no access control, no server-side audit log, and clearing site data deletes
+it. The app says so in a standing banner when it is in this mode.
+
+Use it to try the checklists out. **Do not put patient-identifiable
+information in it.**
 
 ```bash
 python3 -m http.server 8000 --directory docs
 # then visit http://localhost:8000/app/
 ```
 
-### Storage modes
-
-| Where it runs | Storage | Shared between people? |
-|---|---|---|
-| Published as a Claude artifact | Artifact database (`claude.use("db")`) | Yes, live, with per-user sign-off |
-| Opened directly / GitHub Pages | Browser `localStorage` | No, one browser only |
-
-All persistence goes through two small classes in `docs/app/index.html`,
-`DbStore` and `LocalStore`, which share one interface (`subscribeAll`,
-`create`, `update`, `remove`, `log`, `subscribeLog`). To back the tool with
-your own server
-(Firestore, Supabase, a FastAPI service, etc.), add a third class with the same
-methods and select it at boot.
+All persistence goes through one interface (`subscribeAll`, `create`, `update`,
+`remove`, `log`, `subscribeLog`), implemented by `ApiStore` (the Docker stack),
+`DbStore` (artifact) and `LocalStore` (browser). To back the tool with
+something else — Firestore, Supabase, your own service — add a fourth class
+with the same methods. The app selects one at boot and **never silently falls
+back**: if a server was expected and cannot be reached, it stops and says so.
 
 ## Documentation site
 
@@ -76,7 +122,7 @@ pixi run lint-fix        # rumdl, fixing what it can in place
 The same hooks run in CI via `.github/workflows/lint.yml`, so CI cannot drift
 from what contributors get locally.
 
-### Deploy
+### Publishing the documentation site
 
 `.github/workflows/pages.yml` builds with Zensical and publishes on every push
 to `main`. Enable it once under **Settings → Pages → Build and deployment
@@ -84,7 +130,8 @@ to `main`. Enable it once under **Settings → Pages → Build and deployment
 
 ## Compliance rules
 
-Status is computed in the browser by `flags()` in `docs/app/index.html`. See
+Status is computed in the browser by `flags()`, in
+`app/js/10-frameworks/10-chai/10-rules.js`. See
 [`docs/compliance-rules.md`](docs/compliance-rules.md) for the full list and how
 to change it.
 

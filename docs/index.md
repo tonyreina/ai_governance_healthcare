@@ -25,22 +25,6 @@ dashboard.
 The app has no build step and no dependencies: everything is in a single
 `index.html`.
 
-## Run it locally
-
-The dashboard is a self-contained file. Open it straight from the repository:
-
-```bash
-# any browser, no server required
-xdg-open docs/app/index.html
-```
-
-Or serve the folder, which is closer to how it behaves when published:
-
-```bash
-python3 -m http.server 8000 --directory docs
-# then visit http://localhost:8000/app/
-```
-
 ## Where it runs
 
 The tool picks its storage backend from where it is running, and the modes are
@@ -60,6 +44,43 @@ everything locally.
     to a server, and nothing is shared with colleagues. Use the JSON export to
     move a project between people or machines, or see
     [Self-hosting](self-hosting.md) to put it behind a real database.
+
+## Run it
+
+There are three modes and **they are not equivalent**. Only the server-backed
+one enforces access control, keeps a server-side audit log, or produces a
+checkpoint sign-off that means anything. See [Running it](running.md) for the
+full comparison.
+
+### A shared workspace, for records you intend to keep
+
+A Caddy front door, a FastAPI service and PostgreSQL. Sign-in is handled by
+whatever single sign-on the hospital already runs, and the API reads identity
+from the proxy and nowhere else.
+
+```bash
+make env          # creates .env from the template
+$EDITOR .env      # set POSTGRES_PASSWORD and IDENTITY_ID_SOURCE
+make up           # refuses to start on unsafe settings
+```
+
+The template ships deliberately incomplete, and `make up` will say exactly what
+is missing and why it matters. Then read the
+[deployment guide](deploy.md) — every platform section there has a *Close the
+back door* step, and those steps are not hardening, they are the deployment.
+
+### Try it out without deploying anything
+
+The dashboard is also a single self-contained file that needs no server. In
+that mode everything lives in one browser: colleagues cannot see it, there is
+no access control, no server-side audit log, and clearing site data deletes it.
+The app shows a standing banner saying so. **Do not put patient-identifiable
+information in it.**
+
+```bash
+python3 -m http.server 8000 --directory docs
+# then visit http://localhost:8000/app/
+```
 
 ## Two frameworks, reconciled
 

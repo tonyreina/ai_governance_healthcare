@@ -344,11 +344,19 @@ def content_md5(doc: dict[str, Any]) -> str:
 async def _snapshot(
     conn: Any, project_id: str, rev: int, doc: dict[str, Any], by: str | None
 ) -> None:
-    """Record one immutable version. Caller supplies the open transaction."""
+    """Record one immutable version. Caller supplies the open transaction.
+
+    The access list is copied onto the row. That is what keeps history as
+    restricted as the record was: a deleted project has no live document to
+    check against, and without this its snapshots were readable by anyone who
+    could reach the API. See ``003_version_access.sql``.
+    """
+    access = doc.get("access") if isinstance(doc.get("access"), dict) else {}
     await conn.execute(
         """
-        INSERT INTO project_version (project_id, rev, doc, content_md5, changed_by)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO project_version
+               (project_id, rev, doc, content_md5, changed_by, access)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (project_id, rev) DO NOTHING
         """,
         project_id,
@@ -356,7 +364,37 @@ async def _snapshot(
         doc,
         content_md5(doc),
         by,
+        access,
     )
+
+
+async def _version_gate(conn: Any, project_id: str) -> dict[str, Any] | None:
+    """The document whose access list governs reads of this project's history.
+
+    The live project when there is one. Otherwise the access list recorded on
+    the most recent snapshot, so deleting a project does not turn its history
+    into a public record. ``None`` means there is no history at all, which the
+    caller turns into a 404.
+
+    Rows written before ``003_version_access.sql`` have a NULL access snapshot
+    and read as unclaimed, i.e. unrestricted -- which is the state they were
+    already in. Nothing becomes more open than it was.
+    """
+    live = await conn.fetchrow("SELECT doc FROM projects WHERE id = $1", project_id)
+    if live is not None:
+        return live["doc"] or {}
+    row = await conn.fetchrow(
+        """
+        SELECT access FROM project_version
+         WHERE project_id = $1
+         ORDER BY rev DESC
+         LIMIT 1
+        """,
+        project_id,
+    )
+    if row is None:
+        return None
+    return {"access": row["access"] or {}}
 
 
 # --- version history --------------------------------------------------------
@@ -375,25 +413,21 @@ async def list_versions(
     themselves are fetched one at a time, because returning fifty full
     snapshots to render a list is a lot of bytes for a column of dates.
 
-    Access is checked against the LIVE project. A deleted project keeps its
-    versions on purpose (see 002_versions.sql), and in that case there is no
-    live document to check, so the history of a deleted project is readable by
-    anyone who can reach the API. That is the intended trade: "it was deleted,
-    and here is what it said" is the audit answer, and a deleted record cannot
-    tell you who used to own it.
+    Access is checked against the live project, or -- when it has been deleted
+    -- against the access list recorded on its most recent snapshot. A deleted
+    project keeps its versions on purpose (see 002_versions.sql), and it must
+    not become readable to everyone in the process: "it was deleted, and here
+    is what it said" is the audit answer for the people who could read it, not
+    for everybody with an account.
     """
     async with db.acquire() as conn:
-        live = await conn.fetchrow("SELECT doc FROM projects WHERE id = $1", project_id)
-        if live is not None:
-            require(
-                live["doc"] or {},
-                identity.id,
-                "read",
-                enforced=settings.require_identity,
-            )
+        gate = await _version_gate(conn, project_id)
+        if gate is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
+        require(gate, identity.id, "read", enforced=settings.require_identity)
         rows = await conn.fetch(
             """
-            SELECT rev, content_md5, changed_by, changed_at
+            SELECT rev, content_md5, changed_by, changed_at, purged_at, purged_by
               FROM project_version
              WHERE project_id = $1
              ORDER BY rev DESC
@@ -406,6 +440,15 @@ async def list_versions(
             "md5": r["content_md5"],
             "by": r["changed_by"],
             "at": r["changed_at"].isoformat(),
+            "purged": r["purged_at"] is not None,
+            **(
+                {
+                    "purgedAt": r["purged_at"].isoformat(),
+                    "purgedBy": r["purged_by"],
+                }
+                if r["purged_at"] is not None
+                else {}
+            ),
         }
         for r in rows
     ]
@@ -419,19 +462,20 @@ async def read_version(
     settings: Settings = Depends(get_settings),
     identity: Identity = Depends(get_identity),
 ) -> dict[str, Any]:
-    """One revision, exactly as it was stored, with its fingerprint."""
+    """One revision, exactly as it was stored, with its fingerprint.
+
+    A purged revision returns an empty ``doc`` and ``purged: true``. Its
+    ``md5`` is the fingerprint of the ORIGINAL content, which is what makes the
+    tombstone evidence rather than a gap.
+    """
     async with db.acquire() as conn:
-        live = await conn.fetchrow("SELECT doc FROM projects WHERE id = $1", project_id)
-        if live is not None:
-            require(
-                live["doc"] or {},
-                identity.id,
-                "read",
-                enforced=settings.require_identity,
-            )
+        gate = await _version_gate(conn, project_id)
+        if gate is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
+        require(gate, identity.id, "read", enforced=settings.require_identity)
         row = await conn.fetchrow(
             """
-            SELECT rev, doc, content_md5, changed_by, changed_at
+            SELECT rev, doc, content_md5, changed_by, changed_at, purged_at, purged_by
               FROM project_version
              WHERE project_id = $1 AND rev = $2
             """,
@@ -442,13 +486,74 @@ async def read_version(
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, f"No revision {rev} of {project_id!r}."
         )
-    return {
+    out: dict[str, Any] = {
         "rev": row["rev"],
         "md5": row["content_md5"],
         "by": row["changed_by"],
         "at": row["changed_at"].isoformat(),
         "doc": row["doc"],
+        "purged": row["purged_at"] is not None,
     }
+    if row["purged_at"] is not None:
+        out["purgedAt"] = row["purged_at"].isoformat()
+        out["purgedBy"] = row["purged_by"]
+    return out
+
+
+@router.delete(
+    "/projects/{project_id}/versions",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["versions"],
+)
+async def purge_versions(
+    project_id: str = ProjectId,
+    db: Database = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    identity: Identity = Depends(get_identity),
+) -> Response:
+    """Destroy the stored content of every retained revision. Owner only.
+
+    This is the disposal path. Snapshots are otherwise append-only and survive
+    the project's deletion, which is right for an audit trail and wrong as an
+    absolute: data entered in error -- a patient identifier pasted into an
+    evidence field -- has to be removable, and before this it was not
+    removable through the application at all.
+
+    What survives is deliberate. Each row keeps its revision number, its
+    author, its timestamp and its ORIGINAL ``content_md5``; only ``doc`` is
+    emptied, and ``purged_at``/``purged_by`` record who did it. A row that
+    vanished would be indistinguishable from a snapshot never taken. A trigger
+    in 003_version_access.sql permits exactly this transition and nothing else.
+
+    Works on a deleted project, whose access list comes from its last snapshot
+    -- otherwise the one record most likely to need purging would be the one
+    record nobody could purge.
+    """
+    async with db.acquire() as conn, conn.transaction():
+        gate = await _version_gate(conn, project_id)
+        if gate is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
+        require(gate, identity.id, "own", enforced=settings.require_identity)
+        purged = await conn.fetchval(
+            """
+            WITH redacted AS (
+                UPDATE project_version
+                   SET doc = '{}'::jsonb, purged_at = now(), purged_by = $2
+                 WHERE project_id = $1 AND purged_at IS NULL
+             RETURNING 1
+            )
+            SELECT count(*) FROM redacted
+            """,
+            project_id,
+            identity.id,
+        )
+    log.warning(
+        "version history of %s purged by %s (%d revision(s))",
+        project_id,
+        identity.id,
+        purged or 0,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # --- audit log --------------------------------------------------------------

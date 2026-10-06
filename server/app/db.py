@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -157,6 +158,8 @@ class Database:
         self._max_size = max_size
         self._connect_timeout = connect_timeout
         self._pool: asyncpg.Pool | None = None
+        self._ping_cache: tuple[float, bool] | None = None
+        self._ping_lock = asyncio.Lock()
 
     # --- lifecycle --------------------------------------------------------
 
@@ -283,3 +286,34 @@ class Database:
         except (OSError, asyncpg.PostgresError, RuntimeError) as exc:
             log.warning("database ping failed: %s", exc)
             return False
+
+    async def ping_cached(self, ttl: float = 2.0) -> bool:
+        """:meth:`ping`, but at most once per ``ttl`` seconds.
+
+        ``GET /api/health`` is deliberately unauthenticated -- every platform
+        in docs/deploy.md probes it from inside the load balancer, where no
+        identity header exists yet -- and it is exempt from the rate limiter
+        for the same reason. An uncached ping therefore let anyone who could
+        reach the port take a connection from a pool of ten, as fast as they
+        liked, and starve real requests of it.
+
+        A couple of seconds is invisible to a probe that runs every ten or
+        thirty, and turns an unbounded amplifier into a fixed, tiny load.
+        Failures are cached too, briefly: a database that is down does not
+        come back within two seconds, and retrying per request is how a
+        struggling database gets hammered by its own health checks.
+        """
+        now = time.monotonic()
+        cached = self._ping_cache
+        if cached is not None and now - cached[0] < ttl:
+            return cached[1]
+        async with self._ping_lock:
+            # Re-check: a burst of concurrent probes should produce one query,
+            # not one per waiter.
+            cached = self._ping_cache
+            now = time.monotonic()
+            if cached is not None and now - cached[0] < ttl:
+                return cached[1]
+            alive = await self.ping()
+            self._ping_cache = (time.monotonic(), alive)
+            return alive

@@ -1760,7 +1760,10 @@ function renderDashboardShell(){
     <div class="dash-head">
       <div><p class="eyebrow">AI governance</p><h1>AI projects under review</h1>
       <p class="lede">Every AI solution your organization is evaluating or running, checked against the CHAI lifecycle. Projects out of compliance or needing an update rise to the top.</p></div>
-      <button class="btn primary ro-hide" data-act="new">New project</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+        <button class="btn ro-hide" data-act="samples" title="Add any sample projects not already in this workspace">Add samples</button>
+        <button class="btn primary ro-hide" data-act="new">New project</button>
+      </div>
     </div>
     ${legacy?`<div class="banner ro-hide" id="legacyBanner"><span>A review of <b>${esc(legacy.meta.solution||"an AI solution")}</b> was saved in this browser before the shared workspace existed.</span><span style="display:flex;gap:8px"><button class="btn" data-act="legacy">Add it to the workspace</button><button class="btn ghost" data-act="legacy-dismiss">Dismiss</button></span></div>`:""}
     <form class="newform ro-hide" id="newform" hidden>
@@ -1798,7 +1801,7 @@ function updateDashboard(){
   const rank={red:0,amber:1,green:2,retired:3};
   list.sort((a,b)=>(rank[a.st.key]-rank[b.st.key]) || (b.f.length-a.f.length) || (a.p.meta.solution||"").localeCompare(b.p.meta.solution||""));
   if(!rows.length){
-    host.innerHTML=`<div class="empty-state"><p>No AI projects yet. Add the first solution your organization is evaluating, or load three sample projects to see how compliance flags work.</p>
+    host.innerHTML=`<div class="empty-state"><p>No AI projects yet. Add the first solution your organization is evaluating, or load ${SAMPLES.length} sample projects \u2014 one per CHAI use case \u2014 to see how compliance flags work.</p>
       <div class="ro-hide" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="new">New project</button><button class="btn" data-act="samples">Load sample projects</button></div></div>`;
     applyRO(host); return;
   }
@@ -2276,10 +2279,18 @@ function exampleInto(p){
   p.card=Object.assign(clone(EX_CARD),{releaseStage:"Silent evaluation"}); p.cardUpdatedAt=new Date().toISOString();
 }
 
+/* Additive and repeatable. The samples used to be loadable only into an
+   empty workspace, from a button that vanished as soon as anything existed --
+   so anyone who loaded them once could never get the ones added later, and
+   there was no way to top up. Matching on name keeps a second press from
+   duplicating what is already there. */
 async function loadSamples(){
   const now=new Date();
-  for(const spec of SAMPLES) await createProject(buildSample(spec, now), "Sample project added");
-  toast(`${SAMPLES.length} sample projects added`);
+  const have=new Set([...PROJECTS.values()].map(p=>(p.meta.solution||"").trim()));
+  const missing=SAMPLES.filter(spec=>!have.has(spec.name));
+  if(!missing.length){ toast("All sample projects are already here"); return; }
+  for(const spec of missing) await createProject(buildSample(spec, now), "Sample project added");
+  toast(`${missing.length} sample project${missing.length===1?"":"s"} added`);
 }
 
 /* ============================================================
@@ -2364,7 +2375,12 @@ document.addEventListener("click",async e=>{
   const a=t.dataset.act; if(!a) return;
   if(a==="new"){ const f=document.getElementById("newform"); if(f){ f.hidden=false; document.getElementById("newname").focus(); } return; }
   if(a==="new-cancel"){ document.getElementById("newform").hidden=true; return; }
-  if(a==="samples"){ t.disabled=true; await loadSamples(); return; }
+  if(a==="samples"){
+    t.disabled=true;
+    try{ await loadSamples(); }
+    finally{ t.disabled=false; }
+    return;
+  }
   if(a==="legacy"){
     try{ const j=JSON.parse(localStorage.getItem("chai-review-v1")); const p=normalize(Object.assign(blankProject(j.meta.solution),{meta:j.meta,items:j.items||{},gates:j.gates||{},metrics:j.metrics||[],card:j.card||{}}));
       Object.values(p.items).forEach(x=>{ if(x) delete x._open; });

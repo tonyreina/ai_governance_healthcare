@@ -192,8 +192,16 @@ function exampleInto(p){
   p.card=Object.assign(clone(EX_CARD),{releaseStage:"Silent evaluation"}); p.cardUpdatedAt=new Date().toISOString();
 }
 
+/* Additive and repeatable. The samples used to be loadable only into an
+   empty workspace, from a button that vanished as soon as anything existed --
+   so anyone who loaded them once could never get the ones added later, and
+   there was no way to top up. Matching on name keeps a second press from
+   duplicating what is already there. */
 async function loadSamples(){
   const now=new Date();
-  for(const spec of SAMPLES) await createProject(buildSample(spec, now), "Sample project added");
-  toast(`${SAMPLES.length} sample projects added`);
+  const have=new Set([...PROJECTS.values()].map(p=>(p.meta.solution||"").trim()));
+  const missing=SAMPLES.filter(spec=>!have.has(spec.name));
+  if(!missing.length){ toast("All sample projects are already here"); return; }
+  for(const spec of missing) await createProject(buildSample(spec, now), "Sample project added");
+  toast(`${missing.length} sample project${missing.length===1?"":"s"} added`);
 }

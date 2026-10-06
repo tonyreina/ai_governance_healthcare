@@ -24,7 +24,10 @@ function renderDashboardShell(){
     <div class="dash-head">
       <div><p class="eyebrow">AI governance</p><h1>AI projects under review</h1>
       <p class="lede">Every AI solution your organization is evaluating or running, checked against the CHAI lifecycle. Projects out of compliance or needing an update rise to the top.</p></div>
-      <button class="btn primary ro-hide" data-act="new">New project</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+        <button class="btn ro-hide" data-act="samples" title="Add any sample projects not already in this workspace">Add samples</button>
+        <button class="btn primary ro-hide" data-act="new">New project</button>
+      </div>
     </div>
     ${legacy?`<div class="banner ro-hide" id="legacyBanner"><span>A review of <b>${esc(legacy.meta.solution||"an AI solution")}</b> was saved in this browser before the shared workspace existed.</span><span style="display:flex;gap:8px"><button class="btn" data-act="legacy">Add it to the workspace</button><button class="btn ghost" data-act="legacy-dismiss">Dismiss</button></span></div>`:""}
     <form class="newform ro-hide" id="newform" hidden>
@@ -62,7 +65,7 @@ function updateDashboard(){
   const rank={red:0,amber:1,green:2,retired:3};
   list.sort((a,b)=>(rank[a.st.key]-rank[b.st.key]) || (b.f.length-a.f.length) || (a.p.meta.solution||"").localeCompare(b.p.meta.solution||""));
   if(!rows.length){
-    host.innerHTML=`<div class="empty-state"><p>No AI projects yet. Add the first solution your organization is evaluating, or load three sample projects to see how compliance flags work.</p>
+    host.innerHTML=`<div class="empty-state"><p>No AI projects yet. Add the first solution your organization is evaluating, or load ${SAMPLES.length} sample projects \u2014 one per CHAI use case \u2014 to see how compliance flags work.</p>
       <div class="ro-hide" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="new">New project</button><button class="btn" data-act="samples">Load sample projects</button></div></div>`;
     applyRO(host); return;
   }

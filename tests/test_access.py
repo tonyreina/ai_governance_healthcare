@@ -146,6 +146,33 @@ def main() -> int:
             f"{page.evaluate('PROJECTS.size')} vs {before - 1}",
         )
 
+        print("\nSample top-up")
+        # The samples button used to exist only on the empty state, so anyone
+        # who loaded them once could never get the ones added later.
+        page.evaluate("goHome()")
+        page.wait_for_timeout(400)
+        check(
+            "samples button is on the dashboard, not just the empty state",
+            page.locator('[data-act="samples"]').is_visible(),
+        )
+        page.locator('[data-act="samples"]').click()
+        page.wait_for_timeout(2500)
+        check(
+            "top-up restores every sample",
+            page.evaluate("PROJECTS.size") == page.evaluate("SAMPLES.length"),
+            f"{page.evaluate('PROJECTS.size')} vs {page.evaluate('SAMPLES.length')}",
+        )
+        check(
+            "button re-enables after use",
+            not page.locator('[data-act="samples"]').is_disabled(),
+        )
+        again = page.evaluate("PROJECTS.size")
+        page.locator('[data-act="samples"]').click()
+        page.wait_for_timeout(1500)
+        check(
+            "pressing again adds no duplicates", page.evaluate("PROJECTS.size") == again
+        )
+
         check("no page errors", not errors, "; ".join(errors[:2]))
         browser.close()
 

@@ -80,7 +80,12 @@ document.addEventListener("click",async e=>{
   const a=t.dataset.act; if(!a) return;
   if(a==="new"){ const f=document.getElementById("newform"); if(f){ f.hidden=false; document.getElementById("newname").focus(); } return; }
   if(a==="new-cancel"){ document.getElementById("newform").hidden=true; return; }
-  if(a==="samples"){ t.disabled=true; await loadSamples(); return; }
+  if(a==="samples"){
+    t.disabled=true;
+    try{ await loadSamples(); }
+    finally{ t.disabled=false; }
+    return;
+  }
   if(a==="legacy"){
     try{ const j=JSON.parse(localStorage.getItem("chai-review-v1")); const p=normalize(Object.assign(blankProject(j.meta.solution),{meta:j.meta,items:j.items||{},gates:j.gates||{},metrics:j.metrics||[],card:j.card||{}}));
       Object.values(p.items).forEach(x=>{ if(x) delete x._open; });

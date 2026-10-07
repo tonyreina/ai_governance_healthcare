@@ -77,6 +77,70 @@ forwards the request to the container with the resulting identity in
 HTTP headers. What differs is which headers, and whether they can be
 cryptographically verified.
 
+### Why there is no password login
+
+This is the first question a security review asks, so the answer is
+recorded here rather than left to be rediscovered.
+
+There is no user table, no password hash, no registration form and no
+token endpoint. Sign-in is the hospital's existing identity provider,
+and the application only ever learns who you are from the proxy in
+front of it.
+
+That is a decision, not an omission. Adding local accounts — the
+`OAuth2PasswordRequestForm` pattern from the FastAPI tutorial, or
+anything like it — would mean taking on:
+
+- a credential store, and the hashing and rotation policy that goes with it;
+- lockout, complexity and reuse rules;
+- multi-factor enrollment and recovery, which an organization handling
+  patient data is expected to have;
+- token issuance, expiry and revocation;
+- an audit trail for credential events, separate from the one this tool
+  already keeps for governance decisions.
+
+Every one of those is a thing that can be got wrong, in a tool whose
+current authentication surface is reading one header. None of them is
+the problem this tool exists to solve.
+
+What delegating to the identity provider buys is more specific than
+"less code":
+
+**Offboarding actually works.** A clinician who leaves is disabled once,
+in the directory, and loses access here at the same moment they lose
+access to everything else. With local accounts, this tool becomes one
+more place somebody has to remember to revoke — and the one nobody
+remembers, because it is used by a committee that meets monthly.
+
+**MFA is whatever the hospital already requires**, enforced at the front
+door, with no second enrollment for users to abandon halfway.
+
+**Password policy is somebody else's job**, and that somebody has already
+argued it out with the security office.
+
+**A checkpoint sign-off means something.** The identity attached to it
+was asserted by the organization's IdP, not chosen by whoever was at the
+keyboard. That is the difference between an audit record and a text
+field — see the note on `localStorage` mode in [Running it](running.md).
+
+#### If you have no identity provider
+
+Run one in front; do not move authentication into the application. Put
+[oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) or
+[Keycloak](https://www.keycloak.org/) ahead of Caddy and point
+`IDENTITY_*_SOURCE` at the headers it sets — the
+`Self-hosted oauth2-proxy / Keycloak gatekeeper` block in `.env.example`.
+The application is unchanged, and the credential handling stays in
+software built for it.
+
+#### If you need non-interactive access
+
+Scripts, scheduled jobs and CI are not users and should not have user
+passwords. Authenticate them at the proxy — a service account in the
+cloud front door, or `PROXY_SHARED_SECRET` for a caller inside the
+network — and leave the browser path alone. The exporters under
+`examples/` read exported JSON and need no API access at all.
+
 ### Plain headers versus signed assertions
 
 Every front door sets a convenient plaintext header such as

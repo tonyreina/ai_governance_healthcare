@@ -381,8 +381,17 @@ gcloud sql instances create chai-db \
 Secret Manager, mounted as environment variables, read by the runtime
 service account — never baked into the image or passed as `--set-env-vars`.
 
+A `DATABASE_URL` you write by hand must have its password percent-encoded:
+a `/`, `@`, `:`, `?` or `#` in it ends the URL early and the API refuses to
+start, with a message saying so. The stack's own `POSTGRES_PASSWORD` does not
+have this problem, because the API builds the URL and does the encoding.
+
 ```bash
-printf '%s' "postgresql://chai:...@/chai?host=/cloudsql/${INSTANCE}" \
+# percent-encode the password first:
+python3 -c 'import sys, urllib.parse as u
+print(u.quote(sys.argv[1], safe=""))' 'the-password'
+
+printf '%s' "postgresql://chai:ENCODED@/chai?host=/cloudsql/${INSTANCE}" \
   | gcloud secrets create chai-database-url --data-file=-
 
 gcloud secrets add-iam-policy-binding chai-database-url \

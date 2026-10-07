@@ -146,9 +146,9 @@ class Database:
     ) -> None:
         if not dsn:
             raise RuntimeError(
-                "DATABASE_URL is not set. The API needs PostgreSQL; there is no "
-                "in-memory fallback, because the audit log has to outlive the "
-                "container."
+                "Neither DATABASE_URL nor POSTGRES_PASSWORD is set. The API needs "
+                "PostgreSQL; there is no in-memory fallback, because the audit "
+                "log has to outlive the container."
             )
         self.dsn = normalize_dsn(dsn)
         warning = check_dsn_encryption(self.dsn)

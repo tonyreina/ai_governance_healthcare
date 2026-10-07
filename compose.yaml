@@ -108,7 +108,18 @@ services:
       - data   # reaches Postgres
 
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-chai}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-chai}
+      # The PIECES, not a URL. This used to be
+      # `postgresql://user:${POSTGRES_PASSWORD}@db:5432/...`, and compose cannot
+      # percent-encode, so a "/" in the password ended the URL's authority and
+      # the API crashed on startup reading the password as a port number. The
+      # documented generator (`openssl rand -base64 32`) produces a "/" about half
+      # the time. The API assembles the URL itself, with the password encoded.
+      # Set DATABASE_URL instead to point at a managed instance.
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-chai}
+      POSTGRES_DB: ${POSTGRES_DB:-chai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (cp .env.example .env)}
       API_PORT: "8000"
 
       # Which headers carry identity. The API reads these and NOTHING else --

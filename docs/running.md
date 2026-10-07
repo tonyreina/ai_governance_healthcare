@@ -143,4 +143,7 @@ cd server
 TEST_DATABASE_URL=postgresql://chai:<password>@localhost:5432/chai pytest
 ```
 
+This one is a URL you write yourself, so percent-encode the password if it
+contains `/`, `@`, `:`, `?` or `#`. The stack itself does that for you.
+
 Without `TEST_DATABASE_URL` those tests skip and say why.

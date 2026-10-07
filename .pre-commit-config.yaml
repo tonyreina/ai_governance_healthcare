@@ -62,6 +62,26 @@ repos:
         language: system
         types: [text]
 
+      # A closed set of values gets an enumerated type, not a bare string. It is
+      # a ratchet: scripts/enum_baseline.json holds the existing uses, a new one
+      # fails, and fixing one fails until the baseline is ratcheted down. Run
+      # over the whole tree (not per file) because staleness is a global fact.
+      - id: check-enums
+        name: check for strings used as enums
+        entry: pixi run check-enums
+        language: system
+        pass_filenames: false
+        files: '^(server/app/.*\.py|scripts/.*\.py|examples/.*\.py|app/js/.*\.js|scripts/enum_baseline\.json)$'
+
+      # The guardrail's own tests. A check never shown to fail is a claim, so
+      # this runs whenever the checker or its tests change.
+      - id: test-enums
+        name: test the enum guardrail
+        entry: pixi run test-enums
+        language: system
+        pass_filenames: false
+        files: '^(scripts/check_enums\.py|tests/test_check_enums\.py)$'
+
       # Regenerates the published CHAI checklist from the app. prek fails the
       # run if this modifies the file, so the docs cannot drift from the app.
       - id: gen-checklists

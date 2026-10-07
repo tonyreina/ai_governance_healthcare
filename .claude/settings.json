@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && { p=.pixi/envs/default/bin/python; [ -x \"$p\" ] || p=python3; \"$p\" scripts/check_enums.py --hook; }",
+            "timeout": 15,
+            "statusMessage": "Checking for strings used as enums..."
+          }
+        ]
+      }
+    ]
+  }
+}

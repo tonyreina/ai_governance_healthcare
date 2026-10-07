@@ -91,8 +91,16 @@
 	# -------------------------------------------------------------------------
 	# The API, and the identity handoff.
 	#
-	# `route` keeps these in the order written. That order is the security
-	# property: strip first, set second, reject third, forward last.
+	# `route` keeps these in the order written, and the order IS the security
+	# property: strip the canonical headers, set them from the configured
+	# source, strip the provider headers, reject if empty, forward.
+	#
+	# The provider strip has to come AFTER the set, not before. It used to come
+	# before, and that silently broke every cloud deployment this repository
+	# documents: step 2 reads the provider header through a placeholder, so
+	# removing it first made the placeholder resolve to "" and step 3 answered
+	# 401 to every request. The only identity setting that worked was a literal
+	# string -- the one configuration that makes every visitor the same person.
 	# -------------------------------------------------------------------------
 	handle /api/* {
 		# A project document is a governance record: kilobytes. Nothing
@@ -113,36 +121,6 @@
 			request_header -X-Auth-Request-User
 			request_header -X-Auth-Request-Name
 			request_header -X-Auth-Request-Email
-
-			#    Strip the upstream providers' headers too. Stripping only the
-			#    three above is not enough: if this proxy is configured to
-			#    READ a cloud header (IDENTITY_*_SOURCE pointing at, say,
-			#    X-Goog-Authenticated-User-Email), a client that reaches this
-			#    proxy directly can set that header itself and have its value
-			#    copied into the canonical ones at step 2. Forged identity,
-			#    through the front door's own logic.
-			#
-			#    Which is why, in a cloud deployment, THIS PROXY MUST NOT BE
-			#    THE PLACE CLOUD IDENTITY IS READ. Set IDENTITY_MODE on the
-			#    API instead (iap / alb / easyauth) and pin the peer with
-			#    TRUSTED_PROXY_CIDR, so the only component trusting a cloud
-			#    header is the one that can also check who it came from. This
-			#    proxy's identity block is for the local stack, where it is
-			#    the sole front door and mints a fixed development identity.
-			#    See docs/deploy.md.
-			request_header -X-Goog-Authenticated-User-Email
-			request_header -X-Goog-Authenticated-User-Id
-			request_header -X-Goog-Iap-Jwt-Assertion
-			request_header -X-Amzn-Oidc-Identity
-			request_header -X-Amzn-Oidc-Data
-			request_header -X-Amzn-Oidc-Accesstoken
-			request_header -X-Ms-Client-Principal
-			request_header -X-Ms-Client-Principal-Id
-			request_header -X-Ms-Client-Principal-Name
-			request_header -X-Ms-Client-Principal-Idp
-			request_header -X-Forwarded-Email
-			request_header -X-Forwarded-User
-			request_header -X-Forwarded-Preferred-Username
 
 			# 2. SET from a source the operator configured.
 			#
@@ -177,6 +155,44 @@
 			request_header X-Auth-Request-User "{$IDENTITY_ID_SOURCE}"
 			request_header X-Auth-Request-Name "{$IDENTITY_NAME_SOURCE}"
 			request_header X-Auth-Request-Email "{$IDENTITY_EMAIL_SOURCE}"
+
+			# 2b. STRIP the upstream providers' headers, now that step 2 has
+			#     read whichever one it was pointed at.
+			#
+			#     THIS MUST COME AFTER THE SET, NOT BEFORE. It used to come
+			#     before, and that silently broke every cloud deployment this
+			#     repository documents: step 2 reads a provider header through
+			#     a placeholder, so deleting it first made the placeholder
+			#     resolve to "" and step 3 answered 401 to every request. The
+			#     only identity setting that worked was a literal string -- the
+			#     one configuration that makes every visitor the same person.
+			#
+			#     What it is for: the API reads AUTH_HEADER_* and nothing else,
+			#     and a stray X-Goog-/X-Amzn-/X-Ms- header arriving there would
+			#     be a second, unchecked answer to "who is this" the moment
+			#     somebody also set IDENTITY_MODE. It also keeps them out of the
+			#     API's logs.
+			#
+			#     What it is NOT for: it does not stop a client that can reach
+			#     THIS PROXY DIRECTLY from setting a provider header itself and
+			#     having step 2 copy it into X-Auth-Request-*. Nothing here can
+			#     -- step 2's whole job is to trust that header. The only
+			#     control is the network: Caddy must be reachable only through
+			#     the SSO front door, exactly as the API must be reachable only
+			#     through Caddy. See "Close the back door" in docs/deploy.md.
+			request_header -X-Goog-Authenticated-User-Email
+			request_header -X-Goog-Authenticated-User-Id
+			request_header -X-Goog-Iap-Jwt-Assertion
+			request_header -X-Amzn-Oidc-Identity
+			request_header -X-Amzn-Oidc-Data
+			request_header -X-Amzn-Oidc-Accesstoken
+			request_header -X-Ms-Client-Principal
+			request_header -X-Ms-Client-Principal-Id
+			request_header -X-Ms-Client-Principal-Name
+			request_header -X-Ms-Client-Principal-Idp
+			request_header -X-Forwarded-Email
+			request_header -X-Forwarded-User
+			request_header -X-Forwarded-Preferred-Username
 
 			# 3. REJECT an anonymous request here rather than passing an empty
 			#    header downstream and hoping the API notices. This fires when

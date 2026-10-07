@@ -118,6 +118,14 @@ services:
       AUTH_HEADER_NAME: ${AUTH_HEADER_NAME:-X-Auth-Request-Name}
       AUTH_HEADER_EMAIL: ${AUTH_HEADER_EMAIL:-X-Auth-Request-Email}
 
+      # A scheme prefix the front door puts in front of the identity, which
+      # the API removes before storing it. Google IAP sends
+      # "accounts.google.com:person@hospital.org"; left in place, every
+      # sign-off is attributed to an id that matches nothing in any directory,
+      # and the mistake is invisible until somebody tries to reconcile the
+      # audit log with a staff list. Empty for every other front door.
+      IDENTITY_STRIP_PREFIX: ${IDENTITY_STRIP_PREFIX:-}
+
       # Belt and braces: the API should refuse a request whose peer address is
       # outside this range, so a misconfigured network cannot silently turn the
       # header into a free-for-all. 172.16.0.0/12 is the default Docker bridge

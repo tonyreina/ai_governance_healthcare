@@ -19,7 +19,7 @@ POSTGRES_DB   ?= chai
 HTTP_PORT     ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help env preflight up dev down logs ps config build-app shell psql backup backup-plaintext restore prune check-isolation
+.PHONY: help env preflight doctor up dev down logs ps config build-app shell psql backup backup-plaintext restore prune check-isolation
 
 help:  ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -35,6 +35,13 @@ env: .env  ## Create .env from .env.example if it is missing
 
 preflight:  ## Check .env for settings that would deploy insecurely
 	@python3 scripts/preflight.py
+
+# preflight reads .env and nothing else, so it cannot see the one failure .env
+# causes and cannot explain: Postgres applies POSTGRES_PASSWORD only when it
+# initializes an empty volume, so changing it later leaves the database on the
+# old one. This asks the running database what it actually accepts.
+doctor:  ## Diagnose a stack that is up but not working
+	@python3 scripts/doctor.py
 
 build-app:  ## Rebuild docs/app/index.html from app/ (runs on the host, not in Docker)
 	pixi run build-app

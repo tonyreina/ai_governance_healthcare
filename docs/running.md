@@ -52,25 +52,19 @@ open http://localhost:8080
 The dashboard should show **Shared workspace** rather than *This browser only*.
 If it says the latter, the API is not answering — check `docker compose logs api`.
 
-!!! warning "Changing POSTGRES_PASSWORD later will not work"
+!!! warning "Changing POSTGRES_PASSWORD later does not change the password"
 
-    PostgreSQL applies `POSTGRES_PASSWORD` **only when it initializes an empty
-    data directory**. Change it after the first run and the database keeps the
-    old credentials while the API uses the new ones, which shows up as:
+    PostgreSQL reads `POSTGRES_PASSWORD` **only when it initializes an empty
+    data directory**. On an existing `pgdata` volume the variable is ignored,
+    so editing `.env` changes what the API *presents* without changing what the
+    database *accepts*. Nothing warns, and the symptom points nowhere useful:
+    the API retries ten times and exits, `docker compose ps` shows a crash
+    loop, and the dashboard says it cannot reach the server.
 
-    ```text
-    database not ready: password authentication failed for user "chai"
-    ```
-
-    The fix destroys the data, so be sure that is what you want:
-
-    ```bash
-    docker compose down -v      # removes the volume AND everything in it
-    docker compose up -d --build
-    ```
-
-    For a real deployment, rotate the password in PostgreSQL itself
-    (`ALTER ROLE chai WITH PASSWORD ...`) and then update `.env`.
+    `make doctor` names it, and prints the command to fix it. See
+    [Rotating the database password](self-hosting.md#rotating-the-database-password)
+    — the fix keeps every record, and the destructive option is a last resort,
+    not the first one.
 
 ### What to try
 
@@ -123,6 +117,12 @@ docker compose down -v         # stop and DELETE the database
 ```
 
 ## Running the tests
+
+If something is up but not working, start here:
+
+```bash
+make doctor             # asks the running stack what is wrong
+```
 
 ```bash
 pixi run check          # every lint and build hook

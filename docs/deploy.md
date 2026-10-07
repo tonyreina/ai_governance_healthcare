@@ -49,6 +49,12 @@ document is stored as a `jsonb` column; `PATCH` performs the recursive
 merge described in [Self-hosting](self-hosting.md), in which objects
 merge key by key at every level and arrays replace wholesale.
 
+Rotate the database credential with the provider and update `DATABASE_URL`;
+there is no `pgdata` volume here and no `db` service, so the
+[rotation trap in the compose stack](self-hosting.md#rotating-the-database-password)
+does not apply. Prefer the platform's identity-based connection — Cloud SQL IAM
+auth, RDS IAM auth, Entra ID — over a password you have to rotate at all.
+
 !!! note "Do not implement the merge with `jsonb` concatenation"
 
     PostgreSQL's `||` operator on `jsonb` merges only the top level, so

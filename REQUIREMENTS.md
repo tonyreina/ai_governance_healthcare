@@ -210,6 +210,21 @@ honest answer and is a gap worth closing; see R-19.
   role whose password contains every awkward character, and a guard that fails if
   compose ever interpolates the password into a URL again.
 
+### R-26 Showcase media is first-party, bounded and honest about the mode
+
+- Status: Active
+- The walkthrough video lives on the docs site (`docs/assets/`), not on a
+  third-party host, so the project's no-third-party rule (R-05) holds for its own
+  front page. Each file is capped at 10 MB, starts playing before it finishes
+  downloading, has controls and a poster, and never autoplays.
+- The page must say the video was recorded on the Docker stack and that the
+  demonstration copy at `/app/` is browser-only, because a viewer will otherwise
+  assume the demo behaves like the video (R-04).
+- **Known gap:** the narration has no captions or transcript (#75).
+- Source: the user's instruction to publish the walkthrough; DECISIONS D-26.
+- Enforced by: `tests/test_docs_media.py`, and a pre-commit hook that applies the
+  10 MB cap to `docs/assets/` media while the repo-wide limit stays at 512 KB.
+
 ## Engineering rules
 
 ### R-17 American English only

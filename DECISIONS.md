@@ -324,6 +324,32 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   be refused to protect a code path that should simply be correct.
 - Source: R-25.
 
+### D-26 The walkthrough video is hosted on the docs site, under a bounded cap
+
+- Status: Accepted
+- The source recording was 160 MB (2392x1462, 14.5 Mbps), over GitHub's 100 MB
+  push limit and the repo's own 512 KB guard. A screen recording compresses
+  extremely well: re-encoded to 1920 px wide, H.264, CRF 26, it is **7.5 MB** at
+  the same 91 seconds, which also fits GitHub's 10 MB free-plan limit for inline
+  video attachments.
+- Hosted on the docs site (`docs/assets/`) and played with a plain `<video>`.
+  Rejected: YouTube or Vimeo (a third-party iframe, against the spirit of R-05);
+  a README drag-and-drop upload (a manual browser step, hosted by GitHub outside
+  the repo and not versioned with it); a Release asset (works, but is not shown
+  on the project's own page).
+- Cost, accepted: about 7.6 MB added to git history, permanently. The repo was
+  about 6 MB. Rewriting a public repo's history to remove it later would be worse
+  than the cost, so this is the decision to revisit *before* adding a second
+  video, not after.
+- The repo-wide 512 KB limit is unchanged. Media under `docs/assets/` gets its own
+  hook with a 10 MB cap, and `tests/test_docs_media.py` fails if that number and
+  the page's assumption ever differ. An exception with a cap is a different thing
+  from no limit.
+- The poster is the portfolio overview, chosen because it is the most legible
+  single frame. The video shows the browser's own chrome (a profile chip and an
+  extension button), which is public now.
+- Source: R-26.
+
 ## Proposed, not yet decided
 
 ### D-21 PHI detection runs in an opt-in sidecar, advisory only

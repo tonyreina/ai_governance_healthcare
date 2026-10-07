@@ -7,6 +7,33 @@ dashboard.
 
 [Open the dashboard :material-arrow-right:](app/index.html){ .md-button .md-button--primary }
 
+## See it in action
+
+<!-- rumdl-disable MD033 -->
+<!-- A video element has no Markdown form; the rule is relaxed for this block only. -->
+<video controls preload="metadata" width="100%"
+       poster="assets/ai-healthcare-governance-demo.jpg"
+       aria-label="A 90-second walkthrough of the CHAI governance dashboard">
+  <source src="assets/ai-healthcare-governance-demo.mp4" type="video/mp4">
+  Your browser cannot play this video.
+  <a href="assets/ai-healthcare-governance-demo.mp4">Download the walkthrough
+  (MP4, 7.5 MB)</a>.
+</video>
+<!-- rumdl-enable MD033 -->
+
+A 90-second walkthrough, using sample data only. It shows the portfolio
+dashboard and its statuses, opening a project and its access settings, the
+stage checklists with their evidence and owners, the go/no-go checkpoints, the
+applied model card preview, the OPTICA adoption review, and creating a project.
+
+!!! note "This was recorded on the Docker stack, not the demonstration copy"
+
+    The video shows a **shared workspace**: a server, per-project access control
+    and an audit log. The demonstration copy at [`/app/`](app/index.html) runs in
+    **browser-only mode**. It stores everything in your browser, has no access
+    control, and keeps no server-side audit log, so it is not the same thing. See
+    [Running it](running.md) for the modes.
+
 ## What it does
 
 - **Portfolio dashboard** — every AI project with its lifecycle position,

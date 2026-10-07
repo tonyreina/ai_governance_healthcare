@@ -19,6 +19,16 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=512]
+        exclude: '^docs/assets/.*\.(mp4|webm)$'
+      # The one exception to the 512 KB limit: showcase media on the docs site,
+      # which is first-party by design (R-05) and so has to live in the repo. It
+      # has its own cap rather than no limit, and tests/test_docs_media.py fails if
+      # this number and the one the docs page assumes ever differ.
+      - id: check-added-large-files
+        alias: check-showcase-media-size
+        name: check showcase media size (10 MB max)
+        args: [--maxkb=10240]
+        files: '^docs/assets/.*\.(mp4|webm)$'
       - id: mixed-line-ending
         args: [--fix=lf]
 

@@ -21,6 +21,10 @@ documentation, with a **demonstration** copy of the dashboard at
 [`/app/`](https://tonyreina.github.io/ai_governance_healthcare/app/). That copy
 stores everything in your browser. It is not a system of record.
 
+**Walkthrough:** a [90-second video](https://tonyreina.github.io/ai_governance_healthcare/#see-it-in-action)
+of the dashboard on the Docker stack, using sample data. It shows the server-backed
+mode, which the browser-only demonstration copy above is not.
+
 ## Running it
 
 There are three modes and **they are not equivalent**. Only one of them

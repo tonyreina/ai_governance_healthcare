@@ -56,6 +56,8 @@ check-enums = "python scripts/check_enums.py"
 test-enums = "python tests/test_check_enums.py"
 # Unit tests of the CI configuration: does CI run every test, and fail on a skip?
 test-workflows = "python tests/test_workflows.py"
+# The showcase video: present, bounded, first-party, streamable, honest about the mode.
+test-docs-media = "python tests/test_docs_media.py"
 check-spelling = "python scripts/check_spelling.py"
 check-chai = "python scripts/check_chai_updates.py"
 check-chai-write = "python scripts/check_chai_updates.py --write"

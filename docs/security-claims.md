@@ -293,11 +293,21 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-24 `make up` refuses to start on unsafe settings
 
-- **Claim:** A placeholder or short database password, a literal identity
-  source, and a non-loopback bind over plain HTTP are all refused.
+- **Claim:** A placeholder or short database password, a literal identity source,
+  and a non-loopback bind over plain HTTP are all refused, and `.env` is read the
+  way compose reads it, so a blank value or a trailing comment cannot get past
+  the gate.
 - **Asserted in:** `README.md` — "refuses to start on unsafe settings"
-- **Status:** unenforced
-- **Gap:** `scripts/preflight.py` has no tests. #77
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_preflight.py::an empty password is refused`
+  `tests/test_preflight.py::15 characters is refused`
+  `tests/test_preflight.py::the message points at make dev for local use`
+  `tests/test_preflight.py::0.0.0.0 over plain HTTP is refused`
+  `tests/test_preflight.py::SITE_ADDRESS= (blank) is plain HTTP, so 0.0.0.0 is REFUSED`
+  `tests/test_preflight.py::so a weak one with a long note is still refused`
+  `tests/test_preflight.py::an unsafe .env exits 1`
+  `tests/test_preflight.py::FORCE=1 skips the check and exits 0`
 
 ### C-25 Any database password works
 

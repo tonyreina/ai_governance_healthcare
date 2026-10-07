@@ -60,8 +60,10 @@ from .models import (
     ProjectOut,
     ProjectPatch,
 )
+from .signoff import attribute_signoffs
 
 log = logging.getLogger("chai.routes")
+
 
 router = APIRouter(prefix="/api")
 
@@ -202,7 +204,15 @@ async def create_project(
     two callers both see no row and the second gets a constraint error instead
     of a clean 409.
     """
-    doc = dict(body.root)
+    # Sign-offs are attributed to whoever is calling, never to a name the client
+    # supplied (#31). Applies to a project created already carrying them too.
+    doc = attribute_signoffs(
+        dict(body.root),
+        None,
+        identity.id,
+        _now_iso(),
+        enforced=settings.require_identity,
+    )
     access = doc.get("access") if isinstance(doc.get("access"), dict) else {}
     # Whoever creates a project owns it. A project created with no owner would
     # be "unclaimed", which means unrestricted -- an open record from birth.
@@ -282,6 +292,11 @@ async def patch_project(
         require(before, identity.id, "write", enforced=enforced)
         guard_access_change(before, patch, identity.id, enforced=enforced)
         guard_owner_only_fields(before, patch, identity.id, enforced=enforced)
+        # Who signed, and when, is the server's to say (#31). After the guards,
+        # so an unauthorized caller is refused before anything is rewritten.
+        patch = attribute_signoffs(
+            patch, before, identity.id, _now_iso(), enforced=enforced
+        )
         try:
             document = merged(before, patch)
         except TooDeep as exc:

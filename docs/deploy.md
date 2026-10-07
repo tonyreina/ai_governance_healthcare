@@ -129,6 +129,16 @@ was asserted by the organization's IdP, not chosen by whoever was at the
 keyboard. That is the difference between an audit record and a text
 field — see the note on `localStorage` mode in [Running it](running.md).
 
+The API enforces this rather than trusting the browser: `signedBy` and
+`signedAt` are written by the server from the proxy's identity and its own
+clock, whatever a client sends. Changing a decision re-attributes it to whoever
+changed it; clearing one clears its attribution; re-sending an unchanged gate is
+a harmless no-op. The committee's own words (`by`, `date`, `rationale`) stay as
+written. Two consequences worth knowing: a record imported from elsewhere is
+attributed to whoever imports it, because they are the one asserting it here,
+and with `REQUIRE_IDENTITY=false` nothing is attributed, which `/api/health`
+reports rather than hides.
+
 #### If you have no identity provider
 
 Run one in front; do not move authentication into the application. Put

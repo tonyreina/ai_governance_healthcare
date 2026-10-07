@@ -241,6 +241,36 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   This is a description of the present, not an endorsement. Do not claim a
   property is "tested" on the strength of a test file that CI never executes.
 
+### D-24 The server decides who signed a checkpoint, and when
+
+- Status: Accepted
+- `server/app/signoff.py` rewrites `gates.*.signedBy` and `signedAt` from the
+  caller and the clock on create and on patch, mirroring what `append_log`
+  already does for the audit log's `at` and `by`.
+- Attribution follows the *decision*, not the claim. Changing a decision without
+  sending any attribution would otherwise leave the record saying the previous
+  person made the new decision. Setting or changing one attributes it to the
+  caller; clearing one clears it; recording a periodic review attributes the
+  reviewer.
+- An unchanged decision is a **no-op, not an error**. The browser may re-send a
+  whole gate, and a 403 would be read by the app as "your access changed" and put
+  the user into read-only mode. Forgery is prevented by ignoring the claim, not
+  by punishing it.
+- Rejected: failing the request when a client sends a wrong `signedBy`. It turns
+  an ordinary resend into a visible failure and teaches nothing the caller can
+  act on.
+- Only `signedBy` and `signedAt` are the server's. `by`, `date` and `rationale`
+  are the committee's own words and stay as sent.
+- A project created with pre-signed gates (an import) is attributed to whoever
+  creates it. They are the one asserting it in this deployment; the original
+  signer is not authenticated here and cannot be.
+- With identity disabled (`REQUIRE_IDENTITY=false`) nothing is attributed, the
+  same carve-out `access.py` makes, and `/api/health` reports it.
+- Known limit: nothing signs the attestation cryptographically. The proxy
+  identity is the trust anchor for everything here; making the sign-off match it
+  is the fix, not raising it above it.
+- Source: closed issue #31; R-09.
+
 ## Proposed, not yet decided
 
 ### D-21 PHI detection runs in an opt-in sidecar, advisory only

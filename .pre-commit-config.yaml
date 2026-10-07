@@ -85,6 +85,16 @@ repos:
 
       # The guardrail's own tests. A check never shown to fail is a claim, so
       # this runs whenever the checker or its tests change.
+      # Every security claim in docs/security-claims.md must still be quoted in the
+      # file it cites and backed by a test CI runs. Always runs: a claim goes stale
+      # when ANY of the files it cites changes, and the check takes milliseconds.
+      - id: check-claims
+        name: check security claims against their evidence
+        entry: pixi run check-claims
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: test-enums
         name: test the enum guardrail
         entry: pixi run test-enums

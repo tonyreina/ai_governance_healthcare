@@ -350,6 +350,33 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   extension button), which is public now.
 - Source: R-26.
 
+### D-27 Claims are rows with a quoted sentence and evidence CI runs
+
+- Status: Accepted
+- `docs/security-claims.md` has one section per claim: the claim, one or more
+  `Asserted in` entries (a file and the sentence **quoted**), a status, the
+  evidence, and for anything not fully enforced the gap and its issue.
+  `scripts/check_claims.py` verifies it.
+- The quote is the key design choice. A claim list that only names tests rots
+  silently when the doc is edited. Quoting the sentence means editing the doc
+  fails the check until the row is reviewed, which is when "is this still true?"
+  gets asked.
+- Evidence must be something **CI runs**: a `server/tests` test, a `tests/` suite
+  with a pixi task in `test.yml`, or a pre-commit hook. A test nobody runs is
+  what #32 was.
+- Four statuses, one of them `violated`. A claim the code does not back may stay
+  in the inventory, with its issue, so the repository can say "this sentence is
+  not true yet" in the open. The alternative, deleting the row or the sentence to
+  pass, hides the finding.
+- Rejected: scanning the docs for assertive words and requiring a row for each.
+  It is noisy, and it would fail on ordinary prose. Finding a claim nobody wrote
+  down is a judgment, which is what the CLAUDE.md rule asks of the author.
+- The first run found a gap that became a test: the isolation the security model
+  rests on had only a manual `make` target. `tests/test_compose_isolation.py` now
+  asserts it against the real `compose.yaml` in CI. It also found that
+  `preflight.py` has no tests (#77).
+- Source: #68; R-19.
+
 ## Proposed, not yet decided
 
 ### D-21 PHI detection runs in an opt-in sidecar, advisory only

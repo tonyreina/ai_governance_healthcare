@@ -141,6 +141,84 @@ async def test_iap_preset_strips_the_accounts_google_com_prefix() -> None:
     assert response.json()["id"] == "1234567890"
 
 
+async def test_iap_behind_caddy_strips_the_prefix_from_canonical_headers() -> None:
+    """The topology compose.yaml actually deploys, which is not the one above.
+
+    With Caddy in front, the API does NOT read X-Goog-* -- Caddy normalizes
+    every front door into X-Auth-Request-*. So IDENTITY_MODE stays unset (the
+    `proxy` preset) and the prefix has to arrive from IDENTITY_STRIP_PREFIX
+    instead of from a preset.
+
+    That combination is what a Google Cloud deployment of this repository
+    runs, and it was untested: the preset test above passes with
+    IDENTITY_STRIP_PREFIX doing nothing at all, because the preset supplies
+    the prefix itself. compose.yaml also did not pass the variable through
+    until recently, so the live behavior was "prefix retained" while the
+    suite was green.
+
+    Retaining it puts `accounts.google.com:1234` in every access list and
+    every sign-off -- an id no directory lookup resolves.
+    """
+    settings = make_settings(
+        identity_mode="proxy",
+        identity_header="X-Auth-Request-Email",
+        identity_id_header="X-Auth-Request-User",
+        identity_name_header="X-Auth-Request-Name",
+        identity_strip_prefix="accounts.google.com:",
+    )
+    response = await call(
+        settings,
+        {
+            "X-Auth-Request-Email": "accounts.google.com:ann@hospital.example",
+            "X-Auth-Request-User": "accounts.google.com:1234567890",
+            "X-Auth-Request-Name": "accounts.google.com:ann@hospital.example",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["email"] == "ann@hospital.example"
+    assert body["id"] == "1234567890"
+    assert body["name"] == "ann@hospital.example"
+    assert "accounts.google.com" not in str(body), body
+
+
+async def test_an_unset_strip_prefix_leaves_the_value_alone() -> None:
+    """Every front door other than IAP sends an unprefixed value."""
+    settings = make_settings(
+        identity_mode="proxy",
+        identity_header="X-Auth-Request-Email",
+        identity_id_header="X-Auth-Request-User",
+    )
+    response = await call(
+        settings,
+        {
+            "X-Auth-Request-Email": "ann@hospital.example",
+            "X-Auth-Request-User": "entra-oid-999",
+        },
+    )
+    assert response.json()["email"] == "ann@hospital.example"
+    assert response.json()["id"] == "entra-oid-999"
+
+
+async def test_the_strip_prefix_is_not_a_substring_match() -> None:
+    """Only a LEADING prefix is removed.
+
+    An address that merely contains the prefix text, or a different issuer,
+    must survive intact rather than be silently rewritten.
+    """
+    settings = make_settings(
+        identity_mode="proxy",
+        identity_header="X-Auth-Request-Email",
+        identity_strip_prefix="accounts.google.com:",
+    )
+    for value in (
+        "ann+accounts.google.com:tag@hospital.example",
+        "accounts.google.com.evil.test:ann@hospital.example",
+    ):
+        response = await call(settings, {"X-Auth-Request-Email": value})
+        assert response.json()["email"] == value, value
+
+
 async def test_easyauth_preset_reads_the_azure_principal_headers() -> None:
     preset = IDENTITY_PRESETS["easyauth"]
     settings = make_settings(

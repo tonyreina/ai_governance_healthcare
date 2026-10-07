@@ -14,17 +14,12 @@
       "AbortError": 1,
       "ok": 1
     },
-    "app/js/00-core/30-state.js": {
-      "connecting": 1,
-      "local": 1
-    },
     "app/js/00-core/40-writes.js": {
       "invalid_argument": 1,
       "not_found": 2,
       "permission_denied": 2,
       "quota_exceeded": 2,
       "revoked": 1,
-      "shared": 1,
       "unavailable": 1
     },
     "app/js/00-core/45-changelog.js": {
@@ -149,12 +144,9 @@
       "samples": 1
     },
     "app/js/20-app/80-boot.js": {
-      "api": 1,
       "denied": 1,
       "error": 1,
-      "local": 1,
       "ok": 1,
-      "shared": 1,
       "unreachable": 1
     }
   },

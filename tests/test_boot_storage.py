@@ -210,6 +210,66 @@ def main() -> int:
         )
         page.close()
 
+        # 6. After a save, what the user is TOLD about where it went must match
+        #    where it went. The server-backed mode used to say "Saved in this
+        #    browser" after every save (#55): MODE was "api" in one file and
+        #    compared with "shared" in another, so the test was false forever.
+        #    This drives a real debounced save and reads the label on screen.
+        page = browser.new_page()
+        boot(page, base, (200, HEALTH_OK))
+        page.route(
+            "**/api/projects/p1",
+            lambda r: r.fulfill(status=200, body="{}", content_type="application/json"),
+        )
+        page.evaluate("queuePatch('p1', {note: 'x'})")
+        page.wait_for_timeout(1200)
+        saved = page.locator("#saved").inner_text().strip()
+        check(
+            "server mode: a save says it went to the shared workspace",
+            saved == "Saved to shared workspace",
+            saved,
+        )
+        check(
+            "server mode: a save does not claim the browser",
+            "browser" not in saved.lower(),
+            saved,
+        )
+        page.close()
+
+        page = browser.new_page()
+        boot(page, base, 404)
+        page.evaluate("STORE.create('p1', {})")
+        page.evaluate("queuePatch('p1', {note: 'x'})")
+        page.wait_for_timeout(1200)
+        saved = page.locator("#saved").inner_text().strip()
+        check(
+            "browser-only mode: a save says it stayed in this browser",
+            saved == "Saved in this browser",
+            saved,
+        )
+        page.close()
+
+        # Every mode has a saved label, and only LOCAL may mention the browser.
+        # A new Mode member with no label would otherwise fall back silently.
+        page = browser.new_page()
+        boot(page, base, (200, HEALTH_OK))
+        labels = page.evaluate(
+            "Object.fromEntries(Object.values(Mode)"
+            ".filter(m => m !== Mode.CONNECTING)"
+            ".map(m => [m, SAVED_LABEL[m]]))"
+        )
+        check(
+            "every Mode has a saved label",
+            all(isinstance(v, str) and v for v in labels.values()),
+            str(labels),
+        )
+        check(
+            "only the browser-only mode may say 'browser'",
+            [m for m, v in labels.items() if "browser" in v.lower()] == ["local"],
+            str(labels),
+        )
+        page.close()
+
         browser.close()
 
     print()

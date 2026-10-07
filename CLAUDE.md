@@ -109,6 +109,33 @@ file (`docs/app/index.html` is rebuilt by `pixi run build-app`, which a hook
 checks), a comment, a rename with no behavior change that existing tests already
 cover. If the user tells you to skip tests for a change, do, and record it.
 
+## Security claims name their evidence
+
+[docs/security-claims.md](docs/security-claims.md) lists every security property
+this project asserts, where it asserts it (the sentence is quoted), and the test
+that enforces it. `pixi run check-claims` fails if a quote is no longer in the
+file it cites, or if the evidence does not exist or is something CI never runs.
+
+This is the rule that would have caught #31, #55, #56, #61 and #62: each was a
+sentence in the docs or the UI claiming something no test checked, and each was
+false.
+
+- **A new sentence that asserts a security property gets a row in the same
+  change**, with a test that enforces it. That includes docs, UI text, labels,
+  banners and the headline comments of `compose.yaml` and the `Caddyfile`.
+- **No test? Write the test, soften the sentence, or list it honestly** as
+  `unenforced` with the reason. Never leave a claim sounding enforced when it is
+  not.
+- **When you edit a quoted sentence, the check fails until the row matches.**
+  That is the point. Update the row, and ask whether the claim is still true.
+- **Statuses are honest, not aspirational.** `violated` means the sentence is not
+  true today; it stays in the inventory with its issue. Do not delete a row to
+  make the check pass, and do not mark a claim `enforced` on a test that does not
+  assert it.
+- Evidence must be something CI runs: a `server/tests` test, a `tests/` suite with
+  a pixi task in `test.yml`, or a pre-commit hook. A Makefile target or a manual
+  step does not count.
+
 ## American English
 
 Write American English everywhere: prose, code comments, docstrings, commit

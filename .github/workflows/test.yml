@@ -56,6 +56,11 @@ jobs:
       # first-party, and honest about which mode it shows.
       - run: pixi run test-docs-media
 
+      # The claims inventory: its checker is tested, and the network isolation the
+      # security model rests on is asserted against the real compose.yaml.
+      - run: pixi run test-claims
+      - run: pixi run test-compose
+
       # Static analysis of the workflow files themselves.
       - name: actionlint
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color

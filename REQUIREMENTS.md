@@ -251,13 +251,19 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-19 A security claim names the test that enforces it
 
-- Status: Active, **tooling pending** (#68)
+- Status: Active
 - A claim in documentation or the UI ("sign-off means something", "check-
-  isolation asserts all of this") is true or it is removed. Each one should
-  name a test that runs in CI.
-- The dependency is met: CI now runs every test (R-23), so a claim that names a
-  test can be checked against something that actually executes.
-- Enforced by: Nothing yet. The table and the hook that checks it are #68.
+  isolation asserts all of this") is true or it is removed. Each one is listed in
+  `docs/security-claims.md` with the sentence quoted and a test CI runs, or is
+  listed honestly as `partial`, `unenforced` or `violated` with a reason and an
+  issue.
+- History: this was the root cause of #31, #55, #56, #61 and #62.
+- Source: the claim-versus-reality findings of the hospital security review; #68;
+  DECISIONS D-27.
+- Enforced by: `pixi run check-claims` (every commit, and CI through the
+  pre-commit hooks) and `tests/test_check_claims.py`. What it cannot do is
+  find a claim nobody wrote down: a new assertive sentence still needs a human
+  to add its row, which is what CLAUDE.md requires.
 
 ### R-23 Code ships with unit and integration tests
 

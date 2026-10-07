@@ -1,0 +1,488 @@
+# Security claims
+
+<!-- rumdl-disable MD013 -->
+<!-- Evidence references are single long tokens (a test path plus a test name) that cannot be wrapped. -->
+
+Every security property this project asserts, where it asserts it, and what
+backs it. The inventory exists because the same bug kept appearing: a sentence in
+the docs or the UI claiming something no test checked, which turned out to be
+false (#31, #55, #56, #61, #62).
+
+`pixi run check-claims` reads this page and fails if any row is not true to
+its own description. It runs in every commit and in CI.
+
+- **Asserted in** is the file and the sentence, quoted. The quote must still be
+  in that file, so when a doc changes, its row has to change with it.
+- **Enforced by** names the tests that enforce the claim. Each must exist **and**
+  be something CI runs, because a test nobody runs (#32) is decoration.
+- **Status** is one of four values, and the honest ones matter most:
+    - `enforced`: a test CI runs fails if the claim becomes false.
+    - `partial`: tested, but not all of it. The gap and its issue are stated.
+    - `unenforced`: true or plausible, with nothing that would notice if it
+      stopped being true. The reason is stated.
+    - `violated`: the sentence is **not true** today. It stays in the inventory,
+      with its issue, rather than being quietly left in the docs.
+
+A claim the code does not back is allowed to stay here, as `violated`, in plain
+sight. What is not allowed is a claim that looks enforced and is not.
+
+**Adding a claim.** Any new sentence in the docs or the UI that asserts a
+security property gets a row in the same change, with the test that enforces
+it. If there is no test, write the test, or soften the sentence, or list it
+honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_governance_healthcare/blob/main/CLAUDE.md).
+
+## The claims
+
+### C-01 Client-supplied identity headers are stripped
+
+- **Claim:** The proxy deletes any identity header a client sends and sets its
+  own, so a client cannot choose who it is.
+- **Asserted in:** `docs/self-hosting.md` — "The proxy deletes any
+  `X-Auth-Request-User`, `-Name` or `-Email` the browser sent"
+- **Asserted in:** `docs/running.md` — "**Identity cannot be forged.**"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_proxy_identity.py::a forged X-Auth-Request-* is refused`
+  `tests/test_stack.py::forged identity headers are stripped`
+
+### C-02 Every documented cloud identity configuration resolves an identity
+
+- **Claim:** The IAP, ALB, Azure and oauth2-proxy settings each produce the
+  canonical identity headers. (This was broken for months, #23.)
+- **Asserted in:** `docs/self-hosting.md` — "behind a cloud SSO front door: the
+  header it sets"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_proxy_identity.py::request is forwarded`
+  `tests/test_proxy_identity.py::no provider header reaches the API`
+
+### C-03 A request with no identity is refused, and an unset source fails closed
+
+- **Claim:** An empty or missing identity answers 401. It never falls back to a
+  usable default.
+- **Asserted in:** `proxy/Caddyfile` — "NO DEFAULT VALUE"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_proxy_identity.py::a request with no identity is refused`
+  `tests/test_proxy_identity.py::an unset identity source fails closed`
+  `server/tests/test_auth.py::test_missing_header_is_401_not_an_anonymous_user`
+
+### C-04 The API reads identity from the proxy header and nowhere else
+
+- **Claim:** Not from a body, a query parameter or a cookie. The audit log's
+  author is overwritten with the proxy identity.
+- **Asserted in:** `README.md` — "the API reads identity from the proxy and
+  nowhere else"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_auth.py::test_identity_comes_from_the_configured_header`
+  `server/tests/test_api.py::test_log_author_is_the_proxy_identity_not_the_body`
+
+### C-05 The API is reachable only through the proxy
+
+- **Claim:** The API publishes no host port, and nothing but the proxy shares
+  the internet-facing network with it.
+- **Asserted in:** `docs/self-hosting.md` — "the API publishes no host port"
+- **Asserted in:** `README.md` — "so it must be unreachable except through the
+  proxy."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_compose_isolation.py::publishing a port on the api is noticed`
+  `tests/test_compose_isolation.py::a new service on the edge network is noticed`
+
+### C-06 The database has no route off the host
+
+- **Claim:** Postgres sits on an `internal: true` network and publishes no port.
+- **Asserted in:** `docs/self-hosting.md` — "on an `internal: true` network with
+  no route off the host at all"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_compose_isolation.py::an internal network made routable is noticed`
+  `tests/test_compose_isolation.py::publishing a port on the database is noticed`
+
+### C-07 The stack binds to loopback by default
+
+- **Claim:** It speaks plain HTTP, so it is published on 127.0.0.1 unless the
+  operator changes it.
+- **Asserted in:** `README.md` — "The stack binds to loopback by default"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_compose_isolation.py::the proxy binding every interface is noticed`
+
+### C-08 The development override cannot be picked up by accident
+
+- **Claim:** It is a named file, never compose.override.yaml, which a bare
+  `docker compose up` would load silently. It deliberately publishes
+  the API.
+- **Asserted in:** `docs/running.md` — "can never pick it up by accident"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_compose_isolation.py::a compose.override.yaml is noticed`
+
+### C-09 `make check-isolation` asserts the isolation model
+
+- **Claim:** The docs say the target asserts that the API is unreachable and
+  that a forged identity is stripped.
+- **Asserted in:** `docs/self-hosting.md` — "`make check-isolation` asserts all
+  of this against a running stack."
+- **Status:** violated
+- **Gap:** Step 3, the forged-identity request, ends in `|| true` and asserts
+  nothing, and step 1 prints rather than asserts. The compose and proxy
+  tests now enforce the same properties in CI, but the sentence is
+  still untrue. #56
+
+### C-10 Access control is enforced on the server
+
+- **Claim:** A reader cannot write, a writer cannot delete, and a stranger gets
+  404, not 403, so existence is not confirmed.
+- **Asserted in:** `docs/running.md` — "| Access control enforced | **No** |
+  Partly | **Yes, server-side** |"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_access.py::TestEnforcement::test_reader_may_not_patch`
+  `server/tests/test_access.py::TestEnforcement::test_writer_may_not_delete`
+  `server/tests/test_access.py::TestEnforcement::test_stranger_gets_404_not_403`
+  `server/tests/test_access.py::TestEnforcement::test_list_hides_projects_you_cannot_read`
+
+### C-11 A writer cannot grant themselves ownership
+
+- **Claim:** Only an owner may change who has access, and a project cannot be
+  left with no owner.
+- **Asserted in:** `server/app/access.py` — "Only an owner may change who has
+  access"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_access.py::TestEnforcement::test_writer_may_not_grant_themselves_ownership`
+  `server/tests/test_access.py::TestEnforcement::test_last_owner_cannot_be_removed`
+
+### C-12 A checkpoint sign-off is attributed to the authenticated user
+
+- **Claim:** `signedBy` and `signedAt` are written by the server from the proxy
+  identity and its clock, whatever the client sends. (Violated until
+  #31.)
+- **Asserted in:** `docs/deploy.md` — "**A checkpoint sign-off means
+  something.**"
+- **Asserted in:** `docs/running.md` — "| Checkpoint sign-off means something |
+  **No, self-asserted** | Yes | Yes |"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_signoff.py::TestTheForgeryFromTheIssue::test_a_writer_cannot_sign_off_as_the_cmo`
+  `server/tests/test_signoff.py::TestWhoSignedAndWhen::test_a_new_decision_is_attributed_to_the_caller_not_the_claim`
+  `tests/test_stack.py::the sign-off is attributed to the proxy identity, not the claim`
+
+### C-13 In the Claude artifact mode, identity and sign-off hold
+
+- **Claim:** The comparison table says the artifact mode has a signed-in
+  identity and a meaningful sign-off.
+- **Asserted in:** `docs/running.md` — "| Signed-in identity | **None** | Yes |
+  Yes, from your SSO |"
+- **Status:** unenforced
+- **Gap:** Rests on the Claude artifact runtime, which is outside this
+  repository and cannot be exercised from a test here.
+
+### C-14 Cross-site writes are refused
+
+- **Claim:** A state-changing request a different site initiated is rejected by
+  `Sec-Fetch-Site`, so a signed-in user's browser cannot be driven
+  from another page.
+- **Asserted in:** `server/app/main.py` — "Cross-site writes are refused."
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_csrf.py::TestCrossSiteWrites::test_a_cross_site_delete_is_refused`
+  `server/tests/test_csrf.py::TestCrossSiteWrites::test_every_write_method_is_covered`
+
+### C-15 Security headers are on every response
+
+- **Claim:** The Content-Security-Policy, HSTS, nosniff and frame denial apply
+  to `/api` and the dashboard alike, and `Server` is removed.
+- **Asserted in:** `proxy/Caddyfile` — "Security headers, at the SITE level so
+  /api/* gets them too."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_proxy_identity.py::content-security-policy`
+  `tests/test_proxy_identity.py::no Server header`
+  `server/tests/test_api_hardening.py::test_api_responses_get_security_headers`
+
+### C-16 Request bodies are bounded
+
+- **Claim:** The edge and the API both refuse an oversize body, and the API does
+  so without buffering it.
+- **Asserted in:** `proxy/Caddyfile` — "A project document is a governance
+  record: kilobytes."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_proxy_identity.py::Caddy cut the over-size body off at the cap`
+  `server/tests/test_api_hardening.py::test_body_limit_rejects_large_payloads`
+  `server/tests/test_api_hardening.py::TestBodyLimitDoesNotBuffer::test_an_oversize_chunked_body_is_rejected`
+
+### C-17 Abuse is rate limited
+
+- **Claim:** Requests are counted per identity over a sliding window. The limit
+  is per replica.
+- **Asserted in:** `server/app/main.py` — "Per-key request accounting over a
+  moving window."
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_api_hardening.py::test_rate_limit_blocks_burst_requests`
+  `server/tests/test_api_hardening.py::TestRateLimiterMemory::test_the_window_really_slides`
+
+### C-18 The audit log is append-only
+
+- **Claim:** No route changes or removes a log entry, and the database itself
+  refuses an UPDATE.
+- **Asserted in:** `README.md` — "Audit log | Yes, append-only"
+- **Status:** partial
+- **Enforced by:**
+  `server/tests/test_api.py::test_the_database_itself_refuses_to_update_a_log_entry`
+  `server/tests/test_api.py::test_there_is_no_route_to_change_or_remove_a_log_entry`
+  `server/tests/test_api.py::test_log_timestamp_is_the_server_clock`
+- **Gap:** Deleting a project cascades and removes its log, and nothing durable
+  records that the deletion happened. #36
+
+### C-19 Version history cannot be rewritten
+
+- **Claim:** Every revision is kept, and the only permitted change to one is a
+  purge.
+- **Asserted in:** `docs/running.md` — "| Version snapshots | No | No | **Yes**
+  |"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_versions.py::TestVersions::test_history_is_append_only`
+  `server/tests/test_versions.py::TestPurge::test_history_cannot_be_rewritten_by_hand`
+
+### C-20 History survives deletion and stays restricted
+
+- **Claim:** Deleting a project does not erase its history, and deleting a
+  restricted record does not widen access to it.
+- **Asserted in:** `server/migrations/002_versions.sql` — "No foreign key to
+  projects, deliberately."
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_versions.py::TestVersions::test_history_survives_deletion`
+  `server/tests/test_versions.py::TestDeletedHistoryStaysRestricted::test_a_stranger_cannot_read_a_deleted_projects_history`
+
+### C-21 Disposal leaves a tombstone, not a gap
+
+- **Claim:** A purge empties a snapshot's content and keeps its revision,
+  author, timestamp and original hash. Only an owner may purge.
+- **Asserted in:** `server/migrations/003_version_access.sql` — "The purge below
+  is deliberately NOT a delete."
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_versions.py::TestPurge::test_an_owner_can_purge_and_the_tombstone_survives`
+  `server/tests/test_versions.py::TestPurge::test_a_writer_cannot_purge`
+
+### C-22 Deleting a project deletes it and its log
+
+- **Claim:** The store contract says `remove` deletes a project and its log.
+- **Asserted in:** `docs/self-hosting.md` — "| `remove(id)` | Delete a project
+  and its log |"
+- **Status:** violated
+- **Gap:** Every revision's full document survives in `project_version`, and the
+  purge does not reach the same values in the audit log, so this is not
+  erasure. #36
+
+### C-23 Backups are encrypted, and a plaintext dump is refused
+
+- **Claim:** `make backup` requires a passphrase and writes only an encrypted
+  dump.
+- **Asserted in:** `Makefile` — "BACKUP_PASSPHRASE is required"
+- **Status:** unenforced
+- **Gap:** The guard is a Makefile conditional with no test, and the passphrase
+  is passed on gpg's command line, readable by any local account. #41
+
+### C-24 `make up` refuses to start on unsafe settings
+
+- **Claim:** A placeholder or short database password, a literal identity
+  source, and a non-loopback bind over plain HTTP are all refused.
+- **Asserted in:** `README.md` — "refuses to start on unsafe settings"
+- **Status:** unenforced
+- **Gap:** `scripts/preflight.py` has no tests. #77
+
+### C-25 Any database password works
+
+- **Claim:** A password from `openssl rand -base64 32`, or one with any
+  character in it, connects. (About half of them crashed the API
+  before #72.)
+- **Asserted in:** `.env.example` — "Any password works in POSTGRES_PASSWORD
+  above"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_database_url.py::TestThePiecesBecomeAUrlThatSurvivesAnyPassword::test_every_awkward_password_round_trips`
+  `server/tests/test_database_url.py::TestARealRoleWithAHostilePassword::test_it_connects_and_a_wrong_password_does_not`
+
+### C-26 Browser-only mode says so, in a standing banner
+
+- **Claim:** The app states in the layout that it is storing in one browser,
+  with no access control or audit log, and names the risk.
+- **Asserted in:** `README.md` — "The app says so in a standing banner when it
+  is in this mode."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_boot_storage.py::static host -> standing warning is shown`
+  `tests/test_boot_storage.py::static host -> warning names the risk`
+
+### C-27 The app never silently falls back to browser storage
+
+- **Claim:** If a server was expected and cannot be reached, or refuses the
+  user, the app stops and says so.
+- **Asserted in:** `README.md` — "never silently falls back"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_boot_storage.py::no store was created`
+  `tests/test_boot_storage.py::nothing written to localStorage`
+
+### C-28 After a save, the app says where the save went
+
+- **Claim:** The server mode says the shared workspace and never the browser;
+  only the browser-only mode may mention the browser. (Violated until
+  #55.)
+- **Asserted in:** `app/js/00-core/40-writes.js` — "What a save tells the user
+  about where it went."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_boot_storage.py::server mode: a save says it went to the shared workspace`
+  `tests/test_boot_storage.py::browser-only mode: a save says it stayed in this browser`
+  `tests/test_boot_storage.py::only the browser-only mode may say 'browser'`
+
+### C-29 Each storage mode is labeled distinctly
+
+- **Claim:** The header names the mode, so a user can tell the audited server
+  from the other modes.
+- **Asserted in:** `app/js/20-app/80-boot.js` — "setMode(RO?"View only":"Shared
+  workspace""
+- **Status:** violated
+- **Gap:** The Claude artifact mode shows the same "Shared workspace" label as
+  the self-hosted server. #64
+
+### C-30 Live updates reach other users, and only those who may see the project
+
+- **Claim:** A change arrives over the event stream without a refresh. The
+  stream carries ids, not documents, and a stranger is not told a
+  restricted project changed.
+- **Asserted in:** `docs/running.md` — "Live updates between people"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_stack.py::external change arrives over SSE`
+  `server/tests/test_events.py::test_a_stranger_does_not_see_a_restricted_project_change`
+  `server/tests/test_events.py::test_the_stream_carries_ids_not_documents`
+
+### C-31 The generated dashboard can never go stale
+
+- **Claim:** A hook rebuilds docs/app/index.html on any change under app/ and
+  fails the run if the file differs.
+- **Asserted in:** `docs/self-hosting.md` — "so the generated file can never go
+  stale"
+- **Status:** enforced
+- **Enforced by:**
+  `.pre-commit-config.yaml::build-app`
+  `.pre-commit-config.yaml::check-app`
+
+### C-32 A test cannot be added and quietly left out of CI
+
+- **Claim:** CI fails if a `test-*` task is not run, or a test file has no task.
+- **Asserted in:** `docs/running.md` — "so a test cannot be added and quietly
+  left out."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_workflows.py::every rule passes on .github/workflows/test.yml`
+  `tests/test_workflows.py::a suite dropped from CI is noticed`
+
+### C-33 In CI, a test that cannot run is a failure
+
+- **Claim:** `REQUIRE_TESTS=1` turns a skip into a failure, because a skip exits
+  0 and reads as a pass.
+- **Asserted in:** `docs/running.md` — "to turn every skip into a failure; CI
+  always does."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_workflows.py::REQUIRE_TESTS removed is noticed`
+  `tests/test_workflows.py::REQUIRE_TESTS set to 0 is noticed`
+
+### C-34 The walkthrough video says what it shows
+
+- **Claim:** The page says it was recorded on the Docker stack and that the
+  demonstration copy is browser-only.
+- **Asserted in:** `docs/index.md` — "The video shows a **shared workspace**"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_docs_media.py::dropping the mode caveat is noticed`
+
+### C-35 `PROXY_SHARED_SECRET` is a working control
+
+- **Claim:** The deployment guide offers it to authenticate a caller inside the
+  network.
+- **Asserted in:** `docs/deploy.md` — "or `PROXY_SHARED_SECRET` for a caller
+  inside the network"
+- **Status:** violated
+- **Gap:** No shipped proxy configuration sends the header, so enabling it makes
+  every request 403. #61
+
+### C-36 The self-hosting identity example is the safe one
+
+- **Claim:** The first example shown for `IDENTITY_ID_SOURCE` is for local
+  development.
+- **Asserted in:** `docs/self-hosting.md` — "# local development: a literal
+  string"
+- **Status:** violated
+- **Gap:** The literal it shows is exactly the value `preflight.py` refuses to
+  start on, and it is the uncommented line. #62
+
+### C-37 The AWS audience setting matches what the load balancer signs
+
+- **Claim:** The task definition sets `IDENTITY_AUDIENCE` to the value the API
+  compares against.
+- **Asserted in:** `docs/deploy.md` — "listener/app/chai/a/b"
+- **Status:** violated
+- **Gap:** The ALB signs with the load balancer ARN, not the listener ARN, so
+  every request would 401. #51
+
+### C-38 MFA is whatever the hospital already requires
+
+- **Claim:** Authentication, including multi-factor, is enforced at the front
+  door and not by this application.
+- **Asserted in:** `docs/deploy.md` — "**MFA is whatever the hospital already
+  requires**"
+- **Status:** unenforced
+- **Gap:** Rests on the hospital's identity provider and the cloud front door,
+  which are outside this repository and cannot be exercised from a test
+  here.
+
+### C-39 Following 'Close the back door' makes the API unreachable except through SSO
+
+- **Claim:** Each cloud section's back-door steps are, in the guide's words,
+  "not hardening"; they are the deployment.
+- **Asserted in:** `docs/deploy.md` — "They are the deployment."
+- **Status:** unenforced
+- **Gap:** Rests on each cloud's own network configuration. The guide's 'Proving
+  the back door is closed' commands are for an operator to run per
+  deployment; nothing here runs them.
+
+### C-40 The API refuses identity headers from an unexpected peer
+
+- **Claim:** With `TRUSTED_PROXY_CIDR` set, a request whose TCP peer is outside
+  it is rejected, and `X-Forwarded-For` cannot satisfy the check.
+- **Asserted in:** `docs/deploy.md` — "refuses identity headers arriving from
+  anywhere else"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_auth.py::test_trusted_proxy_cidr_rejects_an_outside_peer`
+  `server/tests/test_auth.py::test_x_forwarded_for_cannot_satisfy_the_peer_check`
+
+### C-41 The data survives `docker compose down`
+
+- **Claim:** Postgres writes to a named volume, which `down` leaves alone.
+- **Asserted in:** `docs/self-hosting.md` — "containers and networks go; pgdata
+  stays"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_compose_isolation.py::the database leaving its named volume is noticed`
+
+### C-42 The database image is pinned to a major version
+
+- **Claim:** Postgres does not migrate its on-disk format, so a floating tag
+  could make a volume unreadable on an unrelated pull.
+- **Asserted in:** `compose.yaml` — "Pinned to a major version, never :latest."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_compose_isolation.py::db image '{image}' is noticed`

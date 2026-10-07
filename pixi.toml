@@ -58,6 +58,13 @@ test-enums = "python tests/test_check_enums.py"
 test-workflows = "python tests/test_workflows.py"
 # The showcase video: present, bounded, first-party, streamable, honest about the mode.
 test-docs-media = "python tests/test_docs_media.py"
+# docs/security-claims.md: every claim quoted from where it is made and backed by a
+# test CI runs. `check-claims` checks the real page; `test-claims` tests the checker.
+check-claims = "python scripts/check_claims.py"
+test-claims = "python tests/test_check_claims.py"
+# The network isolation the security model rests on: no port on the api or db, the
+# db on an internal network, loopback by default, a named volume, a pinned image.
+test-compose = "python tests/test_compose_isolation.py"
 check-spelling = "python scripts/check_spelling.py"
 check-chai = "python scripts/check_chai_updates.py"
 check-chai-write = "python scripts/check_chai_updates.py --write"

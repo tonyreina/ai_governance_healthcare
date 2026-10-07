@@ -821,7 +821,18 @@ function rememberApiHere(){
 /* ============================================================
    App state
    ============================================================ */
-let STORE=null, MODE="connecting", RO=false, CAN_DELETE=true, USER=null;
+/* Where this session's data lives. A closed set, so it is a frozen object and
+   never a bare string: `MODE === "shared"` once sat next to `MODE = "api"` and
+   was false forever, which told every server-backed user their work was "Saved
+   in this browser" (#55). `Mode.APi` is undefined and a test fails; "apI" is
+   just a different string and nothing does. */
+const Mode = Object.freeze({
+  CONNECTING: "connecting",  // booting; the store is not chosen yet
+  LOCAL: "local",            // this browser only (localStorage)
+  API: "api",                // the self-hosted server (PostgreSQL)
+  ARTIFACT: "artifact",      // a Claude artifact's database
+});
+let STORE=null, MODE=Mode.CONNECTING, RO=false, CAN_DELETE=true, USER=null;
 // Set when the whole workspace is view-only (an artifact shared read-only).
 // Outranks any per-project role: it is a property of how you got here.
 let WORKSPACE_RO=false;
@@ -842,7 +853,7 @@ async function resolveNames(root){
   root=root||document;
   const els=[...root.querySelectorAll("[data-uid]")];
   const ids=[...new Set(els.map(e=>e.dataset.uid).filter(Boolean))];
-  els.forEach(e=>{ if(!e.dataset.uid) e.textContent = MODE==="local"?"you (this browser)":"someone"; });
+  els.forEach(e=>{ if(!e.dataset.uid) e.textContent = MODE===Mode.LOCAL?"you (this browser)":"someone"; });
   const need=ids.filter(i=>!(i in NAMES));
   if(need.length && USER && USER.profiles){
     try{ const ps=await USER.profiles(need); need.forEach(i=>{ const p=ps[i]; NAMES[i]= p ? (p.isMe ? "you" : (p.name||"someone")) : "someone"; }); }catch(e){ need.forEach(i=>NAMES[i]="someone"); }
@@ -855,6 +866,16 @@ const who = id => `<span data-uid="${esc(id||"")}">${id&&NAMES[id]?esc(NAMES[id]
    Writes
    ============================================================ */
 function setSaved(t){ document.getElementById("saved").textContent=t; }
+/* What a save tells the user about where it went. Keyed by Mode, so adding a
+   mode without deciding its wording is a gap the test in test_boot_storage.py
+   finds, and an unknown mode falls back to a label that claims nothing rather
+   than to one that claims the wrong place. Only LOCAL may say "browser". */
+const SAVED_LABEL = Object.freeze({
+  [Mode.LOCAL]: "Saved in this browser",
+  [Mode.API]: "Saved to shared workspace",
+  [Mode.ARTIFACT]: "Saved to shared workspace",
+});
+function savedLabel(mode){ return SAVED_LABEL[mode] || "Saved"; }
 function stamp(extra){ return Object.assign({updatedAt:new Date().toISOString(), updatedBy:ME.id||null}, extra||{}); }
 function queuePatch(pid,patch){
   if(RO) return;
@@ -882,7 +903,7 @@ async function flush(pid,attempt){
   const restore = ()=>{ pending[pid] = deepMerge(p, pending[pid]||{}); };
   try{
     await STORE.update(pid,p);
-    if(!pending[pid]) setSaved(MODE==="shared"?"Saved to shared workspace":"Saved in this browser");
+    if(!pending[pid]) setSaved(savedLabel(MODE));
   }
   catch(e){
     const c=e&&e.code;
@@ -3159,7 +3180,7 @@ renderDashboardShell();
     try{ const c=await user.can("data.write"); if(db && c===false) WORKSPACE_RO=RO=true; }catch(e){}
     try{ CAN_DELETE = (await user.canEdit()) || (await user.isOwner()); }catch(e){ CAN_DELETE=false; }
   }
-  if(db){ STORE=new DbStore(db); MODE="shared"; setMode(RO?"View only":"Shared workspace", RO?"ro":"shared"); }
+  if(db){ STORE=new DbStore(db); MODE=Mode.ARTIFACT; setMode(RO?"View only":"Shared workspace", RO?"ro":"shared"); }
   else {
     // Self-hosted backend, if this page is served by one. Checked only when
     // there is no artifact database, so the artifact path costs nothing.
@@ -3167,7 +3188,7 @@ renderDashboardShell();
 
     if(api.verdict === "ok"){
       rememberApiHere();
-      STORE=new ApiStore("/api"); MODE="api"; CAN_DELETE=true;
+      STORE=new ApiStore("/api"); MODE=Mode.API; CAN_DELETE=true;
       setMode("Shared workspace","shared");
       // Identity is established by the proxy, so the browser cannot choose it.
       try{
@@ -3203,7 +3224,7 @@ renderDashboardShell();
     else {
       // Nothing API-shaped at this origin and none ever seen: a genuinely
       // static host. localStorage is the intended mode here.
-      STORE=new LocalStore(); MODE="local"; CAN_DELETE=true;
+      STORE=new LocalStore(); MODE=Mode.LOCAL; CAN_DELETE=true;
       setMode("This browser only","");
       showStorageWarning();
     }

@@ -15,7 +15,7 @@ renderDashboardShell();
     try{ const c=await user.can("data.write"); if(db && c===false) WORKSPACE_RO=RO=true; }catch(e){}
     try{ CAN_DELETE = (await user.canEdit()) || (await user.isOwner()); }catch(e){ CAN_DELETE=false; }
   }
-  if(db){ STORE=new DbStore(db); MODE="shared"; setMode(RO?"View only":"Shared workspace", RO?"ro":"shared"); }
+  if(db){ STORE=new DbStore(db); MODE=Mode.ARTIFACT; setMode(RO?"View only":"Shared workspace", RO?"ro":"shared"); }
   else {
     // Self-hosted backend, if this page is served by one. Checked only when
     // there is no artifact database, so the artifact path costs nothing.
@@ -23,7 +23,7 @@ renderDashboardShell();
 
     if(api.verdict === "ok"){
       rememberApiHere();
-      STORE=new ApiStore("/api"); MODE="api"; CAN_DELETE=true;
+      STORE=new ApiStore("/api"); MODE=Mode.API; CAN_DELETE=true;
       setMode("Shared workspace","shared");
       // Identity is established by the proxy, so the browser cannot choose it.
       try{
@@ -59,7 +59,7 @@ renderDashboardShell();
     else {
       // Nothing API-shaped at this origin and none ever seen: a genuinely
       // static host. localStorage is the intended mode here.
-      STORE=new LocalStore(); MODE="local"; CAN_DELETE=true;
+      STORE=new LocalStore(); MODE=Mode.LOCAL; CAN_DELETE=true;
       setMode("This browser only","");
       showStorageWarning();
     }

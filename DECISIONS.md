@@ -218,6 +218,22 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - A file the checker cannot parse is reported as a violation, not skipped.
 - Source: `scripts/check_enums.py`; [CLAUDE.md](CLAUDE.md).
 
+### D-22 The storage mode is an enum, and each mode owns its labels
+
+- Status: Accepted
+- `Mode` (`app/js/00-core/30-state.js`) is a frozen object with `CONNECTING`,
+  `LOCAL`, `API` and `ARTIFACT`. What a save tells the user is looked up in
+  `SAVED_LABEL`, keyed by `Mode`, rather than chosen by a comparison.
+- Why: `MODE` was assigned `"api"` in one file and compared with `"shared"` in
+  another, so the server-backed mode reported "Saved in this browser" after every
+  save (#55), contradicting the header beside it.
+- An unknown mode falls back to a label that claims nothing ("Saved") rather than
+  to one that claims the wrong place. Only `LOCAL` may mention the browser, and
+  the test asserts it.
+- The artifact mode's value changed from `"shared"` to `"artifact"`. Nothing
+  outside the app read it.
+- Source: closed issue #55; R-04.
+
 ### D-20 Pre-commit is the only CI gate today
 
 - Status: Accepted, **known gap** (#32)

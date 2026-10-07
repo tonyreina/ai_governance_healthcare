@@ -2,6 +2,16 @@
    Writes
    ============================================================ */
 function setSaved(t){ document.getElementById("saved").textContent=t; }
+/* What a save tells the user about where it went. Keyed by Mode, so adding a
+   mode without deciding its wording is a gap the test in test_boot_storage.py
+   finds, and an unknown mode falls back to a label that claims nothing rather
+   than to one that claims the wrong place. Only LOCAL may say "browser". */
+const SAVED_LABEL = Object.freeze({
+  [Mode.LOCAL]: "Saved in this browser",
+  [Mode.API]: "Saved to shared workspace",
+  [Mode.ARTIFACT]: "Saved to shared workspace",
+});
+function savedLabel(mode){ return SAVED_LABEL[mode] || "Saved"; }
 function stamp(extra){ return Object.assign({updatedAt:new Date().toISOString(), updatedBy:ME.id||null}, extra||{}); }
 function queuePatch(pid,patch){
   if(RO) return;
@@ -29,7 +39,7 @@ async function flush(pid,attempt){
   const restore = ()=>{ pending[pid] = deepMerge(p, pending[pid]||{}); };
   try{
     await STORE.update(pid,p);
-    if(!pending[pid]) setSaved(MODE==="shared"?"Saved to shared workspace":"Saved in this browser");
+    if(!pending[pid]) setSaved(savedLabel(MODE));
   }
   catch(e){
     const c=e&&e.code;

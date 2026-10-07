@@ -170,6 +170,65 @@ make backup                # pg_dump through the running server -> backups/
 Back up with `make backup`, not by copying the volume's files: a live cluster
 copied file-by-file gives a torn snapshot that may not restore.
 
+### Rotating the database password
+
+`POSTGRES_PASSWORD` is read by PostgreSQL **once**, when it initializes an
+empty data directory. On an existing `pgdata` volume it is ignored. Editing it
+in `.env` therefore changes what the API presents and not what the database
+accepts, and the API can no longer reach its own database:
+
+```text
+database not ready: password authentication failed for user "chai"
+```
+
+Nothing warns about this, and `make up` cannot: `preflight.py` reads `.env` and
+has no running database to ask. It is also the check that sends people here,
+because it insists the password be strong and not a placeholder — which is
+exactly what makes somebody change it.
+
+So ask the running stack instead:
+
+```bash
+make doctor
+```
+
+It connects as the API does and tells you whether the password in `.env` is the
+one the database accepts. The fix keeps every record:
+
+```bash
+docker compose exec db \
+  psql -U chai -d chai \
+  -c "ALTER ROLE chai WITH PASSWORD 'the value now in .env';"
+
+docker compose up -d --force-recreate api
+```
+
+That `psql` has no `-h`, so it goes over the container's Unix socket, which
+`pg_hba.conf` trusts — it needs no password, which is what makes the rotation
+possible when you have locked yourself out.
+
+!!! note "Why `make doctor` connects to `-h db` and not to localhost"
+
+    `initdb` writes a `pg_hba.conf` that trusts the Unix socket *and*
+    loopback; the postgres image appends one `host all all all scram-sha-256`
+    line, and only that line asks for a password. A check run as
+    `psql -h 127.0.0.1` inside the container matches the loopback **trust**
+    rule and succeeds with any password at all. The API connects from another
+    container over the bridge, so `-h db` is the only path that tests
+    anything.
+
+The other option destroys the database, so reach for it only on a stack with
+nothing in it worth keeping:
+
+```bash
+make backup      # if there is
+make prune       # deletes the volume: records, audit log, every version
+```
+
+Managed PostgreSQL has none of this problem, because there is no volume and no
+`db` service — rotate with the provider and update `DATABASE_URL`. See
+[Deploying with SSO](deploy.md).
+
 ## Deploying this site
 
 The GitHub Actions workflow at `.github/workflows/pages.yml` builds the

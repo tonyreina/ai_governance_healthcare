@@ -39,7 +39,6 @@ services:
 
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-only-not-a-secret}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-chai}:${POSTGRES_PASSWORD:-dev-only-not-a-secret}@db:5432/${POSTGRES_DB:-chai}
       LOG_LEVEL: debug
       # Loosened so a request straight to 127.0.0.1:8000 from the host (which
       # arrives from the Docker gateway, not the proxy) is not rejected.

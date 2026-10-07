@@ -23,7 +23,9 @@ by oauth2-proxy and most nginx auth_request setups.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from urllib.parse import quote, urlsplit
 
 DEFAULT_IDENTITY_HEADER = "X-Forwarded-Email"
 
@@ -118,6 +120,72 @@ def _int(name: str, default: int) -> int:
 
 def _csv(name: str) -> list[str]:
     return [part.strip() for part in _str(name).split(",") if part.strip()]
+
+
+# --- the database URL ------------------------------------------------------
+#
+# Nothing builds this URL by string interpolation. Compose used to write
+# `postgresql://user:${POSTGRES_PASSWORD}@db/...`, which cannot percent-encode,
+# so a `/` in the password ended the URL's authority section and the first chunk
+# of the password was read as a port number:
+#
+#     ValueError: invalid literal for int() with base 10: 'pwYZ1MXvvrx+eItO'
+#
+# `openssl rand -base64 32` is the generator preflight.py and .env.example tell
+# people to use, and it emits a `/` often enough that about half of all passwords
+# broke the stack. So compose passes the pieces and this assembles them, with the
+# password encoded, which makes the choice of password irrelevant.
+
+
+def _bad_url_reason(url: str) -> str | None:
+    """Why `url` cannot be parsed, WITHOUT quoting any of it.
+
+    urllib's own message embeds the offending text, which for this failure is the
+    start of the password. An error that echoes a credential ends up in a log
+    aggregator, so this says what is wrong and nothing about what it was given.
+    """
+    try:
+        urlsplit(url).port  # noqa: B018  (the access is the check)
+    except ValueError:
+        return (
+            "DATABASE_URL is not a valid URL: what follows the first ':' in its "
+            "authority is not a port number. This almost always means the "
+            "password contains one of / @ : ? # and was not percent-encoded. "
+            "Either percent-encode it, or set POSTGRES_USER, POSTGRES_PASSWORD, "
+            "POSTGRES_HOST and POSTGRES_DB instead and let the API do it."
+        )
+    return None
+
+
+def build_database_url(env: Mapping[str, str]) -> str:
+    """The connection URL, from DATABASE_URL or from its pieces. "" if neither.
+
+    An explicit DATABASE_URL wins and is used as written, because a managed
+    instance's URL carries query parameters (``sslmode``, a Cloud SQL socket) the
+    pieces cannot express. It is checked, so a broken one fails at startup with a
+    message that says why.
+
+    Otherwise the URL is assembled from POSTGRES_USER, POSTGRES_PASSWORD,
+    POSTGRES_HOST, POSTGRES_PORT and POSTGRES_DB, with every part percent-encoded.
+    No password means no URL, not a guess.
+    """
+    explicit = (env.get("DATABASE_URL") or "").strip()
+    if explicit:
+        problem = _bad_url_reason(explicit)
+        if problem:
+            raise RuntimeError(problem)
+        return explicit
+
+    password = env.get("POSTGRES_PASSWORD") or ""
+    if not password:
+        return ""
+    user = quote(env.get("POSTGRES_USER") or "chai", safe="")
+    database = quote(env.get("POSTGRES_DB") or "chai", safe="")
+    host = env.get("POSTGRES_HOST") or "localhost"
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"  # an IPv6 literal
+    port = env.get("POSTGRES_PORT") or "5432"
+    return f"postgresql://{user}:{quote(password, safe='')}@{host}:{port}/{database}"
 
 
 @dataclass(frozen=True)
@@ -290,7 +358,7 @@ class Settings:
             )
 
         settings = cls(
-            database_url=_str("DATABASE_URL"),
+            database_url=build_database_url(os.environ),
             db_pool_min=_int("DB_POOL_MIN", 1),
             db_pool_max=_int("DB_POOL_MAX", 10),
             db_connect_timeout=float(_int("DB_CONNECT_TIMEOUT", 10)),

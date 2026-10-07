@@ -77,7 +77,8 @@ controls, and the CIDR check would be checking the attacker's own claim.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | — | Required. `postgresql://…`; `postgres://` and `postgresql+asyncpg://` are accepted too. |
+| `DATABASE_URL` | — | `postgresql://…`; `postgres://` and `postgresql+asyncpg://` are accepted too. Wins over the `POSTGRES_*` variables. **Percent-encode the password** (`/ @ : ? #` end the URL early); a broken one fails at startup and says so. |
+| `POSTGRES_PASSWORD`, `POSTGRES_USER`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB` | —, `chai`, `localhost`, `5432`, `chai` | Used when `DATABASE_URL` is unset. The API builds the URL and encodes the password, so **any password works**. `compose.yaml` uses these. One of the two is required. |
 | `PORT` / `API_PORT` | `8000` | Port to bind. Cloud Run sets `PORT`; `compose.yaml` sets `API_PORT`. |
 | `IDENTITY_MODE` | `proxy` | Preset: `proxy`, `iap`, `alb`, `easyauth`. |
 | `IDENTITY_HEADER` | `X-Forwarded-Email` | The header carrying identity. Overrides the preset. Alias: `AUTH_HEADER_EMAIL`. |

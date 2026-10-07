@@ -195,6 +195,21 @@ honest answer and is a gap worth closing; see R-19.
 - Source: `proxy/Caddyfile`; closed issues #14, #27.
 - Enforced by: `tests/test_proxy_identity.py`.
 
+### R-25 The documented first-run path works with any password
+
+- Status: Active
+- A password generated the way `preflight.py` and `.env.example` tell the
+  operator to generate it (`openssl rand -base64 32`), or chosen by a password
+  manager, must work. Nothing may build a URL by interpolating the password.
+- History: this was violated. Compose pasted `${POSTGRES_PASSWORD}` into the
+  connection URL, and a `/` in the password made the API crash on startup, reading
+  the start of the password as a port number. About half of all generated
+  passwords did this. Found by an operator running `make dev`, not by a test.
+- Source: the user's bug report; DECISIONS D-25.
+- Enforced by: `server/tests/test_database_url.py`, including a real PostgreSQL
+  role whose password contains every awkward character, and a guard that fails if
+  compose ever interpolates the password into a URL again.
+
 ## Engineering rules
 
 ### R-17 American English only

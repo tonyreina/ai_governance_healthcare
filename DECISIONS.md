@@ -271,6 +271,30 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   is the fix, not raising it above it.
 - Source: closed issue #31; R-09.
 
+### D-25 The API assembles the database URL; compose passes the pieces
+
+- Status: Accepted
+- `compose.yaml` hands the API `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`,
+  `POSTGRES_DB` and `POSTGRES_PASSWORD`. `build_database_url` in `config.py`
+  assembles the URL and percent-encodes every part, so the choice of password is
+  irrelevant. An explicit `DATABASE_URL` still wins, for managed instances whose
+  URL carries `sslmode` or a Cloud SQL socket the pieces cannot express.
+- Why: compose cannot percent-encode. `postgresql://u:${POSTGRES_PASSWORD}@db/..`
+  broke on a `/` in the password, which the documented generator produces about
+  half the time (measured: 47% of 20,000).
+- A hand-written `DATABASE_URL` that cannot be parsed fails at startup with a
+  message that names the likely cause and the way out, and **never echoes the
+  password**. urllib's own message embeds the offending text, which here is the
+  start of the password, and an error that quotes a credential ends up in a log
+  aggregator.
+- Rejected: telling operators to use `openssl rand -hex`. It shifts the burden to
+  every operator and to every password manager, fixes nothing for a password
+  chosen by a person, and leaves a first-run path that works only if you happened
+  to read the right sentence.
+- Rejected: rejecting such passwords in `preflight.py`. Correct passwords would
+  be refused to protect a code path that should simply be correct.
+- Source: R-25.
+
 ## Proposed, not yet decided
 
 ### D-21 PHI detection runs in an opt-in sidecar, advisory only

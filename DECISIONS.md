@@ -234,12 +234,41 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   outside the app read it.
 - Source: closed issue #55; R-04.
 
-### D-20 Pre-commit is the only CI gate today
+### D-20 Pre-commit is the only CI gate
 
-- Status: Accepted, **known gap** (#32)
-- `lint.yml` runs `prek` and nothing else, so no test runs on a pull request.
-  This is a description of the present, not an endorsement. Do not claim a
-  property is "tested" on the strength of a test file that CI never executes.
+- Status: **Superseded by D-23**
+- `lint.yml` ran `prek` and nothing else, so no test ran on a pull request (#32).
+  Kept for the history: until D-23, a property could not honestly be called
+  "tested" on the strength of a test file CI never executed.
+
+### D-23 CI runs every test, in four jobs, and a skip fails
+
+- Status: Accepted
+- `.github/workflows/test.yml` runs on every pull request and on main:
+  **workflows** (unit: `test-workflows`, `test-enums`, and `actionlint`),
+  **server** (the API against a PostgreSQL 17 service container), **browser**
+  (the dashboard suites in Chromium) and **stack** (the proxy, then the Compose
+  stack end to end). A fifth job, **tests passed**, depends on all of them and
+  treats a skipped job as a failure, so one check name can gate a merge and a new
+  job cannot be forgotten.
+- Why three environments: what the server tests exercise IS the database (a row
+  lock, a trigger), the dashboard needs a browser, and the identity handoff needs
+  a real Caddy. A fake would test the fake.
+- Why `REQUIRE_TESTS`: a skip exits 0. On a runner with no database 106 of 201
+  server tests skip and the run is green. See R-24.
+- Why the CI configuration has unit tests: the gap opened because a test could be
+  added and left out of CI. `test_workflows.py` fails if any `pixi run test-*`
+  task is not run by CI, if a test file has no task, if Postgres drifts from the
+  version `compose.yaml` pins, or if a job loses its timeout. Each rule has a
+  mutation test.
+- Found by running it: `test_stack.py`'s browser section had been broken since the
+  Content-Security-Policy shipped, because `wait_for_function` evaluates a string
+  and the policy forbids `unsafe-eval`. It is fixed with a polling helper, which
+  keeps the app under the policy it ships with rather than bypassing it.
+- Not done: branch protection on `main` requiring `tests passed`. That is a
+  repository setting and the owner's call. Actions are pinned by tag, matching the
+  existing workflows; pinning by commit SHA is #37.
+- Source: #32; R-23, R-24.
 
 ### D-24 The server decides who signed a checkpoint, and when
 

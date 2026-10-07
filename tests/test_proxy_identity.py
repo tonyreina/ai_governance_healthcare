@@ -26,6 +26,7 @@ apart is to ask the upstream whether it ever saw the request.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -68,6 +69,11 @@ ROOT = Path(__file__).resolve().parent.parent
 CADDYFILE = ROOT / "proxy" / "Caddyfile"
 PORT = 18099
 NET = "chai-proxy-test"
+
+# CI sets REQUIRE_TESTS=1. A suite that cannot run then FAILS instead of
+# skipping, because a skip exits 0 and reads as a pass: that is how CI once
+# reported green while running none of these tests (#32).
+REQUIRE_TESTS = bool(os.environ.get("REQUIRE_TESTS"))
 
 # What each front door actually puts on the request, and how .env.example says
 # to read it. Keep in step with the identity blocks in .env.example.
@@ -345,7 +351,7 @@ def check_edge_body_cap(headers: dict[str, str]) -> None:
 def main() -> int:
     if not shutil.which("docker") or docker("info").returncode != 0:
         print("docker unavailable; skipping proxy identity checks")
-        return 0
+        return 1 if REQUIRE_TESTS else 0
 
     workdir = Path(tempfile.mkdtemp(prefix="chai-proxy-test-"))
     (workdir / "srv").mkdir()

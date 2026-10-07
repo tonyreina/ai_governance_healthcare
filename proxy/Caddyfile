@@ -108,6 +108,12 @@
 		# can write until the volume fills -- and every such write is also
 		# copied permanently into project_version, where the append-only
 		# trigger prevents reclaiming the space.
+		#
+		# `2MB` is SI: 2,000,000 bytes, not 2 MiB. Caddy enforces it by capping
+		# the body reader rather than by rejecting on Content-Length, so the
+		# upstream sees the request line and at most that many bytes -- never a
+		# complete over-size document -- and the client gets 413.
+		# tests/test_proxy_identity.py asserts exactly that.
 		request_body {
 			max_size 2MB
 		}

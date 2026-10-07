@@ -23,10 +23,17 @@ genuine case of a reverse proxy terminating TLS somewhere this cannot see.
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 
 ENV_FILE = Path(".env")
+
+# The defaults compose.yaml applies with `${VAR:-default}`. They are repeated here
+# because this reads `.env` ALONE and has to decide what compose will do with it.
+# tests/test_preflight.py fails if either drifts from compose.yaml.
+DEFAULT_BIND = "127.0.0.1"
+DEFAULT_SITE = "http://:80"
 
 # Values that look set but mean "I have not done this yet". Compared casefolded.
 PLACEHOLDERS = {
@@ -43,6 +50,34 @@ PLACEHOLDERS = {
 }
 
 
+_EXPORT = re.compile(r"^export\s+")
+_COMMENT = re.compile(r"\s#")
+
+
+def _value(raw: str) -> str:
+    """One value, read the way compose reads it.
+
+    A quoted value is whatever is between the quotes, `#` and all; anything after
+    the closing quote (a trailing comment) is dropped. An UNQUOTED value ends at the
+    first whitespace followed by `#`, so `abc # a long note` is `abc`. That matters
+    for a safety check: counting the note would make a 3-character password look
+    long enough, and compose would use the 3 characters.
+    """
+    raw = raw.strip()
+    if raw[:1] in ("'", '"'):
+        quote, i = raw[0], 1
+        while i < len(raw):
+            if quote == '"' and raw[i] == "\\":
+                i += 2
+                continue
+            if raw[i] == quote:
+                return raw[1:i]
+            i += 1
+        return raw  # unterminated: compose rejects it; do not guess
+    cut = _COMMENT.search(raw)
+    return (raw[: cut.start()] if cut else raw).strip()
+
+
 def read_env(path: Path) -> dict[str, str]:
     """Parse the subset of dotenv syntax compose itself accepts."""
     out: dict[str, str] = {}
@@ -53,10 +88,7 @@ def read_env(path: Path) -> dict[str, str]:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, value = line.partition("=")
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
-        out[key.strip()] = value
+        out[_EXPORT.sub("", key.strip())] = _value(value)
     return out
 
 
@@ -99,8 +131,12 @@ def check(env: dict[str, str]) -> list[str]:
                 "    stack with `make dev`, which supplies a dev identity safely."
             )
 
-    bind = env.get("HTTP_BIND", "127.0.0.1")
-    site = env.get("SITE_ADDRESS", "http://:80")
+    # `${VAR:-default}` substitutes the default when the variable is unset OR EMPTY,
+    # so `HTTP_BIND=` and `SITE_ADDRESS=` mean the defaults. Reading an empty
+    # SITE_ADDRESS as "not plain HTTP" waved through a bind to the whole network
+    # while compose served plain HTTP on it.
+    bind = env.get("HTTP_BIND") or DEFAULT_BIND
+    site = env.get("SITE_ADDRESS") or DEFAULT_SITE
     serves_plain_http = site.startswith("http://")
     if bind not in ("127.0.0.1", "::1", "localhost") and serves_plain_http:
         problems.append(

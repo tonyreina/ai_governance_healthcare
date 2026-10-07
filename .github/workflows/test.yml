@@ -60,6 +60,7 @@ jobs:
       # security model rests on is asserted against the real compose.yaml.
       - run: pixi run test-claims
       - run: pixi run test-compose
+      - run: pixi run test-preflight
 
       # Static analysis of the workflow files themselves.
       - name: actionlint

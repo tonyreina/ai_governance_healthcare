@@ -377,6 +377,26 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   `preflight.py` has no tests (#77).
 - Source: #68; R-19.
 
+### D-28 Preflight reads `.env` exactly as compose does
+
+- Status: Accepted
+- `scripts/preflight.py` decides from `.env` alone, so the way for it to be wrong
+  is to read `.env` differently from compose, and both mistakes failed open:
+  an empty `SITE_ADDRESS=` (compose: the default, plain `http://:80`) was read as
+  "not plain HTTP" and passed a bind to the whole network, and
+  `POSTGRES_PASSWORD=abc # a long note` was counted at the length of the note while
+  compose used `abc`.
+- So it follows compose's rules: an empty value is the default (`${VAR:-d}`), an
+  unquoted `#` after whitespace starts a comment, a quoted value keeps its `#`,
+  and `export` is accepted. Its two defaults are constants, and a test fails if
+  they drift from `compose.yaml`.
+- Found by writing the tests (#77), not by reading the code: the gate had never
+  been tested, and a gate nobody tests is a claim.
+- Rejected: shelling out to `docker compose config` to read the resolved values.
+  It would be exact, but it needs Docker and the variables set, and preflight must
+  run first, before anything is up, on a machine that may have neither.
+- Source: #77; R-08.
+
 ## Proposed, not yet decided
 
 ### D-21 PHI detection runs in an opt-in sidecar, advisory only

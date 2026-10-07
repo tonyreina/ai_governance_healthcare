@@ -105,7 +105,10 @@ honest answer and is a gap worth closing; see R-19.
   source, a placeholder or short database password, or a non-loopback bind over
   plain HTTP.
 - Source: `proxy/Caddyfile` ("NO DEFAULT VALUE"); `scripts/preflight.py`.
-- Enforced by: `tests/test_proxy_identity.py`; `scripts/preflight.py`.
+- Enforced by: `tests/test_proxy_identity.py`; `tests/test_preflight.py` for
+  the preflight gate. It reads `.env` the way compose does (an empty value is
+  the default, an unquoted `#` after whitespace starts a comment), because
+  reading it differently fails open.
 
 ### R-09 Sign-offs are attributed to the authenticated user
 

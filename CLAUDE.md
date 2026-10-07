@@ -1,0 +1,185 @@
+# Working in this repository
+
+## Requirements and design decisions
+
+[REQUIREMENTS.md](REQUIREMENTS.md) records what must stay true.
+[DECISIONS.md](DECISIONS.md) records why things are built the way they are, and
+what was rejected. They are the project's memory. Treat them as binding.
+
+**Before** writing code, planning, or recommending a design, read the entries
+that touch the area. Anything marked **Active** (requirements) or **Accepted**
+(decisions) is a constraint on new code unless the user says otherwise.
+
+- **If a task would conflict with an entry, say so before building it.** Name the
+  entry (R-nn, D-nn), say what would change, and let the user decide. Do not
+  deviate silently, and do not quietly follow the old rule when the user has
+  clearly asked for something else.
+- **If the user overrides or changes one, do what they ask and record it** in the
+  same change. They are the owner.
+- **Keep both files current as part of the change that alters them.** New
+  constraint: add the next unused `R-nn`. New design choice: add a `D-nn` with
+  the reason and the alternatives rejected. Changed mind: add a new entry that
+  supersedes the old one and mark the old one `Superseded by D-nn`. Never
+  renumber, reuse an ID, edit history or delete an entry. Fixed a known
+  violation: update its "Known violation" and "Enforced by" lines.
+- **Record what the user decided, not what you assume.** Only the owner moves a
+  decision from **Proposed** to **Accepted**, and an **Open** question stays
+  open until they answer it. Do not write documentation, UI copy or code that
+  assumes an answer to an open one (R-21 and R-22 today).
+- **Cite sources.** Every entry names where it came from (a file, an issue
+  number, or the user's instruction) and what enforces it. "Enforced by:
+  Nothing" is honest, and is a gap to report, not hide.
+- Record only what constrains future work. A passing implementation detail is not
+  a decision.
+- If you notice documentation or code that contradicts an entry, flag it, even
+  when it is not the task at hand. That is how the claim-versus-reality bugs in
+  this repository (#31, #55, #56) were found.
+
+## American English
+
+Write American English everywhere: prose, code comments, docstrings, commit
+messages, documentation and UI copy. Never British spellings.
+
+Check before writing, not after. The slip is easiest in words that feel
+neutral. Write the first, never the second:
+
+- behavior (not behaviour) <!-- spelling-ok -->
+- defense (not defence) <!-- spelling-ok -->
+- organization, organize (not organisation, organise) <!-- spelling-ok -->
+- license (noun and verb) (not licence) <!-- spelling-ok -->
+- analyze (not analyse) <!-- spelling-ok -->
+- catalog (not catalogue) <!-- spelling-ok -->
+- canceled (not cancelled) <!-- spelling-ok -->
+- fulfill (not fulfil) <!-- spelling-ok -->
+- gray (not grey) <!-- spelling-ok -->
+- toward (not towards) <!-- spelling-ok -->
+- modeling (not modelling) <!-- spelling-ok -->
+- labeled (not labelled) <!-- spelling-ok -->
+- center (not centre) <!-- spelling-ok -->
+- acknowledgment (not acknowledgement) <!-- spelling-ok -->
+
+Quoted material keeps its original spelling: a quotation from a source, a
+third-party license text, an API field name spelled the British way. Mark such a
+line `spelling-ok`, or add an entry to `.spelling-allow`.
+
+Why: the project is US-oriented. It is built around CHAI, a US non-profit, and is
+aimed at US health systems, so British spellings read as inconsistent with the
+subject. The user asked for this directly (R-17).
+
+Enforced by `pixi run check-spelling`, which runs in pre-commit and CI. It is a
+word list and cannot catch every case, so the check passing does not mean you
+were consistent.
+
+## Enumerated types, not strings
+
+**A closed set of values gets a type. Never branch on a bare string.**
+
+This is a rule with a history. The server-backed dashboard told every user
+"Saved in this browser" because `MODE` was assigned `"api"` in one file and
+compared with `"shared"` in another. Nothing connected the two spellings, so the
+comparison was false forever and no test, linter or reviewer noticed. A typo in
+a string literal is not an error anywhere. A typo in an enum member fails the
+first time the line runs, and a rename follows every use.
+
+### What counts as a closed set
+
+Any value that code *branches on* and that comes from a fixed list: roles
+(`owner`/`writer`/`reader`), statuses (`met`/`partial`/`notmet`), modes, kinds,
+verdicts, error codes, identity-header formats, event names, SQL `CHECK` lists.
+
+It is **not** a closed set, and needs no enum: a file path, a URL, a header
+*name*, prose, a regex, a key you look up in a dict, a value you only pass
+through, or a value defined by someone else's protocol (an ASGI scope type, a
+DOM key name, an HTTP method). Name those with a constant if they repeat;
+mark a genuine protocol comparison `enum-ok: <reason>` (see below).
+
+### Python
+
+- Use `enum.StrEnum` (3.11+). Members *are* strings, so JSON, pydantic and
+  asyncpg are unchanged and there is no wire-format change to worry about.
+- **Parse once, at the boundary.** `Role(raw)` raises on an unknown value; do it
+  where input enters (request body, env var, DB row) and pass members everywhere
+  inside. Type fields and parameters as the enum, not `str`.
+- Pydantic models: annotate the field with the enum. Not `str`, not `Literal`.
+- `Literal["a", "b"]` spelled as an enum is the same problem in a type hint.
+  `Literal` is only for matching a third-party signature you cannot change.
+- Use `match` over members and finish with `assert_never` where the set must be
+  exhaustive, so adding a member is a type error at every unhandled site.
+- Compare with `is` (`role is Role.OWNER`), not `==`.
+- A database column holding an enum keeps a `CHECK` constraint listing the same
+  values. Add a test asserting the constraint and the enum agree, so neither can
+  drift.
+- `class X(str, Enum)` is flagged by ruff (UP042). Write `StrEnum`.
+
+### JavaScript
+
+There is no enum syntax. Use a frozen object, one definition per set:
+
+```js
+const Mode = Object.freeze({ LOCAL: "local", API: "api", SHARED: "shared" });
+if (MODE === Mode.API) { ... }          // never: MODE === "api"
+```
+
+- `Mode.APi` is `undefined`, which a test catches. `"apI"` is a string, which
+  nothing catches.
+- Never assign a state variable a bare word (`MODE = "api"`); assign `Mode.API`.
+- The app is concatenated into one file in filename order (`scripts/build_app.py`),
+  so a definition must live in a file that sorts before its first use, normally
+  `app/js/00-core/`.
+- Give a check a name when it is asked in more than one place
+  (`isServerBacked()`), rather than repeating the comparison.
+
+### Tests
+
+Tests are exempt from the checker, deliberately: a test may pin a wire value on
+purpose (`assert response.json()["role"] == "owner"` is the test that proves the
+API did not silently rename it). Use the enum in a test when the point is the
+domain logic; use the literal when the point is the wire format.
+
+### The guardrail
+
+`scripts/check_enums.py` enforces this in `pre-commit`/CI (`pixi run
+check-enums`) and, as a Claude Code hook (`.claude/settings.json`), on every
+Python/JS file you edit. When it reports a violation, **write the enum.**
+
+It is a ratchet. `scripts/enum_baseline.json` records the existing uses of bare
+strings, counted per file and per literal, so legacy code does not block work.
+A new use fails; fixing an old one makes the baseline stale, which also fails,
+so it only ever shrinks.
+
+- **Never edit `enum_baseline.json` by hand** and never run
+  `--update-baseline --allow-growth` to make a failure go away. Both defeat the
+  point. `--allow-growth` is for a human who has decided otherwise.
+- After you *remove* uses (by introducing an enum), run
+  `python scripts/check_enums.py --update-baseline` to ratchet it down, and
+  commit the smaller baseline.
+- `enum-ok: <reason>` on the line excuses a genuine protocol value. The reason is
+  mandatory; a bare `enum-ok` excuses nothing. Do not use it for a value this
+  repository defines, such as a role, status or mode.
+- If you are editing near an existing string-typed closed set, you do not have to
+  convert it, but do not add a second use of it. Say so rather than silently
+  extending the pattern.
+
+`pixi run check-enums --report` lists what remains, by file: it is the
+refactor backlog.
+
+### What the checker cannot see
+
+A green check is a tripwire for the common shape, not proof. It deliberately
+does not flag these, because catching them would flag every dict lookup and
+substring test and the guardrail would be switched off. They are exactly what a
+well-meaning author writes to make the check pass, so do not:
+
+- **Hoist the string into a constant.** `OWNER = "owner"` then `x == OWNER` is
+  still a string, and `ROLES = ("owner", "writer")` then `x in ROLES` is the same.
+  A named constant is right for a value defined by someone else's protocol. For
+  a closed set this repository defines, the fix is the enum, not a constant.
+- **Key a dispatch dict by the strings** (`{"csv": f}[kind]`). Key it by enum
+  members.
+- **Test with a literal on the left of `in`** (`"admin" in user.roles`), or go
+  through `operator.eq`, `any(...)` or `__eq__`.
+- **Assign a lowercase JavaScript state variable a bare word** (`mode = "api"`).
+  Only SHOUTING_CASE state variables are caught, so this one rests on you.
+
+The hook runs after Write, Edit, MultiEdit and Bash. After a Bash command it
+checks every file git says changed, because a `sed -i` or a heredoc names no file.

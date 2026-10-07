@@ -109,12 +109,18 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-09 Sign-offs are attributed to the authenticated user
 
-- Status: Active, **not met**
+- Status: Active
 - A checkpoint sign-off records the identity the proxy asserted and the server
-  clock, not a name or date the client supplied.
-- Known violation: #31. `signedBy` and `signedAt` are accepted from the client.
-- Source: `docs/deploy.md`, "A checkpoint sign-off means something."
-- Enforced by: Nothing.
+  clock, not a name or date the client supplied. The server writes `signedBy`
+  and `signedAt` whenever a decision is set or changed, clears them when it is
+  cleared, ignores them on an unchanged decision, and refuses to let them be
+  blanked while a decision stands. With identity disabled nothing is attributed.
+- History: this was violated (#31). A writer could record a decision as the CMO,
+  on any date, while the deployment guide claimed the opposite.
+- Source: `docs/deploy.md`, "A checkpoint sign-off means something."; DECISIONS
+  D-24.
+- Enforced by: `server/tests/test_signoff.py` (the rules, and the exploit against
+  the real API); `tests/test_stack.py` (the same exploit through a real Caddy).
 
 ## Audit and data
 

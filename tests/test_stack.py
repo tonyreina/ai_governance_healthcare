@@ -122,6 +122,40 @@ def main() -> int:
         str(doc["metrics"]),
     )
 
+    # Who signed a checkpoint is the server's to say, not the client's (#31). Sent
+    # through the real proxy to the real API: the identity comes from Caddy, so
+    # this is the only place the two halves are tested together.
+    forged = "cmo@hospital.example"
+    forged_at = "2026-01-15T09:00:00.000Z"
+    sid = "t-" + uuid.uuid4().hex[:8]
+    http(f"/api/projects/{sid}", "POST", {"meta": {"solution": "sign-off test"}})
+    status, _ = http(
+        f"/api/projects/{sid}",
+        "PATCH",
+        {
+            "gates": {
+                "A": {
+                    "decision": "Proceed",
+                    "signedBy": forged,
+                    "signedAt": forged_at,
+                }
+            }
+        },
+    )
+    check("a forged sign-off is accepted as a patch", status == 200, str(status))
+    _, listing = http("/api/projects")
+    gate = next(p for p in json.loads(listing) if p["id"] == sid)["gates"]["A"]
+    check(
+        "the sign-off is attributed to the proxy identity, not the claim",
+        gate["signedBy"] == baseline["id"] and gate["signedBy"] != forged,
+        f"signedBy={gate['signedBy']!r}, expected {baseline['id']!r}",
+    )
+    check(
+        "the sign-off time is the server's, not the claim",
+        gate["signedAt"] != forged_at,
+        gate["signedAt"],
+    )
+
     print("Browser")
     try:
         from playwright.sync_api import sync_playwright

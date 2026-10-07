@@ -130,7 +130,10 @@ pixi run test-app       # the dashboard, in a real browser
 pixi run test-access    # roles and the delete confirmation
 pixi run test-te        # the CHAI metric picker
 pixi run test-pdf       # renders a real PDF and reads it back
+pixi run test-proxy     # the proxy against a real Caddy (needs Docker)
 pixi run test-stack     # end to end against a running stack
+pixi run test-enums     # the enum guardrail
+pixi run test-workflows # does CI run every test that exists?
 ```
 
 The server's own suite needs a PostgreSQL to test against, because what it
@@ -146,4 +149,18 @@ TEST_DATABASE_URL=postgresql://chai:<password>@localhost:5432/chai pytest
 This one is a URL you write yourself, so percent-encode the password if it
 contains `/`, `@`, `:`, `?` or `#`. The stack itself does that for you.
 
-Without `TEST_DATABASE_URL` those tests skip and say why.
+Without `TEST_DATABASE_URL` those tests skip and say why. A skip exits 0, so on
+your own machine it looks like a pass. Set `REQUIRE_TESTS=1` to turn every skip
+into a failure; CI always does.
+
+### In CI
+
+Every pull request and every push to `main` runs all of the above in GitHub
+Actions (`.github/workflows/test.yml`): the server suite against a PostgreSQL 17
+service container, the dashboard suites in Chromium, the proxy against a real
+Caddy, and the whole Compose stack end to end. One job, **tests passed**, fails
+if any of them failed, was canceled, or was skipped.
+
+`pixi run test-workflows` checks the CI configuration itself: it fails if a
+`test-*` task is not run by CI, or a test file has no task, so a test cannot be
+added and quietly left out.

@@ -9,6 +9,7 @@ two ever disagree, a PATCH silently throws away work a user has done.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -175,7 +176,10 @@ process.stdout.write(JSON.stringify(cases.map(([t, s]) => deepMerge(t, s))));
 """
 
 
-@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+@pytest.mark.skipif(
+    shutil.which("node") is None and not os.getenv("REQUIRE_TESTS"),
+    reason="node is not installed",
+)
 @pytest.mark.skipif(not UTIL_JS.exists(), reason=f"{UTIL_JS} not found")
 def test_parity_with_the_browsers_deepmerge(tmp_path: Path) -> None:
     """Run the app's own ``deepMerge`` and demand identical output.

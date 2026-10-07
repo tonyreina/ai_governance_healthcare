@@ -54,6 +54,8 @@ check-homographs = "python scripts/check_homographs.py"
 # A closed set of values gets an enumerated type, not a string. See CLAUDE.md.
 check-enums = "python scripts/check_enums.py"
 test-enums = "python tests/test_check_enums.py"
+# Unit tests of the CI configuration: does CI run every test, and fail on a skip?
+test-workflows = "python tests/test_workflows.py"
 check-spelling = "python scripts/check_spelling.py"
 check-chai = "python scripts/check_chai_updates.py"
 check-chai-write = "python scripts/check_chai_updates.py --write"

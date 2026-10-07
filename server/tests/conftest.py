@@ -28,8 +28,12 @@ from httpx import ASGITransport, AsyncClient
 
 DB_URL = os.getenv("TEST_DATABASE_URL") or os.getenv("DATABASE_URL") or ""
 
+# CI sets REQUIRE_TESTS=1. A test that cannot run then FAILS instead of skipping,
+# because a skip reports as a pass: that is how CI once ran none of these (#32).
+REQUIRE_TESTS = bool(os.getenv("REQUIRE_TESTS"))
+
 requires_db = pytest.mark.skipif(
-    not DB_URL,
+    not DB_URL and not REQUIRE_TESTS,
     reason="set TEST_DATABASE_URL to a PostgreSQL this test may TRUNCATE",
 )
 

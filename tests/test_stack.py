@@ -17,6 +17,7 @@ Docker.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -25,6 +26,11 @@ import urllib.request
 import uuid
 
 BASE = "http://localhost:8080"
+
+# CI sets REQUIRE_TESTS=1. A suite that cannot run then FAILS instead of
+# skipping, because a skip exits 0 and reads as a pass: that is how CI once
+# reported green while running none of these tests (#32).
+REQUIRE_TESTS = bool(os.environ.get("REQUIRE_TESTS"))
 
 
 def http(path: str, method: str = "GET", body: dict | None = None) -> tuple[int, str]:
@@ -49,11 +55,29 @@ def stack_up() -> bool:
         return False
 
 
+def wait_until(page, expression: str, timeout: float = 20.0) -> None:
+    """Poll until a page expression is truthy, or raise.
+
+    NOT page.wait_for_function: that evaluates its argument with the page's own
+    `eval`, which the Content-Security-Policy this stack serves
+    (`script-src 'unsafe-inline'`, deliberately no `unsafe-eval`) forbids. This
+    suite broke the day that policy shipped and nobody noticed, because CI did not
+    run it (#32). `page.evaluate` goes through the debugging protocol instead, so
+    the app is still tested under the policy it actually ships with.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if page.evaluate(expression):
+            return
+        page.wait_for_timeout(200)
+    raise TimeoutError(f"still false after {timeout}s: {expression}")
+
+
 def main() -> int:
     if not stack_up():
         print("stack not running at " + BASE + " - skipping")
         print("  start it with: docker compose up -d --build")
-        return 0
+        return 1 if REQUIRE_TESTS else 0
 
     failures: list[str] = []
 
@@ -161,7 +185,7 @@ def main() -> int:
         from playwright.sync_api import sync_playwright
     except ImportError:
         print("  playwright not installed - skipping browser checks")
-        return 1 if failures else 0
+        return 1 if failures or REQUIRE_TESTS else 0
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
@@ -169,7 +193,7 @@ def main() -> int:
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.goto(BASE + "/")
-        page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=20000)
+        wait_until(page, "typeof LOADED !== 'undefined' && LOADED", timeout=20)
         page.wait_for_timeout(1500)
 
         check(

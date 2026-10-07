@@ -240,9 +240,31 @@ honest answer and is a gap worth closing; see R-19.
 - A claim in documentation or the UI ("sign-off means something", "check-
   isolation asserts all of this") is true or it is removed. Each one should
   name a test that runs in CI.
-- Known dependency: CI runs no tests today (#32), so this cannot be fully
-  enforced until that lands.
-- Enforced by: Nothing yet.
+- The dependency is met: CI now runs every test (R-23), so a claim that names a
+  test can be checked against something that actually executes.
+- Enforced by: Nothing yet. The table and the hook that checks it are #68.
+
+### R-23 Code ships with unit and integration tests
+
+- Status: Active
+- Whenever code is added or changed, unit and integration tests are added or
+  updated in the same change. A bug fix starts with a regression test shown to
+  fail. A guardrail is shown to fail (mutation tests). Integration tests use the
+  real thing at a boundary (PostgreSQL, a browser, Caddy, Compose), never a fake
+  for what is under test.
+- Source: the user's instruction; [CLAUDE.md](CLAUDE.md); #32.
+- Enforced by: review and CLAUDE.md for "tests accompany the change". CI
+  enforces the weaker half: every test that exists runs on every pull request
+  (`tests/test_workflows.py`).
+
+### R-24 In CI, a test that cannot run fails
+
+- Status: Active
+- `REQUIRE_TESTS=1` turns a skip into a failure for every suite: no database, no
+  Docker, no `node`, no stack, no Playwright. A skip exits 0 and reads as a pass.
+- Source: #32.
+- Enforced by: `.github/workflows/test.yml` sets it at workflow level, and
+  `tests/test_workflows.py` fails if that is removed.
 
 ### R-20 Decisions and requirements are tracked
 

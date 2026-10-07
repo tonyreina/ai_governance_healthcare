@@ -35,6 +35,80 @@ that touch the area. Anything marked **Active** (requirements) or **Accepted**
   when it is not the task at hand. That is how the claim-versus-reality bugs in
   this repository (#31, #55, #56) were found.
 
+## Tests ship with the code
+
+**Whenever you add or change code, add or update unit and integration tests in
+the same change.** Not after, not as a follow-up. A change with no test is not
+finished, and "I could not test it" is a finding to report, not a reason to skip.
+
+Why this is a rule here: the CI that was supposed to protect this repository ran
+the linters and no tests at all (#32), so twenty-four test files, including every
+regression test for a closed security finding, ran only when somebody
+remembered. A fix without a test is a fix that can silently stop being true, and
+nothing here would say so.
+
+- **New behavior:** a test that fails without it and passes with it.
+- **Changed behavior:** update the tests that described the old behavior. Do not
+  weaken or delete an assertion to make a change pass; if an assertion is wrong,
+  say why in the change.
+- **A bug fix:** write the regression test first and watch it fail for the right
+  reason, then fix. #55 did this: the test failed with `Mode is not defined`
+  before the fix and passed after, and it reads the label the user actually sees.
+- **A guardrail or a check:** show it failing. A check that is never shown to
+  fail is a claim, not a control, so give it mutation tests that break something
+  and demand it notice (see `tests/test_workflows.py`).
+
+### Unit and integration
+
+- **Unit:** logic with no I/O, run anywhere: merge semantics, header parsing, the
+  enum checker, the CI configuration itself. Fast, and always run.
+- **Integration:** the real thing at a boundary. The API against a real
+  PostgreSQL, the dashboard in a real browser, the proxy as a real Caddy, the
+  whole Compose stack. Never a fake for the thing under test: a fake would test
+  the fake. The database tests exist because what they test *is* the database's
+  behavior (a row lock, a trigger refusing an UPDATE).
+- A change that crosses a boundary needs an integration test, not just a unit
+  test. The merge rule is unit-tested and also run against Postgres; the
+  identity handoff cannot be tested without a real Caddy, which is exactly how
+  it broke for months (#23).
+
+### Where tests go, and how they run
+
+| What | Where | Runs as |
+|---|---|---|
+| API, database, SSE | `server/tests/` (pytest) | `cd server && pytest`, needs `TEST_DATABASE_URL` |
+| Dashboard, exports | `tests/test_*.py` (Playwright) | `pixi run test-<name>` |
+| Proxy, Compose stack | `tests/test_proxy_identity.py`, `tests/test_stack.py` | needs Docker |
+| CI configuration | `tests/test_workflows.py` | `pixi run test-workflows` |
+
+A new test file gets a `test-*` pixi task, and that task must be run by
+`.github/workflows/test.yml`. `test_workflows.py` fails if either is missing, so
+a test cannot be added and quietly left out of CI.
+
+### A skip is a failure
+
+CI sets `REQUIRE_TESTS=1`, which turns every suite that cannot run (no database,
+no Docker, no `node`, no stack) into a failure, because a skip exits 0 and reads
+as a pass. Without it, 106 of the 201 server tests skip silently on a machine with
+no database and the run is green. Never add a `skip`, `skipif` or
+`continue-on-error` to get a check green. If a new test can skip, it must also
+honor `REQUIRE_TESTS`.
+
+### Before you say it is done
+
+Run the tests that cover what you touched, and the ones that could have broken,
+and say what you ran. Report a failure as a failure. If a suite needs something
+you do not have (Docker, a database), say that it was not run rather than
+implying it passed. CI will run all of them; do not use that as a reason not to
+run them first.
+
+### Where a test is not needed
+
+Say so in the change, with the reason: a documentation-only edit, a generated
+file (`docs/app/index.html` is rebuilt by `pixi run build-app`, which a hook
+checks), a comment, a rename with no behavior change that existing tests already
+cover. If the user tells you to skip tests for a change, do, and record it.
+
 ## American English
 
 Write American English everywhere: prose, code comments, docstrings, commit

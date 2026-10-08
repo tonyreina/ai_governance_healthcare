@@ -5,7 +5,7 @@ function lcTrack(p){
   const ph=phase(p);
   const pip=s=>{const c=scoreOf(s.items,p.items); const frac=c.total?c.answered/c.total:0;
     return `<span class="pip${frac===1?" full":""}${ph.stage===s.n?" cur":""}" title="${esc(t("dash.pipTitle",{n:s.n,answered:c.answered,total:c.total}))}"><i style="height:${Math.round(frac*100)}%"></i>${s.n}</span>`;};
-  const gd=k=>{const d=dec(p,k); const cls=!d?"":(/Stop|Retire/.test(d)?"stop":/conditions|changes|Revise|Retrain/.test(d)?"cond":"go"); return `<span class="gd ${cls}" title="${esc(GATES[k].title)}: ${esc(d||t("dash.gateOpen"))}"></span>`;};
+  const gd=k=>{const d=dec(p,k); const cls=!d?"":(/Stop|Retire/.test(d)?"stop":/conditions|changes|Revise|Retrain/.test(d)?"cond":"go"); return `<span class="gd ${cls}" title="${esc(gateTitle(k))}: ${esc(d?optionText(d):t("dash.gateOpen"))}"></span>`;};
   const S_=STAGES;
   return `<div class="lc" aria-hidden="true">${pip(S_[0])}${gd("A")}${pip(S_[1])}${pip(S_[2])}${pip(S_[3])}${gd("B")}${pip(S_[4])}${gd("C")}${pip(S_[5])}${gd("D")}</div><div class="lc-label">${esc(phaseLabel(ph))}</div>`;
 }

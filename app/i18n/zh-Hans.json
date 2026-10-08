@@ -445,5 +445,13 @@
   "md.openGaps": "未解决的差距",
   "md.population": "人群",
   "md.noneEntered": "未输入",
-  "md.footer": "依照 CHAI 六阶段生命周期和应用模型卡构建。检查清单措辞为转述；这是一份内部治理记录，并非 CHAI 认证。"
+  "md.footer": "依照 CHAI 六阶段生命周期和应用模型卡构建。检查清单措辞为转述；这是一份内部治理记录，并非 CHAI 认证。",
+  "label.releaseStage": "发布阶段",
+  "label.releaseDate": "发布日期",
+  "label.version": "版本",
+  "label.availability": "可用范围",
+  "label.regulatory": "监管批准",
+  "label.keywords": "关键词：",
+  "label.summary": "摘要",
+  "fw.note": "本页的框架文字是对本项目英文文本的非官方机器翻译草稿；以英文原文为准。"
 }

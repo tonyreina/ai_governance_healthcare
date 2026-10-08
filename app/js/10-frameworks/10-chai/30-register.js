@@ -28,13 +28,13 @@ registerFramework({
     const out = [];
     STAGES.forEach(s => {
       out.push({
-        id: s.id, kind: "stage", label: s.title, num: s.n, short: t("rail.stageShort", {n: s.n}),
+        id: s.id, kind: "stage", label: stageTitle(s), num: s.n, short: t("rail.stageShort", {n: s.n}),
         meta: () => { const c = scoreOf(s.items, p.items); return `${c.answered}/${c.total}`; },
         metaCls: () => { const c = scoreOf(s.items, p.items); return c.answered === c.total ? "done" : ""; },
       });
       Object.entries(GATES).filter(([, g]) => g.after === s.id).forEach(([key, g]) => {
         out.push({
-          id: "g" + key, kind: "gate", gate: key, label: g.title, cls: "gate",
+          id: "g" + key, kind: "gate", gate: key, label: gateTitle(key), cls: "gate",
           numHTML: '<span class="diamond" aria-hidden="true"></span>',
           meta: () => { const d = (p.gates[key] || {}).decision || ""; return d ? esc(shortDecision(d)) : esc(t("dash.gateOpen")); },
           metaCls: () => { const d = (p.gates[key] || {}).decision || ""; return !d ? "" : (/Stop|Retire|Revise|Retrain/.test(d) ? "warn" : "done"); },

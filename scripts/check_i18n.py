@@ -171,6 +171,34 @@ def usage_problems(source: dict, texts: dict[str, str]) -> list[str]:
     ] + [f"app/i18n/en.json: {k!r} is never used" for k in sorted(keys - named)]
 
 
+def framework_problems(source: dict, catalogs: dict[str, dict]) -> list[str]:
+    """The framework content (D-60): app/i18n/framework/en.json is the English the
+    definitions hold (tests/test_framework_i18n.py keeps it so), and every other
+    language translates exactly those keys, as plain text."""
+    problems = []
+    for locale in Locale:
+        if locale is Locale.EN:
+            continue
+        where = f"app/i18n/framework/{locale}.json"
+        catalog = catalogs.get(str(locale))
+        if catalog is None:
+            problems.append(f"{where} is missing")
+            continue
+        problems += [
+            f"{where}: missing {k!r}" for k in sorted(set(source) - set(catalog))
+        ]
+        problems += [
+            f"{where}: {k!r} is not in framework/en.json"
+            for k in sorted(set(catalog) - set(source))
+        ]
+        for key, value in catalog.items():
+            if not isinstance(value, str) or not value.strip():
+                problems.append(f"{where}: {key!r} is empty")
+            elif "<" in value:
+                problems.append(f"{where}: {key!r} holds markup")
+    return problems
+
+
 def main() -> int:
     files = sorted(CATALOGS.glob("*.json"))
     catalogs = {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in files}
@@ -183,6 +211,14 @@ def main() -> int:
     for locale, catalog in catalogs.items():
         if locale != Locale.EN:
             problems += catalog_problems(locale, catalog, source, safety)
+    fw_dir = CATALOGS / "framework"
+    fw = {
+        p.stem: json.loads(p.read_text(encoding="utf-8")) for p in fw_dir.glob("*.json")
+    }
+    if Locale.EN in fw:
+        problems += framework_problems(fw[Locale.EN], fw)
+    else:
+        problems.append("app/i18n/framework/en.json is missing")
     texts = {str(p): p.read_text(encoding="utf-8") for p in SOURCES}
     problems += usage_problems(source, texts)
     for problem in problems:

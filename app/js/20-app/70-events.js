@@ -71,7 +71,7 @@ document.addEventListener("click",async e=>{
     }
     renderMain(false); renderLabel();
     // Put the cursor where the user now has to type.
-    const rows=[...document.querySelectorAll('.mtable input[aria-label="Metric"]')];
+    const rows=[...document.querySelectorAll('.mtable input[data-bind$=".name"]')];
     const row=rows.find(i=>i.value===name);
     if(row) row.closest("tr").querySelector('input[aria-label="Value"]').focus();
     return;
@@ -114,7 +114,7 @@ document.addEventListener("click",async e=>{
     S.access=accessPatch(S,id,role); queuePatch(CUR,Object.assign({access:S.access},stamp()));
     writeLog(CUR,`Granted ${ROLE_LABEL[role].toLowerCase()} to ${id}`); renderMain(false); toast(t("toast.accessGranted")); return;
   }
-  if(a==="addmetric"){ S.metrics.push({cat:METRIC_CATS[0],name:"",value:"",ci:"",pop:""}); saveMetrics(); renderMain(false); const ins=document.querySelectorAll('.mtable input[aria-label="Metric"]'); ins[ins.length-1]?.focus(); }
+  if(a==="addmetric"){ S.metrics.push({cat:METRIC_CATS[0],name:"",value:"",ci:"",pop:""}); saveMetrics(); renderMain(false); const ins=document.querySelectorAll('.mtable input[data-bind$=".name"]'); ins[ins.length-1]?.focus(); }
   else if(a==="example"){ exampleInto(S); const st=stamp(); queuePatch(CUR,Object.assign({meta:clone(S.meta),items:clone(S.items),gates:clone(S.gates),metrics:clone(S.metrics),card:clone(S.card),cardUpdatedAt:S.cardUpdatedAt},st)); writeLog(CUR,"Example data filled in"); renderProject(false); toast("Example filled in"); }
   else if(a==="archive"){ if(!canOwn(S)){ toast(t("toast.ownerArchive")); return; } const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?t("toast.archived"):t("toast.restored")); }
   else if(a==="delete"){ if(!canOwn(S)){ toast(t("toast.ownerDelete")); return; } openDeleteDialog(); }

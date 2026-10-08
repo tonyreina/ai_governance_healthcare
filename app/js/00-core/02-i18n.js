@@ -97,6 +97,20 @@ function tHtml(key, params, html){
   return out;
 }
 
+/* Framework content (CHAI, OPTICA): the English lives in the definitions, which stay
+   the source of truth; FRAMEWORK_I18N[locale][key] translates it (D-60). A key with
+   no translation shows the English. Stored values never go through this. */
+function tf(key, english){
+  if(LOCALE === Locale.EN) return english;
+  if(LOCALE === Locale.PSEUDO) return pseudoize(english);
+  const own = (typeof FRAMEWORK_I18N === "object" && FRAMEWORK_I18N[LOCALE]) || {};
+  return typeof own[key] === "string" && own[key] ? own[key] : english;
+}
+/* Is framework wording on screen a translation? Then it says so (D-60). */
+const frameworkTranslated = () => LOCALE !== Locale.EN && LOCALE !== Locale.PSEUDO;
+const fwNoteHTML = () => frameworkTranslated()
+  ? `<p class="fw-note small" role="note">${esc(t("fw.note"))}</p>` : "";
+
 /* English whatever the reader chose: for machine contracts (JSON, CSV headers) and
    anything an export must keep stable. */
 function tEn(key, params){ return withLocale(Locale.EN, () => t(key, params)); }

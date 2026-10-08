@@ -453,5 +453,13 @@
   "md.openGaps": "Offene Lücken",
   "md.population": "Population",
   "md.noneEntered": "Keine eingegeben",
-  "md.footer": "Aufgebaut entlang des sechsstufigen CHAI-Lebenszyklus und der angewandten Modellkarte. Die Formulierungen der Checkliste sind sinngemäß; dies ist eine interne Governance-Unterlage, keine CHAI-Zertifizierung."
+  "md.footer": "Aufgebaut entlang des sechsstufigen CHAI-Lebenszyklus und der angewandten Modellkarte. Die Formulierungen der Checkliste sind sinngemäß; dies ist eine interne Governance-Unterlage, keine CHAI-Zertifizierung.",
+  "label.releaseStage": "Freigabestufe",
+  "label.releaseDate": "Freigabedatum",
+  "label.version": "Version",
+  "label.availability": "Verfügbarkeit",
+  "label.regulatory": "Behördliche Zulassung",
+  "label.keywords": "Schlüsselwörter:",
+  "label.summary": "Zusammenfassung",
+  "fw.note": "Der Rahmenwerkstext auf dieser Seite ist eine inoffizielle, maschinell erstellte Übersetzung des englischen Texts dieses Projekts; maßgeblich ist das englische Original."
 }

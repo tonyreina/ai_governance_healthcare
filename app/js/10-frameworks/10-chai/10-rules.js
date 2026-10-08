@@ -4,6 +4,22 @@
    STAGES and GATES from 00-definition.js and are CHAI's alone;
    nothing here is shared with another framework.
    ============================================================ */
+/* CHAI's content as the reader sees it (D-60): the English in the definitions,
+   translated through tf() when the reader chose another language. Records and
+   exports that machines read keep the English. */
+const stageTitle = s => tf(`chai.stage.${s.id}.title`, s.title);
+const stageBlurb = s => tf(`chai.stage.${s.id}.blurb`, s.blurb);
+const itemText = it => tf(`chai.item.${it.id}`, it.text);
+const principleName = k => tf(`chai.principle.${k}`, PRINCIPLES[k].name);
+const gateTitle = k => tf(`chai.gate.${k}.title`, GATES[k].title);
+const gateQuestion = k => tf(`chai.gate.${k}.q`, GATES[k].q);
+const gateHelp = k => tf(`chai.gate.${k}.help`, GATES[k].help);
+const optionText = o => tf(`chai.option.${o}`, o);
+const cardSecName = sec => tf(`chai.card.sec.${CARD.indexOf(sec)}`, sec.sec);
+const cardLabel = f0 => tf(`chai.card.${f0}.label`, CARD_LABEL[f0]);
+const cardHint = f => f[2] ? tf(`chai.card.${f[0]}.hint`, f[2]) : "";
+const metricCatName = c => tf(`chai.metricCat.${c}`, c);
+
 function allItems(){ return STAGES.flatMap(s=>s.items.map(it=>({...it,stage:s}))); }
 function gapsUpTo(p,stageId){
   const idx=STAGES.findIndex(s=>s.id===stageId);
@@ -55,13 +71,13 @@ function flags(p){
     const missing=CORE_CARD.filter(k=>!cardValOf(p,k));
     if(missing.length) F.push({sev:live?"red":"amber",text:`Model card missing ${missing.length} core field${missing.length>1?"s":""}`,msg:["flag.cardMissing",{count:missing.length}]});
     const lg=latestGo(p); const cu=p.cardUpdatedAt?new Date(p.cardUpdatedAt):null;
-    if(lg && (!cu || cu < lg.d)) F.push({sev:"amber",text:`Model card not updated since ${GATES[lg.k].title}`,msg:["flag.cardStale",{gate:GATES[lg.k].title}]});
+    if(lg && (!cu || cu < lg.d)) F.push({sev:"amber",text:`Model card not updated since ${GATES[lg.k].title}`,msg:["flag.cardStale",{gateKey:lg.k}]});
     if(!p.metrics.some(m=>m.name||m.value)) F.push({sev:"amber",text:"No key metrics recorded",msg:["flag.noMetrics",{}]});
   }
   ["A","B","C","D"].forEach(k=>{ const g=p.gates[k]||{};
     if(isGo(g.decision) && !(g.rationale||"").trim()){
-      if(/conditions|changes/.test(g.decision)) F.push({sev:"amber",text:`${GATES[k].title}: conditional approval with no conditions recorded`,msg:["flag.noConditions",{gate:GATES[k].title}]});
-      else if(gapsUpTo(p,GATES[k].after).length) F.push({sev:"amber",text:`${GATES[k].title}: approved with open criteria and no rationale`,msg:["flag.noRationale",{gate:GATES[k].title}]});
+      if(/conditions|changes/.test(g.decision)) F.push({sev:"amber",text:`${GATES[k].title}: conditional approval with no conditions recorded`,msg:["flag.noConditions",{gateKey:k}]});
+      else if(gapsUpTo(p,GATES[k].after).length) F.push({sev:"amber",text:`${GATES[k].title}: approved with open criteria and no rationale`,msg:["flag.noRationale",{gateKey:k}]});
     }});
   if(!live && p.updatedAt){ const idle=daysBetween(new Date(p.updatedAt),new Date()); if(idle>90) F.push({sev:"amber",text:`No activity in ${idle} days`,msg:["flag.idle",{count:idle}]}); }
   return F.sort((a,b)=>(a.sev==="red"?0:1)-(b.sev==="red"?0:1));
@@ -84,5 +100,6 @@ function flagText(f){
   const [key, params] = f.msg;
   const p = Object.assign({}, params);
   if(p.date) p.date = fmtDay(p.date);
+  if(p.gateKey){ p.gate = gateTitle(p.gateKey); delete p.gateKey; }
   return t(key, p);
 }

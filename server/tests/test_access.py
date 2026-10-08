@@ -102,6 +102,58 @@ class TestEnforcement:
         assert r.status_code == 201
         assert r.json()["access"]["owners"] == [OWNER]
 
+    async def test_creator_stays_an_owner_when_naming_someone_else(
+        self, client: AsyncClient
+    ):
+        """A create naming only a colleague as owner must not hand the record away (#44).
+
+        The client's ``owners`` used to be kept verbatim, so any authenticated
+        user could create a record owned by somebody else and absent from every
+        list themselves: a record attributed to a colleague who never made it,
+        or, with a mistyped address, one nobody could open.
+        """
+        r = await client.post(
+            "/api/projects/pplant",
+            json={"access": {"owners": ["colleague@x"], "writers": [], "readers": []}},
+        )
+        assert r.status_code == 201
+        assert OWNER in r.json()["access"]["owners"]
+        assert "colleague@x" in r.json()["access"]["owners"]
+        listed = (await client.get("/api/projects")).json()
+        assert "pplant" in [p["id"] for p in listed]
+
+    async def test_a_mistyped_owner_cannot_orphan_a_new_project(
+        self, client: AsyncClient
+    ):
+        r = await client.post(
+            "/api/projects/ptypo", json={"access": {"owners": ["typo@hospitl.org"]}}
+        )
+        assert r.status_code == 201
+        listed = (await client.get("/api/projects")).json()
+        assert "ptypo" in [p["id"] for p in listed]
+        # and the creator can still change the access list to fix the typo
+        fixed = await client.patch(
+            "/api/projects/ptypo",
+            json={"access": {"owners": [OWNER, "right@hospital.org"]}},
+        )
+        assert fixed.status_code == 200
+
+    async def test_create_and_share_still_works(self, client: AsyncClient):
+        r = await client.post(
+            "/api/projects/pshare",
+            json=doc_with(owners=[OWNER, "co@x"], writers=[WRITER], readers=[READER]),
+        )
+        access = r.json()["access"]
+        assert access["owners"] == [OWNER, "co@x"]
+        assert access["writers"] == [WRITER]
+        assert access["readers"] == [READER]
+
+    async def test_the_creator_is_listed_once(self, client: AsyncClient):
+        r = await client.post(
+            "/api/projects/ponce", json=doc_with(owners=[OWNER, OWNER])
+        )
+        assert r.json()["access"]["owners"] == [OWNER]
+
     async def test_writer_may_patch(self, client: AsyncClient):
         await self._make(client, "pw")
         async with await self._as(client, WRITER) as w:

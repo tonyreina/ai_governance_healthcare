@@ -51,7 +51,7 @@ import ipaddress
 import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from fastapi import HTTPException, Request, status
@@ -77,6 +77,10 @@ class Identity:
     name: str
     email: str
     dev: bool = False
+    # True when this identity is one the deployment configured as break-glass
+    # (EMERGENCY_ACCESS_IDS). Decided from configuration and the proxy's asserted id
+    # alone, never from anything the client sent. See app/emergency.py (#42).
+    emergency: bool = False
 
 
 ANONYMOUS = Identity(id="anonymous", name="anonymous", email="", dev=False)
@@ -305,11 +309,11 @@ def _normalized(identity: Identity, settings: Settings) -> Identity:
     prefix = settings.identity_strip_prefix
     if not prefix:
         return identity
-    return Identity(
+    return replace(
+        identity,
         id=_strip_prefix(identity.id, prefix),
         name=_strip_prefix(identity.name, prefix),
         email=_strip_prefix(identity.email, prefix),
-        dev=identity.dev,
     )
 
 
@@ -368,5 +372,9 @@ def identity_from_request(request: Request, settings: Settings) -> Identity:
         )
 
     if settings.identity_header_format == "jwt":
-        return _normalized(_identity_from_jwt(raw, settings), settings)
-    return _normalized(_identity_from_plain(raw, request, settings), settings)
+        identity = _normalized(_identity_from_jwt(raw, settings), settings)
+    else:
+        identity = _normalized(_identity_from_plain(raw, request, settings), settings)
+    if identity.id in settings.emergency_access_ids:
+        identity = replace(identity, emergency=True)
+    return identity

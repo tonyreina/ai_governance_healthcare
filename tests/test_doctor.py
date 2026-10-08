@@ -50,6 +50,8 @@ with open(os.environ["CALLS"], "a") as f:
 joined = " ".join(args)
 if "ps --format json" in joined or "ps --format" in joined:
     print("\n".join(json.dumps(r) for r in sc["services"]))
+elif "psql" in joined and "jsonb_array_length" in joined:
+    print(sc.get("sole_owners", 0))
 elif "psql" in joined:
     user = args[args.index("-U") + 1]
     ok = sc["logins"].get(user, False)
@@ -78,7 +80,9 @@ def check(name: str, ok: bool, detail: str = "") -> None:
         failures.append(name)
 
 
-def doctor(health: str, logins: dict[str, bool], env_text: str = ENV):
+def doctor(
+    health: str, logins: dict[str, bool], env_text: str = ENV, sole_owners: int = 0
+):
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
         (work / ".env").write_text(env_text)
@@ -97,7 +101,12 @@ def doctor(health: str, logins: dict[str, bool], env_text: str = ENV):
                 **os.environ,
                 "PATH": f"{bindir}:{os.environ['PATH']}",
                 "SCENARIO": json.dumps(
-                    {"services": SERVICES, "health": health, "logins": logins}
+                    {
+                        "services": SERVICES,
+                        "health": health,
+                        "logins": logins,
+                        "sole_owners": sole_owners,
+                    }
                 ),
                 "CALLS": str(calls),
             },
@@ -185,6 +194,25 @@ def main() -> int:
     check(
         "with a managed APP_DATABASE_URL it does not try a local login",
         not [c for c in calls if "chai_app" in c["argv"]],
+    )
+
+    print("Projects that depend on a single owner (#42)")
+    done, _ = doctor(
+        HEALTH["restricted"], {"chai": True, "chai_app": True}, sole_owners=3
+    )
+    check("a count above zero is a warning, not a failure", done.returncode == 0)
+    check(
+        "it says how many, and where the query is",
+        "3 project(s) have exactly one owner" in done.stdout
+        and "Offboarding, and emergency access" in done.stdout,
+        done.stdout[-400:],
+    )
+    done, _ = doctor(
+        HEALTH["restricted"], {"chai": True, "chai_app": True}, sole_owners=0
+    )
+    check(
+        "none is reported as fine",
+        "no project depends on a single owner" in done.stdout,
     )
 
     print()

@@ -266,6 +266,61 @@ class Doctor:
             "  docker compose up -d --force-recreate migrate api",
         )
 
+    def check_sole_owners(self, env: dict[str, str], services: dict[str, dict]) -> None:
+        """How many projects have exactly one owner (a warning, not a failure).
+
+        Whoever creates a project is its only owner until somebody adds a second, so
+        the commonest way a record becomes unreachable is that its creator leaves and
+        their account is disabled (#42). A sole owner is normal; a count is useful
+        before an offboarding and in a periodic review.
+        """
+        if env.get("DATABASE_URL") or env.get("APP_DATABASE_URL"):
+            return
+        state = services.get("db", {}).get("State")
+        if state != "running":  # enum-ok: docker compose's container state name
+            return
+        password = env.get("POSTGRES_PASSWORD", "")
+        if not password:
+            return
+        query = (
+            "SELECT count(*) FROM projects WHERE CASE WHEN "
+            "jsonb_typeof(doc -> 'access' -> 'owners') = 'array' THEN "
+            "jsonb_array_length(doc -> 'access' -> 'owners') = 1 ELSE false END"
+        )
+        result = run(
+            [
+                *COMPOSE,
+                "exec",
+                "-T",
+                "-e",
+                "PGPASSWORD",
+                "db",
+                "psql",
+                "-h",
+                "db",
+                "-U",
+                env.get("POSTGRES_USER", "chai"),
+                "-d",
+                env.get("POSTGRES_DB", "chai"),
+                "-tAc",
+                query,
+            ],
+            env={**os.environ, "PGPASSWORD": password},
+        )
+        count = result.stdout.strip()
+        if result.returncode != 0 or not count.isdigit():
+            return
+        if int(count) == 0:
+            say(OK, "no project depends on a single owner")
+            return
+        say(
+            WARN,
+            f"{count} project(s) have exactly one owner",
+            "If that person's account is disabled, the record becomes unreachable.",
+            "Give each a second owner before an offboarding. The query that lists",
+            "them is in docs/deploy.md, 'Offboarding, and emergency access'.",
+        )
+
     def check_reachable(self, env: dict[str, str]) -> None:
         """Is the API alive, and is the dashboard being served?
 
@@ -345,6 +400,7 @@ def main() -> int:
     doctor.check_running(services)
     doctor.check_password(env, services)
     doctor.check_app_password(env, services)
+    doctor.check_sole_owners(env, services)
     if services.get("proxy", {}).get("State") == "running":
         doctor.check_reachable(env)
     print()

@@ -103,23 +103,37 @@ def role_of(doc: dict[str, Any], user_id: str | None) -> str:
 
 
 def can_read(
-    doc: dict[str, Any], user_id: str | None, *, enforced: bool = True
+    doc: dict[str, Any],
+    user_id: str | None,
+    *,
+    enforced: bool = True,
+    emergency: bool = False,
 ) -> bool:
-    if not enforced or unclaimed(doc):
+    if not enforced or unclaimed(doc) or emergency:
         return True
     return bool(role_of(doc, user_id))
 
 
 def can_write(
-    doc: dict[str, Any], user_id: str | None, *, enforced: bool = True
+    doc: dict[str, Any],
+    user_id: str | None,
+    *,
+    enforced: bool = True,
+    emergency: bool = False,
 ) -> bool:
-    if not enforced or unclaimed(doc):
+    if not enforced or unclaimed(doc) or emergency:
         return True
     return role_of(doc, user_id) in ("owner", "writer")
 
 
-def can_own(doc: dict[str, Any], user_id: str | None, *, enforced: bool = True) -> bool:
-    if not enforced or unclaimed(doc):
+def can_own(
+    doc: dict[str, Any],
+    user_id: str | None,
+    *,
+    enforced: bool = True,
+    emergency: bool = False,
+) -> bool:
+    if not enforced or unclaimed(doc) or emergency:
         return True
     return role_of(doc, user_id) == "owner"
 
@@ -131,24 +145,35 @@ def require(
     *,
     enforced: bool = True,
     project_id: str | None = None,
-) -> None:
+    emergency: bool = False,
+) -> bool:
     """Raise unless the user holds `level` on this project.
 
     404 rather than 403 when the user cannot even read it. Returning 403 would
     confirm that a project with that id exists, which is a small leak but a
     free one to close: project ids appear in URLs people paste around.
+
+    Returns True when the request was allowed ONLY because ``emergency`` (a
+    configured break-glass identity) lifted a refusal, and False when the
+    project's own access list would have allowed it. The caller must record a True
+    (``app/emergency.py``): a path around the access lists that is not recorded is
+    just a backdoor (#42).
     """
     checks = {"read": can_read, "write": can_write, "own": can_own}
     if level not in checks:  # pragma: no cover - programming error
         raise ValueError(f"unknown level {level!r}")
 
     if not can_read(doc, user_id, enforced=enforced):
+        if emergency:
+            return True
         denied(
             user_id, project_id, level, role_of(doc, user_id), status.HTTP_404_NOT_FOUND
         )
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
 
     if not checks[level](doc, user_id, enforced=enforced):
+        if emergency:
+            return True
         held = role_of(doc, user_id) or "no"
         need = "an owner" if level == "own" else "write access"
         denied(
@@ -158,6 +183,7 @@ def require(
             status.HTTP_403_FORBIDDEN,
             f"You have {held} access to this project; this needs {need}.",
         )
+    return False
 
 
 # Fields inside the project document that only an owner may change, even
@@ -177,6 +203,7 @@ def guard_owner_only_fields(
     *,
     enforced: bool = True,
     project_id: str | None = None,
+    emergency: bool = False,
 ) -> None:
     """Refuse a writer's attempt to change an owner-only field.
 
@@ -190,7 +217,7 @@ def guard_owner_only_fields(
             continue
         if patch[field] == before.get(field):
             continue
-        if not can_own(before, user_id, enforced=enforced):
+        if not can_own(before, user_id, enforced=enforced, emergency=emergency):
             denied(
                 user_id,
                 project_id,
@@ -211,6 +238,7 @@ def guard_access_change(
     *,
     enforced: bool = True,
     project_id: str | None = None,
+    emergency: bool = False,
 ) -> None:
     """Police changes to the access list itself.
 
@@ -223,7 +251,7 @@ def guard_access_change(
     if "access" not in patch:
         return
 
-    if not can_own(before, user_id, enforced=enforced):
+    if not can_own(before, user_id, enforced=enforced, emergency=emergency):
         denied(
             user_id,
             project_id,

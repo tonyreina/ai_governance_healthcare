@@ -34,6 +34,7 @@ plain HTTP (TLS is terminated at the front door), and expects:
 |---|---|
 | `PORT` | Port to bind. Set by the platform on all three clouds. |
 | `APP_DATABASE_URL` | PostgreSQL connection string for the **restricted** role the API serves as. See [Two database roles](#two-database-roles). |
+| `EMERGENCY_ACCESS_IDS` | Optional. Identity ids with owner rights on every project, every use audited. See [Offboarding, and emergency access](#offboarding-and-emergency-access). |
 | `RUN_MIGRATIONS` | `false` when the API serves as a restricted role, which cannot create tables. A migration job runs instead. |
 | `DATABASE_URL` | The **owner's** connection string, for the migration job only. A single-role deployment may put it here and omit the two above, which works and is reported as a weaker setup. |
 | `IDENTITY_MODE` | `iap`, `alb` or `easyauth` — which header to read. |
@@ -143,6 +144,64 @@ things break it on managed platforms:
 - **More than one replica.** An event written on replica A must reach a
   browser subscribed on replica B. Use PostgreSQL `LISTEN`/`NOTIFY` as
   the fan-out bus, or pin the service to a single replica until you do.
+
+### Offboarding, and emergency access
+
+Whoever creates a project is its only owner until somebody adds a second, so the
+commonest way a record becomes unreachable is that its creator leaves and their
+SSO account is disabled. Nobody left can then open, export, reassign, archive or
+delete it, and the API answers 404 to everyone else on purpose.
+
+**Before you disable an account**, find what it solely owns and give each project
+a second owner (*Project setup → Access*, as any current owner, or as an
+emergency-access identity, below). Run this as the database owner, with the
+person's id as the proxy asserts it (the same id the access lists hold):
+
+```sql
+-- projects whose ONLY owner is this person
+SELECT id, doc -> 'meta' ->> 'solution' AS solution
+  FROM projects
+ WHERE CASE WHEN jsonb_typeof(doc -> 'access' -> 'owners') = 'array'
+            THEN jsonb_array_length(doc -> 'access' -> 'owners') = 1
+                 AND doc -> 'access' -> 'owners' ->> 0 = 'person@hospital.org'
+            ELSE false END;
+
+-- every project with a single owner, whoever it is
+SELECT id, doc -> 'meta' ->> 'solution' AS solution,
+       doc -> 'access' -> 'owners' ->> 0 AS only_owner
+  FROM projects
+ WHERE CASE WHEN jsonb_typeof(doc -> 'access' -> 'owners') = 'array'
+            THEN jsonb_array_length(doc -> 'access' -> 'owners') = 1
+            ELSE false END
+ ORDER BY only_owner, id;
+```
+
+The dashboard also tells an owner, in *Access*, when they are a project's only
+owner, and `make doctor` warns with a count.
+
+**Emergency access** is for when that did not happen. HIPAA's emergency access
+procedure (45 CFR 164.312(a)(2)(ii)) is *required*, not addressable. Set
+`EMERGENCY_ACCESS_IDS` to one or more identity ids, comma-separated, as the proxy
+asserts them. Each holds owner rights on **every** project: read, export,
+reassign, archive, delete and purge.
+
+- It is a path around the access lists, so every use is recorded where the
+  project's owners will see it: a system entry in **that project's own audit log**
+  ("EMERGENCY ACCESS: ... used break-glass access to change this project. This was
+  not granted by this project's access list."), tagged `event: access.breakglass`,
+  which a purge never redacts. Reads of the same project by the same person are
+  one entry per ten minutes (a dashboard polls); every write, archive, purge or
+  reassignment is its own entry. **Every** use, throttled or not, is also a warning
+  on the `chai.emergency` logger, `access.breakglass actor=... project=...`. Alert
+  on that.
+- A *delete* cannot leave an entry in the project's log, because the log goes with
+  the project by design. It is recorded by that warning and by the deletion
+  tombstone's `deleted_by`.
+- These are real SSO identities, so the person still signs in through the front
+  door, with whatever MFA it demands. Name people or a sealed account held by the
+  Security Officer, not a shared mailbox, and review the list. The API logs who
+  holds it at every startup.
+- Off by default: with the variable unset nobody has emergency access.
 
 ### Browser spellcheck on workstations
 

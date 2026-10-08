@@ -295,6 +295,20 @@ def owner_credential_stays_in_migrate(compose: dict) -> list[str]:
     return problems
 
 
+def emergency_setting_reaches_the_api(compose: dict) -> list[str]:
+    """EMERGENCY_ACCESS_IDS is documented as a .env setting, so compose must pass it.
+
+    A setting the docs tell people to use and the stack never delivers is the
+    PROXY_SHARED_SECRET failure (#61): the operator sets it, nothing happens, and
+    for an emergency path the first time anyone finds out is the emergency.
+    """
+    env = service(compose, API).get("environment", {})
+    want = "${EMERGENCY_ACCESS_IDS:-}"
+    if env.get("EMERGENCY_ACCESS_IDS") != want:
+        return [f"api does not receive EMERGENCY_ACCESS_IDS as {want}"]
+    return []
+
+
 def every_rule(compose: dict) -> list[str]:
     return [
         *api_ports(compose),
@@ -308,6 +322,7 @@ def every_rule(compose: dict) -> list[str]:
         *shared_secret_reaches_both_ends(compose),
         *container_hardening(compose),
         *owner_credential_stays_in_migrate(compose),
+        *emergency_setting_reaches_the_api(compose),
         *cloud_proxy_image_is_unprivileged(
             (ROOT / "proxy" / "Dockerfile").read_text(encoding="utf-8")
         ),
@@ -479,6 +494,12 @@ def main() -> int:
     role_mutation(
         "migrate losing the owner credential",
         lambda s: s[MIGRATE]["environment"].pop("POSTGRES_PASSWORD"),
+    )
+    broken = copy.deepcopy(compose)
+    del broken["services"][API]["environment"]["EMERGENCY_ACCESS_IDS"]
+    check(
+        "EMERGENCY_ACCESS_IDS not reaching the api is noticed",
+        bool(emergency_setting_reaches_the_api(broken)),
     )
     hardening_mutation(
         "migrate keeping its default capabilities", lambda s: s[MIGRATE].pop("cap_drop")

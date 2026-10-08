@@ -161,6 +161,16 @@ newest 60 of 412 entries"), with a *Show older entries* button on the server
 store that goes up to 500; every export carries the same sentence. Paging is
 access-controlled exactly like the first page.
 
+## Emergency access
+
+`EMERGENCY_ACCESS_IDS` (comma-separated identity ids) names identities that
+hold owner rights on every project, for a record whose only owner has left. Every
+use is recorded in that project's own audit log as a system entry (`event:
+access.breakglass`, never redacted by a purge) and as a warning on the
+`chai.emergency` logger; reads of the same project by the same person are one entry
+per ten minutes, writes are never throttled. Off by default. See
+`docs/deploy.md`, "Offboarding, and emergency access".
+
 ## Denied access is logged
 
 A request from an authenticated user that is refused on a project they have no

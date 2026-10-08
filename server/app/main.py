@@ -40,6 +40,7 @@ from starlette.requests import ClientDisconnect
 from .auth import log_auth_posture
 from .config import Settings
 from .db import Database
+from .emergency import EmergencyAudit
 from .events import EventBroker
 from .principals import PrincipalRecorder
 from .roles import DbRole
@@ -303,6 +304,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await broker.start()
 
     app.state.db = db
+    app.state.emergency = EmergencyAudit()
+    if settings.emergency_access_ids:
+        log.warning(
+            "emergency access is configured for %s: these identities hold owner "
+            "rights on EVERY project, and every use is recorded in that project's "
+            "audit log and as access.breakglass on the chai.emergency logger.",
+            ", ".join(sorted(settings.emergency_access_ids)),
+        )
     app.state.principals = PrincipalRecorder(db)
     app.state.db_role = db_role
     app.state.broker = broker

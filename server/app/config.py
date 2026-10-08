@@ -250,6 +250,12 @@ class Settings:
 
     require_identity: bool = True
 
+    # Identities (as the proxy asserts them, after any prefix is stripped) that hold
+    # owner rights on every project, with every use recorded in that project's own
+    # audit log (#42). Empty by default: nobody is special unless the deployment
+    # says so, and a blank value is not a wildcard.
+    emergency_access_ids: frozenset[str] = frozenset()
+
     # A second, differently-named variable that must ALSO be set before either
     # kill switch above is honored off loopback. One typo'd variable in a task
     # definition should not be the whole of the authentication system.
@@ -446,6 +452,9 @@ class Settings:
             identity_jwt_email_claim=_str("IDENTITY_JWT_EMAIL_CLAIM", "email"),
             identity_jwt_name_claim=_str("IDENTITY_JWT_NAME_CLAIM", "name"),
             identity_jwt_id_claim=_str("IDENTITY_JWT_ID_CLAIM", "sub"),
+            emergency_access_ids=frozenset(
+                _csv("EMERGENCY_ACCESS_IDS") or _csv("EMERGENCY_ACCESS_ID")
+            ),
             dev_insecure_auth=_bool("DEV_INSECURE_AUTH", False),
             insecure_auth_acknowledged=_bool("I_UNDERSTAND_THIS_IS_INSECURE", False),
             bind_host=_str("HOST", "0.0.0.0"),

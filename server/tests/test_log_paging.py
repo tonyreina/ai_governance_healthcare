@@ -31,10 +31,16 @@ async def long_history(client: AsyncClient) -> str:
     async with client.app.state.db.acquire() as conn:
         # Direct, not 130 requests: this is about reading, and the rate limiter
         # would (rightly) object to 130 writes.
+        #
+        # Each entry gets an explicit, increasing timestamp. `now()` would do, until
+        # the machine's clock steps backwards between two inserts (WSL does this),
+        # which reordered entries and failed this test once in a full run.
         for i in range(TOTAL):
             await conn.execute(
-                "INSERT INTO project_log (project_id, by_id, entry) VALUES ($1, $2, $3)",
+                "INSERT INTO project_log (project_id, at, by_id, entry) "
+                "VALUES ($1, now() + make_interval(secs => $2), $3, $4)",
                 "long",
+                float(i),
                 TEST_EMAIL,
                 {"at": "x", "by": TEST_EMAIL, "text": f"entry {i:03d}"},
             )

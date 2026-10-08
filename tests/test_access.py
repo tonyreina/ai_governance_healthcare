@@ -173,6 +173,41 @@ def main() -> int:
             "pressing again adds no duplicates", page.evaluate("PROJECTS.size") == again
         )
 
+        print("A sole owner is warned (#42)")
+        pid = page.evaluate("[...PROJECTS.keys()][0]")
+        page.evaluate(f"openProject({pid!r}, 'setup')")
+        page.wait_for_timeout(300)
+
+        def access_html(owners: str, me: str = "ann@hospital.example") -> str:
+            page.evaluate(
+                f"ME.id = {me!r}; "
+                f"S.access = {{owners: {owners}, writers: [], readers: []}}"
+            )
+            return " ".join(page.evaluate("accessHTML()").split())
+
+        warned = access_html("['ann@hospital.example']")
+        check(
+            "the only owner is told nobody can reach the record if they leave",
+            "only owner" in warned and "second owner" in warned,
+            warned[:200],
+        )
+        check(
+            "and the warning says why it matters",
+            "disabled" in warned and "unreachable" in warned.lower(),
+        )
+        check(
+            "two owners: no warning",
+            "only owner" not in access_html("['ann@hospital.example','bob@x']"),
+        )
+        check(
+            "a writer is not nagged about something only an owner can fix",
+            "only owner" not in access_html("['bob@x']"),
+        )
+        check(
+            "an unclaimed project has its own message, not this one",
+            "only owner" not in access_html("[]"),
+        )
+
         check("no page errors", not errors, "; ".join(errors[:2]))
         browser.close()
 

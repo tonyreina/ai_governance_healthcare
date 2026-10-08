@@ -100,10 +100,22 @@ function accessHTML(){
        project is open to everyone in the workspace. Claim it to restrict who can
        change it.</p>`;
 
+  /* The commonest way a record becomes unreachable: whoever created it is its
+     only owner, and their account is later disabled. Nobody left can read, export,
+     reassign or delete it, short of an emergency-access identity or a database
+     edit (#42). Said to the one person who can fix it. */
+  const soleOwner = owner && a.owners.length===1 && a.owners[0]===ME.id
+    ? `<div class="note"><p><b>You are this project's only owner.</b> If your account
+       is disabled, for instance when you leave, nobody will be able to open,
+       export or reassign this record, and it becomes unreachable. Add a second
+       owner below.</p></div>`
+    : "";
+
   return `<h2>Access</h2>
   <p style="font-size:13px;color:var(--muted)">Owners can delete, archive and change
   access. Writers can fill in the review. Readers can see it and change nothing.
   You are ${esc(mine?ROLE_LABEL[mine].toLowerCase():"not listed")} on this project.</p>
+  ${soleOwner}
   ${list}
   ${owner?`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:10px">
     <div class="field" style="margin:0"><label for="grantWho">Add someone</label>

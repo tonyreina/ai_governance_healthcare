@@ -259,6 +259,31 @@ honest answer and is a gap worth closing; see R-19.
   real `ApiStore` and name resolution in the DOM and in the exports) and
   `tests/test_stack.py` (through a real proxy).
 
+### R-37 A record can always be reached, and every emergency use is recorded
+
+- Status: Active
+- An identity listed in `EMERGENCY_ACCESS_IDS` holds owner rights on every
+  project, so a record whose only owner has left stays readable, exportable,
+  reassignable, archivable, deletable and purgeable (45 CFR
+  164.312(a)(2)(ii)). It is **off by default**: with the variable unset nobody
+  has it.
+- **Every use is recorded where the project's owners will see it**: a system entry
+  (`event: access.breakglass`, never redacted by a purge) in the project's own audit
+  log, plus a warning on `chai.emergency`. Reads of the same project by the same
+  person are throttled to one entry per ten minutes (a dashboard polls); writes
+  never are. A delete cannot leave a log entry (the log goes with the project) and
+  is recorded by the warning and the tombstone's `deleted_by`.
+- The identity is only ever what the proxy asserted, compared to configuration.
+  A client cannot claim it.
+- Owners are warned in the dashboard when they are a project's only owner, and
+  `make doctor` counts such projects.
+- A path around the access lists that is not recorded is a backdoor, so a change
+  that adds one (a new route reachable by this identity, say) must record it.
+- Source: #42; DECISIONS D-39.
+- Enforced by: `server/tests/test_breakglass.py`, `server/tests/test_offboarding_sql.py`,
+  `tests/test_access.py` (the sole-owner warning), `tests/test_doctor.py`, and
+  `tests/test_compose_isolation.py` (the setting reaches the API).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

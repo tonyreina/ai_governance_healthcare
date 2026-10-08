@@ -49,6 +49,7 @@ from .access import (
 from .auth import Identity, identity_from_request
 from .config import Settings
 from .db import Database
+from .emergency import EmergencyAudit, Use
 from .events import (
     LOG_APPENDED,
     PROJECT_CREATED,
@@ -106,6 +107,10 @@ def get_db(request: Request) -> Database:
 
 def get_broker(request: Request) -> EventBroker:
     return request.app.state.broker
+
+
+def get_emergency(request: Request) -> EmergencyAudit:
+    return request.app.state.emergency
 
 
 async def get_identity(
@@ -235,6 +240,7 @@ async def me(identity: Identity = Depends(get_identity)) -> MeOut:
 async def list_projects(
     db: Database = Depends(get_db),
     identity: Identity = Depends(get_identity),
+    emergency: EmergencyAudit = Depends(get_emergency),
     settings: Settings = Depends(get_settings),
 ) -> list[ProjectOut]:
     """Every project, as ``{id, ...document}``.
@@ -248,11 +254,26 @@ async def list_projects(
             "SELECT id, doc FROM projects ORDER BY updated_at DESC, id ASC"
         )
     enforced = settings.require_identity
-    return [
-        ProjectOut.from_row(row["id"], row["doc"] or {})
+    visible = [
+        row
         for row in rows
-        if can_read(row["doc"] or {}, identity.id, enforced=enforced)
+        if can_read(
+            row["doc"] or {},
+            identity.id,
+            enforced=enforced,
+            emergency=identity.emergency,
+        )
     ]
+    if identity.emergency:
+        # The projects this list shows only because of emergency access, counted
+        # against what the project's own access lists would have shown.
+        ordinary = sum(
+            1
+            for row in visible
+            if can_read(row["doc"] or {}, identity.id, enforced=enforced)
+        )
+        emergency.note_listing(identity, len(visible) - ordinary)
+    return [ProjectOut.from_row(row["id"], row["doc"] or {}) for row in visible]
 
 
 def _listed_ids(value: Any) -> list[str]:
@@ -340,6 +361,7 @@ async def patch_project(
     db: Database = Depends(get_db),
     broker: EventBroker = Depends(get_broker),
     identity: Identity = Depends(get_identity),
+    emergency: EmergencyAudit = Depends(get_emergency),
     settings: Settings = Depends(get_settings),
 ) -> ProjectOut:
     """Deep-merge the body into the stored document.
@@ -374,13 +396,34 @@ async def patch_project(
             )
         before = row["doc"] or {}
         enforced = settings.require_identity
-        require(before, identity.id, "write", enforced=enforced, project_id=project_id)
+        used_emergency = require(
+            before,
+            identity.id,
+            "write",
+            enforced=enforced,
+            project_id=project_id,
+            emergency=identity.emergency,
+        )
         guard_access_change(
-            before, patch, identity.id, enforced=enforced, project_id=project_id
+            before,
+            patch,
+            identity.id,
+            enforced=enforced,
+            project_id=project_id,
+            emergency=identity.emergency,
         )
         guard_owner_only_fields(
-            before, patch, identity.id, enforced=enforced, project_id=project_id
+            before,
+            patch,
+            identity.id,
+            enforced=enforced,
+            project_id=project_id,
+            emergency=identity.emergency,
         )
+        if used_emergency:
+            await emergency.record(
+                conn, identity, project_id, "change this project", Use.WRITE
+            )
         # Who signed, and when, is the server's to say (#31). After the guards,
         # so an unauthorized caller is refused before anything is rewritten.
         patch = attribute_signoffs(
@@ -425,6 +468,7 @@ async def delete_project(
     db: Database = Depends(get_db),
     broker: EventBroker = Depends(get_broker),
     identity: Identity = Depends(get_identity),
+    emergency: EmergencyAudit = Depends(get_emergency),
     settings: Settings = Depends(get_settings),
 ) -> Response:
     """Delete the live project and its audit log. It does NOT erase the history.
@@ -446,13 +490,17 @@ async def delete_project(
             "SELECT doc FROM projects WHERE id = $1 FOR UPDATE", project_id
         )
         if current is not None:
-            require(
+            if require(
                 current["doc"] or {},
                 identity.id,
                 "own",
                 enforced=settings.require_identity,
                 project_id=project_id,
-            )
+                emergency=identity.emergency,
+            ):
+                await emergency.record(
+                    conn, identity, project_id, "delete this project", Use.DELETE
+                )
             # The tombstone is written AFTER the access check and BEFORE the
             # delete, from the same row lock, so a refused or failed delete
             # leaves nothing behind and a successful one cannot lose it.
@@ -627,6 +675,7 @@ async def list_versions(
     db: Database = Depends(get_db),
     settings: Settings = Depends(get_settings),
     identity: Identity = Depends(get_identity),
+    emergency: EmergencyAudit = Depends(get_emergency),
 ) -> list[dict[str, Any]]:
     """Every recorded revision of this project, newest first.
 
@@ -646,13 +695,17 @@ async def list_versions(
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
         doc, incarnation = gate
-        require(
+        if require(
             doc,
             identity.id,
             "read",
             enforced=settings.require_identity,
             project_id=project_id,
-        )
+            emergency=identity.emergency,
+        ):
+            await emergency.record(
+                conn, identity, project_id, "read this project's history", Use.READ
+            )
         rows = await conn.fetch(
             """
             SELECT rev, content_md5, changed_by, changed_at, purged_at, purged_by
@@ -690,6 +743,7 @@ async def read_version(
     db: Database = Depends(get_db),
     settings: Settings = Depends(get_settings),
     identity: Identity = Depends(get_identity),
+    emergency: EmergencyAudit = Depends(get_emergency),
 ) -> dict[str, Any]:
     """One revision, exactly as it was stored, with its fingerprint.
 
@@ -702,13 +756,17 @@ async def read_version(
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
         doc, incarnation = gate
-        require(
+        if require(
             doc,
             identity.id,
             "read",
             enforced=settings.require_identity,
             project_id=project_id,
-        )
+            emergency=identity.emergency,
+        ):
+            await emergency.record(
+                conn, identity, project_id, "read this project's history", Use.READ
+            )
         row = await conn.fetchrow(
             """
             SELECT rev, doc, content_md5, changed_by, changed_at, purged_at, purged_by
@@ -748,6 +806,7 @@ async def purge_versions(
     broker: EventBroker = Depends(get_broker),
     settings: Settings = Depends(get_settings),
     identity: Identity = Depends(get_identity),
+    emergency: EmergencyAudit = Depends(get_emergency),
 ) -> Response:
     """Destroy the stored content of every retained revision. Owner only.
 
@@ -784,13 +843,21 @@ async def purge_versions(
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
         doc, incarnation = gate
-        require(
+        if require(
             doc,
             identity.id,
             "own",
             enforced=settings.require_identity,
             project_id=project_id,
-        )
+            emergency=identity.emergency,
+        ):
+            await emergency.record(
+                conn,
+                identity,
+                project_id,
+                "destroy this project's history",
+                Use.WRITE,
+            )
         purged = await conn.fetchval(
             """
             WITH redacted AS (
@@ -925,6 +992,7 @@ async def read_log(
     db: Database = Depends(get_db),
     settings: Settings = Depends(get_settings),
     identity: Identity = Depends(get_identity),
+    emergency: EmergencyAudit = Depends(get_emergency),
 ) -> list[LogEntryOut]:
     """One page of the audit log, newest first -- what ``subscribeLog`` shows.
 
@@ -954,13 +1022,16 @@ async def read_log(
         owner_row = await conn.fetchrow(
             "SELECT doc FROM projects WHERE id = $1", project_id
         )
-        if owner_row is not None:
-            require(
-                owner_row["doc"] or {},
-                identity.id,
-                "read",
-                enforced=settings.require_identity,
-                project_id=project_id,
+        if owner_row is not None and require(
+            owner_row["doc"] or {},
+            identity.id,
+            "read",
+            enforced=settings.require_identity,
+            project_id=project_id,
+            emergency=identity.emergency,
+        ):
+            await emergency.record(
+                conn, identity, project_id, "read this project's log", Use.READ
             )
         rows = await conn.fetch(
             """
@@ -1004,6 +1075,7 @@ async def append_log(
     db: Database = Depends(get_db),
     broker: EventBroker = Depends(get_broker),
     identity: Identity = Depends(get_identity),
+    emergency: EmergencyAudit = Depends(get_emergency),
     settings: Settings = Depends(get_settings),
 ) -> LogEntryOut:
     """Append one entry. There is no update and no delete, by design.
@@ -1023,13 +1095,16 @@ async def append_log(
         target = await conn.fetchrow(
             "SELECT doc FROM projects WHERE id = $1", project_id
         )
-        if target is not None:
-            require(
-                target["doc"] or {},
-                identity.id,
-                "write",
-                enforced=settings.require_identity,
-                project_id=project_id,
+        if target is not None and require(
+            target["doc"] or {},
+            identity.id,
+            "write",
+            enforced=settings.require_identity,
+            project_id=project_id,
+            emergency=identity.emergency,
+        ):
+            await emergency.record(
+                conn, identity, project_id, "add to this project's log", Use.WRITE
             )
         try:
             await conn.execute(

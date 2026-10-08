@@ -693,3 +693,23 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_principals.py::test_it_is_not_a_directory_anyone_can_enumerate`
   `server/tests/test_principals.py::test_the_lookup_resolves_people_on_a_project_you_can_read`
   `server/tests/test_principals.py::test_the_batch_is_bounded`
+
+### C-55 Every use of emergency access is recorded in the project's own audit log
+
+- **Claim:** An identity with emergency access holds owner rights on every project,
+  and each use is recorded in that project's own audit log, which a purge never
+  redacts, and as a warning an alert can match.
+- **Asserted in:** `docs/deploy.md` — "every use is recorded where the
+  project's owners will see it"
+- **Status:** partial
+- **Gap:** Reads of one project by one person are throttled to one entry per ten
+  minutes (every read is still a warning on `chai.emergency`), and a delete cannot
+  leave a log entry because the log goes with the project; it is recorded by the
+  warning and the tombstone. Nothing here tests that a deployment alerts on the
+  warning. #42
+- **Enforced by:**
+  `server/tests/test_breakglass.py::test_every_use_on_a_project_is_recorded_in_its_own_log`
+  `server/tests/test_breakglass.py::test_the_entry_survives_a_purge`
+  `server/tests/test_breakglass.py::test_reads_are_throttled_but_writes_are_not`
+  `server/tests/test_breakglass.py::test_without_configuration_nobody_has_emergency_access`
+  `server/tests/test_breakglass.py::test_the_record_is_visible_to_the_projects_new_owners`

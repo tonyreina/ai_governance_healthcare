@@ -162,9 +162,6 @@
       "file": 1,
       "te.rst": 1
     },
-    "scripts/check_homographs.py": {
-      "site": 1
-    },
     "scripts/doctor.py": {
       "restarting": 1,
       "running": 3,

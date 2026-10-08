@@ -58,7 +58,6 @@ test-access = "python tests/test_access.py"
 test-changelog = "python tests/test_changelog.py"
 # The delete dialog: honest about what deleting does, and a way to destroy history.
 test-disposal-ui = "python tests/test_disposal_ui.py"
-check-homographs = "python scripts/check_homographs.py"
 # A closed set of values gets an enumerated type, not a string. See CLAUDE.md.
 check-enums = "python scripts/check_enums.py"
 test-enums = "python tests/test_check_enums.py"

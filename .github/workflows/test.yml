@@ -264,6 +264,11 @@ jobs:
       - name: purge ledger
         run: pixi run test-purge-ledger
 
+      # `make dispose`: a report that changes nothing and never prints content, and an
+      # --apply that disposes of what it reported and records who ran it (#57).
+      - name: dispose
+        run: pixi run test-dispose
+
       # `make verify-backup`: a real dump restored into a throwaway PostgreSQL, and
       # `make restore` asking before it overwrites anything (#52).
       - name: backups restore

@@ -1080,6 +1080,42 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   the framework content.
 - Source: the owner, on #80; R-55.
 
+### D-61 The documentation site stays in English
+
+- Status: Accepted
+- The owner's decision, 2026-10-08, on #80. The nine pages under `docs/` are
+  written for the people who deploy and run the software, and stay English. Only
+  the dashboard and its reports are translated (R-55, D-60).
+- Rejected: translating the docs (nine pages that change with the code, for a
+  readership that already works in English, at the cost of keeping seven copies
+  true).
+- Source: the owner, on #80.
+
+### D-62 Disposal is a purge, run by an operator, stopped by a hold
+
+- Status: Accepted
+- The owner's choices, 2026-10-08, on #57, each the recommended option:
+    - disposal reuses the purge, so a tombstone stays (R-12); only the read
+      trail loses rows outright;
+    - it reports first and applies on request (`make dispose`, `APPLY=1`),
+      scheduled by the organization, not by the server;
+    - a hold is per project, placed and lifted with a reason, and append-only.
+- Built in SQL (`008_retention.sql`), not in the API: the database enforces it
+  whoever is connected, the API's role is refused it, and the read trail's
+  trigger checks the period itself, so even the owner cannot delete a row too
+  young without first changing the recorded policy.
+- The periods live in a one-row `retention_policy` table rather than in the
+  code, because R-54 makes the organization's schedule take precedence. A
+  change is stamped with who and when.
+- The clock is the later of the retirement date and the last change, so a
+  typo'd or future date, or a later edit, keeps a record longer, never shorter.
+- Not built: a way to place a hold from the dashboard or the API (today it is an
+  INSERT as the owner), and disposal of `principals`.
+- Rejected: deleting every row (leaves no evidence the record existed, against
+  R-12); a timer in the server (a wrong date or setting deletes with nobody
+  looking); one global hold switch (one dispute would freeze every project).
+- Source: the owner, on #57; R-56.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

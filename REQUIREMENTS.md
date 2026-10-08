@@ -345,7 +345,9 @@ honest answer and is a gap worth closing; see R-19.
   fetched, so the dashboard reports each one with a beacon. That is a record of
   ordinary use, not a control: a client can omit it. The reads that fetched the
   data are recorded and bound what any export could hold.
-- Not decided: how long to keep the trail (#57).
+- Kept for R-54's read-trail period. Since R-56, a row past it and not under a
+  litigation hold may be deleted, by the database owner only; the trigger refuses
+  any other DELETE, and every UPDATE.
 - Why: "which records did a compromised account open, and did it export any?"
   had no answer anywhere, and 45 CFR 164.312(b) is required (#33).
 - Source: #33; DECISIONS D-42.
@@ -610,13 +612,14 @@ honest answer and is a gap worth closing; see R-19.
 - The organization's own records retention schedule takes precedence, and a
   litigation hold suspends any period. `docs/privacy.md` states the periods and
   why, and its Art. 30 draft points to them.
-- Not built: anything that deletes on this schedule. An automatic disposal step
-  needs an owner-approved exception to R-10, because it removes rows from the
-  append-only tables; until then the docs say disposal is manual.
+- Applied since R-56: `make dispose` reports what is past these periods and
+  disposes of it. The security log and backups are outside the database and
+  follow the organization's own policies; staff names and emails (`principals`)
+  are not disposed of yet.
 - Supersedes: R-47 (answered).
 - Source: the owner, on #57; DECISIONS D-56.
-- Enforced by: Nothing yet. The periods are documentation, and no code applies
-  them.
+- Enforced by: `server/tests/test_retention.py` for the record and read-trail
+  periods. Nothing applies the `principals` period.
 
 ### R-55 The dashboard's languages, and what may be shown untranslated
 
@@ -644,6 +647,33 @@ honest answer and is a gap worth closing; see R-19.
 - Source: the owner, on #80; DECISIONS D-59.
 - Enforced by: `tests/test_i18n.py` (real browser), `tests/test_check_i18n.py`
   (every rule shown failing) and the `check-i18n` hook.
+
+### R-56 Records past their retention period are disposed of, unless held
+
+- Status: Active
+- The owner's decision, 2026-10-08, on #57: the exception to the append-only
+  rule (R-10, R-40) that applying R-54 needs is granted, on these terms.
+- **Disposal is a purge.** A retired project past its period loses its live
+  record (a deletion record is written, as for any delete) and the content of
+  its revisions (the rows keep number, author, time and hash, R-12). A deleted
+  project's history is purged the same way. Read-trail rows past their period
+  are deleted. Nothing else is removed.
+- **An operator runs it.** `make dispose` reports and changes nothing;
+  `make dispose APPLY=1 BY=<name>` disposes, in one transaction, and writes a
+  `disposal_run` row with who ran it, the periods and what went. Only the
+  database owner can: the API's role cannot run `dispose_due()` or delete from
+  `access_event`.
+- **A litigation hold stops it.** A project whose latest `retention_hold` row is
+  a placement is kept, with its read trail. Holds are append-only and need a
+  reason.
+- Retired means checkpoint A, B or C decided "Stop" or D decided "Retire", the
+  dashboard's own rule. The clock starts at the later of that decision's date
+  and the record's last change.
+- Source: the owner, on #57; DECISIONS D-62.
+- Enforced by: `server/tests/test_retention.py` (real PostgreSQL: what is due,
+  what disposal leaves, holds, the trigger, the API role refused, the retired
+  rule kept equal to the dashboard's), `tests/test_dispose.py` (the script,
+  against real migrations).
 
 ### R-28 A project's creator is always one of its owners
 

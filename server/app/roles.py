@@ -57,6 +57,13 @@ GRANTS: Mapping[str, tuple[str, ...]] = {
     "access_event": ("SELECT", "INSERT"),
     # Updated in place as a person's name or email changes; never deleted by the API.
     "principals": ("SELECT", "INSERT", "UPDATE"),
+    # Retention (#57, 008_retention.sql). The API may read the periods, and place or
+    # lift a litigation hold (append-only). It may not dispose of anything: that is
+    # dispose_due(), run by an operator as the owner, and the read trail above has
+    # no DELETE.
+    "retention_policy": ("SELECT",),
+    "retention_hold": ("SELECT", "INSERT"),
+    "disposal_run": ("SELECT",),
 }
 
 # Tables the API must never touch at all: the owner's migration bookkeeping.
@@ -66,6 +73,7 @@ NO_ACCESS = ("schema_migrations",)
 SEQUENCE_GRANTS: Mapping[str, tuple[str, ...]] = {
     "project_log_seq_seq": ("USAGE", "SELECT"),
     "access_event_id_seq": ("USAGE", "SELECT"),
+    "retention_hold_id_seq": ("USAGE", "SELECT"),
 }
 
 _ROLE_NAME = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")

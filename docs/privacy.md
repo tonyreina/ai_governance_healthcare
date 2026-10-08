@@ -49,11 +49,48 @@ the limitation periods for minors in your state call for longer. Backups bound
 how long an erasure takes to be complete, because a purged value survives in
 every older backup until it expires.
 
-**Nothing deletes on this schedule yet.** The audit log, the revisions, the
-deletion record and the read trail are append-only, and no job ages them out.
-Disposing of a retired project at the end of its period is a manual purge and
-delete today; an automatic disposal step needs a deliberate exception to the
-append-only rule (R-10) and has not been built.
+### Disposal at the end of the period
+
+`make dispose` lists what is past its period, and changes nothing:
+
+- a retired project (a checkpoint decided "Stop" or "Retire") whose retirement date
+  and last change are both older than the record period;
+- the history of a deleted project, counted from its deletion;
+- the read-trail rows older than the read-trail period.
+
+`make dispose APPLY=1 BY=<your name>` disposes of them, in one transaction.
+Disposal is a purge, not a disappearance: the live record is deleted and a
+deletion record (who, when, the last hash) is kept, the revisions are emptied and
+keep their number, time and hash, and the read-trail rows are deleted. Each run
+is recorded with who ran it and what it disposed of. Run it on a schedule your
+records officer approves (monthly is typical), and read the report first.
+
+Only the database owner can dispose. The API cannot: its database role has no
+right to delete the read trail and cannot run the disposal. The database refuses
+to delete a read-trail row younger than the period, even for the owner, unless
+the period itself is changed.
+
+The periods are in the `retention_policy` table (6 and 6 years by default). If
+your schedule differs, change them as the owner (`make psql`, then
+`UPDATE retention_policy SET record_years = 10;`); the change is stamped with
+who and when. A record period starts at retirement and is reset by any later
+edit, so it can only ever run longer than the date suggests.
+
+**A litigation hold stops disposal.** A project under a hold is listed in the
+report and kept, with its read trail, until the hold is lifted. Holds are
+append-only, each with who, when and why:
+
+```sql
+INSERT INTO retention_hold (project_id, by_id, action, reason)
+VALUES ('<project id>', '<your id>', 'place', '<matter or reason>');
+-- and later, with action 'lift'
+```
+
+A hold does not stop an owner's manual purge or delete in the dashboard; it
+stops the schedule.
+
+A restore can bring back records disposed of after the dump was taken, so
+`make restore` ends by printing what is due; run `make dispose APPLY=1` again.
 
 ## What can be erased, and what cannot
 

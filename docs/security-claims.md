@@ -777,7 +777,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   omit: they are a record of ordinary use, bounded by the recorded reads that fetched
   the data. The table is append-only against the application and the restricted role;
   a database owner can still disable its trigger, which is why the same facts are also
-  security events. How long it is kept is undecided (#57). #33
+  security events. Rows past the retention period may be deleted by the owner's
+  disposal step (R-56, C-77). #33
 - **Enforced by:**
   `server/tests/test_access_audit.py::test_each_read_route_records_what_it_returned`
   `server/tests/test_access_audit.py::test_a_read_that_fails_leaves_no_row`
@@ -985,3 +986,24 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Enforced by:**
   `tests/test_i18n.py::the unreviewed safety warning stays in English`
   `tests/test_i18n.py::once a reviewer is recorded, it shows in Spanish`
+
+### C-77 Only the database owner can dispose, and not of a recent read
+
+- **Claim:** The API's role cannot run disposal or delete the read trail, and the
+  database refuses to delete a read-trail row younger than the period, even for
+  the owner.
+- **Asserted in:** `docs/privacy.md` — "Only the database owner can dispose. The API cannot: its database role has no"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_retention.py::test_the_api_role_cannot_dispose_or_delete_the_read_trail`
+  `server/tests/test_retention.py::test_the_trigger_refuses_what_the_policy_does_not_allow`
+
+### C-78 A litigation hold stops disposal
+
+- **Claim:** A project under a litigation hold, and its read trail, are not
+  disposed of until the hold is lifted.
+- **Asserted in:** `docs/privacy.md` — "A project under a hold is listed in the"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_retention.py::test_a_held_project_is_reported_and_kept_until_the_hold_is_lifted`
+  `server/tests/test_retention.py::test_the_read_trail_loses_only_rows_past_the_period_and_not_held`

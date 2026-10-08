@@ -390,6 +390,9 @@ honest answer and is a gap worth closing; see R-19.
   is a declaration, which is what an addressable standard (45 CFR
   164.312(a)(2)(iv)) asks for. The docs are conditional on whether the system
   holds ePHI, because that is open (R-21).
+- Since R-49 (patient data out of scope), the docs are no longer conditional:
+  the standard is the practice followed, and the exposure is the review record
+  and staff personal data (#121, D-52).
 - Not covered: column- or document-level encryption, which would break the
   `jsonb` merge and every query.
 - Source: #47; DECISIONS D-44.
@@ -536,6 +539,19 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `tests/test_phi_scan.py` (the patterns on pasted and on
   governance text, the dashboard's sample projects producing no match, and the
   real script against a real PostgreSQL).
+
+### R-51 A HIPAA citation names a practice, not an obligation
+
+- Status: Active
+- Patient data is out of scope (R-49), so the HIPAA Security Rule does not bind
+  this system. Where the docs cite one of its standards, they say it is the
+  practice the control follows; a sentence that says what the rule *requires*
+  must say it is about systems that hold ePHI. `docs/deploy.md` says this once,
+  near the top.
+- The controls are unchanged: none is weakened or made optional by this.
+- Source: #121, following the owner's decision on #34; DECISIONS D-52.
+- Enforced by: `tests/test_data_scope.py` (every page under `docs/` and the
+  README, with mutation tests).
 
 ### R-28 A project's creator is always one of its owners
 

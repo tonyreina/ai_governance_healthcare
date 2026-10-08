@@ -29,6 +29,13 @@ IMPLIES_PHI_OK = re.compile(
     re.I,
 )
 DOCS = [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
+# A HIPAA citation framed as an obligation on this system. With patient data out of
+# scope, a cited standard names the practice a control follows (#121).
+CITES = re.compile(r"45 CFR|HIPAA", re.I)
+OBLIGES = re.compile(
+    r"\brequired\b|\baddressable\b|\basks for\b|\bmakes? .{0,60}required", re.I
+)
+PRACTICE_NOTE = "not a legal requirement on this system"
 
 failures: list[str] = []
 
@@ -77,6 +84,20 @@ def implies_ok(text: str) -> list[str]:
     return hits
 
 
+def hipaa_as_obligation(text: str) -> list[str]:
+    """Sentences that cite a HIPAA standard as binding on this system.
+
+    A sentence may say what the rule requires of systems that hold ePHI; it must say
+    so, by naming ePHI, rather than read as a requirement this deployment is under.
+    """
+    hits = []
+    for sentence in re.split(r"(?<=[.!?])\s+", flat(text)):
+        cited = CITES.search(sentence) and OBLIGES.search(sentence)
+        if cited and "ePHI" not in sentence:
+            hits.append(sentence[:120])
+    return hits
+
+
 def main() -> int:
     print("The statement leads each page a deployer reads first")
     for rel in LEAD:
@@ -96,7 +117,37 @@ def main() -> int:
         hits = implies_ok(path.read_text(encoding="utf-8"))
         check(path.relative_to(ROOT).as_posix(), not hits, ", ".join(hits))
 
+    print("A HIPAA citation names the practice a control follows (#121)")
+    deploy = (ROOT / "docs" / "deploy.md").read_text(encoding="utf-8")
+    check(
+        "the deployment guide says what its citations mean, near the top",
+        PRACTICE_NOTE in flat(deploy[:4000]),
+    )
+    for path in DOCS:
+        hits = hipaa_as_obligation(path.read_text(encoding="utf-8"))
+        check(
+            f"{path.relative_to(ROOT).as_posix()} cites no standard as binding here",
+            not hits,
+            " | ".join(hits[:3]),
+        )
+
     print("The rules notice (mutation)")
+    check(
+        "'45 CFR 164.308(a)(7) makes a backup plan *required*' is noticed",
+        bool(
+            hipaa_as_obligation("45 CFR 164.308(a)(7) makes a backup plan *required*.")
+        ),
+    )
+    check(
+        "'is *addressable*' is noticed",
+        bool(hipaa_as_obligation("45 CFR 164.312(a)(2)(iv) is *addressable*: do it.")),
+    )
+    check(
+        "the same, said of systems that hold ePHI, is not",
+        not hipaa_as_obligation(
+            "For systems that hold ePHI, 45 CFR 164.308(a)(7) makes a plan required."
+        ),
+    )
     good = (ROOT / "README.md").read_text(encoding="utf-8")
     check(
         "a dropped statement is noticed",

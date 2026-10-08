@@ -372,7 +372,9 @@ def main() -> int:
     )
     check(
         "the refusal says what encrypting it means and why it matters",
-        mentions(problems(**exposed), "164.402")
+        # It named a PHI breach rule (45 CFR 164.402) until patient data was put out
+        # of scope (R-49, #121); what is at stake now is the record and staff data.
+        mentions(problems(**exposed), "staff")
         and mentions(problems(**exposed), "unencrypted"),
     )
     check(

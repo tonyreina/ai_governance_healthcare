@@ -217,9 +217,9 @@ def check(env: dict[str, str]) -> list[str]:
     # Encryption at rest. Nothing in a container can verify it, so this cannot check
     # it. What it can do is refuse to bring up a production-shaped stack (reachable
     # beyond this machine, using the stack's own database volume) until somebody has
-    # said, on the record, that they dealt with it. 45 CFR 164.312(a)(2)(iv) is
-    # addressable, which means implement it or document why an equivalent is
-    # reasonable; either way it is a decision, and a silent default is not one (#47).
+    # said, on the record, that they dealt with it. The practice followed is the HIPAA
+    # Security Rule's (45 CFR 164.312(a)(2)(iv)): implement it or document why an
+    # equivalent is reasonable; either way a decision, not a silent default (#47).
     uses_own_volume = not env.get("DATABASE_URL")
     if (
         uses_own_volume
@@ -229,10 +229,9 @@ def check(env: dict[str, str]) -> list[str]:
         problems.append(
             "The database lives in the Docker volume `pgdata`, which is an\n"
             "    unencrypted directory on this host's disk unless the disk is\n"
-            "    encrypted. A stolen or improperly disposed disk is then readable.\n"
-            "    If this stack holds protected health information, whether that is a\n"
-            "    reportable breach can turn on it (see 45 CFR 164.402; ask your\n"
-            "    privacy officer). Put the Docker data root on an encrypted volume\n"
+            "    encrypted. A stolen or improperly disposed disk is then readable:\n"
+            "    every review record, and the personal data of the staff named in\n"
+            "    them. Put the Docker data root on an encrypted volume\n"
             "    (LUKS/dm-crypt, or your cloud's encrypted disks), then set\n"
             "      STORAGE_ENCRYPTION_CONFIRMED=1\n"
             "    in .env. That is you telling us it is done: nothing here can check.\n"

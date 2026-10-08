@@ -4,10 +4,10 @@
 function lcTrack(p){
   const ph=phase(p);
   const pip=s=>{const c=scoreOf(s.items,p.items); const frac=c.total?c.answered/c.total:0;
-    return `<span class="pip${frac===1?" full":""}${ph.stage===s.n?" cur":""}" title="Stage ${s.n}: ${c.answered}/${c.total} answered"><i style="height:${Math.round(frac*100)}%"></i>${s.n}</span>`;};
-  const gd=k=>{const d=dec(p,k); const cls=!d?"":(/Stop|Retire/.test(d)?"stop":/conditions|changes|Revise|Retrain/.test(d)?"cond":"go"); return `<span class="gd ${cls}" title="${GATES[k].title}: ${esc(d||"open")}"></span>`;};
+    return `<span class="pip${frac===1?" full":""}${ph.stage===s.n?" cur":""}" title="${esc(t("dash.pipTitle",{n:s.n,answered:c.answered,total:c.total}))}"><i style="height:${Math.round(frac*100)}%"></i>${s.n}</span>`;};
+  const gd=k=>{const d=dec(p,k); const cls=!d?"":(/Stop|Retire/.test(d)?"stop":/conditions|changes|Revise|Retrain/.test(d)?"cond":"go"); return `<span class="gd ${cls}" title="${esc(GATES[k].title)}: ${esc(d||t("dash.gateOpen"))}"></span>`;};
   const S_=STAGES;
-  return `<div class="lc" aria-hidden="true">${pip(S_[0])}${gd("A")}${pip(S_[1])}${pip(S_[2])}${pip(S_[3])}${gd("B")}${pip(S_[4])}${gd("C")}${pip(S_[5])}${gd("D")}</div><div class="lc-label">${esc(ph.label)}</div>`;
+  return `<div class="lc" aria-hidden="true">${pip(S_[0])}${gd("A")}${pip(S_[1])}${pip(S_[2])}${pip(S_[3])}${gd("B")}${pip(S_[4])}${gd("C")}${pip(S_[5])}${gd("D")}</div><div class="lc-label">${esc(phaseLabel(ph))}</div>`;
 }
 function dashData(){
   const list=[...PROJECTS.values()].map(p=>normalize(p));
@@ -96,8 +96,8 @@ function updateDashboard(){
       <div>${lcTrack(p)}</div>
       <div><span class="pct">${r.score}%</span></div>
       <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">${esc(t("dash.overdue"))}</div>`:""}`:`<span class="small">${esc(t(phase(p).key==="deployed"?"dash.notSet":"dash.notLive"))}</span>`}</div>
-      <div><span class="st ${r.st.key}">${esc(r.st.label)}</span>
-        ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(f.text)}</li>`).join("")}${r.f.length>3?`<li>${esc(t("dash.andMore",{count:r.f.length-3}))}</li>`:""}</ul>`:""}
+      <div><span class="st ${r.st.key}">${esc(statusLabel(r.st))}</span>
+        ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(flagText(f))}</li>`).join("")}${r.f.length>3?`<li>${esc(t("dash.andMore",{count:r.f.length-3}))}</li>`:""}</ul>`:""}
         <button class="icon-btn ro-hide parchive" data-archive="${esc(p.id)}"
           aria-label="${esc(t(p.archived?"dash.restoreLabel":"dash.archiveLabel",{name}))}"
           title="${esc(t(p.archived?"dash.restoreTitle":"dash.archiveTitle"))}"

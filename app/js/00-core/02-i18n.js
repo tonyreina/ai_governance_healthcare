@@ -99,9 +99,13 @@ function tHtml(key, params, html){
 
 /* English whatever the reader chose: for machine contracts (JSON, CSV headers) and
    anything an export must keep stable. */
-function tEn(key, params){
-  const saved = LOCALE; LOCALE = Locale.EN;
-  try{ return t(key, params); } finally { LOCALE = saved; }
+function tEn(key, params){ return withLocale(Locale.EN, () => t(key, params)); }
+
+/* Run `fn` as if the reader had chosen `loc`: an export renders in English whatever
+   the screen shows, until exports are translated in their own right (R-55). */
+function withLocale(loc, fn){
+  const saved = LOCALE; LOCALE = loc;
+  try{ return fn(); } finally { LOCALE = saved; }
 }
 
 /* Static markup in app/index.html names its keys: data-i18n for text, and

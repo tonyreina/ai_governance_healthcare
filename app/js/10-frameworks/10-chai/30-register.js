@@ -28,7 +28,7 @@ registerFramework({
     const out = [];
     STAGES.forEach(s => {
       out.push({
-        id: s.id, kind: "stage", label: s.title, num: s.n, short: `Stage ${s.n}`,
+        id: s.id, kind: "stage", label: s.title, num: s.n, short: t("rail.stageShort", {n: s.n}),
         meta: () => { const c = scoreOf(s.items, p.items); return `${c.answered}/${c.total}`; },
         metaCls: () => { const c = scoreOf(s.items, p.items); return c.answered === c.total ? "done" : ""; },
       });
@@ -36,16 +36,16 @@ registerFramework({
         out.push({
           id: "g" + key, kind: "gate", gate: key, label: g.title, cls: "gate",
           numHTML: '<span class="diamond" aria-hidden="true"></span>',
-          meta: () => { const d = (p.gates[key] || {}).decision || ""; return d ? esc(shortDecision(d)) : "open"; },
+          meta: () => { const d = (p.gates[key] || {}).decision || ""; return d ? esc(shortDecision(d)) : esc(t("dash.gateOpen")); },
           metaCls: () => { const d = (p.gates[key] || {}).decision || ""; return !d ? "" : (/Stop|Retire|Revise|Retrain/.test(d) ? "warn" : "done"); },
         });
       });
     });
     out.push({
-      id: "card", kind: "card", label: "Applied model card", glyph: "≡", sep: "before",
+      id: "card", kind: "card", label: t("card.title"), glyph: "≡", sep: "before",
       meta: () => `${CARD_FIELDS.filter(k => cardValOf(p, k)).length}/${CARD_FIELDS.length}`,
     });
-    out.push({ id: "report", kind: "report", label: "Report", glyph: "✓" });
+    out.push({ id: "report", kind: "report", label: t("rail.report"), glyph: "✓" });
     return out;
   },
 

@@ -18,7 +18,8 @@ function normalize(p){
 }
 const cardValOf = (p,k) => ((p.card||{})[k]||"").trim() || (k==="name"?(p.meta.solution||"").trim():"") || (k==="developer"?(p.meta.developer||"").trim():"");
 
-const STATUS = {met:"Met",partial:"Partial",notmet:"Not met",na:"N/A"};
+const STATUS = {met:"Met",partial:"Partial",notmet:"Not met",na:"N/A"};   // English: exports
+const STATUS_KEY = Object.freeze({met:"status.met",partial:"status.partial",notmet:"status.notmet",na:"status.na"});
 const VAL = {met:1,partial:.5,notmet:0};
 
 // Generic: scores any list of {id} against any items map. Framework rules

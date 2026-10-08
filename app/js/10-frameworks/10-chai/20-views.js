@@ -7,11 +7,11 @@ const shortDecision = d => ({"Proceed with conditions":"Conditional","Revise and
 
 function renderStage(s){
   const c=scoreOf(s.items);
-  return `<p class="eyebrow">Stage ${s.n} of 6</p><h1>${esc(s.title)}</h1>
+  return `<p class="eyebrow">${esc(t("stage.eyebrow",{n:s.n}))}</p><h1>${esc(s.title)}</h1>
   <p class="lede">${esc(s.blurb)}</p>
   <div class="legend">${Object.entries(PRINCIPLES).map(([k,p])=>`<span><span class="pchip">${k}</span> ${esc(p.name)}</span>`).join("")}</div>
   <ol class="checklist">${s.items.map(it=>ciHTML(it)).join("")}</ol>
-  <p style="font-size:13px;color:var(--muted);margin-top:10px">${c.answered} of ${c.total} answered. Give anything partial or not met an owner and a due date; overdue actions are flagged on the dashboard.</p>
+  <p style="font-size:13px;color:var(--muted);margin-top:10px">${esc(t("stage.answered",{answered:c.answered,total:c.total}))}</p>
   ${s.metrics?metricsHTML():""}
   ${pager()}`;
 }
@@ -19,34 +19,34 @@ function ciHTML(it){
   const d=S.items[it.id]||{}; const st=d.status||"";
   const open = openItems.has(it.id);
   const late = d.due && parseDay(d.due)<parseDay(TODAY()) && st!=="met" && st!=="na";
-  const notes = (d.evidence||d.owner||d.due) && !open ? `<span class="has-notes">${late?`<b style="color:var(--red)">overdue ${esc(fmtDay(d.due))}</b>`:"notes added"}</span>`:"";
+  const notes = (d.evidence||d.owner||d.due) && !open ? `<span class="has-notes">${late?`<b style="color:var(--red)">${esc(t("ci.overdue",{date:fmtDay(d.due)}))}</b>`:esc(t("ci.notes"))}</span>`:"";
   return `<li class="ci${open?" open":""}" data-item="${it.id}">
     <div class="ci-row">
       <span class="pchip" title="${esc(PRINCIPLES[it.p].name)}">${it.p}</span>
-      <div class="ci-text">${esc(it.text)}<button class="more" data-toggle="${it.id}" aria-expanded="${open}">${open?"Hide details":"Evidence & owner"}</button>${notes}</div>
-      <div class="seg" role="group" aria-label="Status">${Object.entries(STATUS).map(([k,l])=>`<button data-set="${it.id}" data-s="${k}" aria-pressed="${st===k}">${l}</button>`).join("")}</div>
+      <div class="ci-text">${esc(it.text)}<button class="more" data-toggle="${it.id}" aria-expanded="${open}">${esc(t(open?"ci.hide":"ci.more"))}</button>${notes}</div>
+      <div class="seg" role="group" aria-label="${esc(t("ci.statusGroup"))}">${Object.keys(STATUS).map(k=>`<button data-set="${it.id}" data-s="${k}" aria-pressed="${st===k}">${esc(t(STATUS_KEY[k]))}</button>`).join("")}</div>
     </div>
     <div class="ci-detail">
-      <div><label for="ev_${it.id}">Evidence or notes</label><textarea id="ev_${it.id}" rows="2" data-bind="items.${it.id}.evidence" ${NO_BROWSER_ASSIST}>${esc(d.evidence||"")}</textarea></div>
-      <div><label for="ow_${it.id}">Owner</label><input type="text" id="ow_${it.id}" data-bind="items.${it.id}.owner" value="${esc(d.owner||"")}"></div>
-      <div><label for="du_${it.id}">Due</label><input type="date" id="du_${it.id}" data-bind="items.${it.id}.due" value="${esc(d.due||"")}"></div>
+      <div><label for="ev_${it.id}">${esc(t("ci.evidence"))}</label><textarea id="ev_${it.id}" rows="2" data-bind="items.${it.id}.evidence" ${NO_BROWSER_ASSIST}>${esc(d.evidence||"")}</textarea></div>
+      <div><label for="ow_${it.id}">${esc(t("ci.owner"))}</label><input type="text" id="ow_${it.id}" data-bind="items.${it.id}.owner" value="${esc(d.owner||"")}"></div>
+      <div><label for="du_${it.id}">${esc(t("ci.due"))}</label><input type="date" id="du_${it.id}" data-bind="items.${it.id}.due" value="${esc(d.due||"")}"></div>
     </div>
   </li>`;
 }
 function metricsHTML(){
-  return `<h2>Key metrics</h2>
-  <p class="lede" style="margin-bottom:12px">Report each metric with the population it was measured on. Add one row per subgroup for fairness results.</p>
-  <div class="mwrap"><table class="mtable"><thead><tr><th style="width:24%">Category</th><th>Metric</th><th style="width:13%">Value</th><th style="width:15%">95% CI</th><th style="width:22%">Population or subgroup</th><th><span class="vh">Remove</span></th></tr></thead><tbody>
+  return `<h2>${esc(t("metrics.title"))}</h2>
+  <p class="lede" style="margin-bottom:12px">${esc(t("metrics.lede"))}</p>
+  <div class="mwrap"><table class="mtable"><thead><tr><th style="width:24%">${esc(t("metrics.col.category"))}</th><th>${esc(t("metrics.col.metric"))}</th><th style="width:13%">${esc(t("metrics.col.value"))}</th><th style="width:15%">${esc(t("metrics.col.ci"))}</th><th style="width:22%">${esc(t("metrics.col.pop"))}</th><th><span class="vh">${esc(t("metrics.remove"))}</span></th></tr></thead><tbody>
   ${S.metrics.map((m,i)=>`<tr>
-    <td><select aria-label="Category" data-bind="metrics.${i}.cat">${METRIC_CATS.map(c=>`<option${m.cat===c?" selected":""}>${c}</option>`).join("")}</select></td>
-    <td><input type="text" aria-label="Metric" data-bind="metrics.${i}.name" value="${esc(m.name)}" placeholder="e.g. AUROC"></td>
-    <td><input type="text" aria-label="Value" data-bind="metrics.${i}.value" value="${esc(m.value)}"></td>
-    <td><input type="text" aria-label="95% CI" data-bind="metrics.${i}.ci" value="${esc(m.ci)}"></td>
-    <td><input type="text" aria-label="Population" data-bind="metrics.${i}.pop" value="${esc(m.pop)}"></td>
-    <td><button class="icon-btn ro-hide" data-delmetric="${i}" aria-label="Remove metric">Remove</button></td></tr>`).join("")}
+    <td><select aria-label="${esc(t("metrics.col.category"))}" data-bind="metrics.${i}.cat">${METRIC_CATS.map(c=>`<option${m.cat===c?" selected":""}>${c}</option>`).join("")}</select></td>
+    <td><input type="text" aria-label="${esc(t("metrics.col.metric"))}" data-bind="metrics.${i}.name" value="${esc(m.name)}" placeholder="${esc(t("metrics.placeholder"))}"></td>
+    <td><input type="text" aria-label="${esc(t("metrics.col.value"))}" data-bind="metrics.${i}.value" value="${esc(m.value)}"></td>
+    <td><input type="text" aria-label="${esc(t("metrics.col.ci"))}" data-bind="metrics.${i}.ci" value="${esc(m.ci)}"></td>
+    <td><input type="text" aria-label="${esc(t("metrics.col.pop"))}" data-bind="metrics.${i}.pop" value="${esc(m.pop)}"></td>
+    <td><button class="icon-btn ro-hide" data-delmetric="${i}" aria-label="${esc(t("metrics.removeLabel"))}">${esc(t("metrics.remove"))}</button></td></tr>`).join("")}
   </tbody></table></div>
-  ${S.metrics.length?"":`<p style="font-size:14px;color:var(--muted)">No metrics yet. Add the ones your team will stand behind.</p>`}
-  <button class="btn ro-hide" data-act="addmetric" style="margin-top:10px">Add metric</button>
+  ${S.metrics.length?"":`<p style="font-size:14px;color:var(--muted)">${esc(t("metrics.none"))}</p>`}
+  <button class="btn ro-hide" data-act="addmetric" style="margin-top:10px">${esc(t("metrics.add"))}</button>
   ${teSuggestHTML()}`;
 }
 
@@ -66,8 +66,7 @@ function teSuggestHTML(){
 
   let body;
   if(!uc){
-    body = `<p style="font-size:13px;color:var(--muted);margin:8px 0 0">
-      Choose a use case to see the methods and metrics CHAI's workgroups agreed on for it.</p>`;
+    body = `<p style="font-size:13px;color:var(--muted);margin:8px 0 0">${esc(t("te.choose"))}</p>`;
   } else {
     const byCat = {};
     uc.metrics.forEach(m=>{ (byCat[m.cat] = byCat[m.cat] || []).push(m); });
@@ -80,25 +79,20 @@ function teSuggestHTML(){
           const note = [m.when, m.who].filter(Boolean).join(" \u00b7 ");
           return `<button class="btn ro-hide" data-te="${esc(m.name)}" data-te-cat="${esc(c)}"
             ${added?"disabled":""} style="font-size:12px;padding:4px 9px"
-            title="${esc(note||"Recommended by CHAI for this use case")}">${added?"\u2713 ":""}${esc(m.name)}</button>`;
+            title="${esc(note||t("te.recommended"))}">${added?"\u2713 ":""}${esc(m.name)}</button>`;
         }).join("")}
       </div>`).join("")
-      + `<p style="font-size:12px;color:var(--muted);margin:12px 0 0">
-        ${uc.metrics.length} methods and metrics, reproduced under CC BY 4.0 from
-        <a href="${esc(uc.url)}" target="_blank" rel="noopener">CHAI's ${esc(uc.label)} T&amp;E framework</a>,
-        &copy; 2025 Coalition for Health AI. Follow the link for each one's description,
-        rationale, benchmark and supporting literature.</p>`;
+      // The attribution CC BY 4.0 requires: the source, the license and the copyright
+      // line stay in every language (te.credit keeps {link} and the © line verbatim).
+      + `<p style="font-size:12px;color:var(--muted);margin:12px 0 0">${tHtml("te.credit",{count:uc.metrics.length},{link:`<a href="${esc(uc.url)}" target="_blank" rel="noopener">${esc(t("te.linkText",{label:uc.label}))}</a>`})}</p>`;
   }
 
   return `<details class="fallback ro-hide" style="margin-top:16px"${chosen?" open":""}>
-    <summary style="cursor:pointer;font-size:14px;font-weight:600">Suggested metrics from CHAI</summary>
-    <p style="font-size:13px;color:var(--muted);margin:8px 0">
-      CHAI's guidance is to review the use-case Testing &amp; Evaluation framework when
-      completing the model card. Selecting a metric adds its name and category;
-      the value and population stay yours to measure.</p>
-    <label for="teUse" style="font-size:12.5px;font-weight:700">Use case</label>
+    <summary style="cursor:pointer;font-size:14px;font-weight:600">${esc(t("te.summary"))}</summary>
+    <p style="font-size:13px;color:var(--muted);margin:8px 0">${esc(t("te.lede"))}</p>
+    <label for="teUse" style="font-size:12.5px;font-weight:700">${esc(t("te.useCase"))}</label>
     <select id="teUse" data-te-use style="margin-left:8px">
-      <option value="">Select a use case</option>${options}
+      <option value="">${esc(t("te.select"))}</option>${options}
     </select>
     ${body}
   </details>`;
@@ -110,34 +104,34 @@ function renderGate(key){
   const partial = STAGES.slice(0,STAGES.indexOf(s)+1).flatMap(x=>x.items).filter(it=>(S.items[it.id]||{}).status==="partial").length;
   let note="";
   if(gaps.length){
-    note=`<div class="note"><b>${gaps.length} item${gaps.length>1?"s":""} in stages 1–${s.n} ${gaps.length>1?"are":"is"} unanswered or not met${partial?`, and ${partial} partial`:""}.</b>${isGo(g.decision)?" Record the conditions or the accepted risk in the rationale.":""}
-    <ul class="gaplist">${gaps.slice(0,6).map(it=>`<li>Stage ${it.stage.n}: ${esc(it.text)} <em>(${(S.items[it.id]||{}).status?"not met":"unanswered"})</em></li>`).join("")}${gaps.length>6?`<li>and ${gaps.length-6} more</li>`:""}</ul></div>`;
-  } else if(partial) note=`<div class="note">All items through stage ${s.n} are answered; ${partial} ${partial>1?"are":"is"} partial.</div>`;
-  else note=`<div class="note ok">Every applicable item through stage ${s.n} is met.</div>`;
+    note=`<div class="note"><b>${esc(t("gate.gaps",{count:gaps.length,n:s.n}))}${partial?esc(t("gate.andPartial",{count:partial})):""}.</b>${isGo(g.decision)?` ${esc(t("gate.recordConditions"))}`:""}
+    <ul class="gaplist">${gaps.slice(0,6).map(it=>`<li>${esc(t("gate.gapItem",{n:it.stage.n,text:it.text}))} <em>(${esc(t((S.items[it.id]||{}).status?"gate.notMet":"gate.unanswered"))})</em></li>`).join("")}${gaps.length>6?`<li>${esc(t("dash.andMore",{count:gaps.length-6}))}</li>`:""}</ul></div>`;
+  } else if(partial) note=`<div class="note">${esc(t("gate.answeredPartial",{count:partial,n:s.n}))}</div>`;
+  else note=`<div class="note ok">${esc(t("gate.allMet",{n:s.n}))}</div>`;
   const nr = key==="D" ? nextReview(S) : null;
-  return `<p class="eyebrow">${G.title}, after stage ${s.n}</p><h1>${esc(G.q)}</h1>
+  return `<p class="eyebrow">${esc(t("gate.eyebrow",{title:G.title,n:s.n}))}</p><h1>${esc(G.q)}</h1>
   <p class="lede">${esc(G.help)}</p>
   ${note}
   <div class="gate-panel">
-    <p style="margin:0;font-weight:600">Decision</p>
-    <div class="decisions" role="group" aria-label="Decision">${G.options.map(o=>`<button data-gate="${key}" data-d="${esc(o)}" aria-pressed="${g.decision===o}">${esc(o)}</button>`).join("")}</div>
+    <p style="margin:0;font-weight:600">${esc(t("gate.decision"))}</p>
+    <div class="decisions" role="group" aria-label="${esc(t("gate.decision"))}">${G.options.map(o=>`<button data-gate="${key}" data-d="${esc(o)}" aria-pressed="${g.decision===o}">${esc(o)}</button>`).join("")}</div>
     <div class="fields">
-      ${field(`gates.${key}.by`,"Decided by","Committee, or name and role",0)}
-      ${field(`gates.${key}.date`,"Decision date","",0,null,"date")}
-      ${field(`gates.${key}.rationale`,"Rationale and conditions","What the decision rests on, conditions attached, and when it will be revisited",1)}
+      ${field(`gates.${key}.by`,t("gate.by"),t("gate.byHint"),0)}
+      ${field(`gates.${key}.date`,t("gate.date"),"",0,null,"date")}
+      ${field(`gates.${key}.rationale`,t("gate.rationale"),t("gate.rationaleHint"),1)}
     </div>
-    ${g.decision?`<p class="signed">Recorded by ${who(g.signedBy)}${g.signedAt?` on ${esc(fmtDay(g.signedAt.slice(0,10)))}`:""}.${nr?` Next periodic review due ${esc(fmtDay(nr))}.`:""}</p>`:""}
-    ${key==="D"&&g.decision?`<p class="ro-hide" style="margin:12px 0 0"><button class="btn" data-act="newreview">Record a new periodic review today</button></p>`:""}
+    ${g.decision?`<p class="signed">${g.signedAt?tHtml("gate.recordedOn",{date:fmtDay(g.signedAt.slice(0,10))},{who:who(g.signedBy)}):tHtml("gate.recorded",{},{who:who(g.signedBy)})}${nr?` ${esc(t("gate.nextDue",{date:fmtDay(nr)}))}`:""}</p>`:""}
+    ${key==="D"&&g.decision?`<p class="ro-hide" style="margin:12px 0 0"><button class="btn" data-act="newreview">${esc(t("gate.newReview"))}</button></p>`:""}
   </div>
   ${pager()}`;
 }
 function renderCardForm(){
-  return `<p class="eyebrow">Transparency</p><h1>Applied model card</h1>
-  <p class="lede">The fields follow the CHAI Applied Model Card template. Core fields for live or piloted solutions: ${CORE_CARD.map(k=>CARD_LABEL[k].toLowerCase()).join(", ")}. Edits here mark the card as updated on the dashboard.</p>
-  ${S.cardUpdatedAt?`<p style="font-size:13px;color:var(--muted);margin:-8px 0 0">Card last updated ${esc(ago(S.cardUpdatedAt))}.</p>`:""}
+  return `<p class="eyebrow">${esc(t("card.eyebrow"))}</p><h1>${esc(t("card.title"))}</h1>
+  <p class="lede">${esc(t("card.lede",{fields:CORE_CARD.map(k=>CARD_LABEL[k].toLowerCase()).join(", ")}))}</p>
+  ${S.cardUpdatedAt?`<p style="font-size:13px;color:var(--muted);margin:-8px 0 0">${esc(t("card.updated",{when:ago(S.cardUpdatedAt)}))}</p>`:""}
   ${CARD.map(sec=>`<h2>${esc(sec.sec)}</h2><div class="fields">${sec.fields.map(f=>{
       const ph = f[0]==="name"?S.meta.solution: f[0]==="developer"?S.meta.developer:"";
-      return field(`card.${f[0]}`,f[1]+(CORE_CARD.includes(f[0])?" (core)":""),f[2],f[3]).replace(/data-bind="card\.(name|developer)"/, m=>`${m} placeholder="${esc(ph)}"`);
+      return field(`card.${f[0]}`,f[1]+(CORE_CARD.includes(f[0])?` ${t("card.coreTag")}`:""),f[2],f[3]).replace(/data-bind="card\.(name|developer)"/, m=>`${m} placeholder="${esc(ph)}"`);
     }).join("")}</div>`).join("")}
   ${pager()}`;
 }

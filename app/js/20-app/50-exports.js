@@ -20,7 +20,7 @@ function exportHTML(){
      assessments and clinical rationale. STANDALONE_CSS() goes to real trouble
      to inline everything else; this was the one hole left in it. The font
      stacks below end in system-ui. -->
-<style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}<p class="disclaimer" data-provenance><strong>Stored in: ${esc(storageNote().label)}.</strong> ${esc(storageNote().note)}</p></main></body></html>`;
+<style>${STANDALONE_CSS()}</style></head><body><main class="report">${withLocale(Locale.EN, () => reportBody(true))}<p class="disclaimer" data-provenance><strong>Stored in: ${esc(storageNote().label)}.</strong> ${esc(storageNote().note)}</p></main></body></html>`;
 }
 /* PDF, via the browser's own print-to-PDF.
 

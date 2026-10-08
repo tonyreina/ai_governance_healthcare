@@ -101,6 +101,9 @@ test-supply-chain = "python tests/test_supply_chain.py"
 test-deploy-residency = "python tests/test_deploy_residency.py"
 # Finding one person's identifier across every table, on a real PostgreSQL (#57). Needs Docker.
 test-subject-access = "python tests/test_subject_access.py"
+# make phi-scan: a pasted patient identifier is found, a governance record is not
+# flagged, against a real PostgreSQL and the sample projects (#66). Docker + Chromium.
+test-phi-scan = "python tests/test_phi_scan.py"
 # What a `docker build` sends to the daemon: no .env, backups, .git or licensed PDF (#63).
 test-dockerignore = "python tests/test_dockerignore.py"
 # The gate behind `make up`: placeholders, literal identities, plain HTTP on the network,

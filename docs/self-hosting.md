@@ -368,6 +368,15 @@ select count(*) from project_version where doc::text like '%the-value%';
 select count(*) from project_log where entry::text like '%the-value%';
 ```
 
+**Finding it first.** `make phi-scan` looks for what a pasted patient record
+leaves behind: an SSN, and a medical record number, date of birth or patient name
+that is labeled as one. It reads the live records, every revision not yet purged
+and every audit entry not yet redacted, and reports the project, the field and the
+revisions, never the matched text. `make phi-scan STRICT=1` exits non-zero on a
+match, for a scheduled job. It does not look for names or dates on their own,
+because a governance record is made of them, so a clean run is not a finding that
+no patient information is present.
+
 **What none of this reaches.** Backups made earlier still hold the data, and
 `make restore` puts it back, so a restore after a purge must be followed by
 another purge. The identifiers of the people who made changes (`created_by`,

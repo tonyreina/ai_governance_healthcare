@@ -895,6 +895,28 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   stays open.
 - Source: the owner, on #34; R-49.
 
+### D-51 Scan for labeled identifiers on demand; no model, no sidecar
+
+- Status: Accepted
+- The owner's decision. With patient data out of scope (R-49), what is wanted is
+  a way to notice a mistake, not a control that makes patient data acceptable.
+  Rules catch the shapes a paste leaves (an SSN, a labeled MRN or date of birth)
+  with almost no false alarms; a model catches names and dates, which a
+  governance record is full of, and would flag nearly every record.
+- The scan reads through the database container like `make subject-access`, so
+  it covers revisions and audit entries a live read cannot reach. Purged content
+  is skipped: it is already destroyed.
+- It never prints the matched text, because a report that quotes it is a second
+  copy in a terminal or a ticket. Location, kind and the revisions are enough to
+  find it.
+- The false-positive rate was measured on this corpus: the dashboard's ten
+  sample projects, 1,365 strings, produce no match, and a test keeps it so.
+- Rejected: the OpenMed sidecar (#65) and Croissant de-identification (#67), by
+  the owner's decision; surfacing the scan in `make doctor` (a scan of every
+  revision is not a quick health check).
+- Supersedes: D-21.
+- Source: the owner; #66; R-50.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted
@@ -931,7 +953,7 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 
 ### D-21 PHI detection runs in an opt-in sidecar, advisory only
 
-- Status: **Proposed** (#65, #66, #67)
+- Status: **Superseded by D-51** (was Proposed: #65, #66, #67)
 - The detector (OpenMed) cannot be bundled into a single-file dashboard (R-01),
   and adding it to the API image would add gigabytes and a large CVE surface. A
   separate container, absent by default, behind `POST /api/phi-check`.

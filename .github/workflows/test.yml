@@ -241,6 +241,11 @@ jobs:
       - name: subject access
         run: pixi run test-subject-access
 
+      # make phi-scan: finds a pasted identifier in the live record, the history and
+      # the audit log, and is silent on the sample projects (#66).
+      - name: phi scan
+        run: pixi run test-phi-scan
+
       # `make verify-backup`: a real dump restored into a throwaway PostgreSQL, and
       # `make restore` asking before it overwrites anything (#52).
       - name: backups restore

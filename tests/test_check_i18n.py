@@ -145,6 +145,32 @@ def main() -> int:
         ),
     )
 
+    print("English set on screen at run time, outside t()")
+    rl = ci.runtime_literal_problems
+    for label, js in [
+        ("a toast", 'toast("Example filled in");'),
+        ("a label a handler swaps", 'btn.textContent=open?"Hide details":"More";'),
+        (
+            "a tooltip set by code",
+            'frame.setAttribute("title", "Report for printing");',
+        ),
+        ("an error screen", 'fatalError("Cannot load", detail);'),
+    ]:
+        check(f"{label} is noticed (mutation)", bool(rl({"a.js": js})))
+    check(
+        "the same through t() passes",
+        not rl({"a.js": 'toast(t("toast.example")); b.textContent=t("ci.hide");'}),
+    )
+    check(
+        "a value that is not language passes",
+        not rl({"a.js": 'el.textContent = "\u2713"; toast(msg);'}),
+    )
+    check(
+        "i18n-ok needs a reason",
+        bool(rl({"a.js": 'toast("Hi there"); // i18n-ok:'}))
+        and not rl({"a.js": 'toast("ChatGPT"); // i18n-ok: a product name'}),
+    )
+
     print("Framework catalogs (D-60)")
     fw_en = {"chai.item.a": "Criterion", "chai.item.b": "Another"}
     full = {str(loc): dict(fw_en) for loc in ci.Locale}

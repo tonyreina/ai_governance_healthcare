@@ -454,5 +454,9 @@
   "label.regulatory": "监管批准",
   "label.keywords": "关键词：",
   "label.summary": "摘要",
-  "fw.note": "本页的框架文字是对本项目英文文本的非官方机器翻译草稿；以英文原文为准。"
+  "fw.note": "本页的框架文字是对本项目英文文本的非官方机器翻译草稿；以英文原文为准。",
+  "toast.legacyImported": "审查已添加到工作区",
+  "toast.exampleFilled": "已填入示例",
+  "toast.reviewRecorded": "已记录定期审查",
+  "print.frameTitle": "用于打印的报告"
 }

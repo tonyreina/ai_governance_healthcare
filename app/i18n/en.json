@@ -474,5 +474,9 @@
   "label.regulatory": "Regulatory approval",
   "label.keywords": "Keywords:",
   "label.summary": "Summary",
-  "fw.note": "The framework wording on this page is an unofficial, machine-drafted translation of this project's English text; the English original governs."
+  "fw.note": "The framework wording on this page is an unofficial, machine-drafted translation of this project's English text; the English original governs.",
+  "toast.legacyImported": "Review added to the workspace",
+  "toast.exampleFilled": "Example filled in",
+  "toast.reviewRecorded": "Periodic review recorded",
+  "print.frameTitle": "Report for printing"
 }

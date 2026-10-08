@@ -470,5 +470,9 @@
   "label.regulatory": "Aprobación regulatoria",
   "label.keywords": "Palabras clave:",
   "label.summary": "Resumen",
-  "fw.note": "El texto del marco en esta página es una traducción no oficial, redactada automáticamente, del texto en inglés de este proyecto; prevalece el original en inglés."
+  "fw.note": "El texto del marco en esta página es una traducción no oficial, redactada automáticamente, del texto en inglés de este proyecto; prevalece el original en inglés.",
+  "toast.legacyImported": "Revisión añadida al espacio de trabajo",
+  "toast.exampleFilled": "Ejemplo completado",
+  "toast.reviewRecorded": "Revisión periódica registrada",
+  "print.frameTitle": "Informe para imprimir"
 }

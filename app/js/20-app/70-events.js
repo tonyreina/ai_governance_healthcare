@@ -40,13 +40,13 @@ document.addEventListener("click",async e=>{
     edit(`${store}.${id}.status`, val);
     const li=btn.closest(".ci");
     li.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.s===val)));
-    if((val==="partial"||val==="notmet") && !openItems.has(id)){ openItems.add(id); li.classList.add("open"); const m=li.querySelector(".more"); m.textContent="Hide details"; m.setAttribute("aria-expanded","true"); }
+    if((val==="partial"||val==="notmet") && !openItems.has(id)){ openItems.add(id); li.classList.add("open"); const m=li.querySelector(".more"); m.textContent=t("ci.hide"); m.setAttribute("aria-expanded","true"); }
     renderRail(); return;
   }
   if(btn.dataset.toggle){
     const id=btn.dataset.toggle, li=btn.closest(".ci"); const open=!openItems.has(id);
     open?openItems.add(id):openItems.delete(id);
-    li.classList.toggle("open",open); btn.textContent=open?"Hide details":"Evidence & owner"; btn.setAttribute("aria-expanded",String(open));
+    li.classList.toggle("open",open); btn.textContent=t(open?"ci.hide":"ci.more"); btn.setAttribute("aria-expanded",String(open));
     if(open && !RO) li.querySelector("textarea").focus();
     return;
   }
@@ -90,7 +90,7 @@ document.addEventListener("click",async e=>{
   if(a==="legacy"){
     try{ const j=JSON.parse(localStorage.getItem("chai-review-v1")); const p=normalize(Object.assign(blankProject(j.meta.solution),{meta:j.meta,items:j.items||{},gates:j.gates||{},metrics:j.metrics||[],card:j.card||{}}));
       Object.values(p.items).forEach(x=>{ if(x) delete x._open; });
-      const id=await createProject(p,"Imported from a review saved in this browser"); if(id){ localStorage.setItem("chai-legacy-imported","1"); document.getElementById("legacyBanner")?.remove(); toast("Review added to the workspace"); }
+      const id=await createProject(p,"Imported from a review saved in this browser"); if(id){ localStorage.setItem("chai-legacy-imported","1"); document.getElementById("legacyBanner")?.remove(); toast(t("toast.legacyImported")); }
     }catch(err){ toast(t("toast.legacyFailed")); }
     return;
   }
@@ -115,10 +115,10 @@ document.addEventListener("click",async e=>{
     writeLog(CUR,`Granted ${ROLE_LABEL[role].toLowerCase()} to ${id}`); renderMain(false); toast(t("toast.accessGranted")); return;
   }
   if(a==="addmetric"){ S.metrics.push({cat:METRIC_CATS[0],name:"",value:"",ci:"",pop:""}); saveMetrics(); renderMain(false); const ins=document.querySelectorAll('.mtable input[data-bind$=".name"]'); ins[ins.length-1]?.focus(); }
-  else if(a==="example"){ exampleInto(S); const st=stamp(); queuePatch(CUR,Object.assign({meta:clone(S.meta),items:clone(S.items),gates:clone(S.gates),metrics:clone(S.metrics),card:clone(S.card),cardUpdatedAt:S.cardUpdatedAt},st)); writeLog(CUR,"Example data filled in"); renderProject(false); toast("Example filled in"); }
+  else if(a==="example"){ exampleInto(S); const st=stamp(); queuePatch(CUR,Object.assign({meta:clone(S.meta),items:clone(S.items),gates:clone(S.gates),metrics:clone(S.metrics),card:clone(S.card),cardUpdatedAt:S.cardUpdatedAt},st)); writeLog(CUR,"Example data filled in"); renderProject(false); toast(t("toast.exampleFilled")); }
   else if(a==="archive"){ if(!canOwn(S)){ toast(t("toast.ownerArchive")); return; } const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?t("toast.archived"):t("toast.restored")); }
   else if(a==="delete"){ if(!canOwn(S)){ toast(t("toast.ownerDelete")); return; } openDeleteDialog(); }
-  else if(a==="newreview"){ const now=new Date().toISOString(); const patch={gates:{D:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); writeLog(CUR,`Checkpoint D: periodic review recorded (${S.gates.D.decision})`); renderRail(); renderMain(false); toast("Periodic review recorded"); }
+  else if(a==="newreview"){ const now=new Date().toISOString(); const patch={gates:{D:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); writeLog(CUR,`Checkpoint D: periodic review recorded (${S.gates.D.decision})`); renderRail(); renderMain(false); toast(t("toast.reviewRecorded")); }
   else if(a==="dl-html"){ download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML()); noteExport(ExportFormat.HTML); }
   else if(a==="dl-md"){ download(`${slug(S.meta.solution)}-chai-review.md`, exportMD()); noteExport(ExportFormat.MD); }
   else if(a==="dl-json"){ download(`${slug(S.meta.solution)}-chai-review.json`, JSON.stringify(projectJSON(S),null,2)); noteExport(ExportFormat.JSON); }

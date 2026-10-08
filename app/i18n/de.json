@@ -462,5 +462,9 @@
   "label.regulatory": "Behördliche Zulassung",
   "label.keywords": "Schlüsselwörter:",
   "label.summary": "Zusammenfassung",
-  "fw.note": "Der Rahmenwerkstext auf dieser Seite ist eine inoffizielle, maschinell erstellte Übersetzung des englischen Texts dieses Projekts; maßgeblich ist das englische Original."
+  "fw.note": "Der Rahmenwerkstext auf dieser Seite ist eine inoffizielle, maschinell erstellte Übersetzung des englischen Texts dieses Projekts; maßgeblich ist das englische Original.",
+  "toast.legacyImported": "Prüfung zum Arbeitsbereich hinzugefügt",
+  "toast.exampleFilled": "Beispiel ausgefüllt",
+  "toast.reviewRecorded": "Regelmäßige Überprüfung erfasst",
+  "print.frameTitle": "Bericht zum Drucken"
 }

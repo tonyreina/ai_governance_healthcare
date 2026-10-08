@@ -41,7 +41,7 @@ function exportHTML(){
 function exportPDF(){
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
-  frame.setAttribute("title", "Report for printing");
+  frame.setAttribute("title", t("print.frameTitle"));
   frame.style.cssText = "position:fixed;left:-9999px;top:0;width:820px;height:1160px;border:0";
   frame.onload = () => {
     const win = frame.contentWindow;

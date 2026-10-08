@@ -638,7 +638,9 @@ honest answer and is a gap worth closing; see R-19.
   marked as an unofficial translation; stored values (decisions, categories,
   metric names) stay English.
 - Hard-coded text is a ratchet: the pseudo-locale count in
-  `tests/i18n_baseline.json` may only go down.
+  `tests/i18n_baseline.json` may only go down. Text code sets on screen at run
+  time (a toast, a label a handler swaps, a tooltip), which that count cannot
+  see, must go through `t()`; `check-i18n` fails on an English literal there.
 - Source: the owner, on #80; DECISIONS D-59.
 - Enforced by: `tests/test_i18n.py` (real browser), `tests/test_check_i18n.py`
   (every rule shown failing) and the `check-i18n` hook.

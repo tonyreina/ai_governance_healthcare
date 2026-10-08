@@ -27,9 +27,32 @@ reviewed, it stays in English in the report (see
 [Developing it](developing.md#languages)).
 
 A report is also tied to the record it came from by the **record
-fingerprint**, a short hash of the project's contents that you can quote beside
-it. It shows whether two copies are the same version. It does not prove nobody
-altered the record, and the tool says so wherever it shows one.
+fingerprint**, which every export carries: a SHA-256 and an MD5 of the project.
+The JSON has them in a `fingerprint` object, with the project's id beside it; the
+HTML report, the PDF it prints and the Markdown report print them at the end. The
+MD5 is the one the project's setup page and change log show, so a fingerprint
+quoted beside a report ties it to the record on screen.
+
+The fingerprint shows whether two copies are the same version. It does not prove
+nobody altered the record: anyone who can edit a file can recompute its hash, so
+a hash proves tampering only if it was kept somewhere the editor could not reach,
+such as in your own records system when the report was filed. SHA-256 is the
+digest to quote for that; MD5 has been collision-broken since 2004 and is a
+version label, not a seal.
+
+You can check a JSON export against its own fingerprint:
+
+```bash
+python examples/load_export.py my-project-chai-review.json
+# ...
+#   fingerprint: SHA-256 3f1a9c0e5b7d2a46...  matches the record
+```
+
+It recomputes both digests from the file alone, over the record (the `_state` and
+the project id) as compact canonical JSON in UTF-8: keys sorted at every level,
+with the volatile fields `updatedAt`, `updatedBy`, `cardUpdatedAt`, `_state`,
+`contentHash` and `generated` left out. An export from before fingerprints were
+added reports that it has none.
 
 On the shared server, the dashboard reports each export it produces, so it
 appears in the read trail beside the reads that fetched the data

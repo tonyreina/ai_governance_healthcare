@@ -451,6 +451,7 @@
   "export.untitled": "Solution d'IA",
   "export.titleSuffix": "Revue d'assurance CHAI",
   "export.storedIn": "Stocké : {label}.",
+  "export.fingerprint": "Empreinte du dossier (SHA-256) : {sha256}. MD5 : {md5}. Elle identifie cette version exacte du dossier.",
   "md.fieldLine": "- **{label} :** {value}",
   "md.team": "Équipe de revue",
   "md.scope": "Périmètre",

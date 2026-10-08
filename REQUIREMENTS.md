@@ -705,6 +705,23 @@ honest answer and is a gap worth closing; see R-19.
   deployer reads first) and `pixi run check-claims` (a security sentence names its
   test). The rest is by review: nothing checks that a page's prose is true.
 
+### R-58 An export carries a SHA-256 fingerprint of its record
+
+- Status: Active
+- The owner's instruction, 2026-10-08, closing #150: the fingerprint notice said
+  a SHA-256 travels in the JSON export, and it did not. The JSON export, the HTML
+  report (which the PDF prints) and the Markdown report each carry a SHA-256 and
+  an MD5 of the record, and the JSON carries the project id they cover.
+- The MD5 equals the one the setup page and the change log show, so a quoted
+  fingerprint ties an export to the record on screen. MD5 is a version
+  fingerprint only. A hash of a file anyone can edit is evidence of tampering only
+  if the hash is kept somewhere the editor cannot reach, and the documentation
+  says so.
+- Source: the owner, on #150; DECISIONS D-66.
+- Enforced by: `tests/test_fingerprint.py` (the digest against `hashlib`, the
+  export recomputed in Python from the file alone, what moves it, tampering
+  noticed, the reports and their translation, the schema).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

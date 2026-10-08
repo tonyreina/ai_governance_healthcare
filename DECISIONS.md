@@ -1197,6 +1197,29 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   (nothing in the repository supports one); translating the docs (D-61).
 - Source: the owner, this session; R-57.
 
+### D-66 The SHA-256 is computed in the page, and verified by a second implementation
+
+- Status: Accepted
+- The owner chose to make the notice true (#150) rather than remove it.
+- **Synchronous, in the page.** The browser's `crypto.subtle` is asynchronous, and
+  absent on some `file://` origins, while every export is built as one synchronous
+  string (the PDF prints `exportHTML()`). So SHA-256 is written in
+  `app/js/00-core/12-hash.js` beside the MD5 it already had, with its constants
+  derived from the primes as FIPS 180-4 defines them.
+- **Checked against something that is not the same code.** The test compares
+  the digest with Python's `hashlib` on every padding boundary and on non-ASCII
+  text, and `examples/load_export.py` recomputes both digests from an export file
+  in Python, written from the rule rather than the JavaScript. A bug in either
+  side, including a difference in how keys are ordered or text is escaped, fails
+  the test.
+- **What it covers.** The project record including its id, as canonical JSON,
+  so the MD5 is the one the setup page shows. The id is exported as `project_id`
+  so a reader can recompute; import ignores it.
+- Rejected: an asynchronous export path (every caller and test would change for
+  no gain); a signature (that needs a key, which this tool does not hold);
+  putting the digest in each audit entry (the entry already carries the MD5).
+- Source: the owner, on #150; R-58.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

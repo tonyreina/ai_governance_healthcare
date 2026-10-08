@@ -448,6 +448,7 @@
   "export.untitled": "AI 解决方案",
   "export.titleSuffix": "CHAI 保障审查",
   "export.storedIn": "存储位置：{label}。",
+  "export.fingerprint": "记录指纹（SHA-256）：{sha256}。MD5：{md5}。它标识该记录的这一确切版本。",
   "md.fieldLine": "- **{label}：** {value}",
   "md.team": "审查团队",
   "md.scope": "范围",

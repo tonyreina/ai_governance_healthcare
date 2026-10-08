@@ -443,6 +443,7 @@
   "export.untitled": "एआई समाधान",
   "export.titleSuffix": "CHAI आश्वासन समीक्षा",
   "export.storedIn": "संग्रहीत: {label}।",
+  "export.fingerprint": "रिकॉर्ड फ़िंगरप्रिंट (SHA-256): {sha256}। MD5: {md5}। यह रिकॉर्ड के इसी सटीक संस्करण की पहचान कराता है।",
   "md.fieldLine": "- **{label}:** {value}",
   "md.team": "समीक्षा दल",
   "md.scope": "दायरा",

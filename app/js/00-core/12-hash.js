@@ -12,8 +12,9 @@
 
    A SHA-256 is computed alongside for anyone who needs the stronger
    property. It is the one to quote if a hash will ever be offered as
-   evidence that a record was not altered. Both travel with every
-   export so the choice stays with the reader.
+   evidence that a record was not altered. Both travel with the JSON
+   export and with the HTML, PDF and Markdown reports, so the choice
+   stays with the reader (#150).
 
    CANONICALIZATION IS THE WHOLE PROBLEM. Two JSON documents with the
    same contents hash differently if their keys are in a different
@@ -91,10 +92,56 @@ function md5(input) {
   return hex(a0) + hex(b0) + hex(c0) + hex(d0);
 }
 
-async function sha256(input) {
-  if (!(globalThis.crypto && crypto.subtle)) return "";   // file:// in some browsers
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
-  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+/* SHA-256, implemented here for the same reason as MD5: the exports are built
+   synchronously (the PDF prints exportHTML(), and a report is one string), and the
+   browser's crypto.subtle is asynchronous, and absent on some file:// origins. The
+   constants are derived, not typed: the first 32 bits of the fractional parts of the
+   square roots (initial state) and cube roots (round constants) of the first primes,
+   which is how FIPS 180-4 defines them. tests/test_fingerprint.py checks the digest
+   against Python's hashlib on every padding boundary and on non-ASCII text. */
+const SHA256_PRIMES = (() => {
+  const out = [];
+  for (let n = 2; out.length < 64; n++) {
+    let prime = true;
+    for (let d = 2; d * d <= n; d++) if (n % d === 0) { prime = false; break; }
+    if (prime) out.push(n);
+  }
+  return out;
+})();
+const SHA256_H0 = SHA256_PRIMES.slice(0, 8).map(p => Math.floor((Math.sqrt(p) % 1) * 4294967296));
+const SHA256_K = SHA256_PRIMES.map(p => Math.floor((Math.cbrt(p) % 1) * 4294967296));
+
+function sha256(input) {
+  const bytes = new TextEncoder().encode(input);
+  const bitLen = bytes.length * 8;
+  const padded = new Uint8Array((((bytes.length + 8) >> 6) + 1) * 64);
+  padded.set(bytes);
+  padded[bytes.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 8, Math.floor(bitLen / 4294967296));   // big-endian
+  view.setUint32(padded.length - 4, bitLen >>> 0);
+
+  const H = SHA256_H0.slice();
+  const W = new Uint32Array(64);
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  for (let chunk = 0; chunk < padded.length; chunk += 64) {
+    for (let i = 0; i < 16; i++) W[i] = view.getUint32(chunk + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotr(W[i - 15], 7) ^ rotr(W[i - 15], 18) ^ (W[i - 15] >>> 3);
+      const s1 = rotr(W[i - 2], 17) ^ rotr(W[i - 2], 19) ^ (W[i - 2] >>> 10);
+      W[i] = (W[i - 16] + s0 + W[i - 7] + s1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let i = 0; i < 64; i++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const t1 = (h + S1 + ((e & f) ^ (~e & g)) + SHA256_K[i] + W[i]) >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const t2 = (S0 + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+      h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    [a, b, c, d, e, f, g, h].forEach((v, i) => { H[i] = (H[i] + v) >>> 0; });
+  }
+  return H.map(x => x.toString(16).padStart(8, "0")).join("");
 }
 
 /* The fingerprint of a project, synchronously for MD5. */
@@ -102,10 +149,10 @@ function contentHash(doc) {
   return md5(canonicalJSON(doc));
 }
 
-/* Both digests, for exports. Async because SHA-256 is. */
-async function contentHashes(doc) {
+/* Both digests, over the same canonical form, for exports. */
+function contentHashes(doc) {
   const canon = canonicalJSON(doc);
-  return { md5: md5(canon), sha256: await sha256(canon), bytes: canon.length };
+  return { md5: md5(canon), sha256: sha256(canon) };
 }
 
 /* Short form for display. Enough to distinguish versions by eye,

@@ -112,6 +112,10 @@ def seed(name: str) -> None:
           VALUES ('dr.a@hosp.org', 'list', NULL), ('other@hosp.org', 'list', NULL);
         INSERT INTO principals (id, name, email)
           VALUES ('dr.a@hosp.org', 'Dr. A', 'dr.a@hosp.org');
+        INSERT INTO retention_hold (project_id, by_id, action, reason) VALUES
+          ('p1', 'dr.a@hosp.org', 'place', 'Records request'),
+          ('p2', 'other@hosp.org', 'place', 'Deposition of dr.a@hosp.org');
+        SELECT dispose_due('dr.a@hosp.org');
         """,
     )
 
@@ -161,6 +165,7 @@ def main() -> int:
             "project_version.changed_by",
             "project_version.doc", "project_version.access",
             "project_deletion.deleted_by", "access_event.actor", "principals",
+            "retention_hold.by_id", "retention_hold.reason", "disposal_run.run_by",
         ):  # fmt: skip
             check(f"found in {loc}", found.get(loc, 0) >= 1, str(found))
         check(

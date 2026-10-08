@@ -301,8 +301,9 @@ def main() -> int:
             input=stdin, capture_output=True, text=True, cwd=ROOT,
             env={**os.environ, "SINK_LOG": str(log)},
         )  # fmt: skip
-        # A restore reads the live database's purges first (#116), then restores: two
-        # calls. The ledger it read is empty, so there is nothing to re-apply.
+        # A restore reads the live database's purges first (#116), then restores, then
+        # reports what is past its retention period (#57): three calls. The ledger it
+        # read is empty, so there is nothing to re-apply.
         return done, log.read_text().count("CALLED")
 
     done, calls = restore("")
@@ -320,8 +321,19 @@ def main() -> int:
     done, calls = restore("YES\n")
     check(
         "typing YES proceeds",
-        done.returncode == 0 and calls == 2,
+        done.returncode == 0 and calls == 3,
         f"exit {done.returncode}, calls {calls}: {done.stderr[-200:]}",
+    )
+    last = (log.read_text().splitlines() or [""])[-1]
+    check(
+        "and ends by reporting what is due for disposal",
+        "-A" in last.split() and "-t" in last.split(),
+        last,
+    )
+    check(
+        "a report that cannot run does not fail the restore, and says so",
+        "Could not report it" in done.stderr,
+        done.stderr[-200:],
     )
     first = (log.read_text().splitlines() or [""])[0]
     check(
@@ -332,7 +344,7 @@ def main() -> int:
     done, calls = restore("", "CONFIRM=YES")
     check(
         "CONFIRM=YES proceeds for automation, without a prompt",
-        done.returncode == 0 and calls == 2,
+        done.returncode == 0 and calls == 3,
     )
     shutil.rmtree(sink.parent, ignore_errors=True)
 

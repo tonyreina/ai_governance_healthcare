@@ -49,6 +49,18 @@ hit AS (
     SELECT 'access_event.detail', e.project_id, e.id::text
       FROM access_event e, s WHERE e.detail::text ILIKE s.pat
     UNION ALL
+    SELECT 'retention_hold.by_id', h.project_id, h.id::text
+      FROM retention_hold h, s WHERE lower(h.by_id) = lower(s.v)
+    UNION ALL
+    SELECT 'retention_hold.reason', h.project_id, h.id::text
+      FROM retention_hold h, s WHERE h.reason ILIKE s.pat
+    UNION ALL
+    SELECT 'disposal_run.run_by', NULL, r.id::text
+      FROM disposal_run r, s WHERE lower(r.run_by) = lower(s.v)
+    UNION ALL
+    SELECT 'retention_policy.changed_by', NULL, 'policy'
+      FROM retention_policy rp, s WHERE lower(rp.changed_by) = lower(s.v)
+    UNION ALL
     SELECT 'principals', NULL, pr.id
       FROM principals pr, s
      WHERE lower(pr.id) = lower(s.v) OR lower(pr.email) = lower(s.v)

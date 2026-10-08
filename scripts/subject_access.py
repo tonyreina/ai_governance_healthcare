@@ -4,8 +4,9 @@
 A subject access request (GDPR Art. 15) asks for the personal data held about one
 person. Here that identifier is in at least six places: who created or last changed a
 project, the audit log, every frozen revision, the access lists inside them, the
-deletion record, the read trail and the principals table. This turns finding them from
-a half-day of hand-written SQL into a command.
+deletion record, the read trail, the litigation holds and disposal runs, and the
+principals table. This turns finding them from a half-day of hand-written SQL into a
+command.
 
     python3 scripts/subject_access.py ceo@hospital.org
     make subject-access WHO=ceo@hospital.org

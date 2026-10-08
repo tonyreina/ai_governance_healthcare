@@ -26,7 +26,7 @@ POSTGRES_DB   ?= chai
 HTTP_PORT     ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help env preflight doctor up dev down logs ps config build-app shell psql backup backup-plaintext restore reapply-purges verify-backup subject-access phi-scan prune check-isolation lock
+.PHONY: help env preflight doctor up dev down logs ps config build-app shell psql backup backup-plaintext restore reapply-purges dispose verify-backup subject-access phi-scan prune check-isolation lock
 
 help:  ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -163,12 +163,19 @@ restore:  ## Restore a dump: make restore FILE=backups/....sql.gz.gpg  (DESTRUCT
 	  *)     cat "$(FILE)" ;; \
 	esac | gunzip -c | $(PSQL_OWNER) || exit 1; \
 	if [ -n "$$ledger" ]; then python3 scripts/purge_ledger.py --psql "$(PSQL_OWNER)" reapply "$$ledger"; fi
+	@echo "A restore can bring back records disposed of since the dump. What is due now:"
+	@python3 scripts/dispose.py --psql "$(PSQL_OWNER)" || echo "Could not report it (a dump from before 008_retention.sql?). Run make dispose once the migrations have run." >&2
 
 # Re-apply purges from ledger files: one `make restore` wrote, or one rebuilt from the
 # security log with `python3 scripts/purge_ledger.py from-log LOG --out LEDGER` (#116).
 reapply-purges:  ## Re-apply purges after a restore: make reapply-purges LEDGER=backups/purge-ledger-....json
 	@test -n "$(LEDGER)" || { echo "usage: make reapply-purges LEDGER=<ledger.json>"; exit 1; }
 	@python3 scripts/purge_ledger.py --psql "$(PSQL_OWNER)" reapply $(LEDGER)
+
+# Records past their retention period (#57, R-54, R-56). Reports by default; APPLY=1
+# disposes of them (a tombstone stays) and records who ran it. Held projects are kept.
+dispose:  ## Report records past their retention period: make dispose [APPLY=1 BY=<name>]
+	@python3 scripts/dispose.py --psql "$(PSQL_OWNER)" $(if $(APPLY),--apply --by "$(BY)",)
 
 # Where one person's identifier is stored, for a subject access request (#57).
 subject-access:  ## Find where one person's identifier is stored: make subject-access WHO=a@b.org

@@ -67,8 +67,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   reachable port. `TRUSTED_PROXY_CIDR` and `PROXY_SHARED_SECRET` are defense in
   depth, not substitutes.
 - Source: `compose.yaml` header; `server/app/auth.py`.
-- Known issue: `PROXY_SHARED_SECRET` is documented but no shipped config sends it
-  (#61).
+- Known issue, fixed: `PROXY_SHARED_SECRET` was documented but no shipped config
+  sent it, so enabling it made every request 403 (#61). See D-30.
 
 ### D-05 No `--proxy-headers`
 
@@ -407,6 +407,27 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   It would be exact, but it needs Docker and the variables set, and preflight must
   run first, before anything is up, on a machine that may have neither.
 - Source: #77; R-08.
+
+### D-30 One variable turns on the shared secret at both ends
+
+- Status: Accepted
+- `compose.yaml` hands `PROXY_SHARED_SECRET` to both the `api` and the `proxy`
+  service, and `proxy/Caddyfile` sends it as `X-Proxy-Secret` with `header_up`.
+  Setting it once in `.env` therefore turns the control on at both ends; unset,
+  the API does not check and the proxy sends an empty value.
+- Why: the API half existed (`_check_shared_secret`) and nothing sent the header,
+  so the documented way to enable the control made every request 403 (#61). Two
+  settings that must agree are one setting too many.
+- `header_up` sets the header, which replaces a value the client sent under the
+  same name. Do not add `header_up -X-Proxy-Secret` beside it: Caddy applies
+  deletes after sets and the secret would vanish.
+- It authenticates the proxy to the API. It is not a way for a caller to
+  authenticate to the proxy, which the deployment guide used to suggest.
+- The header name is fixed at the API's default, `X-Proxy-Secret`. Compose does
+  not pass `PROXY_SECRET_HEADER`, so the two cannot disagree.
+- Rejected: documenting it as an operator exercise (set it on the API, add a
+  `header_up` to a Caddyfile you edit). That is the configuration nobody tested.
+- Source: #61; R-07, D-04.
 
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 

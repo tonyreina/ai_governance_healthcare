@@ -348,6 +348,45 @@ def check_edge_body_cap(headers: dict[str, str]) -> None:
     )
 
 
+def check_proxy_shared_secret(workdir: Path) -> None:
+    """The proxy must send the secret, and a client must not be able to choose it.
+
+    With the secret set, what the upstream receives is the proxy's value even
+    when the client sends its own, so a caller cannot satisfy the API's check by
+    guessing or by replaying a value it saw. With it unset, nothing the client
+    sends in that header reaches the API as a usable secret either.
+    """
+    door = FRONT_DOORS[3]
+    secret = "s3cret/with+base64=chars"
+    start_caddy(workdir, {**door[1], "PROXY_SHARED_SECRET": secret})
+
+    status, body = get("/api/me", door[2])
+    got = {k.lower(): v for k, v in json.loads(body).items()}
+    check("with a secret set the request is forwarded", status == 200, f"HTTP {status}")
+    check(
+        "the proxy sends X-Proxy-Secret to the API",
+        got.get("x-proxy-secret") == secret,
+        f"got {got.get('x-proxy-secret')!r}",
+    )
+
+    _, body = get("/api/me", {**door[2], "X-Proxy-Secret": "chosen-by-the-client"})
+    got = {k.lower(): v for k, v in json.loads(body).items()}
+    check(
+        "a client-supplied X-Proxy-Secret is replaced, not forwarded",
+        got.get("x-proxy-secret") == secret,
+        f"got {got.get('x-proxy-secret')!r}",
+    )
+
+    start_caddy(workdir, door[1])
+    _, body = get("/api/me", {**door[2], "X-Proxy-Secret": "chosen-by-the-client"})
+    got = {k.lower(): v for k, v in json.loads(body).items()}
+    check(
+        "with no secret configured a client value is not forwarded as a secret",
+        got.get("x-proxy-secret", "") == "",
+        f"got {got.get('x-proxy-secret')!r}",
+    )
+
+
 def main() -> int:
     if not shutil.which("docker") or docker("info").returncode != 0:
         print("docker unavailable; skipping proxy identity checks")
@@ -425,6 +464,14 @@ def main() -> int:
         )
         status, _ = get("/api/me", {"X-Forwarded-Email": "cmo@hospital.org"})
         check("an unset identity source fails closed", status == 401, f"HTTP {status}")
+
+        # ---------------------------------------------------------------
+        # PROXY_SHARED_SECRET (#61). The API rejects a request that lacks the
+        # secret, so the control only works if the proxy sends it. It was
+        # documented for months while nothing did: switching it on made every
+        # request answer 403.
+        # ---------------------------------------------------------------
+        check_proxy_shared_secret(workdir)
 
         # ---------------------------------------------------------------
         # The response headers and the edge body cap. #20 added both and

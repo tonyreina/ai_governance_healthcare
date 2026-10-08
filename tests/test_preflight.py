@@ -346,6 +346,30 @@ def main() -> int:
         str(pf.check(done)),
     )
 
+    print("Every identity example the docs show passes the gate (#62)")
+    # The self-hosting guide's first example was IDENTITY_ID_SOURCE=dev@localhost,
+    # the exact literal preflight refuses to start on, and it was the uncommented
+    # line. An operator who copied it was stopped by the gate, and one who forced
+    # past it made every visitor the same person. Run every uncommented
+    # IDENTITY_*_SOURCE assignment in the docs through the real check.
+    assign = re.compile(r"^\s*(?:export\s+)?(IDENTITY_\w+_SOURCE)=(.*)$")
+    shown = 0
+    for doc in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]:
+        for number, line in enumerate(doc.read_text().splitlines(), 1):
+            found = assign.match(line)
+            if not found:
+                continue
+            shown += 1
+            name, value = found.group(1), found.group(2).strip()
+            where = f"{doc.relative_to(ROOT)}:{number}"
+            refused = pf.check({**SAFE, name: value})
+            check(
+                f"{where}: {name}={value or '(empty)'} passes preflight",
+                not mentions(refused, name),
+                str(refused),
+            )
+    check("the scan found the examples it is meant to check", shown > 0, str(shown))
+
     print()
     if failures:
         print(f"{len(failures)} check(s) failed")

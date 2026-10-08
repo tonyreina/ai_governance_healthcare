@@ -143,6 +143,13 @@ services:
       # pool; narrow it to the proxy's address if you can.
       TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:-172.16.0.0/12}
 
+      # Second lock, off while empty. When set, the API answers 403 to any
+      # request that lacks X-Proxy-Secret with this value. The proxy service
+      # below is given the same variable and sends it (proxy/Caddyfile), so one
+      # entry in .env turns the control on at both ends. Setting it on only one
+      # side would make every request fail, which is why it is one variable.
+      PROXY_SHARED_SECRET: ${PROXY_SHARED_SECRET:-}
+
       # Reject a request that arrives with no identity rather than inventing an
       # anonymous user. Leave this on everywhere except a throwaway demo.
       REQUIRE_IDENTITY: ${REQUIRE_IDENTITY:-true}
@@ -214,6 +221,9 @@ services:
       IDENTITY_ID_SOURCE: ${IDENTITY_ID_SOURCE:?set IDENTITY_ID_SOURCE in .env}
       IDENTITY_NAME_SOURCE: ${IDENTITY_NAME_SOURCE:-}
       IDENTITY_EMAIL_SOURCE: ${IDENTITY_EMAIL_SOURCE:-}
+
+      # Sent to the API as X-Proxy-Secret. Same variable as the api service's.
+      PROXY_SHARED_SECRET: ${PROXY_SHARED_SECRET:-}
 
       # Canonical header names handed to the API. Must match AUTH_HEADER_* above.
       AUTH_HEADER_ID: ${AUTH_HEADER_ID:-X-Auth-Request-User}

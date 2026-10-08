@@ -230,6 +230,16 @@
 				# by Caddy already.)
 				header_up X-Real-IP {remote_host}
 
+				# PROXY_SHARED_SECRET: prove to the API that this request came
+				# through here. The API only enforces it when it has the same
+				# value (compose.yaml passes one variable to both). `header_up`
+				# SETS the header, so whatever the client sent under this name
+				# is replaced, never forwarded; do not add a `header_up -X-Proxy-Secret`
+				# beside it, because Caddy applies deletes after sets and the
+				# secret would vanish. Unset, the value is empty and the API does
+				# not check. The name is the API's PROXY_SECRET_HEADER default.
+				header_up X-Proxy-Secret "{$PROXY_SHARED_SECRET}"
+
 				# A dead API should look dead, not like a hung page.
 				transport http {
 					dial_timeout 5s

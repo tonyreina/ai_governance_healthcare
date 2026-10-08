@@ -125,10 +125,10 @@ leave room to act:
     These settings come from the providers' documentation and have not been run
     here. Check them before you rely on them.
 
-There is no retention policy yet: how long each of these may be kept, and when a
-revision may be purged to a tombstone, is a decision that has not been made (see
-[Privacy and retention](privacy.md), R-47). Until it is, the only way to reclaim
-space is more disk.
+How long each of these is kept is decided (see [Privacy and
+retention](privacy.md), R-54), but nothing ages them out yet: disposal at the end
+of a period is a manual purge and delete. Until it is automated, the only way to
+reclaim space is more disk.
 
 ### Encryption at rest
 
@@ -337,8 +337,8 @@ already fetched, so the server never sees one happen. The export beacon records
 ordinary use; it is **not** a control, because a client can omit it. What bounds
 what any export could contain is the reads that fetched the data, and those are
 recorded. `source_ip` is what the proxy reported, for correlation, and is not
-authentication. How long to keep the trail is not decided here (see
-[Privacy and retention](privacy.md)).
+authentication. It is kept for six years, or your audit-log
+policy if shorter (see [Privacy and retention](privacy.md)).
 
 ### Updating
 

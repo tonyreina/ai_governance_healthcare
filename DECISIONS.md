@@ -986,6 +986,24 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   restored database itself (the purge is what the old dump lacks).
 - Source: #116, #57; R-53.
 
+### D-56 Count from retirement, and defer to the organization's schedule
+
+- Status: Accepted
+- The owner accepted the recommended periods (R-54). The governance record's
+  clock starts when the AI solution is retired, because the record's job is to
+  show who reviewed a tool still in use. Six years follows the HIPAA Security
+  Rule's documentation period, the figure hospital compliance teams already work
+  to, and covers most malpractice limitation periods.
+- The read trail and the security log defer to the organization's existing
+  audit-log and security-log policies, which already exist and are set by the
+  people who answer for them.
+- Recorded as documentation first. Automatic disposal is a separate decision,
+  because it is the first scheduled deletion from append-only tables (R-10).
+- Rejected: a period counted from creation (it could delete the sign-off of a
+  tool still in use); a single period for every table (the read trail and logs
+  have their own owners and policies).
+- Source: the owner, on #57; R-54.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

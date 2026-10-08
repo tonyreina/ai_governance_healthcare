@@ -440,7 +440,8 @@ honest answer and is a gap worth closing; see R-19.
   `docs/deploy.md` ("Disk and growth") gives the growth model, what each table's
   rows are, and the disk alert to set on each platform.
 - Not decided: a retention policy, so nothing is ever trimmed. That waits on the
-  retention question (#57).
+  retention question (#57). (Since R-54 the periods are decided; nothing applies
+  them yet.)
 - Why: a full disk stops the audit trail from recording, the one failure this
   system must not have, and nothing measured it (#54).
 - Source: #54; DECISIONS D-46.
@@ -593,6 +594,28 @@ honest answer and is a gap worth closing; see R-19.
   Makefile's order), `server/tests/test_security_events.py` (the event's fields
   match the rows the purge changed) and `tests/test_verify_backup.py` (the
   restore reads the purges before it overwrites).
+
+### R-54 Retention periods
+
+- Status: Active
+- The owner's decision, 2026-10-08, answering R-47:
+    - a project, its revisions and its audit log: the life of the AI solution,
+      plus 6 years after it is retired;
+    - the read trail: 6 years, or the organization's audit-log policy if shorter;
+    - the security event log: the organization's security-log policy;
+    - staff names and emails (`principals`): while active, then as long as a
+      retained record refers to them;
+    - backups: 35 days rolling, plus any archive the backup policy keeps.
+- The organization's own records retention schedule takes precedence, and a
+  litigation hold suspends any period. `docs/privacy.md` states the periods and
+  why, and its Art. 30 draft points to them.
+- Not built: anything that deletes on this schedule. An automatic disposal step
+  needs an owner-approved exception to R-10, because it removes rows from the
+  append-only tables; until then the docs say disposal is manual.
+- Supersedes: R-47 (answered).
+- Source: the owner, on #57; DECISIONS D-56.
+- Enforced by: Nothing yet. The periods are documentation, and no code applies
+  them.
 
 ### R-28 A project's creator is always one of its owners
 
@@ -850,7 +873,7 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-47 How long is each kind of record kept?
 
-- Status: **Open** (#57)
+- Status: **Answered by R-54** (2026-10-08, the owner's decision)
 - Nothing expires: the audit log, revisions, deletion record and read trail are
   append-only, and no period is stated anywhere. The owner has to decide a period
   for each, reconciling a documented retention floor for governance records

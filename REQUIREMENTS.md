@@ -428,6 +428,22 @@ honest answer and is a gap worth closing; see R-19.
   version), `tests/test_workflows.py` (the new test is run by CI), and
   `security.yml` itself.
 
+### R-44 How fast the append-only tables grow is visible
+
+- Status: Active
+- `make doctor` reports the revision count and average size of
+  `project_version`, the sizes of the audit log, the read trail and the
+  database, and says these never shrink by themselves. It sets no threshold.
+  `docs/deploy.md` ("Disk and growth") gives the growth model, what each table's
+  rows are, and the disk alert to set on each platform.
+- Not decided: a retention policy, so nothing is ever trimmed. That waits on the
+  retention question (#57).
+- Why: a full disk stops the audit trail from recording, the one failure this
+  system must not have, and nothing measured it (#54).
+- Source: #54; DECISIONS D-46.
+- Enforced by: `tests/test_doctor.py` (what is reported, and that an unreadable
+  answer is skipped, not a crash).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

@@ -862,3 +862,17 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Gap:** A policy, not a mechanism: nothing here measures it, and the numbers are a
   first draft for the owner to confirm. Private vulnerability reporting, which the
   policy points to, is a repository setting that is currently off. #37
+
+### C-67 Growth is reported and the disk alerts are documented
+
+- **Claim:** `make doctor` reports how large the append-only tables are, and the
+  deployment guide names the disk alert for each platform.
+- **Asserted in:** `docs/deploy.md` — "Alert on the disk instead"
+- **Status:** partial
+- **Gap:** The report is tested; the per-platform alert metrics and flags are from the
+  providers' documentation and nothing here creates a database or an alert. Nothing
+  trims the tables: a retention policy is undecided (#57). #54
+- **Enforced by:**
+  `tests/test_doctor.py::the revision count and size are reported`
+  `tests/test_doctor.py::the read trail's size is reported too, with why it grows`
+  `tests/test_doctor.py::it says these tables never shrink by themselves`

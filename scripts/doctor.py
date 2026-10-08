@@ -46,6 +46,17 @@ def run(
     )
 
 
+def human_bytes(n: int) -> str:
+    """1536 -> '1.5 KB'. Binary units, one decimal, because it is a size to read."""
+    units = ["B", "KB", "MB", "GB"]
+    size = float(n)
+    step = 0
+    while size >= 1024 and step < len(units) - 1:
+        size /= 1024
+        step += 1
+    return f"{size:.0f} B" if step == 0 else f"{size:.1f} {units[step]}"
+
+
 def say(level: str, title: str, *lines: str) -> None:
     print(f"  {level:<4}  {title}")
     for line in lines:
@@ -266,6 +277,82 @@ class Doctor:
             "  docker compose up -d --force-recreate migrate api",
         )
 
+    def check_growth(self, env: dict[str, str], services: dict[str, dict]) -> None:
+        """How big the append-only tables are (#54).
+
+        Every PATCH writes a full document snapshot into project_version, which is
+        append-only and survives its project's deletion, so it only ever grows. If the
+        disk fills, the database stops accepting writes, and the audit trail stops
+        recording, which is the one failure this system must not have. Nothing
+        measured it. This reports the numbers and says what they mean; it sets no
+        threshold, because the right one depends on the disk it is on.
+        """
+        if env.get("DATABASE_URL") or env.get("APP_DATABASE_URL"):
+            return
+        state = services.get("db", {}).get("State")
+        if state != "running":  # enum-ok: docker compose's container state name
+            return
+        password = env.get("POSTGRES_PASSWORD", "")
+        if not password:
+            return
+        query = (
+            "SELECT (SELECT count(*) FROM project_version) || '|' || "
+            "pg_total_relation_size('project_version') || '|' || "
+            "pg_total_relation_size('project_log') || '|' || "
+            "COALESCE(pg_total_relation_size(to_regclass('access_event')), 0)"
+            " || '|' || "
+            "pg_database_size(current_database())"
+        )
+        result = run(
+            [
+                *COMPOSE,
+                "exec",
+                "-T",
+                "-e",
+                "PGPASSWORD",
+                "db",
+                "psql",
+                "-h",
+                "db",
+                "-U",
+                env.get("POSTGRES_USER", "chai"),
+                "-d",
+                env.get("POSTGRES_DB", "chai"),
+                "-tAc",
+                query,
+            ],
+            env={**os.environ, "PGPASSWORD": password},
+        )
+        parts = result.stdout.strip().split("|")
+        if (
+            result.returncode != 0
+            or len(parts) != 5
+            or not all(p.isdigit() for p in parts)
+        ):
+            return
+        revisions, version_bytes, log_bytes, trail_bytes, db_bytes = (
+            int(p) for p in parts
+        )
+        lines = [
+            f"the version history holds {revisions:,} revision(s), "
+            f"{human_bytes(version_bytes)}",
+        ]
+        if revisions:
+            lines.append(
+                f"average {human_bytes(version_bytes // revisions)} per revision: a "
+                "project edited often grows by that much each time"
+            )
+        lines += [
+            f"the audit log is {human_bytes(log_bytes)} and the read trail "
+            f"{human_bytes(trail_bytes)} (a row per list or read, so it grows with "
+            f"use, not only with edits); the whole database {human_bytes(db_bytes)}",
+            "These tables are append-only and never shrink by themselves. A purge",
+            "empties a revision's content but keeps its row. Alert on the disk",
+            "(docs/deploy.md, 'Disk and growth') before it fills, because a full",
+            "disk stops the audit trail.",
+        ]
+        say(OK, lines[0], *lines[1:])
+
     def check_storage(self, env: dict[str, str], services: dict[str, dict]) -> None:
         """What is under the database volume, as far as the host can say (#47).
 
@@ -446,6 +533,7 @@ def main() -> int:
     doctor.check_app_password(env, services)
     doctor.check_sole_owners(env, services)
     doctor.check_storage(env, services)
+    doctor.check_growth(env, services)
     if services.get("proxy", {}).get("State") == "running":
         doctor.check_reachable(env)
     print()

@@ -70,6 +70,53 @@ there is no `pgdata` volume here and no `db` service, so the
 does not apply. Prefer the platform's identity-based connection — Cloud SQL IAM
 auth, RDS IAM auth, Entra ID — over a password you have to rotate at all.
 
+### Disk and growth
+
+Three tables only ever grow, by design, and a full disk is the one failure this
+system must not have: the database stops accepting writes, so the audit trail
+stops recording.
+
+| Table | What adds a row | Size of a row |
+|---|---|---|
+| `project_version` | every save of a project: a **complete copy** of the document, not a diff | the size of the document |
+| `project_log` | every change entry, and every purge | a few hundred bytes |
+| `access_event` | every list, read, export and stream attach (the read trail) | a few hundred bytes, plus the project ids a list returned |
+
+None is trimmed automatically. A purge empties a revision's `doc` but keeps the
+row (that is what makes it a tombstone), so a purge reclaims content and not
+rows. `project_version` also survives its project's deletion, on purpose.
+
+**How to estimate it.** Growth per year is about *revisions per year x document
+size* for `project_version`, plus a row per read for `access_event`. The bundled
+sample reviews are 1.4 to 5.7 KB of JSON each; a thoroughly evidenced review
+will be several times that. As an illustration only, with the assumptions
+stated: 20 projects, 300 saves a year each, 20 KB a document is 120 MB a year of
+history, and 20 people refreshing the dashboard through a working day adds on
+the order of hundreds of thousands of read rows a year. Measure your own: the
+first number you need is the one `make doctor` prints.
+
+`make doctor` reports the revision count, the average revision size, the audit
+log and read trail sizes, and the whole database. It sets no threshold, because
+the right one depends on the disk it sits on. **Alert on the disk instead**, and
+leave room to act:
+
+| | Disk alert | Let the disk grow |
+|---|---|---|
+| Cloud SQL | an alert on `cloudsql.googleapis.com/database/disk/utilization` | `--storage-auto-increase` (and a limit) |
+| RDS | a CloudWatch alarm on `FreeStorageSpace` | `--max-allocated-storage` enables storage autoscaling |
+| Azure Database | a metric alert on `storage_percent` | storage auto-grow |
+| Compose stack | an alert on the Docker volume's filesystem | extend the volume |
+
+!!! warning "Not exercised against any real managed database"
+
+    These settings come from the providers' documentation and have not been run
+    here. Check them before you rely on them.
+
+There is no retention policy yet: how long each of these may be kept, and when a
+revision may be purged to a tombstone, is a decision that has not been made (see
+the retention issue, #57). Until it is, the only way to reclaim space is more
+disk.
+
 ### Encryption at rest
 
 45 CFR 164.312(a)(2)(iv) is *addressable*: implement it or document why an

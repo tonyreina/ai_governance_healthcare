@@ -808,6 +808,25 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   findings.
 - Source: #37; R-43.
 
+### D-46 Report size, alert on the disk, do not guess a threshold
+
+- Status: Accepted
+- `make doctor` prints numbers and what they mean, and no pass/fail line. A
+  fixed threshold would be wrong on every disk but the one it was written for,
+  and a threshold that is sometimes wrong is a warning people learn to ignore.
+  The control is an alert on the disk, which the docs say how to set per
+  platform.
+- The read trail (D-42) is included because a row per list is written on every
+  change event for every viewer, which is the fastest-growing source in a busy
+  deployment. I measured about 560 bytes a row at 12 projects, growing with the
+  project count because a list stores the ids it returned.
+- Rejected: coalescing rapid revisions (the issue's option 3). It changes the
+  "one row per revision" invariant the history's value rests on, for a saving
+  the disk alert already makes survivable.
+- Rejected, for now: a retention policy with a disposal path (option 4). It
+  needs the retention period decided first (#57).
+- Source: #54; R-44.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

@@ -130,6 +130,21 @@ class ApiStore{
     this.cbs.push(onChange);
     return ()=>{ stop=true; delete this.logPulls[id]; this.cbs = this.cbs.filter(f=>f!==onChange); };
   }
+  /* Names for identity ids, in the shape the Claude runtime's profiles() answers
+     so resolveNames needs no second path: {id: {name, email, isMe}}. The server
+     answers only for people the caller can already see on a project they can read,
+     and omits the rest, so an absent id is "unknown", not an error. Batches are
+     capped by the server (100). (#39) */
+  async profiles(ids){
+    const out={};
+    const unique=[...new Set((ids||[]).filter(Boolean))];
+    for(let i=0;i<unique.length;i+=100){
+      const chunk=unique.slice(i,i+100);
+      const rows=await this.req(`/principals?ids=${encodeURIComponent(chunk.join(","))}`);
+      (Array.isArray(rows)?rows:[]).forEach(p=>{ out[p.id]={name:p.name||"", email:p.email||"", isMe:p.id===ME.id}; });
+    }
+    return out;
+  }
   showOlderLog(id){
     this.logDepth[id] = Math.min(500, (this.logDepth[id]||60) + 60);
     const pull = this.logPulls[id];

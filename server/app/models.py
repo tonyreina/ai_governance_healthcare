@@ -130,5 +130,13 @@ class LogEntryOut(BaseModel):
     text: str
 
 
+class PrincipalOut(BaseModel):
+    """A person an identity id stands for, as the proxy last asserted them."""
+
+    id: str
+    name: str = ""
+    email: str = ""
+
+
 class ErrorOut(BaseModel):
     detail: str

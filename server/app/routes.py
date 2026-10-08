@@ -67,10 +67,13 @@ from .models import (
     LogEntryIn,
     LogEntryOut,
     MeOut,
+    PrincipalOut,
     ProjectCreate,
     ProjectOut,
     ProjectPatch,
 )
+from .principals import MAX_ID_LENGTH, MAX_LOOKUP
+from .principals import resolve as resolve_principals
 from .signoff import attribute_signoffs
 
 log = logging.getLogger("chai.routes")
@@ -105,11 +108,20 @@ def get_broker(request: Request) -> EventBroker:
     return request.app.state.broker
 
 
-def get_identity(
+async def get_identity(
     request: Request, settings: Settings = Depends(get_settings)
 ) -> Identity:
-    """The authenticated caller. Raises 401/403; never returns a guess."""
-    return identity_from_request(request, settings)
+    """The authenticated caller. Raises 401/403; never returns a guess.
+
+    Also remembers who they are (name and email, as the proxy asserted), so an
+    access list or a sign-off can show a person and not an opaque id (#39). That is
+    throttled and can never fail the request.
+    """
+    identity = identity_from_request(request, settings)
+    recorder = getattr(request.app.state, "principals", None)
+    if recorder is not None:
+        await recorder.touch(identity)
+    return identity
 
 
 def _now_iso() -> str:
@@ -174,6 +186,38 @@ async def health(
         db_role=request.app.state.db_role,
         auth_mode=settings.auth_mode,
     )
+
+
+@router.get("/principals", response_model=list[PrincipalOut], tags=["meta"])
+async def principals(
+    ids: str = Query(
+        min_length=1,
+        description=f"Comma-separated identity ids, at most {MAX_LOOKUP}.",
+    ),
+    db: Database = Depends(get_db),
+    identity: Identity = Depends(get_identity),
+    settings: Settings = Depends(get_settings),
+) -> list[PrincipalOut]:
+    """Names and emails for identity ids, for the ids the caller may learn.
+
+    An access list, a sign-off and the log hold ids, and an id means nothing to a
+    reviewer. This answers for the caller themself and for anyone named on a
+    project the caller can read. It does NOT answer for anyone else, however the id
+    was obtained, because the table behind it is a staff directory. An id it will
+    not or cannot resolve is simply omitted; that is not an error.
+    """
+    wanted = list(dict.fromkeys(i.strip() for i in ids.split(",") if i.strip()))
+    if not wanted:
+        raise HTTPException(422, "ids is empty")
+    if len(wanted) > MAX_LOOKUP:
+        raise HTTPException(422, f"at most {MAX_LOOKUP} ids per request")
+    if any(len(i) > MAX_ID_LENGTH for i in wanted):
+        raise HTTPException(422, "an id is implausibly long")
+    async with db.acquire() as conn:
+        rows = await resolve_principals(
+            conn, identity.id, wanted, enforced=settings.require_identity
+        )
+    return [PrincipalOut(id=r["id"], name=r["name"], email=r["email"]) for r in rows]
 
 
 @router.get("/me", response_model=MeOut, tags=["meta"])

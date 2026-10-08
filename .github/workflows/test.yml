@@ -167,6 +167,9 @@ jobs:
       - name: audit log writes
         if: ${{ !cancelled() }}
         run: pixi run test-audit
+      - name: user ids become people
+        if: ${{ !cancelled() }}
+        run: pixi run test-people
       - name: audit history window and paging
         if: ${{ !cancelled() }}
         run: pixi run test-log-window

@@ -596,6 +596,30 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   nobody tests.
 - Source: #48; R-35.
 
+### D-38 A principals table, resolved only for people you can already see
+
+- Status: Accepted
+- The proxy asserts name and email on every request and the API discarded them.
+  `principals` keeps them keyed by id, upserted as people sign in, throttled in
+  memory (new, changed, or at most hourly) so a read is not a write. This is the
+  issue's option 1.
+- The lookup is not open. A signed-in user could otherwise walk a directory of
+  every member of staff who ever signed in, so it answers for the caller and for
+  people on a project the caller can read, and omits the rest. Omitted, not 403:
+  an absent id carries no information about whether the person exists.
+- The server-backed mode shows the id when it cannot name someone (the issue's
+  option 4, as the fallback): it is what a reviewer can match against a
+  directory, where "someone" tells them nothing. The artifact and browser-only
+  modes keep "someone".
+- Rejected: resolving against the IdP (Graph, Google Directory). More correct and
+  a new outbound dependency and credential for a hospital to approve.
+- Rejected: a display name typed when granting access. It drifts, and does not help
+  ids that predate it.
+- Cost, stated: a staff directory exists as a side effect. It is documented as
+  personal data in `docs/deploy.md`, and erasing one person from it is not yet a
+  supported operation (#57).
+- Source: #39; R-36.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

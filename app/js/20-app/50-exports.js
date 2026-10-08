@@ -66,7 +66,7 @@ function exportMD(){
   const all=allItems(), ov=scoreOf(all), m=S.meta, L=[];
   const st=s=>s?STATUS[s]:"Unanswered";
   const line=s=>String(s||"").replace(/\n+/g," ").replace(/\|/g,"\\|");
-  const nm=id=>id?(NAMES[id]||"someone"):"someone";
+  const nm=id=>displayName(id);
   L.push(`# ${m.solution||"Untitled AI solution"}: CHAI assurance review`,"");
   L.push(`- **Status:** ${statusOf(S).label}`,`- **Lifecycle phase:** ${phase(S).label}`,`- **Organization:** ${m.org||"–"}`,`- **Developer:** ${m.developer||"–"}`,`- **Sourcing:** ${m.sourcing||"–"}`,`- **Risk tier:** ${m.riskTier||"–"}`,`- **Clinical sponsor:** ${m.sponsor||"–"}`,`- **Next periodic review:** ${nextReview(S)||"–"}`,`- **Review team:** ${line(m.reviewers)||"–"}`,`- **Scope:** ${line(m.scope)||"–"}`,`- **Generated:** ${TODAY()}`,"");
   const F=flags(S); L.push("## Compliance flags",""); if(F.length) F.forEach(f=>L.push(`- **${f.sev==="red"?"Out of compliance":"Needs update"}:** ${f.text}`)); else L.push("None."); L.push("");

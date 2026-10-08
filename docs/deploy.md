@@ -107,6 +107,30 @@ warning at startup in that case. `make doctor` fails on it for the compose stack
     under `items`. Use `jsonb_set` recursively, a PL/pgSQL function, or
     read-modify-write inside a transaction.
 
+### Personal data the server keeps about staff
+
+A governance record names people, so the server holds personal data about the
+workforce, and a records-of-processing entry should say so:
+
+| Where | What | Why |
+|---|---|---|
+| `principals` | the identity id, display name and email the proxy asserted, and when first and last seen | so an access list or a sign-off shows a person instead of an opaque id |
+| each project's `access` | ids of its owners, writers and readers | access control |
+| `project_log`, `project_version`, `project_deletion` | the id of whoever made each change, and when | the audit trail |
+
+`principals` is built from observed sign-ins: it holds exactly the people who have
+used the system, and no one from a directory the system cannot see. It is **not**
+open: `GET /api/principals?ids=` answers only for the caller themself and for
+people named on a project the caller can already read (its access lists, its
+sign-offs, its log authors). Anyone else is omitted, so a signed-in user cannot
+walk the table. Rows are updated in place when a name changes, are never deleted
+by the application, and are not reached by a project purge; removing one person
+from `principals` is a database operation today (see the erasure issue, #57).
+
+The id alone is what the access lists and the audit trail depend on. If the name
+and email are unwanted, the proxy can simply not assert them: the API then records
+an empty name and shows the id.
+
 ### Streaming: `/api/events`
 
 `GET /api/events` is a long-lived `text/event-stream` response. Three

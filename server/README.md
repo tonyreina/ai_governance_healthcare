@@ -19,7 +19,9 @@ For running this behind Google Cloud IAP, an AWS ALB or Azure Easy Auth, see
 | `log(id, entry)` | `POST /api/projects/{id}/log` |
 | `subscribeLog(id, cb)` | `GET /api/projects/{id}/log` + `GET /api/events` |
 
-Plus `GET /api/health` (unauthenticated) and `GET /api/me`.
+Plus `GET /api/health` (unauthenticated), `GET /api/me`, and
+`GET /api/principals?ids=a,b,c`, which turns identity ids into names and emails
+(see below).
 
 The two `subscribe*` methods are a fetch plus a stream: fetch once, hold
 `/api/events` open, refetch what an event says changed. Events carry an id and
@@ -119,6 +121,19 @@ reach the port. Verifying it properly is the upgrade path — check
 and require the `signer` to be your load balancer's ARN. `IDENTITY_AUDIENCE` catches
 a token minted for a different service in the same account; without a signature
 check it stops misconfiguration, not a determined forger.
+
+## Who an id is
+
+Access lists, sign-offs and log entries hold identity ids, which mean nothing to
+a reviewer (an IAP numeric subject id, an ALB `sub`). The API records the name
+and email the proxy asserts as people sign in (`principals`, throttled to one
+write an hour per person unless the name changes) and `GET /api/principals?ids=`
+returns them.
+
+It answers **only for people the caller can already see**: themself, and anyone
+named on a project the caller can read (its access lists, sign-offs, last editors
+and log authors). Any other id is omitted, not refused, so the table cannot be
+walked. At most 100 ids per request. Recording never fails a request.
 
 ## Reading the whole audit history
 

@@ -680,3 +680,16 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_compose_isolation.py::the api being given the owner's password`
   `tests/test_stack.py::using the credential the API holds, the triggers cannot be disabled`
   `tests/test_stack.py::the API container holds no owner credential`
+
+### C-54 The name lookup answers only for people the caller can already see
+
+- **Claim:** `GET /api/principals` is not a staff directory anyone can walk: it
+  answers for the caller and for people named on a project the caller can read,
+  and for no one else.
+- **Asserted in:** `server/README.md` — "It answers **only for people the caller can
+  already see**"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_principals.py::test_it_is_not_a_directory_anyone_can_enumerate`
+  `server/tests/test_principals.py::test_the_lookup_resolves_people_on_a_project_you_can_read`
+  `server/tests/test_principals.py::test_the_batch_is_bounded`

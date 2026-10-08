@@ -326,6 +326,21 @@ def main() -> int:
         isolation.stdout[-400:],
     )
 
+    print("A user id becomes a person (#39)")
+    _, rows = http("/api/principals?ids=" + baseline["id"])
+    found = json.loads(rows)
+    check(
+        "the proxy's asserted name is recorded and resolvable",
+        len(found) == 1
+        and found[0]["id"] == baseline["id"]
+        and found[0]["name"] == baseline["name"],
+        rows,
+    )
+    check(
+        "an id nobody signed in as resolves to nothing, not an error",
+        json.loads(http("/api/principals?ids=nobody-ever-signed-in")[1]) == [],
+    )
+
     print("Two database roles (#48)")
     api_env = compose_exec("api", "env").splitlines()
     owner_vars = [

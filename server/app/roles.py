@@ -53,6 +53,8 @@ GRANTS: Mapping[str, tuple[str, ...]] = {
     "project_log": ("SELECT", "INSERT", "UPDATE"),
     "project_version": ("SELECT", "INSERT", "UPDATE"),
     "project_deletion": ("SELECT", "INSERT"),
+    # Updated in place as a person's name or email changes; never deleted by the API.
+    "principals": ("SELECT", "INSERT", "UPDATE"),
 }
 
 # Tables the API must never touch at all: the owner's migration bookkeeping.

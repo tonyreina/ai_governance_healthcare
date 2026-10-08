@@ -713,3 +713,30 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_breakglass.py::test_reads_are_throttled_but_writes_are_not`
   `server/tests/test_breakglass.py::test_without_configuration_nobody_has_emergency_access`
   `server/tests/test_breakglass.py::test_the_record_is_visible_to_the_projects_new_owners`
+
+### C-56 An event stream cannot outlive a revoked session by more than its lifetime
+
+- **Claim:** The API ends an event stream after `SSE_MAX_LIFETIME_SECONDS`, so the
+  browser reconnects through the front door and is authenticated again; a revoked
+  session loses its stream within that time.
+- **Asserted in:** `docs/deploy.md` — "A revoked session therefore loses its stream
+  within this many seconds."
+- **Status:** partial
+- **Gap:** Tested that the API closes the stream and that a reconnect with no identity
+  is refused. Nothing here runs a real front door, so that a real IAP, ALB or Easy
+  Auth refuses the reconnect after revocation rests on how those products work. #49
+- **Enforced by:**
+  `server/tests/test_session.py::test_a_stream_is_closed_by_the_server_after_its_lifetime`
+  `server/tests/test_session.py::test_reconnecting_works_and_is_authenticated_again`
+  `tests/test_session_ui.py::a stream that is closed for good is reported`
+
+### C-57 The front doors' session settings are listed correctly
+
+- **Claim:** The table in the deployment guide names where each front door's session
+  lifetime and sign-out are configured.
+- **Asserted in:** `docs/deploy.md` — "the IAP reauthentication policy on the
+  protected resource (session duration)"
+- **Status:** unenforced
+- **Gap:** Nothing here starts an IAP, an ALB, an Easy Auth or an oauth2-proxy
+  session, so these come from the providers' documentation and could be out of date.
+  The page says so. #49

@@ -153,6 +153,11 @@ services:
       APP_POSTGRES_USER: ${APP_POSTGRES_USER:-chai_app}
       APP_POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:-}
       APP_DATABASE_URL: ${APP_DATABASE_URL:-}
+      # Session controls (#49). The front door's own session lifetime is the real
+      # automatic-logoff control (docs/deploy.md); these are defense in depth.
+      SSE_MAX_LIFETIME_SECONDS: ${SSE_MAX_LIFETIME_SECONDS:-900}
+      IDLE_LOCK_MINUTES: ${IDLE_LOCK_MINUTES:-0}
+      SIGN_OUT_URL: ${SIGN_OUT_URL:-}
       # Identities with owner rights on every project, each use recorded in that
       # project's audit log (#42). Empty by default.
       EMERGENCY_ACCESS_IDS: ${EMERGENCY_ACCESS_IDS:-}

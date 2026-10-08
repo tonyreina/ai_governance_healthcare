@@ -295,6 +295,23 @@ def owner_credential_stays_in_migrate(compose: dict) -> list[str]:
     return problems
 
 
+SESSION_SETTINGS = {
+    "SSE_MAX_LIFETIME_SECONDS": "${SSE_MAX_LIFETIME_SECONDS:-900}",
+    "IDLE_LOCK_MINUTES": "${IDLE_LOCK_MINUTES:-0}",
+    "SIGN_OUT_URL": "${SIGN_OUT_URL:-}",
+}
+
+
+def session_settings_reach_the_api(compose: dict) -> list[str]:
+    """The documented session settings must be delivered, or they do nothing."""
+    env = service(compose, API).get("environment", {})
+    return [
+        f"api does not receive {name} as {want}"
+        for name, want in SESSION_SETTINGS.items()
+        if env.get(name) != want
+    ]
+
+
 def emergency_setting_reaches_the_api(compose: dict) -> list[str]:
     """EMERGENCY_ACCESS_IDS is documented as a .env setting, so compose must pass it.
 
@@ -323,6 +340,7 @@ def every_rule(compose: dict) -> list[str]:
         *container_hardening(compose),
         *owner_credential_stays_in_migrate(compose),
         *emergency_setting_reaches_the_api(compose),
+        *session_settings_reach_the_api(compose),
         *cloud_proxy_image_is_unprivileged(
             (ROOT / "proxy" / "Dockerfile").read_text(encoding="utf-8")
         ),
@@ -495,6 +513,13 @@ def main() -> int:
         "migrate losing the owner credential",
         lambda s: s[MIGRATE]["environment"].pop("POSTGRES_PASSWORD"),
     )
+    for name in SESSION_SETTINGS:
+        broken = copy.deepcopy(compose)
+        del broken["services"][API]["environment"][name]
+        check(
+            f"{name} not reaching the api is noticed",
+            bool(session_settings_reach_the_api(broken)),
+        )
     broken = copy.deepcopy(compose)
     del broken["services"][API]["environment"]["EMERGENCY_ACCESS_IDS"]
     check(

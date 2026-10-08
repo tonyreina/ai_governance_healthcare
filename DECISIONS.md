@@ -646,6 +646,31 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   path the role model exists to avoid, and it leaves no record in the application.
 - Source: #42; R-37.
 
+### D-40 Bound the stream's life; do not build a session layer
+
+- Status: Accepted
+- The API stays free of sessions (D-03): identity comes from the proxy. The one
+  place a revoked identity kept working was the event stream, which
+  authenticates at attach. The API cannot re-ask the identity provider, so the
+  fix is to **end the stream** on a timer and let the browser's reconnect do the
+  re-authentication, which is exactly what the front door is for. This is the
+  issue's option 2, adapted: it said to re-check the identity on the keepalive
+  tick, and there is nothing in the API to check it against.
+- The idle lock is a screen lock, off by default. It reloads rather than
+  re-authenticating in place, because only the front door can authenticate. It
+  flushes pending edits first.
+- `SIGN_OUT_URL` is an allowlist (https, or a single-slash path), applied by the
+  server at startup and again in the browser, because the server's answer is
+  data and the value becomes a link. `javascript:`, `data:`, plain `http:` and
+  `//host` are refused.
+- Found while writing it: `ApiStore` set `es.onerror = () => {}`, so a stream
+  that was closed for good (what a refused reconnect looks like) was swallowed
+  and the page went on looking live. It now reports `stream_closed`.
+- Rejected: building sign-in or a session in the API (the issue's own non-goal).
+- Rejected, for now: closing the stream when the identity's *access* to a
+  project changes. Events are already filtered by the audience at publish time.
+- Source: #49; R-38.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

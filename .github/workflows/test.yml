@@ -167,6 +167,9 @@ jobs:
       - name: audit log writes
         if: ${{ !cancelled() }}
         run: pixi run test-audit
+      - name: session controls (idle lock, sign-out, lost stream)
+        if: ${{ !cancelled() }}
+        run: pixi run test-session-ui
       - name: user ids become people
         if: ${{ !cancelled() }}
         run: pixi run test-people

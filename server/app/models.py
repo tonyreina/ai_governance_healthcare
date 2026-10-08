@@ -50,6 +50,14 @@ class HealthOut(BaseModel):
             "superuser, so those guarantees bind its bugs and not the application."
         ),
     )
+    idle_lock_minutes: int = Field(
+        default=0,
+        description="Minutes of inactivity before the dashboard locks. 0 is off.",
+    )
+    sign_out_url: str = Field(
+        default="",
+        description="Where the front door ends a session; empty means no link.",
+    )
     auth_mode: str = Field(
         description="'proxy-header' in a real deployment, 'DEV-INSECURE' otherwise"
     )

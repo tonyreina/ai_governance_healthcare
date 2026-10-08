@@ -78,6 +78,7 @@ document.addEventListener("click",async e=>{
   }
   if(t.dataset.delmetric!=null && !RO){ S.metrics.splice(+t.dataset.delmetric,1); saveMetrics(); renderMain(false); renderLabel(); return; }
   const a=t.dataset.act; if(!a) return;
+  if(a===Act.UNLOCK){ location.reload(); return; }
   if(a==="new"){ const f=document.getElementById("newform"); if(f){ f.hidden=false; document.getElementById("newname").focus(); } return; }
   if(a==="new-cancel"){ document.getElementById("newform").hidden=true; return; }
   if(a==="samples"){

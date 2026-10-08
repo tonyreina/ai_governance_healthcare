@@ -81,7 +81,9 @@ def problems_for(report: Report) -> list[str]:
 def production_image() -> str:
     """The PostgreSQL image compose.yaml runs, so the restore tests the same major."""
     text = (ROOT / "compose.yaml").read_text(encoding="utf-8")
-    found = re.search(r"^\s+image:\s*(postgres:\d+)\s*$", text, re.M)
+    found = re.search(
+        r"^\s+image:\s*(postgres:\d+(?:@sha256:[0-9a-f]{64})?)\s*$", text, re.M
+    )
     if not found:
         raise RuntimeError("cannot find the pinned postgres image in compose.yaml")
     return found.group(1)

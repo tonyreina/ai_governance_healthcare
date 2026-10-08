@@ -12,7 +12,7 @@
 #
 # Build context is the repository root, because docs/app/ is outside proxy/.
 
-FROM caddy:2
+FROM caddy:2@sha256:8dc9fa87b36b25303d1c67d2a09f5824b7f3bfd72cb052f246e5da2133fe29a8
 
 COPY proxy/Caddyfile /etc/caddy/Caddyfile
 

@@ -194,7 +194,7 @@ def main() -> int:
     )
     check(
         "the throwaway database is the production major version",
-        vb.production_image() == "postgres:17",
+        vb.production_image().startswith("postgres:17"),
         vb.production_image(),
     )
 

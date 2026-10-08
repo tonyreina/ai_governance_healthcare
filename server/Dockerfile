@@ -1,32 +1,41 @@
 # syntax=docker/dockerfile:1
 #
-# Two stages so the runtime image carries no compiler, no pip cache and no
+# Two stages so the runtime image carries no compiler, no pip cache, no pip and no
 # build metadata: only the interpreter, the virtualenv and the app.
+#
+# What is installed is exactly what requirements.txt says, verified by hash
+# (#37): a rebuild in six months produces the same dependencies from the same
+# source, and a tampered or substituted package fails the build. The base images
+# are pinned by digest for the same reason; Dependabot keeps both moving, so a new
+# base image is a reviewed change, not whatever the tag points at that day.
+#
+# Regenerate the lock with `make lock` (pip-compile --generate-hashes).
 #
 # Nothing in this image refers to its directory by name, so the build context
 # can be ./server or ./api without edits.
 
-FROM python:3.12-slim AS build
+FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f AS build
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /src
 
-# Dependencies resolve from pyproject alone, so this layer is cached until the
-# dependency list itself changes -- not on every source edit.
-COPY pyproject.toml README.md ./
-COPY app ./app
-# Install from pyproject so the dependency list has one source of truth, then
-# drop the project itself back out: the runtime stage copies the source in at
-# /app, and two copies of the same package on sys.path is a debugging trap.
+# This layer is cached until the lock itself changes, not on every source edit.
+# --require-hashes refuses anything not in the lock, and the project itself is NOT
+# installed: the runtime stage copies the source in at /app and sets PYTHONPATH, and
+# installing it from PyPI-resolved build dependencies would be an unpinned step in a
+# pinned build.
+COPY requirements.txt ./
 RUN python -m venv /opt/venv \
- && /opt/venv/bin/pip install --upgrade pip \
- && /opt/venv/bin/pip install . \
- && /opt/venv/bin/pip uninstall --yes chai-governance-api
+ && /opt/venv/bin/pip install --require-hashes --no-deps -r requirements.txt \
+ && /opt/venv/bin/pip uninstall --yes pip setuptools
+# pip is removed on purpose: nothing at runtime installs anything, and the pip
+# that ships here vendors copies of urllib3, msgpack and others that vulnerability
+# scanners (rightly) flag, in a place the application can never use them (#37).
 
 
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f AS runtime
 
 # PYTHONUNBUFFERED: without it, logs sit in a pipe buffer and a container that
 # dies takes its last words with it.

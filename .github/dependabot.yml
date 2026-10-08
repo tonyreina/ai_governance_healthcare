@@ -1,0 +1,38 @@
+# What watches this project's software for vulnerabilities and staleness (#37).
+#
+# Every ecosystem the project ships is listed, in the directory that holds its files;
+# tests/test_supply_chain.py fails if one is dropped or the directory has no manifest.
+# Dependabot opens a pull request, which has to pass the same `tests passed` check as
+# anything else, and that pull request is how a pinned digest or a locked version
+# moves: a base image or a dependency changes because somebody reviewed it.
+#
+# Not covered: pixi (docs and test tooling; locked by pixi.lock, which Dependabot does
+# not understand).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: docker
+    directory: /server
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /proxy
+    schedule:
+      interval: weekly
+
+  # compose.yaml pins the database and the proxy by digest.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

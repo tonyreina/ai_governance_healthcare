@@ -397,6 +397,37 @@ honest answer and is a gap worth closing; see R-19.
   the exemptions) and `tests/test_doctor.py` (what is reported for each host
   shape).
 
+### R-43 What runs is what was reviewed, and something watches it
+
+- Status: Active
+- The API's dependencies are installed only from `server/requirements.txt`, a
+  hash-pinned lock (`pip install --require-hashes`), regenerated with `make
+  lock`. Every base image (both Dockerfiles, the database and proxy in
+  `compose.yaml`) is pinned by digest. Every GitHub Action is pinned by commit
+  SHA. The runtime image ships no `pip`.
+- Dependabot watches pip, both Dockerfiles, compose and the actions, in the
+  directories that hold them. Updates arrive as pull requests that pass the same
+  `tests passed` check as any change.
+- `.github/workflows/security.yml` builds our images and scans them and the lock
+  weekly and on every pull request, failing on a HIGH or CRITICAL finding **with
+  a fix available**, and writes a CycloneDX SBOM. Findings in the official
+  database and proxy base images are reported, not blocking. `.trivyignore` is
+  empty and an entry needs a reason and a date.
+- `SECURITY.md` says how to report privately and states remediation **targets**
+  (not guarantees).
+- A scheduled job must not push to `main`, which is protected: the CHAI snapshot
+  goes to a branch and a pull request.
+- Not done: signing or attesting images (the issue's own non-goal). Pixi, which
+  locks the docs and test tooling, is not watched by Dependabot.
+- Needs the owner: private vulnerability reporting and Dependabot security
+  updates are **repository settings** and are off; `SECURITY.md` works around
+  the first but is better with it on.
+- Source: #37; DECISIONS D-45.
+- Enforced by: `tests/test_supply_chain.py` (every rule, with a mutation test,
+  and the real image built from the lock, importing, with no pip and the locked
+  version), `tests/test_workflows.py` (the new test is run by CI), and
+  `security.yml` itself.
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

@@ -16,8 +16,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # commit the refreshed snapshot
+  contents: write # push the snapshot to a branch (never to main: it is protected)
   issues: write # open or update the alert issue
+  pull-requests: write # open the snapshot pull request
+  actions: write # start the tests on that branch (see below)
 
 concurrency:
   group: chai-updates
@@ -27,9 +29,9 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: prefix-dev/setup-pixi@v0.10.2
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
         with:
           locked: true
 
@@ -76,21 +78,35 @@ jobs:
             echo "opened a new issue"
           fi
 
-      - name: Record the new snapshot
+      - name: Propose the new snapshot as a pull request
         if: steps.check.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: chai-snapshot
         run: |
           pixi run check-chai-write || true
           if git diff --quiet -- data/chai-upstream.json; then
             echo "snapshot unchanged"
             exit 0
           fi
+          # main is protected: it requires a pull request and the `tests passed`
+          # check, with no bypass. This used to `git push` to main, which can no
+          # longer succeed, so the snapshot goes to a branch and a pull request (#37).
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
           git add data/chai-upstream.json
           git commit -m "Record CHAI upstream snapshot
 
           Updated by .github/workflows/chai-updates.yml so the next run reports
           only what changes after this point."
-          git push
+          git push --force origin "HEAD:refs/heads/$BRANCH"
+          if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')" ]; then
+            gh pr create --head "$BRANCH" --base main \
+              --title "Record CHAI upstream snapshot" \
+              --body "Refreshes data/chai-upstream.json after CHAI published changes. Merging this does not review the changes: the open issue does. Opened by .github/workflows/chai-updates.yml."
+          fi
+          # Pull requests opened with GITHUB_TOKEN do not start workflows, so the
+          # required check would never appear. A manual dispatch is the exception, and
+          # its check run attaches to the same commit.
+          gh workflow run test.yml --ref "$BRANCH"

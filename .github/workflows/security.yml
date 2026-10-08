@@ -1,0 +1,115 @@
+name: Security scan
+
+# Nothing watched this project's software for vulnerabilities, and what to say to a
+# hospital that asks "how do you learn about one" was nothing (#37).
+#
+# Two jobs, because they answer different questions:
+#
+#   images       the images WE build, and the dependency lock. A HIGH or CRITICAL finding
+#                that has a fix available fails the job: it is ours to fix.
+#   third-party   the official images we run UNMODIFIED (the database, the proxy base).
+#                Reported, not blocking: a finding in them is not ours to patch, and a new
+#                CVE in someone else's image must not turn every unrelated pull request
+#                red. Dependabot moves their pinned digests when a fix ships.
+#
+# Not part of the `tests passed` gate on purpose, for the same reason: a vulnerability
+# database that changes by the hour is not a test of the change under review. It runs on
+# every pull request so a finding is visible, on main, and weekly, because the code did not
+# change but the world did.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 3" # Wednesdays; weekly, since new CVEs arrive without a code change
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    name: our images and lock (fail on HIGH/CRITICAL with a fix)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build the API image
+        run: docker build -t chai-api:scan server
+
+      - name: Build the proxy image
+        run: docker build -f proxy/Dockerfile -t chai-proxy:scan .
+
+      - name: Scan the API image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: chai-api:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore
+
+      - name: Scan the proxy image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: chai-proxy:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore
+
+      - name: Scan the dependency lock
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: server/requirements.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore
+
+      # What is in it, for the questionnaire: a CycloneDX bill of materials of the
+      # image we ship.
+      - name: Write a software bill of materials
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: chai-api:scan
+          format: cyclonedx
+          output: sbom-api.cdx.json
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-api
+          path: sbom-api.cdx.json
+          retention-days: 90
+
+  third-party:
+    name: official images we run unmodified (reported, not blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Read the pinned images from compose.yaml
+        id: images
+        run: |
+          echo "db=$(sed -n 's/^    image: \(postgres:[^ ]*\)$/\1/p' compose.yaml | head -1)" >> "$GITHUB_OUTPUT"
+          echo "proxy=$(sed -n 's/^    image: \(caddy:[^ ]*\)$/\1/p' compose.yaml | head -1)" >> "$GITHUB_OUTPUT"
+
+      - name: Scan the database image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.images.outputs.db }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: Scan the proxy base image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.images.outputs.proxy }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"

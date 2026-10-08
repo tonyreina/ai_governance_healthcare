@@ -123,7 +123,7 @@ def database_image_pinned(compose: dict) -> list[str]:
     image = str(service(compose, DB).get("image", ""))
     return (
         []
-        if re.fullmatch(r"postgres:\d+", image)
+        if re.fullmatch(r"postgres:\d+(@sha256:[0-9a-f]{64})?", image)
         else [
             f"db image is '{image}'; pin a major version (postgres:NN), because "
             "Postgres "

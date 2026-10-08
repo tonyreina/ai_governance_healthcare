@@ -48,7 +48,12 @@ spec.loader.exec_module(pf)
 
 GOOD_PASSWORD = "a-Perfectly/Fine+Password=0123456789"
 PLACEHOLDER_IDENTITY = "{http.request.header.X-Forwarded-Email}"
-SAFE = {"POSTGRES_PASSWORD": GOOD_PASSWORD, "IDENTITY_ID_SOURCE": PLACEHOLDER_IDENTITY}
+GOOD_APP_PASSWORD = "an-Entirely/Different+App=Password-9876543210"
+SAFE = {
+    "POSTGRES_PASSWORD": GOOD_PASSWORD,
+    "APP_POSTGRES_PASSWORD": GOOD_APP_PASSWORD,
+    "IDENTITY_ID_SOURCE": PLACEHOLDER_IDENTITY,
+}
 
 failures: list[str] = []
 
@@ -317,7 +322,8 @@ def main() -> int:
     check("and says how many problems and where", "problem(s) in .env" in out)
     check("and offers the override", "make up FORCE=1" in out)
     code, out = run_main(
-        f"POSTGRES_PASSWORD={GOOD_PASSWORD}\nIDENTITY_ID_SOURCE={PLACEHOLDER_IDENTITY}\n"
+        f"POSTGRES_PASSWORD={GOOD_PASSWORD}\nAPP_POSTGRES_PASSWORD={GOOD_APP_PASSWORD}\n"
+        f"IDENTITY_ID_SOURCE={PLACEHOLDER_IDENTITY}\n"
     )
     check("a safe .env exits 0", code == 0, str(code))
     check("and says ok", "preflight: ok" in out)
@@ -338,12 +344,49 @@ def main() -> int:
     done = {
         **shipped,
         "POSTGRES_PASSWORD": "pwYZ1MXvvrx+eItO/Zq=0123456789abcdef",
+        "APP_POSTGRES_PASSWORD": "aZ9xQ+lmN2/oPrStUvWxYz=0123456789abcdef",
         "IDENTITY_ID_SOURCE": PLACEHOLDER_IDENTITY,
     }
     check(
         "the shipped template plus a base64 password and an identity passes",
         pf.check(done) == [],
         str(pf.check(done)),
+    )
+
+    print("The API's restricted role needs its own password (#48)")
+    check(
+        "no APP_POSTGRES_PASSWORD is refused, and says what it is for",
+        mentions(problems(APP_POSTGRES_PASSWORD=""), "APP_POSTGRES_PASSWORD is empty")
+        and mentions(problems(APP_POSTGRES_PASSWORD=""), "restricted role"),
+    )
+    check(
+        "a placeholder is refused",
+        mentions(problems(APP_POSTGRES_PASSWORD="changeme"), "placeholder"),
+    )
+    check(
+        "15 characters is refused, 16 accepted",
+        mentions(problems(APP_POSTGRES_PASSWORD="x" * 15), "15 characters")
+        and not mentions(problems(APP_POSTGRES_PASSWORD="y" * 16), "APP_POSTGRES"),
+    )
+    check(
+        "the owner's password reused is refused: then the API holds the owner's key",
+        mentions(
+            problems(APP_POSTGRES_PASSWORD=GOOD_PASSWORD), "same as POSTGRES_PASSWORD"
+        ),
+    )
+    check(
+        "a different strong password passes",
+        not mentions(problems(), "APP_POSTGRES_PASSWORD"),
+    )
+    check(
+        "a managed instance's APP_DATABASE_URL replaces the password",
+        not mentions(
+            problems(
+                APP_POSTGRES_PASSWORD="",
+                APP_DATABASE_URL="postgresql://api@host/db?sslmode=verify-full",
+            ),
+            "APP_POSTGRES_PASSWORD",
+        ),
     )
 
     print("Google IAP needs its prefix stripped, or access lists never match (#35)")

@@ -16,6 +16,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
 
+from .roles import DbRole
+
 
 class HealthStatus(StrEnum):
     OK = "ok"
@@ -40,6 +42,14 @@ class HealthOut(BaseModel):
     )
     version: str
     database: str = Field(description="'up' or 'down'")
+    db_role: DbRole = Field(
+        default=DbRole.OWNER,
+        description=(
+            "'restricted' when the API connects as a role that cannot disable the "
+            "append-only triggers; 'owner' when it owns the tables or is a "
+            "superuser, so those guarantees bind its bugs and not the application."
+        ),
+    )
     auth_mode: str = Field(
         description="'proxy-header' in a real deployment, 'DEV-INSECURE' otherwise"
     )

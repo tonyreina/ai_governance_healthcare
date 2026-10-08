@@ -36,7 +36,8 @@ env: .env  ## Create .env from .env.example if it is missing
 .env:
 	@cp .env.example .env
 	@echo ".env created from .env.example. It is deliberately incomplete:"
-	@echo "  POSTGRES_PASSWORD   empty  -> openssl rand -base64 32"
+	@echo "  POSTGRES_PASSWORD      empty  -> openssl rand -base64 32"; \
+	 echo "  APP_POSTGRES_PASSWORD  empty  -> a DIFFERENT openssl rand -base64 32"
 	@echo "  IDENTITY_ID_SOURCE  empty  -> set to your SSO front door's header"
 	@echo "`make up` will tell you what is still missing. For a laptop, `make dev`."
 

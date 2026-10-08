@@ -112,6 +112,17 @@ def container_facts() -> dict[str, dict]:
     return facts
 
 
+def compose_exec_all(service: str, *command: str) -> str:
+    """Like compose_exec, but returns stdout AND stderr whatever the exit code."""
+    result = subprocess.run(
+        ["docker", "compose", "exec", "-T", service, *command],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    return result.stdout + result.stderr
+
+
 def proxy_log() -> str:
     done = subprocess.run(
         ["docker", "compose", "logs", "--no-color", "proxy"],
@@ -315,6 +326,57 @@ def main() -> int:
         isolation.stdout[-400:],
     )
 
+    print("Two database roles (#48)")
+    api_env = compose_exec("api", "env").splitlines()
+    owner_vars = [
+        line.split("=", 1)[0]
+        for line in api_env
+        if line.split("=", 1)[0]
+        in ("POSTGRES_PASSWORD", "POSTGRES_USER", "DATABASE_URL")
+    ]
+    check(
+        "the API container holds no owner credential",
+        not owner_vars,
+        f"the API's environment has {owner_vars}",
+    )
+    _, health_text = http("/api/health")
+    check(
+        "the API reports it serves as a restricted role",
+        json.loads(health_text).get("db_role") == "restricted",
+        health_text,
+    )
+    refused = compose_exec_all(
+        "api",
+        "python",
+        "-c",
+        "import asyncio, asyncpg, os\n"
+        "from app.config import build_app_database_url\n"
+        "async def main():\n"
+        "    c = await asyncpg.connect(build_app_database_url(os.environ))\n"
+        "    out = []\n"
+        "    for sql in ('ALTER TABLE project_log DISABLE TRIGGER ALL',\n"
+        "                'TRUNCATE project_version',\n"
+        "                'DROP TRIGGER project_log_no_update ON project_log'):\n"
+        "        try:\n"
+        "            await c.execute(sql)\n"
+        "            out.append('ALLOWED ' + sql)\n"
+        "        except asyncpg.InsufficientPrivilegeError:\n"
+        "            out.append('refused')\n"
+        "    print(','.join(out))\n"
+        "asyncio.run(main())\n",
+    )
+    check(
+        "using the credential the API holds, the triggers cannot be disabled",
+        refused.strip() == "refused,refused,refused",
+        refused[-300:],
+    )
+    facts_roles = container_facts()
+    check(
+        "the migrate job ran, and exited cleanly",
+        (facts_roles.get("migrate") or {}).get("exit") == 0,
+        str(facts_roles.get("migrate")),
+    )
+
     print("Container hardening (#50)")
     facts = container_facts()
 
@@ -343,7 +405,7 @@ def main() -> int:
         all(
             "no-new-privileges:true" in (fact(s, "security_opt") or [])
             and (fact(s, "memory") or 0) > 0
-            for s in ("db", "api", "proxy")
+            for s in ("db", "api", "proxy", "migrate")
         ),
         f"{facts}",
     )

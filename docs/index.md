@@ -87,7 +87,7 @@ from the proxy and nowhere else.
 
 ```bash
 make env          # creates .env from the template
-$EDITOR .env      # set POSTGRES_PASSWORD and IDENTITY_ID_SOURCE
+$EDITOR .env      # set the two passwords + IDENTITY_ID_SOURCE
 make up           # refuses to start on unsafe settings
 ```
 

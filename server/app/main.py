@@ -41,6 +41,7 @@ from .auth import log_auth_posture
 from .config import Settings
 from .db import Database
 from .events import EventBroker
+from .roles import DbRole
 from .routes import router
 
 log = logging.getLogger("chai")
@@ -270,12 +271,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log_auth_posture(settings)
 
     db = Database(
-        settings.database_url,
+        settings.serving_database_url,
         min_size=settings.db_pool_min,
         max_size=settings.db_pool_max,
         connect_timeout=settings.db_connect_timeout,
     )
     await db.connect()
+    db_role = await db.serving_role()
+    if db_role is DbRole.OWNER:
+        log.warning(
+            "serving as the database OWNER (or a superuser): the append-only "
+            "triggers on the audit log and version history constrain this "
+            "application's bugs, not the application, and not anything holding its "
+            "credential. Set APP_POSTGRES_PASSWORD and run `python -m app.migrate` "
+            "so the API serves as a restricted role (#48)."
+        )
+    else:
+        log.info("serving as a restricted database role (cannot disable triggers)")
     if settings.run_migrations:
         await db.migrate()
     else:
@@ -290,6 +302,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await broker.start()
 
     app.state.db = db
+    app.state.db_role = db_role
     app.state.broker = broker
     log.info("ready")
     try:

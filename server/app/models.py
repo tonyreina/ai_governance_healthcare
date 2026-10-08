@@ -11,15 +11,21 @@ not empty, and that a log entry carries text.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
 
 
+class HealthStatus(StrEnum):
+    OK = "ok"
+    UNAVAILABLE = "unavailable"
+
+
 class HealthOut(BaseModel):
     """``GET /api/health`` -- unauthenticated, for load balancer probes."""
 
-    status: str = "ok"
+    status: HealthStatus = HealthStatus.OK
     version: str
     database: str = Field(description="'up' or 'down'")
     auth_mode: str = Field(

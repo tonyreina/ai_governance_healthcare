@@ -39,7 +39,10 @@ plain HTTP (TLS is terminated at the front door), and expects:
 
 `GET /api/health` returns `{"status":"ok","version":"..."}` and must not
 require authentication — every platform below health-checks it from
-inside the load balancer, where no identity header exists.
+inside the load balancer, where no identity header exists. When the database
+cannot be reached it answers **503** with `"status":"unavailable"`, so a probe
+that reads only the status code takes the replica out of rotation instead of
+reporting it healthy.
 
 ### The database
 

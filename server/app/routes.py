@@ -53,6 +53,7 @@ from .merge import MAX_DEPTH as MERGE_MAX_DEPTH
 from .merge import TooDeep, merged
 from .models import (
     HealthOut,
+    HealthStatus,
     LogEntryIn,
     LogEntryOut,
     MeOut,
@@ -127,7 +128,9 @@ def _audience(doc: dict[str, Any], settings: Settings) -> frozenset[str] | None:
 
 @router.get("/health", response_model=HealthOut, tags=["meta"])
 async def health(
-    settings: Settings = Depends(get_settings), db: Database = Depends(get_db)
+    response: Response,
+    settings: Settings = Depends(get_settings),
+    db: Database = Depends(get_db),
 ) -> HealthOut:
     """Liveness and readiness. **Deliberately unauthenticated.**
 
@@ -139,11 +142,22 @@ async def health(
     unauthenticated and exempt from the rate limiter, an uncached one let
     anyone who could reach the port pull a connection from a pool of ten as
     fast as they liked. See :meth:`Database.ping_cached`.
+
+    The status code follows the database. Every probe this stack is deployed
+    behind (docker's HEALTHCHECK, the ALB target group, Cloud Run, Container
+    Apps) reads the code and ignores the body, so a 200 with ``"database":
+    "down"`` kept a replica with no database in rotation and showed it as
+    healthy (#46). A 503 takes it out of rotation, and the dashboard's boot
+    probe reads it as a server error and says so rather than opening a
+    workspace that fails on first use.
     """
+    database_up = await db.ping_cached()
+    if not database_up:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return HealthOut(
-        status="ok",
+        status=HealthStatus.OK if database_up else HealthStatus.UNAVAILABLE,
         version=settings.version,
-        database="up" if await db.ping_cached() else "down",
+        database="up" if database_up else "down",
         auth_mode=settings.auth_mode,
     )
 

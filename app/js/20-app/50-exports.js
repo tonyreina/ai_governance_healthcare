@@ -65,7 +65,9 @@ function exportPDF(){
 function exportMD(){
   const all=allItems(), ov=scoreOf(all), m=S.meta, L=[];
   const st=s=>s?STATUS[s]:"Unanswered";
-  const line=s=>String(s||"").replace(/\n+/g," ").replace(/\|/g,"\\|");
+  // Backslashes first: escaping only the pipe turned a value's own `\|` into `\\|`,
+  // an escaped backslash and a live pipe that ends the cell (#124).
+  const line=s=>String(s||"").replace(/\n+/g," ").replace(/\\/g,"\\\\").replace(/\|/g,"\\|");
   const nm=id=>displayName(id);
   L.push(`# ${m.solution||"Untitled AI solution"}: CHAI assurance review`,"");
   L.push(`- **Status:** ${statusOf(S).label}`,`- **Lifecycle phase:** ${phase(S).label}`,`- **Organization:** ${m.org||"–"}`,`- **Developer:** ${m.developer||"–"}`,`- **Sourcing:** ${m.sourcing||"–"}`,`- **Risk tier:** ${m.riskTier||"–"}`,`- **Clinical sponsor:** ${m.sponsor||"–"}`,`- **Next periodic review:** ${nextReview(S)||"–"}`,`- **Review team:** ${line(m.reviewers)||"–"}`,`- **Scope:** ${line(m.scope)||"–"}`,`- **Generated:** ${TODAY()}`,`- **Stored in:** ${storageNote().label}. ${storageNote().note}`,"");
@@ -80,7 +82,7 @@ function exportMD(){
   else L.push("None.");
   L.push("","## Applied model card","");
   CARD.forEach(sec=>{L.push(`### ${sec.sec}`,""); sec.fields.forEach(f=>L.push(`- **${f[1]}:** ${line(cardValOf(S,f[0]))||"_Not provided_"}`)); L.push("");
-    if(sec.sec==="Trust ingredients"){ L.push("### Key metrics",""); if(S.metrics.length){L.push("| Category | Metric | Value | 95% CI | Population |","|---|---|---|---|---|"); S.metrics.forEach(x=>L.push(`| ${x.cat} | ${line(x.name)} | ${line(x.value)} | ${line(x.ci)} | ${line(x.pop)} |`));} else L.push("_None entered_"); L.push("");}});
+    if(sec.sec==="Trust ingredients"){ L.push("### Key metrics",""); if(S.metrics.length){L.push("| Category | Metric | Value | 95% CI | Population |","|---|---|---|---|---|"); S.metrics.forEach(x=>L.push(`| ${line(x.cat)} | ${line(x.name)} | ${line(x.value)} | ${line(x.ci)} | ${line(x.pop)} |`));} else L.push("_None entered_"); L.push("");}});
   L.push("## Sign-off history",""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${(e.at||"").slice(0,10)}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push("None."); L.push("");
   L.push("## Appendix: full checklist","");
   STAGES.forEach(s=>{L.push(`### ${s.n}. ${s.title}`,""); s.items.forEach(it=>{const d=S.items[it.id]||{}; L.push(`- [${it.p}] ${it.text}: **${st(d.status)}**${d.evidence?` (${line(d.evidence)})`:""}`);}); L.push("");});

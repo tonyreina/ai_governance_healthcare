@@ -164,6 +164,9 @@ jobs:
       - name: exports
         if: ${{ !cancelled() }}
         run: pixi run test-exports
+      - name: untrusted keys cannot reach a prototype
+        if: ${{ !cancelled() }}
+        run: pixi run test-untrusted-keys
       - name: audit log writes
         if: ${{ !cancelled() }}
         run: pixi run test-audit

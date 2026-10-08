@@ -553,6 +553,22 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `tests/test_data_scope.py` (every page under `docs/` and the
   README, with mutation tests).
 
+### R-52 No key in a document reaches an object's prototype
+
+- Status: Active
+- Every dashboard helper that merges, reads or writes by key (`deepMerge`,
+  `setLocal`, `patchFromPath`, `edit`, `get`) skips `__proto__`, `constructor`
+  and `prototype` (`UNSAFE_KEYS`). A new helper that walks a document by key
+  uses `safeKey` too.
+- Why: a project document is JSON any writer controls, and `JSON.parse` makes
+  `__proto__` an ordinary key. Before this, `deepMerge` wrote through it into
+  `Object.prototype`. Nothing reached it with untrusted input yet; nothing
+  stopped a future caller from doing so (CodeQL, #124).
+- Source: #124.
+- Enforced by: `tests/test_untrusted_keys.py` (each helper, in a real browser,
+  with a probe shown to catch a naive merge). It failed on four checks against
+  the build before the fix.
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

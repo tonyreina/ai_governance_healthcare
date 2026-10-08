@@ -490,3 +490,66 @@ class TestNetworkLocksApplyInDevMode:
         response = await call(make_settings(dev_insecure_auth=True))
         assert response.status_code == 200
         assert response.json()["dev"] is True
+
+
+class TestAlbAudienceIsTheLoadBalancerArn:
+    """An ALB signs with its load balancer ARN, never its listener's (#51).
+
+    ``x-amzn-oidc-data`` carries the ARN in the token header's ``signer``, and
+    that is a ``loadbalancer/`` ARN. The deployment guide told operators to
+    paste a ``listener/`` ARN, which can never match, so every request was a 401
+    that looks like an SSO fault. Worse, an operator who concludes the audience
+    check is broken leaves it unset, which turns off the one check that catches
+    a token minted for another service.
+    """
+
+    LOAD_BALANCER = (
+        "arn:aws:elasticloadbalancing:us-east-1:1234:loadbalancer/app/chai/a"
+    )
+    LISTENER = "arn:aws:elasticloadbalancing:us-east-1:1234:listener/app/chai/a/b"
+
+    def _from_env(self, monkeypatch, audience: str) -> Settings:
+        for key in ("DEV_INSECURE_AUTH", "REQUIRE_IDENTITY", "HOST"):
+            monkeypatch.delenv(key, raising=False)
+        monkeypatch.setenv("IDENTITY_MODE", "alb")
+        monkeypatch.setenv("IDENTITY_AUDIENCE", audience)
+        return Settings.from_env()
+
+    def test_a_listener_arn_is_refused_at_startup(self, monkeypatch):
+        with pytest.raises(RuntimeError, match="load balancer") as exc:
+            self._from_env(monkeypatch, self.LISTENER)
+        assert "listener" in str(exc.value)
+
+    def test_a_listener_rule_arn_is_refused_too(self, monkeypatch):
+        rule = self.LISTENER.replace("listener/", "listener-rule/")
+        with pytest.raises(RuntimeError, match="load balancer"):
+            self._from_env(monkeypatch, rule)
+
+    def test_the_load_balancer_arn_starts(self, monkeypatch):
+        settings = self._from_env(monkeypatch, self.LOAD_BALANCER)
+        assert settings.identity_audience == self.LOAD_BALANCER
+
+    async def test_the_load_balancer_arn_is_what_the_alb_signs(self):
+        """End to end through the decoder: the signer matches, so it is accepted."""
+        settings = alb_settings(identity_audience=self.LOAD_BALANCER)
+        token = jwt(
+            {"sub": "s", "email": "a@b.example"}, {"signer": self.LOAD_BALANCER}
+        )
+        assert (await call(settings, {"x-amzn-oidc-data": token})).status_code == 200
+
+    def test_every_arn_the_docs_show_for_the_audience_starts(self, monkeypatch):
+        """The guide's own example must not be one the API refuses (#51, as #62)."""
+        import re
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        shown = []
+        for doc in [root / "README.md", *sorted((root / "docs").glob("*.md"))]:
+            text = doc.read_text(encoding="utf-8")
+            shown += re.findall(
+                r'"name":\s*"IDENTITY_AUDIENCE",\s*"value":\s*"(arn:[^"]+)"', text
+            )
+            shown += re.findall(r"IDENTITY_AUDIENCE=(arn:\S+)", text)
+        assert shown, "the docs show no AWS IDENTITY_AUDIENCE; this scan checks nothing"
+        for arn in shown:
+            self._from_env(monkeypatch, arn)

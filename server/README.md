@@ -113,7 +113,7 @@ In `jwt` mode the signature is **not** verified. That is safe for exactly the
 same reason plain-header mode is safe and no other: nothing but the proxy can
 reach the port. Verifying it properly is the upgrade path — check
 `x-amzn-oidc-data` against `https://public-keys.auth.elb.<region>.amazonaws.com/<kid>`
-and require the `signer` to be your listener's ARN. `IDENTITY_AUDIENCE` catches
+and require the `signer` to be your load balancer's ARN. `IDENTITY_AUDIENCE` catches
 a token minted for a different service in the same account; without a signature
 check it stops misconfiguration, not a determined forger.
 

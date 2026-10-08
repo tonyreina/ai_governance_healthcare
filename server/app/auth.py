@@ -220,7 +220,7 @@ def _jwt_segments(token: str) -> tuple[dict[str, Any], dict[str, Any]]:
     have come from the ALB, because nothing else can reach the port. To check
     it properly, verify at the edge, or verify ``x-amzn-oidc-data`` against
     ``https://public-keys.auth.elb.<region>.amazonaws.com/<kid>`` and require
-    the token header's ``signer`` to equal your listener's ARN. ``docs/deploy.md``
+    the token header's ``signer`` to equal your load balancer's ARN. ``docs/deploy.md``
     walks through why step 3 -- audience, not merely validity -- is the one
     people skip.
     """

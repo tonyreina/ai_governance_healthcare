@@ -751,6 +751,28 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   land is the operator's decision; the gap was that nothing said it was one.
 - Source: #52; R-41.
 
+### D-44 Ask once, on the record, for something that cannot be checked
+
+- Status: Accepted
+- Encryption at rest of the host's disk cannot be verified from inside a
+  container, so preflight does not pretend to: it refuses a production-shaped
+  stack until the operator asserts it with a deliberately specific value (`=1`,
+  not `true` or `yes`), in the spirit of the dev-auth acknowledgment. That turns
+  "nobody thought about it" into "someone decided", which is what an addressable
+  specification asks for.
+- "Production-shaped" is a non-loopback bind using the stack's own volume. A
+  laptop on loopback is not asked, and a managed database is the provider's
+  storage.
+- `make doctor` reports what the host shows (a `crypt` layer under the device)
+  and says "cannot tell" when it cannot; the cloud provider may encrypt below
+  that.
+- Rejected: pretending to detect it. A check that sometimes reports "encrypted"
+  from incomplete information is worse than none.
+- Rejected: column- or document-level encryption (the issue's own non-goal).
+- A non-loopback bind is also what the plain-HTTP rule keys on (D-28), so the
+  two share one definition of loopback (`LOOPBACK_HOSTS`).
+- Source: #47; R-42.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

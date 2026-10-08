@@ -812,3 +812,28 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Gap:** Nothing here creates a Cloud SQL, RDS or Azure database, so the flags come
   from the providers' documentation and could be out of date. The page says so and
   does not recommend a retention length. #52
+
+### C-63 A production-shaped stack is not brought up without an encryption decision
+
+- **Claim:** `make up` refuses a stack reachable beyond this machine, using its own
+  database volume, until the operator confirms the disk is encrypted, and does not
+  claim to be able to check it.
+- **Asserted in:** `docs/self-hosting.md` — "`make up` refuses a stack that is
+  reachable beyond this machine"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_preflight.py::a non-loopback bind with no confirmation is refused`
+  `tests/test_preflight.py::STORAGE_ENCRYPTION_CONFIRMED=1 accepts it`
+  `tests/test_preflight.py::loopback needs no confirmation: that is a laptop`
+  `tests/test_doctor.py::when the host cannot be inspected it says it cannot tell, not that it is fine`
+
+### C-64 The managed databases' encryption settings are described correctly
+
+- **Claim:** Cloud SQL and Azure encrypt storage by default, and RDS only if
+  `--storage-encrypted` is passed at creation.
+- **Asserted in:** `docs/deploy.md` — "**off unless you pass `--storage-encrypted`
+  when you create the instance**"
+- **Status:** unenforced
+- **Gap:** Nothing here creates a managed database, so these come from the providers'
+  documentation. The page says so and tells the operator to confirm the setting on
+  the instance they have. #47

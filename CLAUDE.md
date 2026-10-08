@@ -25,7 +25,7 @@ that touch the area. Anything marked **Active** (requirements) or **Accepted**
 - **Record what the user decided, not what you assume.** Only the owner moves a
   decision from **Proposed** to **Accepted**, and an **Open** question stays
   open until they answer it. Do not write documentation, UI copy or code that
-  assumes an answer to an open one (R-22 and R-47 today).
+  assumes an answer to an open one (R-47 today).
 - **Cite sources.** Every entry names where it came from (a file, an issue
   number, or the user's instruction) and what enforces it. "Enforced by:
   Nothing" is honest, and is a gap to report, not hide.

@@ -936,3 +936,27 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_boot_storage.py::healthy API -> the data scope is stated in the layout`
   `tests/test_boot_storage.py::static host -> the warning states the same data scope`
   `tests/test_data_scope.py::the comparison table says Never in every mode`
+
+### C-73 The PHI scan never repeats what it finds
+
+- **Claim:** `make phi-scan` reports the project, field and revisions of a match,
+  never the matched text, and a clean run does not say no patient information is
+  present.
+- **Asserted in:** `docs/self-hosting.md` — "never the matched text"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_phi_scan.py::the matched text is never printed`
+  `tests/test_phi_scan.py::a clean run does not claim there is no patient information`
+
+### C-74 The PHI scan reaches the history
+
+- **Claim:** The scan reads every unpurged revision and unredacted audit entry, not
+  only the live record, so a value edited out of the record is still found.
+- **Asserted in:** `docs/self-hosting.md` — "every revision not yet purged"
+- **Status:** partial
+- **Gap:** It finds only the patterns it has. A name, a date or a free-form case
+  description is not checked, by design (R-50). Earlier backups are not scanned.
+  #66
+- **Enforced by:**
+  `tests/test_phi_scan.py::the history is scanned, and the revisions are named`
+  `tests/test_phi_scan.py::the audit log is scanned`

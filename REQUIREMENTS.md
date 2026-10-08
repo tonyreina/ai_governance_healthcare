@@ -515,6 +515,28 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `tests/test_data_scope.py` (docs, with mutation tests) and
   `tests/test_boot_storage.py` (the notice in each mode, in a real browser).
 
+### R-50 A small, rule-based scan, not a detector model
+
+- Status: Active
+- The owner's decision, 2026-10-08, answering R-22: no model-based PHI
+  detection. The opt-in sidecar (#65) and de-identifying the Croissant export
+  (#67) are not built. `make phi-scan` (#66) checks the stored records on demand
+  for patterns that look like a pasted patient identifier with few false alarms:
+  SSNs, and medical record numbers, dates of birth and patient names when labeled
+  as such; phone numbers outside the model card's contact field.
+- It does not look for names or dates on their own: a governance record is made
+  of them, and a detector that flags every record is one people learn to ignore.
+- It scans the live records, unpurged revisions and unredacted audit entries. It
+  reports location and kind, **never the matched text**, and never says that no
+  patient information is present.
+- Why: the scope is governance metadata only (R-49), so the scan checks a policy;
+  it is not what makes holding patient data acceptable.
+- Supersedes: R-22 (answered).
+- Source: the owner; #66; DECISIONS D-51.
+- Enforced by: `tests/test_phi_scan.py` (the patterns on pasted and on
+  governance text, the dashboard's sample projects producing no match, and the
+  real script against a real PostgreSQL).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active
@@ -759,7 +781,7 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-22 Is PHI detection in scope, and where does it run?
 
-- Status: **Open** (#65, #66)
+- Status: **Answered by R-50** (2026-10-08, the owner's decision)
 - Context since R-49: the scope is now governance metadata only, so a detector
   would be a check on a policy, not the basis for holding patient data. The owner
   has said they expect a name detector to flag the investigator and approver

@@ -51,8 +51,10 @@ failures: list[str] = []
 
 
 def check(name: str, ok: bool, detail: str = "") -> None:
-    status = "PASS" if ok else "FAIL"
-    print(f"  {status}")
+    """Print the check's name. Callers pass names and details that never carry a
+    planted identifier or a matched kind, so the output is safe to keep in a CI log
+    (CodeQL py/clear-text-logging-sensitive-data on #123)."""
+    print(f"  {'PASS' if ok else 'FAIL'}  {name}{'' if ok else f'  <- {detail}'}")
     if not ok:
         failures.append(name)
 
@@ -98,12 +100,16 @@ NEGATIVES = [
 
 def unit() -> None:
     print("The patterns")
-    for kind, text in POSITIVES:
+    # Named by position, not by the planted text or its kind: those are what a
+    # report must never print, and the test should not print them either.
+    for i, (kind, text) in enumerate(POSITIVES, 1):
         found = ps.kinds_in(text)
-        check(f"{kind}: {text!r}", kind in found, str(found))
-    for text in NEGATIVES:
+        check(f"pasted case {i} is found as its kind", kind in found)
+    for i, text in enumerate(NEGATIVES, 1):
         found = ps.kinds_in(text)
-        check(f"no match: {text!r}", not found, str(found))
+        check(
+            f"governance text {i} matches nothing", not found, f"{len(found)} kind(s)"
+        )
 
     doc = {
         "card": {"contact": "AI team, 555-201-3344"},
@@ -113,12 +119,12 @@ def unit() -> None:
     check(
         "a phone number in the contact field is expected, not flagged",
         ("card.contact", Kind.PHONE) not in hits,
-        str(hits),
+        f"{len(hits)} hit(s)",
     )
     check(
         "the same number in evidence is flagged",
         ("items.s2-1.evidence", Kind.PHONE) in hits,
-        str(hits),
+        f"{len(hits)} hit(s)",
     )
     check(
         "a list index is part of the path",
@@ -179,7 +185,11 @@ def sample_corpus() -> None:
         (d.get("meta", {}).get("solution"), h) for d in docs for h in ps.scan_doc(d)
     ]
     check(f"{len(docs)} sample projects were read", len(docs) >= 10, str(len(docs)))
-    check(f"no match across {strings} strings", not hits, str(hits[:6]))
+    check(
+        f"no match across {strings} strings",
+        not hits,
+        "; ".join(sorted({f"{solution}: {path}" for solution, (path, _) in hits})[:6]),
+    )
 
 
 def docker(*args: str, stdin: bytes | None = None):
@@ -219,17 +229,18 @@ def start() -> str:
     return name
 
 
-PASTED_SSN = "123-45-6789"
-PASTED_MRN = "A7731902"
-PASTED_DOB = "03/14/1961"
-SECRETS = (PASTED_SSN, PASTED_MRN, PASTED_DOB, "201-3344")
+# Synthetic values planted in the database. None is a real identifier.
+PLANTED_A = "123-45-6789"
+PLANTED_B = "A7731902"
+PLANTED_C = "03/14/1961"
+PLANTED = (PLANTED_A, PLANTED_B, PLANTED_C, "201-3344")
 
 
 def seed(name: str) -> None:
     clean = '{"meta":{"solution":"Sepsis","reviewers":"Alan Smith, Beatriz Jones"}}'
     pasted = (
         '{"meta":{"solution":"Sepsis"},'
-        f'"items":{{"s2-1":{{"evidence":"Example case: {PASTED_SSN}"}}}},'
+        f'"items":{{"s2-1":{{"evidence":"Example case: {PLANTED_A}"}}}},'
         '"card":{"contact":"AI team, 555-201-3344"}}'
     )
     psql(
@@ -241,13 +252,13 @@ def seed(name: str) -> None:
                ('p1', 2, '{pasted}', 'b', gen_random_uuid()),
                ('p1', 3, '{pasted}', 'c', gen_random_uuid()),
                ('p2', 1, '{clean}', 'd', gen_random_uuid()),
-               ('gone', 1, '{{"meta":{{"scope":"MRN: {PASTED_MRN}"}}}}', 'e',
+               ('gone', 1, '{{"meta":{{"scope":"MRN: {PLANTED_B}"}}}}', 'e',
                 gen_random_uuid());
         INSERT INTO project_version
                (project_id, rev, doc, content_md5, incarnation, purged_at, purged_by)
         VALUES ('p2', 2, '{{}}', 'f', gen_random_uuid(), now(), 'dpo@hosp.org');
         INSERT INTO project_log (project_id, by_id, entry) VALUES
-          ('p1', 'a@hosp.org', '{{"text":"Changed evidence to DOB {PASTED_DOB}"}}'),
+          ('p1', 'a@hosp.org', '{{"text":"Changed evidence to DOB {PLANTED_C}"}}'),
           ('p2', 'a@hosp.org', '{{"text":"Signed off 2026-03-14 by Alan Smith"}}');
         """,
     )
@@ -281,28 +292,28 @@ def integration() -> None:
         check(
             "the live record is scanned",
             ("p1", ps.Source.CURRENT, "items.s2-1.evidence", Kind.SSN, ()) in got,
-            str(got),
+            f"{len(got)} finding(s)",
         )
         check(
             "the history is scanned, and the revisions are named",
             ("p1", ps.Source.REVISION, "items.s2-1.evidence", Kind.SSN, (2, 3)) in got,
-            str(got),
+            f"{len(got)} finding(s)",
         )
         check(
             "a deleted project's surviving revisions are scanned",
             any(f.project == "gone" and f.kind is Kind.MRN for f in findings),
-            str(got),
+            f"{len(got)} finding(s)",
         )
         check(
             "the audit log is scanned",
             any(f.source is ps.Source.LOG and f.kind is Kind.DOB for f in findings),
-            str(got),
+            f"{len(got)} finding(s)",
         )
         check(
             "nothing from the clean project, the contact field or a purged revision",
             not any(f.project == "p2" for f in findings)
             and not any(f.path == "card.contact" for f in findings),
-            str(got),
+            f"{len(got)} finding(s)",
         )
         check(
             "purged revisions are not counted as scanned",
@@ -312,8 +323,8 @@ def integration() -> None:
 
         code, text = run(name)
         check("a report run exits 0", code == 0, text[-300:])
-        leaked = [s for s in SECRETS if s in text]
-        check("the matched text is never printed", not leaked, str(leaked))
+        leaked = sum(1 for s in PLANTED if s in text)
+        check("the matched text is never printed", not leaked, f"{leaked} value(s)")
         check(
             "it says how to remove a value",
             "/versions" in text and "live record" in text,

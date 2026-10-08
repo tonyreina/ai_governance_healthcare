@@ -631,8 +631,12 @@ honest answer and is a gap worth closing; see R-19.
 - Translations are machine-drafted. A safety-bearing string (`"@meta".safety`)
   shows in English in a language until a reviewer is recorded for it in that
   catalog.
-- Dates and relative times use the chosen language. Exports, the JSON and CSV
-  keys, and server messages stay English for now.
+- Dates and relative times use the chosen language. Since D-60, the HTML, PDF
+  and Markdown exports are written in the reader's language and name it; the
+  JSON and CSV exports stay English (a machine contract), as do server messages.
+- Since D-60, the framework content is translated too, each translated screen
+  marked as an unofficial translation; stored values (decisions, categories,
+  metric names) stay English.
 - Hard-coded text is a ratchet: the pseudo-locale count in
   `tests/i18n_baseline.json` may only go down.
 - Source: the owner, on #80; DECISIONS D-59.

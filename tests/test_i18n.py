@@ -204,10 +204,16 @@ def main() -> int:
             {"Erfüllt", "Teilweise", "Nicht erfüllt"} <= set(segs),
             str(segs),
         )
+        # Exports follow the reader (D-60): the HTML report is German, marked as such,
+        # and its unreviewed safety text (the provenance note) stays English.
         html = page.evaluate("exportHTML()")
         check(
-            "while the HTML export stays English",
-            "CHAI lifecycle assurance review" in html and "Erfüllt" not in html,
+            "the HTML export is German and says so",
+            '<html lang="de">' in html and "Konformitätshinweise" in html,
+        )
+        check(
+            "its unreviewed provenance note stays English",
+            "Kept in one browser on one computer" in html,
         )
         page.evaluate("goHome()")
         page.wait_for_timeout(200)
@@ -316,13 +322,28 @@ def main() -> int:
         page.evaluate("loadSamples()")
         page.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
         page.evaluate("openProject([...PROJECTS.keys()][0], 'report')")
+        md = page.evaluate("exportMD()")
         check(
-            "exports stay English for now",
-            "CHAI assurance review" in page.evaluate("exportMD()")
-            and json.loads(page.evaluate("JSON.stringify(projectJSON(S))"))["storage"][
-                "label"
-            ]
-            in ("This browser only", "Shared workspace", "Claude artifact"),
+            "the Markdown export is French and names its language",
+            "## Alertes de conformité" in md and "**Langue :** fr" in md,
+            md[:200],
+        )
+        check(
+            "its unreviewed footer stays English",
+            "not a CHAI certification" in md,
+        )
+        data = json.loads(page.evaluate("JSON.stringify(projectJSON(S))"))
+        check(
+            "the JSON export stays English, a machine contract",
+            data["storage"]["label"]
+            in ("This browser only", "Shared workspace", "Claude artifact")
+            and data["status"]
+            in ("Out of compliance", "Needs update", "On track", "Retired", "Stopped"),
+            str(data["storage"]),
+        )
+        check(
+            "and so does the CSV header",
+            page.evaluate("exportCSV()").startswith('"Project","Developer"'),
         )
         ctx.close()
 

@@ -86,9 +86,12 @@ one. To record a review, add the key and who reviewed it, with the date, to
 that catalog's `"@meta".reviewers`, for example
 `"safety.scope": "A. Reviewer, 2026-10-08"`.
 
-Not translated yet: the framework content (CHAI criteria, OPTICA questions, the
-CHAI metrics), which is third-party text with attribution terms; most of the
-project screens; and exports and server messages, which stay English for now.
+Reports follow the reader: the HTML, PDF and Markdown exports are written in the
+chosen language and say which. The JSON and CSV exports stay English, because
+scripts and the Croissant exporter read them. Not translated yet: the framework
+content (CHAI criteria, OPTICA questions, the CHAI metrics), which is being
+translated with a note on each screen that it is an unofficial translation, and
+the server's messages.
 `tests/test_i18n.py` counts the hard-coded text left on screen in a pseudo-locale,
 and that count may only go down.
 

@@ -45,6 +45,15 @@ const MODE_PROVENANCE = Object.freeze({
 });
 /* The storage mode, as an export records it: the header's own label, a stable machine
    value, and the sentence above. */
+/* The same, in the reader's language, for the reports a person reads (HTML, PDF,
+   Markdown). storageNote() stays English: the JSON export is a machine contract. */
+const MODE_PROVENANCE_KEY = Object.freeze({
+  [Mode.LOCAL]: "provenance.local", [Mode.API]: "provenance.api", [Mode.ARTIFACT]: "provenance.artifact",
+});
+function storageNoteShown(){
+  return { label: MODE_LABEL_KEY[MODE] ? t(MODE_LABEL_KEY[MODE]) : t("provenance.unknownLabel"),
+           note: t(MODE_PROVENANCE_KEY[MODE] || "provenance.unknown") };
+}
 function storageNote(){
   const l = MODE_LABEL[MODE];
   return { mode: MODE, label: l ? l.text : "Unknown",

@@ -10,7 +10,11 @@
       "safety.artifact.detail",
       "safety.server.detail",
       "report.disclaimer",
-      "label.foot"
+      "label.foot",
+      "provenance.local",
+      "provenance.api",
+      "provenance.artifact",
+      "md.footer"
     ]
   },
   "lang.label": "Language",
@@ -439,5 +443,27 @@
   "optica.status.met": "Answered",
   "optica.status.notmet": "Outstanding",
   "optica.status.declined": "Declined",
-  "optica.rail": "OPTICA adoption review"
+  "optica.rail": "OPTICA adoption review",
+  "provenance.local": "Kept in one browser on one computer. Sign-offs here are self-asserted: nothing verifies who made them, and there is no server-side audit log or version history.",
+  "provenance.api": "Kept on the self-hosted governance server, with server-side access control, a version history and an audit log. Sign-offs are recorded against the signed-in identity.",
+  "provenance.artifact": "Kept in a Claude artifact's own database, not on a server your organization runs. Access control is only partly enforced, and there is no version history.",
+  "provenance.unknown": "The storage mode was not known when this was produced.",
+  "provenance.unknownLabel": "Unknown",
+  "export.untitled": "AI solution",
+  "export.titleSuffix": "CHAI assurance review",
+  "export.storedIn": "Stored in: {label}.",
+  "md.fieldLine": "- **{label}:** {value}",
+  "md.team": "Review team",
+  "md.scope": "Scope",
+  "md.generated": "Generated",
+  "md.language": "Language",
+  "md.storedIn": "Stored in",
+  "md.none": "None.",
+  "md.overall": "Overall: **{pct}%** of applicable criteria met ({answered}/{total} answered).",
+  "md.rationale": "Rationale",
+  "md.notDecided": "Not decided",
+  "md.openGaps": "Open gaps",
+  "md.population": "Population",
+  "md.noneEntered": "None entered",
+  "md.footer": "Structured around the CHAI six-stage lifecycle and Applied Model Card. Checklist wording is paraphrased; this is an internal governance record, not a CHAI certification."
 }

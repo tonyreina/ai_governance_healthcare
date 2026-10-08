@@ -553,3 +553,67 @@ class TestAlbAudienceIsTheLoadBalancerArn:
         assert shown, "the docs show no AWS IDENTITY_AUDIENCE; this scan checks nothing"
         for arn in shown:
             self._from_env(monkeypatch, arn)
+
+
+class TestThePrefixIsStrippedOnEveryPath:
+    """One normalization point, so the plain and JWT paths cannot diverge (#35).
+
+    ``_strip_prefix`` was applied only to plain headers. A JWT-format front door
+    pointed at a prefixed claim would store ``accounts.google.com:...`` in access
+    lists, which stop matching the moment the same people arrive any other way,
+    and the symptom is every project silently vanishing from its owner.
+    """
+
+    PREFIX = "accounts.google.com:"
+
+    async def test_a_jwt_identity_is_stripped_too(self) -> None:
+        token = jwt(
+            {
+                "sub": f"{self.PREFIX}1234567890",
+                "email": f"{self.PREFIX}ann@hospital.example",
+                "name": f"{self.PREFIX}Ann Example",
+            }
+        )
+        settings = alb_settings(identity_strip_prefix=self.PREFIX)
+        response = await call(settings, {"x-amzn-oidc-data": token})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["email"] == "ann@hospital.example"
+        assert body["id"] == "1234567890"
+        assert self.PREFIX not in str(body), body
+
+    async def test_the_same_person_gets_the_same_id_by_either_path(self) -> None:
+        """Plain header and JWT, same configuration: one id, so one access list."""
+        plain = make_settings(
+            identity_mode="proxy",
+            identity_header="X-Auth-Request-Email",
+            identity_id_header="X-Auth-Request-User",
+            identity_strip_prefix=self.PREFIX,
+        )
+        via_plain = await call(
+            plain,
+            {
+                "X-Auth-Request-Email": f"{self.PREFIX}ann@hospital.example",
+                "X-Auth-Request-User": f"{self.PREFIX}1234567890",
+            },
+        )
+        token = jwt(
+            {
+                "sub": f"{self.PREFIX}1234567890",
+                "email": f"{self.PREFIX}ann@hospital.example",
+            }
+        )
+        via_jwt = await call(
+            alb_settings(
+                identity_strip_prefix=self.PREFIX, identity_jwt_id_claim="sub"
+            ),
+            {"x-amzn-oidc-data": token},
+        )
+        assert via_plain.json()["email"] == via_jwt.json()["email"]
+        assert via_plain.json()["id"] == via_jwt.json()["id"] == "1234567890"
+
+    async def test_a_jwt_without_the_prefix_is_left_alone(self) -> None:
+        token = jwt({"sub": "sub-abc-123", "email": "ann@hospital.example"})
+        settings = alb_settings(identity_strip_prefix=self.PREFIX)
+        body = (await call(settings, {"x-amzn-oidc-data": token})).json()
+        assert body["email"] == "ann@hospital.example"

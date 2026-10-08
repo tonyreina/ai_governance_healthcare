@@ -618,3 +618,15 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Enforced by:**
   `tests/test_text_fields.py::every editable textarea opts out of spellcheck and form history`
   `tests/test_text_fields.py::a field with the browser defaults is noticed`
+
+### C-50 `make up` refuses a Google identity source without its prefix
+
+- **Claim:** Google IAP's `accounts.google.com:` prefix must be stripped, and
+  `make up` refuses a Google identity source that does not set it.
+- **Asserted in:** `docs/self-hosting.md` — "`make up` refuses a Google source
+  without it"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_preflight.py::a Google identity source with no strip prefix is refused`
+  `tests/test_preflight.py::uncommenting the template's Google block, in place, passes preflight`
+  `server/tests/test_auth.py::TestThePrefixIsStrippedOnEveryPath::test_the_same_person_gets_the_same_id_by_either_path`

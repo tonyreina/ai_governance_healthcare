@@ -346,28 +346,135 @@ def main() -> int:
         str(pf.check(done)),
     )
 
+    print("Google IAP needs its prefix stripped, or access lists never match (#35)")
+    goog = "{http.request.header.X-Goog-Authenticated-User-Id}"
+    goog_mail = "{http.request.header.X-Goog-Authenticated-User-Email}"
+    check(
+        "a Google identity source with no strip prefix is refused",
+        mentions(problems(IDENTITY_ID_SOURCE=goog), "IDENTITY_STRIP_PREFIX"),
+    )
+    check(
+        "the email source alone is enough to trigger it",
+        mentions(problems(IDENTITY_EMAIL_SOURCE=goog_mail), "IDENTITY_STRIP_PREFIX"),
+    )
+    check(
+        "an explicitly empty prefix is the same as unset",
+        mentions(
+            problems(IDENTITY_ID_SOURCE=goog, IDENTITY_STRIP_PREFIX=""),
+            "IDENTITY_STRIP_PREFIX",
+        ),
+    )
+    check(
+        "the right prefix passes",
+        not mentions(
+            problems(
+                IDENTITY_ID_SOURCE=goog, IDENTITY_STRIP_PREFIX="accounts.google.com:"
+            ),
+            "IDENTITY_STRIP_PREFIX",
+        ),
+    )
+    check(
+        "a header match is not case sensitive, as HTTP header names are not",
+        mentions(
+            problems(
+                IDENTITY_ID_SOURCE="{http.request.header.x-goog-authenticated-user-id}"
+            ),
+            "IDENTITY_STRIP_PREFIX",
+        ),
+    )
+    check(
+        "other front doors need no prefix",
+        not mentions(
+            problems(
+                IDENTITY_ID_SOURCE="{http.request.header.X-Forwarded-User}",
+            ),
+            "IDENTITY_STRIP_PREFIX",
+        ),
+    )
+    check(
+        "a prefix that is not Google's is refused for a Google source",
+        mentions(
+            problems(IDENTITY_ID_SOURCE=goog, IDENTITY_STRIP_PREFIX="oops:"),
+            "IDENTITY_STRIP_PREFIX",
+        ),
+    )
+
+    # The template's own Google block, uncommented as its comment says to, must
+    # work. It did not: a later `IDENTITY_STRIP_PREFIX=` at the bottom of the file
+    # re-emptied what the block had set, and compose takes the last value.
+    template = (ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
+    start = next(i for i, ln in enumerate(template) if "Google Cloud: Identity" in ln)
+    block = []
+    for ln in template[start + 1 :]:
+        if ln.startswith("# ---"):
+            break
+        if re.match(r"# IDENTITY_\w+=", ln):
+            block.append(ln[2:])
+    spliced = "\n".join(
+        ln
+        for ln in template
+        if not ln.startswith(
+            ("IDENTITY_ID_SOURCE=", "IDENTITY_NAME_SOURCE=", "IDENTITY_EMAIL_SOURCE=")
+        )
+    )
+    in_place = pf.check(
+        parse(
+            spliced.replace(
+                "# IDENTITY_ID_SOURCE={http.request.header.X-Goog",
+                "IDENTITY_ID_SOURCE={http.request.header.X-Goog",
+            ).replace(
+                "# IDENTITY_STRIP_PREFIX=accounts.google.com:",
+                "IDENTITY_STRIP_PREFIX=accounts.google.com:",
+            )
+            + "\nPOSTGRES_PASSWORD="
+            + GOOD_PASSWORD
+        )
+    )
+    check(
+        "uncommenting the template's Google block, in place, passes preflight",
+        not mentions(in_place, "IDENTITY_STRIP_PREFIX"),
+        str(in_place),
+    )
+    check("the block names the prefix", any("accounts.google.com:" in b for b in block))
+    check(
+        "nothing later in the file re-empties the prefix it sets",
+        parse(
+            "\n".join(
+                [
+                    "IDENTITY_STRIP_PREFIX=accounts.google.com:",
+                    *[ln for ln in template if ln.startswith("IDENTITY_STRIP_PREFIX=")],
+                ]
+            )
+        ).get("IDENTITY_STRIP_PREFIX")
+        == "accounts.google.com:",
+        "an active `IDENTITY_STRIP_PREFIX=` line after the Google block wins over it",
+    )
+
     print("Every identity example the docs show passes the gate (#62)")
     # The self-hosting guide's first example was IDENTITY_ID_SOURCE=dev@localhost,
     # the exact literal preflight refuses to start on, and it was the uncommented
     # line. An operator who copied it was stopped by the gate, and one who forced
     # past it made every visitor the same person. Run every uncommented
     # IDENTITY_*_SOURCE assignment in the docs through the real check.
-    assign = re.compile(r"^\s*(?:export\s+)?(IDENTITY_\w+_SOURCE)=(.*)$")
+    assign = re.compile(r"^\s*(?:export\s+)?(IDENTITY_\w+?)=(\S*)\s*(?:#.*)?$")
     shown = 0
     for doc in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]:
-        for number, line in enumerate(doc.read_text().splitlines(), 1):
+        # A document's examples are one configuration: evaluate them TOGETHER, so
+        # a source that needs a companion setting (the Google prefix) is held to it.
+        found_here: dict[str, str] = {}
+        for line in doc.read_text().splitlines():
             found = assign.match(line)
-            if not found:
-                continue
-            shown += 1
-            name, value = found.group(1), found.group(2).strip()
-            where = f"{doc.relative_to(ROOT)}:{number}"
-            refused = pf.check({**SAFE, name: value})
-            check(
-                f"{where}: {name}={value or '(empty)'} passes preflight",
-                not mentions(refused, name),
-                str(refused),
-            )
+            if found:
+                shown += 1
+                found_here[found.group(1)] = found.group(2).strip()
+        if not found_here:
+            continue
+        refused = [p for p in pf.check({**SAFE, **found_here}) if "IDENTITY" in p]
+        check(
+            f"{doc.relative_to(ROOT)}: its identity examples pass preflight together",
+            not refused,
+            str(refused),
+        )
     check("the scan found the examples it is meant to check", shown > 0, str(shown))
 
     print()

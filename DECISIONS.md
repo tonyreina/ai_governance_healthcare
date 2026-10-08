@@ -496,6 +496,26 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   in the environment, for the same reason.
 - Source: #41; R-13.
 
+### D-34 The identity prefix is stripped once, and the template cannot undo it
+
+- Status: Accepted
+- `_normalized()` in `server/app/auth.py` strips `IDENTITY_STRIP_PREFIX` from the
+  id, name and email after the plain and JWT parsers, so they cannot diverge.
+  Preflight refuses an identity source that reads `X-Goog-Authenticated-User-*`
+  unless the prefix is exactly `accounts.google.com:`. The template's bottom
+  `IDENTITY_STRIP_PREFIX=` line is commented out, because compose takes the last
+  value in a file and the active line re-emptied what the Google block set.
+- Why both: the API fix makes the two paths agree, but only if the prefix is
+  configured, and compose passes it through empty. The preflight rule stops the
+  misconfiguration before any data is written (#35).
+- Rejected: defaulting the prefix to Google's in `compose.yaml`. It would strip
+  for every other front door too, silently rewriting ids that merely begin with
+  that text.
+- Rejected, for now: a `make doctor` check that finds stored ids not matching the
+  running configuration. The documented count and repair SQL cover deployments
+  that already did this; the check is a follow-up.
+- Source: #35; R-30.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

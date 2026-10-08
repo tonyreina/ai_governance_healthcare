@@ -125,8 +125,53 @@ from a source you configure in `.env`:
 ```bash
 # behind an SSO front door: the header it sets. Pick one.
 IDENTITY_ID_SOURCE={http.request.header.X-Goog-Authenticated-User-Id}
+IDENTITY_STRIP_PREFIX=accounts.google.com:   # Google IAP only; see below
 # IDENTITY_ID_SOURCE={http.request.header.X-Amzn-Oidc-Identity}
 # IDENTITY_ID_SOURCE={http.request.header.X-Ms-Client-Principal-Id}
+```
+
+Google IAP sends its identity as `accounts.google.com:person@hospital.org`.
+`IDENTITY_STRIP_PREFIX` removes that prefix before anything is stored, so an
+access list holds `person@hospital.org` however the person arrives. Set it
+**before anyone signs in**: `make up` refuses a Google source without it,
+because access lists built from prefixed ids stop matching later and every
+project then disappears from its owner, with no error anywhere. Every other front
+door sends an unprefixed value and needs no prefix.
+
+#### If access lists were already stored with the prefix
+
+If people signed in before the prefix was set, their access lists hold
+`accounts.google.com:person@hospital.org`, and once the prefix is set those
+entries match nobody: every such project disappears from its owner, and a direct
+request answers 404. Count the affected entries, then rewrite them. This edits the
+database directly, so the application does not record it: note it in your change
+record. History is not touched, because a live project's versions are read against
+its current access list, so repairing the project repairs who can read them.
+
+```sql
+-- how many access entries still carry the prefix
+SELECT count(*) AS prefixed_entries
+  FROM projects p,
+       LATERAL jsonb_each(COALESCE(p.doc -> 'access', '{}')) AS a(role, list),
+       LATERAL jsonb_array_elements_text(
+         CASE WHEN jsonb_typeof(a.list) = 'array' THEN a.list ELSE '[]' END
+       ) AS e(entry)
+ WHERE e.entry LIKE 'accounts.google.com:%';
+
+-- remove it from owners, writers and readers
+UPDATE projects p
+   SET doc = jsonb_set(p.doc, '{access}', (p.doc -> 'access') || (
+         SELECT jsonb_object_agg(r.role, COALESCE((
+                  SELECT jsonb_agg(
+                           regexp_replace(x, '^accounts\.google\.com:', ''))
+                    FROM jsonb_array_elements_text(
+                           COALESCE(p.doc -> 'access' -> r.role, '[]')) AS x
+                ), '[]'))
+           FROM unnest(ARRAY['owners', 'writers', 'readers']) AS r(role)))
+ WHERE jsonb_typeof(p.doc -> 'access') = 'object'
+   AND (p.doc -> 'access' ->> 'owners'  LIKE '%accounts.google.com:%'
+     OR p.doc -> 'access' ->> 'writers' LIKE '%accounts.google.com:%'
+     OR p.doc -> 'access' ->> 'readers' LIKE '%accounts.google.com:%');
 ```
 
 Never put a literal such as `dev@localhost` here. It makes every visitor the

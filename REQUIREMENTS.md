@@ -129,6 +129,23 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `server/tests/test_signoff.py` (the rules, and the exploit against
   the real API); `tests/test_stack.py` (the same exploit through a real Caddy).
 
+### R-30 One person has one identity id, whichever way they arrive
+
+- Status: Active
+- The id is the key every access list is matched against, so the plain-header
+  and JWT paths, and any front door, must give the same person the same id. The
+  front door's scheme prefix (Google IAP's `accounts.google.com:`) is stripped in
+  one place, after both parsers, and `make up` refuses a Google identity source
+  whose `IDENTITY_STRIP_PREFIX` is not Google's, because ids stored with the
+  prefix stop matching later and every project vanishes from its owner.
+- History: the strip applied to plain headers only, compose passed the prefix
+  through empty, and `.env.example` re-emptied it with a later line (#35).
+- Source: #35; DECISIONS D-34.
+- Enforced by: `server/tests/test_auth.py` (both paths agree),
+  `tests/test_preflight.py` (the refusal, and the template's own Google block
+  passing), and `server/tests/test_identity_repair.py` (the documented repair,
+  run against PostgreSQL).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

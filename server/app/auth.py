@@ -291,17 +291,37 @@ def _identity_from_jwt(raw: str, settings: Settings) -> Identity:
     return Identity(id=subject or email, name=name or email, email=email)
 
 
+def _normalized(identity: Identity, settings: Settings) -> Identity:
+    """Strip the front door's scheme prefix from every field, on every path.
+
+    The id is the key every access list is matched against, so two ways of
+    arriving as the same person must produce the same id. The strip used to be
+    applied to plain headers only, so a JWT-format front door pointed at a
+    prefixed claim stored ``accounts.google.com:...`` in access lists, which
+    stopped matching the moment those people arrived another way, and every
+    project silently vanished from its owner (#35). Done once, here, after both
+    parsers, so they cannot diverge again.
+    """
+    prefix = settings.identity_strip_prefix
+    if not prefix:
+        return identity
+    return Identity(
+        id=_strip_prefix(identity.id, prefix),
+        name=_strip_prefix(identity.name, prefix),
+        email=_strip_prefix(identity.email, prefix),
+        dev=identity.dev,
+    )
+
+
 def _identity_from_plain(raw: str, request: Request, settings: Settings) -> Identity:
-    email = _strip_prefix(raw, settings.identity_strip_prefix)
+    email = raw
     name = ""
     if settings.identity_name_header:
         name = (request.headers.get(settings.identity_name_header) or "").strip()
-        name = _strip_prefix(name, settings.identity_strip_prefix)
     user_id = ""
     if settings.identity_id_header:
         user_id = (request.headers.get(settings.identity_id_header) or "").strip()
-        user_id = _strip_prefix(user_id, settings.identity_strip_prefix)
-    if not email:
+    if not _strip_prefix(email, settings.identity_strip_prefix):
         raise _unauthorized(
             f"{settings.identity_header} was present but empty after parsing."
         )
@@ -348,5 +368,5 @@ def identity_from_request(request: Request, settings: Settings) -> Identity:
         )
 
     if settings.identity_header_format == "jwt":
-        return _identity_from_jwt(raw, settings)
-    return _identity_from_plain(raw, request, settings)
+        return _normalized(_identity_from_jwt(raw, settings), settings)
+    return _normalized(_identity_from_plain(raw, request, settings), settings)

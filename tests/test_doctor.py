@@ -54,6 +54,8 @@ elif "volume inspect" in joined:
     print("/var/lib/docker/volumes/chai-governance_pgdata/_data")
 elif "info" in joined and "DockerRootDir" in joined:
     print("/var/lib/docker")
+elif "psql" in joined and "pg_total_relation_size" in joined:
+    print(sc.get("growth", "0|0|0|0|0"))
 elif "psql" in joined and "jsonb_array_length" in joined:
     print(sc.get("sole_owners", 0))
 elif "psql" in joined:
@@ -90,6 +92,7 @@ def doctor(
     env_text: str = ENV,
     sole_owners: int = 0,
     block_types: str | None = None,
+    growth: str = "0|0|0|0|0",
 ):
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
@@ -122,6 +125,7 @@ def doctor(
                         "health": health,
                         "logins": logins,
                         "sole_owners": sole_owners,
+                        "growth": growth,
                     }
                 ),
                 "CALLS": str(calls),
@@ -229,6 +233,43 @@ def main() -> int:
     check(
         "none is reported as fine",
         "no project depends on a single owner" in done.stdout,
+    )
+
+    print("How big the append-only tables are, and growing (#54)")
+    done, _ = doctor(
+        HEALTH["restricted"],
+        {"chai": True, "chai_app": True},
+        growth="2400|52428800|1048576|3145728|5368709120",
+    )
+    check(
+        "the revision count and size are reported",
+        "2,400 revision(s)" in done.stdout and "50.0 MB" in done.stdout,
+        done.stdout[-600:],
+    )
+    check(
+        "so is the average, which is what makes it predictable",
+        "average" in done.stdout and "21.3 KB" in done.stdout,
+        done.stdout[-600:],
+    )
+    check(
+        "the whole database size is reported",
+        "database" in done.stdout and "5.0 GB" in done.stdout,
+    )
+    check(
+        "the read trail's size is reported too, with why it grows",
+        "read trail 3.0 MB" in done.stdout and "grows with use" in done.stdout,
+        done.stdout[-500:],
+    )
+    check(
+        "it says these tables never shrink by themselves",
+        "never shrink" in done.stdout,
+        done.stdout[-500:],
+    )
+    check("and reporting size is not a failure", done.returncode == 0)
+    done, _ = doctor(HEALTH["restricted"], {"chai": True, "chai_app": True}, growth="")
+    check(
+        "an unreadable answer is skipped, not a crash",
+        done.returncode == 0 and "revision(s)" not in done.stdout,
     )
 
     print("What backs the database volume (#47)")

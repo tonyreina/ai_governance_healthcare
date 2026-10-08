@@ -201,7 +201,7 @@ async function loadSamples(){
   const now=new Date();
   const have=new Set([...PROJECTS.values()].map(p=>(p.meta.solution||"").trim()));
   const missing=SAMPLES.filter(spec=>!have.has(spec.name));
-  if(!missing.length){ toast("All sample projects are already here"); return; }
+  if(!missing.length){ toast(t("toast.samplesHere")); return; }
   for(const spec of missing) await createProject(buildSample(spec, now), "Sample project added");
-  toast(`${missing.length} sample project${missing.length===1?"":"s"} added`);
+  toast(t("toast.samplesAdded",{count:missing.length}));
 }

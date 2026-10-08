@@ -45,7 +45,7 @@ function exportPDF(){
     const win = frame.contentWindow;
     const go = () => {
       try{ win.focus(); win.print(); }
-      catch(e){ toast("Couldn't open the print dialog"); }
+      catch(e){ toast(t("toast.printFailed")); }
       // Keep the frame alive briefly: some browsers run print() asynchronously
       // and removing it immediately cancels the dialog.
       setTimeout(() => frame.remove(), 60000);
@@ -59,7 +59,7 @@ function exportPDF(){
   // srcdoc keeps it same-origin, so contentWindow.print() is reachable; a blob
   // URL would be a different origin in some browsers and throw.
   frame.srcdoc = exportHTML();
-  toast("Opening the print dialog. Choose \u201cSave as PDF\u201d.");
+  toast(t("toast.printOpening"));
 }
 
 function exportMD(){
@@ -69,7 +69,7 @@ function exportMD(){
   // an escaped backslash and a live pipe that ends the cell (#124).
   const line=s=>String(s||"").replace(/\n+/g," ").replace(/\\/g,"\\\\").replace(/\|/g,"\\|");
   const nm=id=>displayName(id);
-  L.push(`# ${m.solution||"Untitled AI solution"}: CHAI assurance review`,"");
+  L.push(`# ${m.solution||t("project.untitled")}: CHAI assurance review`,"");
   L.push(`- **Status:** ${statusOf(S).label}`,`- **Lifecycle phase:** ${phase(S).label}`,`- **Organization:** ${m.org||"–"}`,`- **Developer:** ${m.developer||"–"}`,`- **Sourcing:** ${m.sourcing||"–"}`,`- **Risk tier:** ${m.riskTier||"–"}`,`- **Clinical sponsor:** ${m.sponsor||"–"}`,`- **Next periodic review:** ${nextReview(S)||"–"}`,`- **Review team:** ${line(m.reviewers)||"–"}`,`- **Scope:** ${line(m.scope)||"–"}`,`- **Generated:** ${TODAY()}`,`- **Stored in:** ${storageNote().label}. ${storageNote().note}`,"");
   const F=flags(S); L.push("## Compliance flags",""); if(F.length) F.forEach(f=>L.push(`- **${f.sev==="red"?"Out of compliance":"Needs update"}:** ${f.text}`)); else L.push("None."); L.push("");
   L.push(`## Readiness`,"",`Overall: **${ov.pct}%** of applicable criteria met (${ov.answered}/${ov.total} answered).`,"","| Principle | Score |","|---|---|");
@@ -148,8 +148,8 @@ function updateDlUI(){
   if(DL||STANDALONE){ btns.forEach(b=>b.hidden=false); fb.innerHTML=""; return; }
   if(!dlChecked) return;
   btns.forEach(b=>b.hidden=true);
-  fb.innerHTML=`<details class="fallback"><summary style="cursor:pointer;font-size:14px;font-weight:600">Downloads aren't available in this view. Copy the export instead.</summary>
-    <p style="font-size:13px;color:var(--muted)">Markdown pastes into most wikis and docs; JSON can be imported here or read from Python.</p>
+  fb.innerHTML=`<details class="fallback"><summary style="cursor:pointer;font-size:14px;font-weight:600">${esc(t("dl.unavailable"))}</summary>
+    <p style="font-size:13px;color:var(--muted)">${esc(t("dl.howTo"))}</p>
     <label class="vh" for="fbmd">Markdown</label><textarea id="fbmd" readonly>${esc(exportMD())}</textarea>
     <label class="vh" for="fbjs">JSON</label><textarea id="fbjs" readonly style="margin-top:8px">${esc(JSON.stringify(projectJSON(S),null,2))}</textarea></details>`;
 }
@@ -159,7 +159,7 @@ function updateDlUI(){
 async function noteExport(format){
   if(!STORE || typeof STORE.recordExport!=="function") return;
   try{ await STORE.recordExport(format===ExportFormat.CSV ? null : CUR, format); }
-  catch(e){ toast("The export was produced, but could not be recorded in the access log."); }
+  catch(e){ toast(t("toast.exportNotRecorded")); }
 }
 
 async function download(filename,data){
@@ -168,16 +168,16 @@ async function download(filename,data){
     const ext=filename.split(".").pop();
     const url=URL.createObjectURL(new Blob([data],{type:(types[ext]||"text/plain")+";charset=utf-8"}));
     const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1000); toast("Saved "+filename); return;
+    setTimeout(()=>URL.revokeObjectURL(url),1000); toast(t("toast.savedFile",{name:filename})); return;
   }
-  if(!DL){ toast("Downloads aren't available here"); return; }
-  try{ const r=await DL.save({filename,data}); if(r&&r.status==="saved") toast("Saved "+filename); }
+  if(!DL){ toast(t("toast.noDownloads")); return; }
+  try{ const r=await DL.save({filename,data}); if(r&&r.status==="saved") toast(t("toast.savedFile",{name:filename})); }
   catch(e){
     const c=e&&e.code;
     if(c==="declined") return;
-    if(c==="rate_limited") toast("A save prompt is already open");
-    else if(c==="extension_not_enabled") toast("That file type isn't available here");
-    else { DL=null; updateDlUI(); toast("Downloads aren't available here"); }
+    if(c==="rate_limited") toast(t("toast.savePromptOpen"));
+    else if(c==="extension_not_enabled") toast(t("toast.fileTypeUnavailable"));
+    else { DL=null; updateDlUI(); toast(t("toast.noDownloads")); }
   }
 }
 
@@ -191,49 +191,38 @@ async function download(filename,data){
    which is the mistake that actually happens -- deleting the right
    kind of thing from the wrong row. */
 function openDeleteDialog(){
-  const name = S.meta.solution || "Untitled AI solution";
+  const name = S.meta.solution || t("project.untitled");
   /* Only the server keeps a version history, so only it can offer to destroy one.
      In the other modes deleting really does remove everything, and the plain
      wording is accurate; offering a choice with nothing behind it would not be. */
   const canPurge = typeof STORE.purgeVersions === "function";
-  const heading = canPurge ? "Delete this project?" : "Delete this project forever?";
+  const heading = canPurge ? t("del.title") : t("del.titleForever");
   const consequence = canPurge
-    ? `<p>This removes the review for <b>everyone</b>: the checklist, every
-      checkpoint decision and its sign-offs, the model card and the live audit
-      log, and it leaves the portfolio.</p>
-      <p><b>Its version history is kept.</b> Every earlier revision stays readable
-      by owners, so the record can still be audited. That is usually what you want.
-      To destroy that too, choose it below.</p>`
-    : `<p>This destroys the review for <b>everyone</b>: the checklist, every
-      checkpoint decision and its sign-offs, the model card and the audit log.
-      It cannot be undone.</p>`;
+    ? `<p>${esc(t("del.removes"))}</p>
+      <p><b>${esc(t("del.historyKeptTitle"))}</b> ${esc(t("del.historyKeptDetail"))}</p>`
+    : `<p>${esc(t("del.destroys"))}</p>`;
   const purgeChoice = canPurge ? `
       <label style="display:flex;gap:8px;align-items:flex-start;margin:12px 0 2px">
         <input type="checkbox" id="delPurge" aria-describedby="delPurgeHint"
                style="margin-top:4px">
-        <span><b>Also permanently destroy its version history and the content of its
-        audit log</b></span>
+        <span><b>${esc(t("del.purgeChoice"))}</b></span>
       </label>
-      <p id="delPurgeHint" class="small" style="color:var(--muted);margin-top:0">
-        For something that should never have been recorded, such as a patient
-        identifier. It cannot be undone. Who changed what, and when, is kept; what
-        was written is not. Backups made earlier still hold it.</p>` : "";
+      <p id="delPurgeHint" class="small" style="color:var(--muted);margin-top:0">${esc(t("del.purgeHint"))}</p>` : "";
   const host = document.createElement("div");
   host.className = "modal-backdrop";
   host.innerHTML = `
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delTitle">
-      <h2 id="delTitle" style="margin-top:0">${heading}</h2>
+      <h2 id="delTitle" style="margin-top:0">${esc(heading)}</h2>
       ${consequence}
-      <p><b>Archive it instead</b> if you only want it off the active portfolio.
-      Archiving keeps the whole record and can be reversed.</p>${purgeChoice}
-      <label for="delName">Type <b>${esc(name)}</b> to confirm</label>
+      <p>${esc(t("del.archiveInstead"))}</p>${purgeChoice}
+      <label for="delName">${tHtml("del.typeName",{},{name:`<b>${esc(name)}</b>`})}</label>
       <input type="text" id="delName" autocomplete="off" spellcheck="false"
              aria-describedby="delHint">
-      <p id="delHint" class="small" style="color:var(--muted)">The name must match exactly.</p>
+      <p id="delHint" class="small" style="color:var(--muted)">${esc(t("del.mustMatch"))}</p>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
-        <button class="btn" data-del-cancel>Cancel</button>
-        <button class="btn" data-del-archive>Archive instead</button>
-        <button class="btn danger" data-del-go disabled>${canPurge ? "Delete project" : "Delete forever"}</button>
+        <button class="btn" data-del-cancel>${esc(t("dash.cancel"))}</button>
+        <button class="btn" data-del-archive>${esc(t("del.archiveButton"))}</button>
+        <button class="btn danger" data-del-go disabled>${esc(canPurge ? t("setup.delete") : t("del.forever"))}</button>
       </div>
     </div>`;
   document.body.appendChild(host);
@@ -242,7 +231,7 @@ function openDeleteDialog(){
   const go = host.querySelector("[data-del-go]");
   const purgeBox = host.querySelector("#delPurge");
   if(purgeBox) purgeBox.addEventListener("change", () => {
-    go.textContent = purgeBox.checked ? "Delete and destroy history" : "Delete project";
+    go.textContent = purgeBox.checked ? t("del.goPurge") : t("setup.delete");
   });
   const close = () => { host.remove(); document.removeEventListener("keydown", onKey); };
   const onKey = e => { if(e.key === "Escape") close(); };
@@ -260,14 +249,14 @@ function openDeleteDialog(){
     queuePatch(CUR, Object.assign({archived:v}, stamp()));
     writeLog(CUR, "Archived");
     renderMain(false);
-    toast("Project archived");
+    toast(t("toast.archived"));
   };
 
   go.onclick = async () => {
     if(field.value.trim() !== name) return;   // belt and braces
     const id = CUR;
     const destroy = !!(purgeBox && purgeBox.checked);
-    go.disabled = true; go.textContent = "Deleting…";
+    go.disabled = true; go.textContent = t("del.deleting");
     close();
     delete pending[id]; clearTimeout(timers[id]);
     /* History first, then the project. If destroying the history fails, the project
@@ -275,15 +264,15 @@ function openDeleteDialog(){
        The other order would delete the record and then leave its history behind. */
     if(destroy){
       try{ await STORE.purgeVersions(id); }
-      catch(err){ toast("Couldn't destroy the history, so the project was not deleted."); return; }
+      catch(err){ toast(t("toast.purgeFailed")); return; }
     }
     try{
       await STORE.remove(id); goHome();
-      toast(destroy ? "Project deleted and its history destroyed" : "Project deleted");
+      toast(destroy ? t("toast.deletedPurged") : t("toast.deleted"));
     }
     catch(err){
-      toast(destroy ? "The history was destroyed, but the project could not be deleted. Try again."
-                    : "Couldn't delete the project");
+      toast(destroy ? t("toast.purgedNotDeleted")
+                    : t("toast.deleteFailed"));
     }
   };
 

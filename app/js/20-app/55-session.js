@@ -31,7 +31,7 @@ function renderSignOut(url){
     header.insertBefore(a, saved ? saved.nextSibling : null);
   }
   a.setAttribute("href",url);
-  a.textContent="Sign out";
+  a.textContent=t("session.signOut");
   return true;
 }
 
@@ -68,11 +68,9 @@ function lockNow(){
   el.setAttribute("aria-modal","true");
   el.setAttribute("aria-labelledby","lockTitle");
   el.innerHTML=`<div class="lock-card">
-    <h1 id="lockTitle">Locked</h1>
-    <p>This workspace locked after a period of inactivity, so the record is not left
-    open on an unattended screen. Your changes were saved. Reload to continue; you may
-    be asked to sign in again.</p>
-    <button class="btn primary" type="button" data-act="${Act.UNLOCK}">Reload</button>
+    <h1 id="lockTitle">${esc(t("session.locked"))}</h1>
+    <p>${esc(t("session.lockedDetail"))}</p>
+    <button class="btn primary" type="button" data-act="${Act.UNLOCK}">${esc(t("session.reload"))}</button>
   </div>`;
   document.body.classList.add("locked");
   document.body.appendChild(el);

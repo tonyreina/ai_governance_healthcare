@@ -6,17 +6,17 @@ function setSaved(t){ document.getElementById("saved").textContent=t; }
    mode without deciding its wording is a gap the test in test_boot_storage.py
    finds, and an unknown mode falls back to a label that claims nothing rather
    than to one that claims the wrong place. Only LOCAL may say "browser". */
-const SAVED_LABEL = Object.freeze({
-  [Mode.LOCAL]: "Saved in this browser",
-  [Mode.API]: "Saved to shared workspace",
-  [Mode.ARTIFACT]: "Saved to this Claude artifact",
+const SAVED_LABEL = Object.freeze({   // catalog keys: the text is the reader's language
+  [Mode.LOCAL]: "saved.local",
+  [Mode.API]: "saved.api",
+  [Mode.ARTIFACT]: "saved.artifact",
 });
-function savedLabel(mode){ return SAVED_LABEL[mode] || "Saved"; }
+function savedLabel(mode){ return t(SAVED_LABEL[mode] || "saved.generic"); }
 function stamp(extra){ return Object.assign({updatedAt:new Date().toISOString(), updatedBy:ME.id||null}, extra||{}); }
 function queuePatch(pid,patch){
   if(RO) return;
   deepMerge(pending[pid]||(pending[pid]={}), patch);
-  setSaved("Saving…");
+  setSaved(t("saved.saving"));
   clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid),550);
 }
 /* Send one project's pending patch.
@@ -49,7 +49,7 @@ async function flush(pid,attempt){
     if(c==="unavailable" && n < MAX_SAVE_ATTEMPTS){
       restore();
       flushing[pid]=false;
-      setSaved("Not saved yet \u2014 retrying");
+      setSaved(t("saved.retrying"));
       setTimeout(()=>flush(pid,n), Math.min(8000, 400*Math.pow(2,n)) + Math.random()*400);
       return;
     }
@@ -60,22 +60,22 @@ async function flush(pid,attempt){
     if(c==="permission_denied" || c==="invalid_argument" || c==="revoked"){
       restore();
       setReadOnly(true);
-      toast("Your access to this project changed. Your latest edits could not be saved.");
-      setSaved("Not saved \u2014 no longer editable");
+      toast(t("toast.accessChanged"));
+      setSaved(t("saved.noLongerEditable"));
     }
     else if(c==="not_found"){
-      toast("This project no longer exists, so your last edits could not be saved.");
-      setSaved("Not saved");
+      toast(t("toast.projectGone"));
+      setSaved(t("saved.not"));
     }
     else if(c==="quota_exceeded"){
       restore();
-      toast("The workspace is full. Archive or delete old projects.");
-      setSaved("Not saved \u2014 workspace full");
+      toast(t("toast.full"));
+      setSaved(t("saved.full"));
     }
     else {
       restore();
-      toast("Couldn't save. Your changes are still here; check your connection.");
-      setSaved("Not saved");
+      toast(t("toast.saveFailed"));
+      setSaved(t("saved.not"));
     }
   } finally { flushing[pid]=false; }
 }
@@ -213,14 +213,14 @@ async function drainLog(){
         // record now does not show.
         if(code === "permission_denied" || code === "not_found"){
           logQueue.shift();
-          setSaved("Audit entry not recorded");
-          toast("That change was saved, but could not be added to the audit log.");
+          setSaved(t("saved.auditNot"));
+          toast(t("toast.auditFailed"));
           continue;
         }
         if(++item.tries >= 5){
           logQueue.shift();
-          setSaved("Audit entry not recorded");
-          toast("That change was saved, but could not be added to the audit log.");
+          setSaved(t("saved.auditNot"));
+          toast(t("toast.auditFailed"));
           continue;
         }
         // Back off and let a later call pick it up.
@@ -249,5 +249,5 @@ async function createProject(data,logText){
       text:logText||"Project created", hash:contentHash(data)});
     return id;
   }
-  catch(e){ toast(e&&e.code==="quota_exceeded"?"The workspace is full. Archive or delete old projects.":"Couldn't create the project"); return null; }
+  catch(e){ toast(e&&e.code==="quota_exceeded"?t("toast.full"):t("toast.createFailed")); return null; }
 }

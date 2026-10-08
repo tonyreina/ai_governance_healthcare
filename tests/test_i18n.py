@@ -221,6 +221,31 @@ def main() -> int:
             str(statuses),
         )  # fmt: skip
 
+        print("The report, notices and dialogs")
+        page.evaluate("openProject([...PROJECTS.keys()][0], 'report')")
+        page.wait_for_timeout(200)
+        body = page.inner_text("#main")
+        check("the report chrome is German", "Konformitätshinweise" in body)
+        check(
+            "its unreviewed disclaimer stays English",
+            "not a certification, legal opinion, or regulatory determination" in body,
+        )
+        page.evaluate("toast(t('toast.archived'))")
+        check("a notice is German", page.inner_text("#toast") == "Projekt archiviert")
+        check(
+            "the saved label is German",
+            page.evaluate("savedLabel(MODE)") == "In diesem Browser gespeichert",
+        )
+        page.evaluate("openDeleteDialog()")
+        dialog = page.inner_text(".modal")
+        check(
+            "the delete dialog is German",
+            "Endgültig löschen" in dialog or "Projekt löschen" in dialog,
+            dialog[:80],
+        )
+        page.keyboard.press("Escape")
+        page.evaluate("goHome()")
+
         print("Plural flags pick the language's form")
         page.evaluate("setLocale('ru')")
         forms = page.evaluate(

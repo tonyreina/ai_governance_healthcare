@@ -3,56 +3,56 @@
    ============================================================ */
 document.addEventListener("click",async e=>{
   const row=e.target.closest(".prow");
-  const t=e.target.closest("button");
-  if(!t && row){ openProject(row.dataset.open); return; }
-  if(!t) return;
-  if(t.dataset.archive && !WORKSPACE_RO){
-    const id=t.dataset.archive, p=PROJECTS.get(id);
+  const btn=e.target.closest("button");
+  if(!btn && row){ openProject(row.dataset.open); return; }
+  if(!btn) return;
+  if(btn.dataset.archive && !WORKSPACE_RO){
+    const id=btn.dataset.archive, p=PROJECTS.get(id);
     if(!p) return;
-    if(!canOwn(p)){ toast("Only an owner can archive this project"); return; }
+    if(!canOwn(p)){ toast(t("toast.ownerArchive")); return; }
     const v=!p.archived;
     p.archived=v;
     queuePatch(id, Object.assign({archived:v}, stamp()));
     writeLog(id, v?"Archived":"Restored");
     updateDashboard();
-    toast(v?"Project archived":"Project restored");
+    toast(v?t("toast.archived"):t("toast.restored"));
     return;
   }
-  if(t.dataset.revoke && canOwn(S)){
-    const id=t.dataset.revoke;
-    if(wouldOrphan(S,id,"")){ toast("A project must keep at least one owner"); return; }
+  if(btn.dataset.revoke && canOwn(S)){
+    const id=btn.dataset.revoke;
+    if(wouldOrphan(S,id,"")){ toast(t("toast.keepOwner")); return; }
     S.access=accessPatch(S,id,""); queuePatch(CUR,Object.assign({access:S.access},stamp()));
-    writeLog(CUR,`Removed access for ${id}`); renderMain(false); toast("Access removed"); return;
+    writeLog(CUR,`Removed access for ${id}`); renderMain(false); toast(t("toast.accessRemoved")); return;
   }
-  if(t.dataset.open){ openProject(t.dataset.open); return; }
-  if(t.dataset.home){ goHome(); return; }
-  if(t.dataset.go){ go(t.dataset.go); return; }
-  if(t.dataset.framework && !RO){
-    const f=frameworkById(t.dataset.framework);
+  if(btn.dataset.open){ openProject(btn.dataset.open); return; }
+  if(btn.dataset.home){ goHome(); return; }
+  if(btn.dataset.go){ go(btn.dataset.go); return; }
+  if(btn.dataset.framework && !RO){
+    const f=frameworkById(btn.dataset.framework);
     if(f && f.id==="optica") setOpticaEnabled(!f.enabled(S));
     return;
   }
-  if(t.dataset.filter){ UI.filter=t.dataset.filter; saveUI(); updateDashboard(); document.querySelector(`[data-filter="${UI.filter}"]`)?.focus(); return; }
-  if(t.dataset.set && !RO){
-    const id=t.dataset.set, store=t.dataset.store||"items";
+  if(btn.dataset.filter){ UI.filter=btn.dataset.filter; saveUI(); updateDashboard(); document.querySelector(`[data-filter="${UI.filter}"]`)?.focus(); return; }
+  if(btn.dataset.set && !RO){
+    const id=btn.dataset.set, store=btn.dataset.store||"items";
     const cur=((get(store)||{})[id]||{}).status||"";
-    const val = cur===t.dataset.s ? "" : t.dataset.s;
+    const val = cur===btn.dataset.s ? "" : btn.dataset.s;
     edit(`${store}.${id}.status`, val);
-    const li=t.closest(".ci");
+    const li=btn.closest(".ci");
     li.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.s===val)));
     if((val==="partial"||val==="notmet") && !openItems.has(id)){ openItems.add(id); li.classList.add("open"); const m=li.querySelector(".more"); m.textContent="Hide details"; m.setAttribute("aria-expanded","true"); }
     renderRail(); return;
   }
-  if(t.dataset.toggle){
-    const id=t.dataset.toggle, li=t.closest(".ci"); const open=!openItems.has(id);
+  if(btn.dataset.toggle){
+    const id=btn.dataset.toggle, li=btn.closest(".ci"); const open=!openItems.has(id);
     open?openItems.add(id):openItems.delete(id);
-    li.classList.toggle("open",open); t.textContent=open?"Hide details":"Evidence & owner"; t.setAttribute("aria-expanded",String(open));
+    li.classList.toggle("open",open); btn.textContent=open?"Hide details":"Evidence & owner"; btn.setAttribute("aria-expanded",String(open));
     if(open && !RO) li.querySelector("textarea").focus();
     return;
   }
-  if(t.dataset.gate && !RO){
-    const k=t.dataset.gate, g=S.gates[k]||{};
-    const val = g.decision===t.dataset.d ? "" : t.dataset.d;
+  if(btn.dataset.gate && !RO){
+    const k=btn.dataset.gate, g=S.gates[k]||{};
+    const val = g.decision===btn.dataset.d ? "" : btn.dataset.d;
     const now=new Date().toISOString();
     const patch={gates:{[k]:{decision:val, signedBy:val?(ME.id||null):null, signedAt:val?now:null, date: val ? (g.date||TODAY()) : (g.date||"")}}};
     deepMerge(S,patch); const st=stamp(); Object.assign(S,st);
@@ -63,10 +63,10 @@ document.addEventListener("click",async e=>{
   // Add a CHAI-recommended metric. Name and category only: the value, the
   // interval and the population are measurements the organization has to make,
   // and pre-filling them would be inventing results.
-  if(t.dataset.te && !RO){
-    const name=t.dataset.te;
+  if(btn.dataset.te && !RO){
+    const name=btn.dataset.te;
     if(!S.metrics.some(m=>(m.name||"").trim().toLowerCase()===name.trim().toLowerCase())){
-      S.metrics.push({cat:t.dataset.teCat||METRIC_CATS[0],name,value:"",ci:"",pop:""});
+      S.metrics.push({cat:btn.dataset.teCat||METRIC_CATS[0],name,value:"",ci:"",pop:""});
       saveMetrics();
     }
     renderMain(false); renderLabel();
@@ -76,22 +76,22 @@ document.addEventListener("click",async e=>{
     if(row) row.closest("tr").querySelector('input[aria-label="Value"]').focus();
     return;
   }
-  if(t.dataset.delmetric!=null && !RO){ S.metrics.splice(+t.dataset.delmetric,1); saveMetrics(); renderMain(false); renderLabel(); return; }
-  const a=t.dataset.act; if(!a) return;
+  if(btn.dataset.delmetric!=null && !RO){ S.metrics.splice(+btn.dataset.delmetric,1); saveMetrics(); renderMain(false); renderLabel(); return; }
+  const a=btn.dataset.act; if(!a) return;
   if(a===Act.UNLOCK){ location.reload(); return; }
   if(a==="new"){ const f=document.getElementById("newform"); if(f){ f.hidden=false; document.getElementById("newname").focus(); } return; }
   if(a==="new-cancel"){ document.getElementById("newform").hidden=true; return; }
   if(a==="samples"){
-    t.disabled=true;
+    btn.disabled=true;
     try{ await loadSamples(); }
-    finally{ t.disabled=false; }
+    finally{ btn.disabled=false; }
     return;
   }
   if(a==="legacy"){
     try{ const j=JSON.parse(localStorage.getItem("chai-review-v1")); const p=normalize(Object.assign(blankProject(j.meta.solution),{meta:j.meta,items:j.items||{},gates:j.gates||{},metrics:j.metrics||[],card:j.card||{}}));
       Object.values(p.items).forEach(x=>{ if(x) delete x._open; });
       const id=await createProject(p,"Imported from a review saved in this browser"); if(id){ localStorage.setItem("chai-legacy-imported","1"); document.getElementById("legacyBanner")?.remove(); toast("Review added to the workspace"); }
-    }catch(err){ toast("Couldn't read the earlier review"); }
+    }catch(err){ toast(t("toast.legacyFailed")); }
     return;
   }
   if(a==="legacy-dismiss"){ try{localStorage.setItem("chai-legacy-imported","1");}catch(e){} document.getElementById("legacyBanner")?.remove(); return; }
@@ -100,24 +100,24 @@ document.addEventListener("click",async e=>{
   if(!S) return;
   if(a===Act.LOG_OLDER){ if(STORE && STORE.showOlderLog) STORE.showOlderLog(CUR); return; }
   if(a==="claim"){
-    if(!ME.id){ toast("No signed-in user to claim ownership"); return; }
+    if(!ME.id){ toast(t("toast.noUserClaim")); return; }
     S.access=accessPatch(S,ME.id,"owner"); queuePatch(CUR,Object.assign({access:S.access},stamp()));
-    writeLog(CUR,"Claimed ownership"); RO=false; CAN_DELETE=true; renderProject(false); toast("You are now an owner"); return;
+    writeLog(CUR,"Claimed ownership"); RO=false; CAN_DELETE=true; renderProject(false); toast(t("toast.nowOwner")); return;
   }
   if(a==="grant"){
-    if(!canOwn(S)){ toast("Only an owner can grant access"); return; }
+    if(!canOwn(S)){ toast(t("toast.ownerGrant")); return; }
     const el=document.querySelector("[data-grant-id]");
     const id=el&&el.value?el.value.trim():"";
     const roleEl=document.querySelector("[data-grant-role]");
     const role=roleEl?roleEl.value:"reader";
-    if(!id){ toast("Enter a user id"); return; }
+    if(!id){ toast(t("toast.enterId")); return; }
     S.access=accessPatch(S,id,role); queuePatch(CUR,Object.assign({access:S.access},stamp()));
-    writeLog(CUR,`Granted ${ROLE_LABEL[role].toLowerCase()} to ${id}`); renderMain(false); toast("Access granted"); return;
+    writeLog(CUR,`Granted ${ROLE_LABEL[role].toLowerCase()} to ${id}`); renderMain(false); toast(t("toast.accessGranted")); return;
   }
   if(a==="addmetric"){ S.metrics.push({cat:METRIC_CATS[0],name:"",value:"",ci:"",pop:""}); saveMetrics(); renderMain(false); const ins=document.querySelectorAll('.mtable input[aria-label="Metric"]'); ins[ins.length-1]?.focus(); }
   else if(a==="example"){ exampleInto(S); const st=stamp(); queuePatch(CUR,Object.assign({meta:clone(S.meta),items:clone(S.items),gates:clone(S.gates),metrics:clone(S.metrics),card:clone(S.card),cardUpdatedAt:S.cardUpdatedAt},st)); writeLog(CUR,"Example data filled in"); renderProject(false); toast("Example filled in"); }
-  else if(a==="archive"){ if(!canOwn(S)){ toast("Only an owner can archive this project"); return; } const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?"Project archived":"Project restored"); }
-  else if(a==="delete"){ if(!canOwn(S)){ toast("Only an owner can delete this project"); return; } openDeleteDialog(); }
+  else if(a==="archive"){ if(!canOwn(S)){ toast(t("toast.ownerArchive")); return; } const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?t("toast.archived"):t("toast.restored")); }
+  else if(a==="delete"){ if(!canOwn(S)){ toast(t("toast.ownerDelete")); return; } openDeleteDialog(); }
   else if(a==="newreview"){ const now=new Date().toISOString(); const patch={gates:{D:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); writeLog(CUR,`Checkpoint D: periodic review recorded (${S.gates.D.decision})`); renderRail(); renderMain(false); toast("Periodic review recorded"); }
   else if(a==="dl-html"){ download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML()); noteExport(ExportFormat.HTML); }
   else if(a==="dl-md"){ download(`${slug(S.meta.solution)}-chai-review.md`, exportMD()); noteExport(ExportFormat.MD); }
@@ -188,8 +188,8 @@ document.getElementById("importFile").onchange=async e=>{
     Object.values(p.items).forEach(x=>{ if(x) delete x._open; }); delete p.view;
     p.updatedAt=new Date().toISOString(); p.updatedBy=ME.id||null;
     const id=await createProject(p,"Imported from a JSON export");
-    if(id) toast("Project imported");
-  }catch(err){ toast("That file isn't a project export from this tool"); }
+    if(id) toast(t("toast.imported"));
+  }catch(err){ toast(t("toast.badImport")); }
   e.target.value="";
 };
 const panel=document.getElementById("panel");

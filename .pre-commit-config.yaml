@@ -66,6 +66,15 @@ repos:
         language: system
         types: [text]
 
+      # The message catalogs: same keys, placeholders and plural forms as en.json,
+      # no markup, and every key used (#80).
+      - id: check-i18n
+        name: check the message catalogs
+        entry: pixi run check-i18n
+        language: system
+        pass_filenames: false
+        files: '^(app/i18n/|app/js/|app/index\.html$|scripts/check_i18n\.py$)'
+
       # A closed set of values gets an enumerated type, not a bare string. It is
       # a ratchet: scripts/enum_baseline.json holds the existing uses, a new one
       # fails, and fixing one fails until the baseline is ratcheted down. Run

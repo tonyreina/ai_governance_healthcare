@@ -250,6 +250,7 @@ aside.panel{position:sticky;top:calc(env(safe-area-inset-top,0px) + 58px);align-
 /* ---------- portfolio / shared additions ---------- */
 .brand-btn{all:unset;cursor:pointer;border-radius:4px}
 .brand-btn:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+.lang{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);color:var(--ink);max-width:9.5em}
 .mode{font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
 .mode.shared{background:var(--teal-soft);color:var(--teal)}
 .mode.artifact{background:var(--sunk);color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber)}
@@ -359,24 +360,29 @@ body.ro .ro-hide{display:none!important}
 </head>
 <body class="home">
 <header class="top">
-  <button class="brand-btn" id="brandBtn" type="button" aria-label="Go to all projects"><span class="brand">Health AI assurance review<small id="projName">Portfolio</small></span></button>
-  <span class="mode" id="mode">Connecting…</span>
+  <button class="brand-btn" id="brandBtn" type="button" aria-label="Go to all projects" data-i18n-aria="header.goHome"><span class="brand"><span data-i18n="header.brand">Health AI assurance review</span><small id="projName">Portfolio</small></span></button>
+  <span class="mode" id="mode" data-i18n="header.connecting">Connecting…</span>
   <div class="spacer"></div>
   <span class="saved" id="saved" aria-live="polite"></span>
-  <button class="btn ghost preview-toggle proj-only" id="openPreview" type="button">Model card</button>
-  <input type="file" id="importFile" accept="application/json,.json" class="vh" aria-label="Import project JSON">
-  <button class="btn proj-only" id="goReport" type="button">View report</button>
+  <label class="vh" for="lang" data-i18n="lang.label">Language</label>
+  <select class="lang" id="lang"></select>
+  <button class="btn ghost preview-toggle proj-only" id="openPreview" type="button" data-i18n="header.modelCard">Model card</button>
+  <input type="file" id="importFile" accept="application/json,.json" class="vh" aria-label="Import project JSON" data-i18n-aria="header.import">
+  <button class="btn proj-only" id="goReport" type="button" data-i18n="header.viewReport">View report</button>
 </header>
 <div class="shell">
-  <nav class="rail" aria-label="Review steps"><ol id="rail"></ol></nav>
+  <nav class="rail" aria-label="Review steps" data-i18n-aria="nav.steps"><ol id="rail"></ol></nav>
   <main id="main" tabindex="-1"></main>
-  <aside class="panel" id="panel" aria-label="Applied model card preview">
-    <div class="panel-head"><p>Applied model card, live</p><button class="btn ghost panel-close" id="closePreview" type="button">Close</button></div>
+  <aside class="panel" id="panel" aria-label="Applied model card preview" data-i18n-aria="panel.label">
+    <div class="panel-head"><p data-i18n="panel.title">Applied model card, live</p><button class="btn ghost panel-close" id="closePreview" type="button" data-i18n="panel.close">Close</button></div>
     <div id="labelHost"></div>
   </aside>
 </div>
 <div class="toast" id="toast" role="status"></div>
 <script>
+/* Generated from app/i18n/*.json by scripts/build_app.py. */
+const I18N_CATALOGS = Object.freeze({"en":{"@meta":{"locale":"en","name":"English","safety":["safety.scope","safety.local.title","safety.local.detail","safety.artifact.title","safety.artifact.detail","safety.server.detail"]},"lang.label":"Language","header.brand":"Health AI assurance review","header.goHome":"Go to all projects","header.portfolio":"Portfolio","header.connecting":"Connecting…","header.modelCard":"Model card","header.import":"Import project JSON","header.viewReport":"View report","nav.steps":"Review steps","nav.allProjects":"All projects","panel.label":"Applied model card preview","panel.title":"Applied model card, live","panel.close":"Close","project.untitled":"Untitled AI solution","mode.local":"This browser only","mode.api":"Shared workspace","mode.artifact":"Claude artifact","mode.viewOnly":"View only","mode.notConnected":"Not connected","mode.noAccess":"No access","safety.scope":"Governance metadata only: never enter patient-identifiable information.","safety.local.title":"Saved in this browser only.","safety.local.detail":"Nothing is sent to a server: colleagues cannot see these records, there is no audit log, no access control, and clearing site data deletes them. For a shared workspace, deploy the server (see the deployment guide).","safety.artifact.title":"Stored in this Claude artifact.","safety.artifact.detail":"Records are kept in the artifact's database, not on a server your organization runs. Access control is only partly enforced and there are no version snapshots. For the audited, access-controlled workspace, deploy the server (see the deployment guide).","safety.server.detail":"This workspace is for review records, not clinical data. If patient information is entered by mistake, a project owner can purge it from the history; report it as your organization's policy requires.","fatal.eyebrow":"Cannot start","fatal.retry":"Try again","fatal.denied.title":"You do not have access to this workspace","fatal.denied.detail":"The governance server refused this sign-in. Your account may not be authorized for this deployment, or your session may have ended.","fatal.denied.hint":"Signing out and back in may help. If it does not, ask whoever administers this deployment to grant your account access.","fatal.unreachable.title":"Cannot reach the governance server","fatal.unreachable.detail":"This workspace is stored on a server, and the app could not reach it. Nothing has been lost: your projects are on the server.","fatal.unreachable.hint":"This is usually temporary. If it persists, the API or its database may be down; check with whoever administers this deployment.","dash.eyebrow":"AI governance","dash.title":"AI projects under review","dash.lede":"Every AI solution your organization is evaluating or running, checked against the CHAI lifecycle. Projects out of compliance or needing an update rise to the top.","dash.addSamples":"Add samples","dash.addSamplesTitle":"Add any sample projects not already in this workspace","dash.newProject":"New project","dash.legacy":"A review of {name} was saved in this browser before the shared workspace existed.","dash.legacyUnnamed":"an AI solution","dash.legacyAdd":"Add it to the workspace","dash.legacyDismiss":"Dismiss","dash.newName":"Name of the AI solution","dash.newNamePlaceholder":"Name of the AI solution, e.g. Sepsis early warning","dash.create":"Create project","dash.cancel":"Cancel","dash.filterLabel":"Filter by status","dash.searchLabel":"Search projects","dash.searchNames":"Search by name, developer, or sponsor","dash.searchAll":"Search every field: a name, a vendor, a phrase","dash.searchAllToggle":"Search all text","dash.exportCsv":"Export portfolio (CSV)","dash.importJson":"Import project JSON","dash.loading":"Loading projects…","dash.tally.red":"Out of compliance","dash.tally.amber":"Needs update","dash.tally.green":"On track","dash.tally.retired":"Retired or stopped","dash.tally.all":"All active","dash.tally.archived":"Archived","dash.searchNote":"Searching the current text of every project you can open, archived ones included. Earlier versions and the audit log are not searched.","dash.searchNoteServer":"An administrator can search those with make subject-access.","dash.empty":"No AI projects yet. Add the first solution your organization is evaluating, or load {count} sample projects, one per CHAI use case, to see how compliance flags work.","dash.loadSamples":"Load sample projects","dash.noTextMatch":"No project contains that text.","dash.noMatch":"No projects match. Clear the search or choose another status.","dash.col.project":"Project","dash.col.lifecycle":"Lifecycle","dash.col.readiness":"Readiness","dash.col.nextReview":"Next review","dash.col.status":"Status","dash.sponsor":"Sponsor: {name}","dash.noDeveloper":"No developer or sponsor recorded","dash.updated":"Updated {when} by {who}","dash.archivedTag":"archived","dash.foundIn":"Found in: {places}","dash.andMore":"and {count} more","dash.overdue":"overdue","dash.notSet":"not set","dash.notLive":"not live","dash.archive":"Archive","dash.restore":"Restore","dash.archiveLabel":"Archive {name}","dash.restoreLabel":"Restore {name}","dash.archiveTitle":"Archive: keeps the record, removes it from the active portfolio","dash.restoreTitle":"Restore to the active portfolio","dash.thisProject":"this project"},"de":{"@meta":{"locale":"de","name":"Deutsch","machineDrafted":true,"reviewers":{}},"lang.label":"Sprache","header.brand":"KI-Prüfung im Gesundheitswesen","header.goHome":"Zu allen Projekten","header.portfolio":"Portfolio","header.connecting":"Verbindung wird hergestellt…","header.modelCard":"Modellkarte","header.import":"Projekt-JSON importieren","header.viewReport":"Bericht anzeigen","nav.steps":"Prüfungsschritte","nav.allProjects":"Alle Projekte","panel.label":"Vorschau der angewandten Modellkarte","panel.title":"Angewandte Modellkarte, live","panel.close":"Schließen","project.untitled":"KI-Lösung ohne Titel","mode.local":"Nur dieser Browser","mode.api":"Gemeinsamer Arbeitsbereich","mode.artifact":"Claude-Artefakt","mode.viewOnly":"Nur Lesen","mode.notConnected":"Nicht verbunden","mode.noAccess":"Kein Zugriff","safety.scope":"Nur Governance-Metadaten: Geben Sie niemals Informationen ein, die Patienten identifizieren.","safety.local.title":"Nur in diesem Browser gespeichert.","safety.local.detail":"Nichts wird an einen Server gesendet: Kolleginnen und Kollegen sehen diese Datensätze nicht, es gibt kein Prüfprotokoll und keine Zugriffskontrolle, und das Löschen der Websitedaten löscht sie. Für einen gemeinsamen Arbeitsbereich stellen Sie den Server bereit (siehe Bereitstellungsanleitung).","safety.artifact.title":"In diesem Claude-Artefakt gespeichert.","safety.artifact.detail":"Die Datensätze liegen in der Datenbank des Artefakts, nicht auf einem Server, den Ihre Organisation betreibt. Die Zugriffskontrolle wird nur teilweise durchgesetzt, und es gibt keine Versionsstände. Für den geprüften Arbeitsbereich mit Zugriffskontrolle stellen Sie den Server bereit (siehe Bereitstellungsanleitung).","safety.server.detail":"Dieser Arbeitsbereich ist für Prüfungsunterlagen gedacht, nicht für klinische Daten. Werden versehentlich Patientendaten eingegeben, kann ein Projektverantwortlicher sie aus dem Verlauf entfernen; melden Sie den Vorfall gemäß den Richtlinien Ihrer Organisation.","fatal.eyebrow":"Start nicht möglich","fatal.retry":"Erneut versuchen","fatal.denied.title":"Sie haben keinen Zugriff auf diesen Arbeitsbereich","fatal.denied.detail":"Der Governance-Server hat diese Anmeldung abgelehnt. Ihr Konto ist möglicherweise nicht für diese Installation berechtigt, oder Ihre Sitzung ist abgelaufen.","fatal.denied.hint":"Ab- und erneutes Anmelden kann helfen. Wenn nicht, bitten Sie die Administration dieser Installation, Ihrem Konto Zugriff zu gewähren.","fatal.unreachable.title":"Der Governance-Server ist nicht erreichbar","fatal.unreachable.detail":"Dieser Arbeitsbereich wird auf einem Server gespeichert, und die Anwendung konnte ihn nicht erreichen. Nichts ist verloren: Ihre Projekte befinden sich auf dem Server.","fatal.unreachable.hint":"Das ist meist vorübergehend. Wenn es anhält, sind die API oder ihre Datenbank möglicherweise ausgefallen; wenden Sie sich an die Administration dieser Installation.","dash.eyebrow":"KI-Governance","dash.title":"KI-Projekte in Prüfung","dash.lede":"Alle KI-Lösungen, die Ihre Organisation bewertet oder einsetzt, geprüft anhand des CHAI-Lebenszyklus. Projekte, die nicht konform sind oder eine Aktualisierung brauchen, stehen oben.","dash.addSamples":"Beispiele hinzufügen","dash.addSamplesTitle":"Beispielprojekte hinzufügen, die noch nicht in diesem Arbeitsbereich sind","dash.newProject":"Neues Projekt","dash.legacy":"Eine Prüfung von {name} wurde in diesem Browser gespeichert, bevor es den gemeinsamen Arbeitsbereich gab.","dash.legacyUnnamed":"einer KI-Lösung","dash.legacyAdd":"Zum Arbeitsbereich hinzufügen","dash.legacyDismiss":"Verwerfen","dash.newName":"Name der KI-Lösung","dash.newNamePlaceholder":"Name der KI-Lösung, z. B. Sepsis-Frühwarnung","dash.create":"Projekt erstellen","dash.cancel":"Abbrechen","dash.filterLabel":"Nach Status filtern","dash.searchLabel":"Projekte durchsuchen","dash.searchNames":"Nach Name, Hersteller oder Sponsor suchen","dash.searchAll":"Alle Felder durchsuchen: einen Namen, einen Anbieter, eine Wendung","dash.searchAllToggle":"Gesamten Text durchsuchen","dash.exportCsv":"Portfolio exportieren (CSV)","dash.importJson":"Projekt-JSON importieren","dash.loading":"Projekte werden geladen…","dash.tally.red":"Nicht konform","dash.tally.amber":"Aktualisierung nötig","dash.tally.green":"Im Plan","dash.tally.retired":"Außer Betrieb oder gestoppt","dash.tally.all":"Alle aktiven","dash.tally.archived":"Archiviert","dash.searchNote":"Durchsucht wird der aktuelle Text aller Projekte, die Sie öffnen können, einschließlich archivierter. Frühere Versionen und das Prüfprotokoll werden nicht durchsucht.","dash.searchNoteServer":"Eine Administratorin oder ein Administrator kann sie mit make subject-access durchsuchen.","dash.empty":"Noch keine KI-Projekte. Fügen Sie die erste Lösung hinzu, die Ihre Organisation bewertet, oder laden Sie {count} Beispielprojekte, eines pro CHAI-Anwendungsfall, um zu sehen, wie Konformitätshinweise funktionieren.","dash.loadSamples":"Beispielprojekte laden","dash.noTextMatch":"Kein Projekt enthält diesen Text.","dash.noMatch":"Keine passenden Projekte. Löschen Sie die Suche oder wählen Sie einen anderen Status.","dash.col.project":"Projekt","dash.col.lifecycle":"Lebenszyklus","dash.col.readiness":"Reifegrad","dash.col.nextReview":"Nächste Prüfung","dash.col.status":"Status","dash.sponsor":"Sponsor: {name}","dash.noDeveloper":"Kein Hersteller oder Sponsor erfasst","dash.updated":"Aktualisiert {when} von {who}","dash.archivedTag":"archiviert","dash.foundIn":"Gefunden in: {places}","dash.andMore":"und {count} weitere","dash.overdue":"überfällig","dash.notSet":"nicht festgelegt","dash.notLive":"nicht im Einsatz","dash.archive":"Archivieren","dash.restore":"Wiederherstellen","dash.archiveLabel":"{name} archivieren","dash.restoreLabel":"{name} wiederherstellen","dash.archiveTitle":"Archivieren: behält den Datensatz und entfernt ihn aus dem aktiven Portfolio","dash.restoreTitle":"Zurück ins aktive Portfolio","dash.thisProject":"dieses Projekt"},"es":{"@meta":{"locale":"es","name":"Español","machineDrafted":true,"reviewers":{}},"lang.label":"Idioma","header.brand":"Revisión de garantía de IA en salud","header.goHome":"Ir a todos los proyectos","header.portfolio":"Cartera","header.connecting":"Conectando…","header.modelCard":"Ficha del modelo","header.import":"Importar proyecto JSON","header.viewReport":"Ver informe","nav.steps":"Pasos de la revisión","nav.allProjects":"Todos los proyectos","panel.label":"Vista previa de la ficha del modelo aplicada","panel.title":"Ficha del modelo aplicada, en vivo","panel.close":"Cerrar","project.untitled":"Solución de IA sin título","mode.local":"Solo en este navegador","mode.api":"Espacio de trabajo compartido","mode.artifact":"Artefacto de Claude","mode.viewOnly":"Solo lectura","mode.notConnected":"Sin conexión","mode.noAccess":"Sin acceso","safety.scope":"Solo metadatos de gobernanza: nunca introduzca información que identifique a pacientes.","safety.local.title":"Guardado solo en este navegador.","safety.local.detail":"No se envía nada a un servidor: sus colegas no pueden ver estos registros, no hay registro de auditoría ni control de acceso, y borrar los datos del sitio los elimina. Para un espacio de trabajo compartido, despliegue el servidor (consulte la guía de despliegue).","safety.artifact.title":"Almacenado en este artefacto de Claude.","safety.artifact.detail":"Los registros se guardan en la base de datos del artefacto, no en un servidor que gestione su organización. El control de acceso solo se aplica en parte y no hay instantáneas de versiones. Para el espacio de trabajo auditado y con control de acceso, despliegue el servidor (consulte la guía de despliegue).","safety.server.detail":"Este espacio de trabajo es para registros de revisión, no para datos clínicos. Si se introduce información de un paciente por error, un propietario del proyecto puede purgarla del historial; notifíquelo según exija la política de su organización.","fatal.eyebrow":"No se puede iniciar","fatal.retry":"Reintentar","fatal.denied.title":"No tiene acceso a este espacio de trabajo","fatal.denied.detail":"El servidor de gobernanza rechazó este inicio de sesión. Puede que su cuenta no esté autorizada para esta implantación o que su sesión haya caducado.","fatal.denied.hint":"Cerrar sesión y volver a iniciarla puede ayudar. Si no es así, pida a quien administre esta implantación que conceda acceso a su cuenta.","fatal.unreachable.title":"No se puede conectar con el servidor de gobernanza","fatal.unreachable.detail":"Este espacio de trabajo se guarda en un servidor y la aplicación no ha podido conectarse. No se ha perdido nada: sus proyectos están en el servidor.","fatal.unreachable.hint":"Suele ser temporal. Si continúa, puede que la API o su base de datos no estén disponibles; consulte a quien administre esta implantación.","dash.eyebrow":"Gobernanza de IA","dash.title":"Proyectos de IA en revisión","dash.lede":"Todas las soluciones de IA que su organización evalúa o utiliza, contrastadas con el ciclo de vida de CHAI. Los proyectos que incumplen o necesitan actualización aparecen primero.","dash.addSamples":"Añadir ejemplos","dash.addSamplesTitle":"Añadir los proyectos de ejemplo que aún no estén en este espacio de trabajo","dash.newProject":"Nuevo proyecto","dash.legacy":"Una revisión de {name} se guardó en este navegador antes de que existiera el espacio de trabajo compartido.","dash.legacyUnnamed":"una solución de IA","dash.legacyAdd":"Añadirla al espacio de trabajo","dash.legacyDismiss":"Descartar","dash.newName":"Nombre de la solución de IA","dash.newNamePlaceholder":"Nombre de la solución de IA, p. ej., alerta temprana de sepsis","dash.create":"Crear proyecto","dash.cancel":"Cancelar","dash.filterLabel":"Filtrar por estado","dash.searchLabel":"Buscar proyectos","dash.searchNames":"Buscar por nombre, desarrollador o patrocinador","dash.searchAll":"Buscar en todos los campos: un nombre, un proveedor, una frase","dash.searchAllToggle":"Buscar en todo el texto","dash.exportCsv":"Exportar cartera (CSV)","dash.importJson":"Importar proyecto JSON","dash.loading":"Cargando proyectos…","dash.tally.red":"Incumplimiento","dash.tally.amber":"Requiere actualización","dash.tally.green":"En curso","dash.tally.retired":"Retirados o detenidos","dash.tally.all":"Todos los activos","dash.tally.archived":"Archivados","dash.searchNote":"Se busca en el texto actual de todos los proyectos que puede abrir, incluidos los archivados. No se buscan las versiones anteriores ni el registro de auditoría.","dash.searchNoteServer":"Un administrador puede buscar en ellos con make subject-access.","dash.empty":"Aún no hay proyectos de IA. Añada la primera solución que su organización esté evaluando o cargue {count} proyectos de ejemplo, uno por caso de uso de CHAI, para ver cómo funcionan las alertas de cumplimiento.","dash.loadSamples":"Cargar proyectos de ejemplo","dash.noTextMatch":"Ningún proyecto contiene ese texto.","dash.noMatch":"Ningún proyecto coincide. Borre la búsqueda o elija otro estado.","dash.col.project":"Proyecto","dash.col.lifecycle":"Ciclo de vida","dash.col.readiness":"Preparación","dash.col.nextReview":"Próxima revisión","dash.col.status":"Estado","dash.sponsor":"Patrocinador: {name}","dash.noDeveloper":"No consta desarrollador ni patrocinador","dash.updated":"Actualizado {when} por {who}","dash.archivedTag":"archivado","dash.foundIn":"Encontrado en: {places}","dash.andMore":"y {count} más","dash.overdue":"vencida","dash.notSet":"sin fijar","dash.notLive":"no en uso","dash.archive":"Archivar","dash.restore":"Restaurar","dash.archiveLabel":"Archivar {name}","dash.restoreLabel":"Restaurar {name}","dash.archiveTitle":"Archivar: conserva el registro y lo retira de la cartera activa","dash.restoreTitle":"Devolver a la cartera activa","dash.thisProject":"este proyecto"},"fr":{"@meta":{"locale":"fr","name":"Français","machineDrafted":true,"reviewers":{}},"lang.label":"Langue","header.brand":"Revue d'assurance de l'IA en santé","header.goHome":"Aller à tous les projets","header.portfolio":"Portefeuille","header.connecting":"Connexion…","header.modelCard":"Fiche du modèle","header.import":"Importer un projet JSON","header.viewReport":"Voir le rapport","nav.steps":"Étapes de la revue","nav.allProjects":"Tous les projets","panel.label":"Aperçu de la fiche du modèle appliquée","panel.title":"Fiche du modèle appliquée, en direct","panel.close":"Fermer","project.untitled":"Solution d'IA sans titre","mode.local":"Ce navigateur uniquement","mode.api":"Espace de travail partagé","mode.artifact":"Artefact Claude","mode.viewOnly":"Lecture seule","mode.notConnected":"Non connecté","mode.noAccess":"Aucun accès","safety.scope":"Métadonnées de gouvernance uniquement : ne saisissez jamais d'informations permettant d'identifier un patient.","safety.local.title":"Enregistré dans ce navigateur uniquement.","safety.local.detail":"Rien n'est envoyé à un serveur : vos collègues ne peuvent pas voir ces dossiers, il n'y a ni journal d'audit ni contrôle d'accès, et effacer les données du site les supprime. Pour un espace de travail partagé, déployez le serveur (voir le guide de déploiement).","safety.artifact.title":"Stocké dans cet artefact Claude.","safety.artifact.detail":"Les dossiers sont conservés dans la base de données de l'artefact, et non sur un serveur géré par votre établissement. Le contrôle d'accès n'est que partiellement appliqué et il n'y a pas d'instantanés de version. Pour l'espace de travail audité et à accès contrôlé, déployez le serveur (voir le guide de déploiement).","safety.server.detail":"Cet espace de travail est destiné aux dossiers de revue, pas aux données cliniques. Si des informations sur un patient sont saisies par erreur, un propriétaire du projet peut les purger de l'historique ; signalez-le comme l'exige la politique de votre établissement.","fatal.eyebrow":"Démarrage impossible","fatal.retry":"Réessayer","fatal.denied.title":"Vous n'avez pas accès à cet espace de travail","fatal.denied.detail":"Le serveur de gouvernance a refusé cette connexion. Votre compte n'est peut-être pas autorisé pour ce déploiement, ou votre session a peut-être expiré.","fatal.denied.hint":"Vous déconnecter puis vous reconnecter peut aider. Sinon, demandez à l'administrateur de ce déploiement d'accorder l'accès à votre compte.","fatal.unreachable.title":"Impossible de joindre le serveur de gouvernance","fatal.unreachable.detail":"Cet espace de travail est stocké sur un serveur, et l'application n'a pas pu le joindre. Rien n'est perdu : vos projets sont sur le serveur.","fatal.unreachable.hint":"C'est généralement temporaire. Si cela persiste, l'API ou sa base de données est peut-être indisponible ; contactez l'administrateur de ce déploiement.","dash.eyebrow":"Gouvernance de l'IA","dash.title":"Projets d'IA en cours de revue","dash.lede":"Toutes les solutions d'IA que votre établissement évalue ou utilise, examinées au regard du cycle de vie CHAI. Les projets non conformes ou à mettre à jour apparaissent en premier.","dash.addSamples":"Ajouter des exemples","dash.addSamplesTitle":"Ajouter les projets d'exemple qui ne sont pas encore dans cet espace de travail","dash.newProject":"Nouveau projet","dash.legacy":"Une revue de {name} a été enregistrée dans ce navigateur avant la création de l'espace de travail partagé.","dash.legacyUnnamed":"une solution d'IA","dash.legacyAdd":"L'ajouter à l'espace de travail","dash.legacyDismiss":"Ignorer","dash.newName":"Nom de la solution d'IA","dash.newNamePlaceholder":"Nom de la solution d'IA, p. ex. alerte précoce de sepsis","dash.create":"Créer le projet","dash.cancel":"Annuler","dash.filterLabel":"Filtrer par statut","dash.searchLabel":"Rechercher des projets","dash.searchNames":"Rechercher par nom, développeur ou commanditaire","dash.searchAll":"Rechercher dans tous les champs : un nom, un fournisseur, une expression","dash.searchAllToggle":"Rechercher dans tout le texte","dash.exportCsv":"Exporter le portefeuille (CSV)","dash.importJson":"Importer un projet JSON","dash.loading":"Chargement des projets…","dash.tally.red":"Non conforme","dash.tally.amber":"À mettre à jour","dash.tally.green":"Conforme","dash.tally.retired":"Retirés ou arrêtés","dash.tally.all":"Tous les actifs","dash.tally.archived":"Archivés","dash.searchNote":"Recherche dans le texte actuel de tous les projets que vous pouvez ouvrir, archivés compris. Les versions antérieures et le journal d'audit ne sont pas inclus.","dash.searchNoteServer":"Un administrateur peut y effectuer une recherche avec make subject-access.","dash.empty":"Aucun projet d'IA pour l'instant. Ajoutez la première solution que votre établissement évalue, ou chargez {count} projets d'exemple, un par cas d'usage CHAI, pour voir comment fonctionnent les alertes de conformité.","dash.loadSamples":"Charger les projets d'exemple","dash.noTextMatch":"Aucun projet ne contient ce texte.","dash.noMatch":"Aucun projet ne correspond. Effacez la recherche ou choisissez un autre statut.","dash.col.project":"Projet","dash.col.lifecycle":"Cycle de vie","dash.col.readiness":"Avancement","dash.col.nextReview":"Prochaine revue","dash.col.status":"Statut","dash.sponsor":"Commanditaire : {name}","dash.noDeveloper":"Aucun développeur ni commanditaire enregistré","dash.updated":"Mis à jour {when} par {who}","dash.archivedTag":"archivé","dash.foundIn":"Trouvé dans : {places}","dash.andMore":"et {count} de plus","dash.overdue":"en retard","dash.notSet":"non définie","dash.notLive":"pas en service","dash.archive":"Archiver","dash.restore":"Restaurer","dash.archiveLabel":"Archiver {name}","dash.restoreLabel":"Restaurer {name}","dash.archiveTitle":"Archiver : conserve le dossier et le retire du portefeuille actif","dash.restoreTitle":"Remettre dans le portefeuille actif","dash.thisProject":"ce projet"},"hi":{"@meta":{"locale":"hi","name":"हिन्दी","machineDrafted":true,"reviewers":{}},"lang.label":"भाषा","header.brand":"स्वास्थ्य एआई आश्वासन समीक्षा","header.goHome":"सभी परियोजनाओं पर जाएँ","header.portfolio":"पोर्टफ़ोलियो","header.connecting":"कनेक्ट हो रहा है…","header.modelCard":"मॉडल कार्ड","header.import":"परियोजना JSON आयात करें","header.viewReport":"रिपोर्ट देखें","nav.steps":"समीक्षा के चरण","nav.allProjects":"सभी परियोजनाएँ","panel.label":"लागू मॉडल कार्ड का पूर्वावलोकन","panel.title":"लागू मॉडल कार्ड, लाइव","panel.close":"बंद करें","project.untitled":"बिना शीर्षक का एआई समाधान","mode.local":"केवल यह ब्राउज़र","mode.api":"साझा कार्यक्षेत्र","mode.artifact":"Claude आर्टिफ़ैक्ट","mode.viewOnly":"केवल देखने के लिए","mode.notConnected":"कनेक्ट नहीं है","mode.noAccess":"पहुँच नहीं","safety.scope":"केवल शासन मेटाडेटा: रोगी की पहचान कराने वाली जानकारी कभी दर्ज न करें।","safety.local.title":"केवल इस ब्राउज़र में सहेजा गया।","safety.local.detail":"कुछ भी सर्वर पर नहीं भेजा जाता: सहकर्मी ये रिकॉर्ड नहीं देख सकते, कोई ऑडिट लॉग या पहुँच नियंत्रण नहीं है, और साइट डेटा साफ़ करने से ये मिट जाते हैं। साझा कार्यक्षेत्र के लिए सर्वर तैनात करें (परिनियोजन मार्गदर्शिका देखें)।","safety.artifact.title":"इस Claude आर्टिफ़ैक्ट में संग्रहीत।","safety.artifact.detail":"रिकॉर्ड आर्टिफ़ैक्ट के डेटाबेस में रखे जाते हैं, आपके संगठन द्वारा चलाए जाने वाले सर्वर पर नहीं। पहुँच नियंत्रण केवल आंशिक रूप से लागू है और संस्करणों के स्नैपशॉट नहीं हैं। ऑडिट किए गए, पहुँच-नियंत्रित कार्यक्षेत्र के लिए सर्वर तैनात करें (परिनियोजन मार्गदर्शिका देखें)।","safety.server.detail":"यह कार्यक्षेत्र समीक्षा रिकॉर्ड के लिए है, नैदानिक डेटा के लिए नहीं। यदि गलती से रोगी की जानकारी दर्ज हो जाए, तो परियोजना का स्वामी उसे इतिहास से मिटा सकता है; अपने संगठन की नीति के अनुसार इसकी सूचना दें।","fatal.eyebrow":"शुरू नहीं हो सका","fatal.retry":"फिर से प्रयास करें","fatal.denied.title":"आपके पास इस कार्यक्षेत्र की पहुँच नहीं है","fatal.denied.detail":"शासन सर्वर ने यह साइन-इन अस्वीकार कर दिया। हो सकता है आपका खाता इस परिनियोजन के लिए अधिकृत न हो, या आपका सत्र समाप्त हो गया हो।","fatal.denied.hint":"साइन आउट करके फिर से साइन इन करने से मदद मिल सकती है। यदि नहीं, तो इस परिनियोजन के व्यवस्थापक से अपने खाते को पहुँच देने के लिए कहें।","fatal.unreachable.title":"शासन सर्वर तक नहीं पहुँचा जा सका","fatal.unreachable.detail":"यह कार्यक्षेत्र एक सर्वर पर संग्रहीत है, और ऐप उस तक नहीं पहुँच सका। कुछ भी खोया नहीं है: आपकी परियोजनाएँ सर्वर पर हैं।","fatal.unreachable.hint":"यह आमतौर पर अस्थायी होता है। यदि यह बना रहे, तो API या उसका डेटाबेस बंद हो सकता है; इस परिनियोजन के व्यवस्थापक से संपर्क करें।","dash.eyebrow":"एआई शासन","dash.title":"समीक्षाधीन एआई परियोजनाएँ","dash.lede":"आपका संगठन जिन एआई समाधानों का मूल्यांकन या उपयोग कर रहा है, वे सभी CHAI जीवनचक्र के आधार पर जाँचे गए। अनुपालन से बाहर या अद्यतन की आवश्यकता वाली परियोजनाएँ सबसे ऊपर दिखती हैं।","dash.addSamples":"नमूने जोड़ें","dash.addSamplesTitle":"वे नमूना परियोजनाएँ जोड़ें जो अभी इस कार्यक्षेत्र में नहीं हैं","dash.newProject":"नई परियोजना","dash.legacy":"{name} की एक समीक्षा साझा कार्यक्षेत्र बनने से पहले इस ब्राउज़र में सहेजी गई थी।","dash.legacyUnnamed":"एक एआई समाधान","dash.legacyAdd":"इसे कार्यक्षेत्र में जोड़ें","dash.legacyDismiss":"ख़ारिज करें","dash.newName":"एआई समाधान का नाम","dash.newNamePlaceholder":"एआई समाधान का नाम, जैसे सेप्सिस की शीघ्र चेतावनी","dash.create":"परियोजना बनाएँ","dash.cancel":"रद्द करें","dash.filterLabel":"स्थिति के अनुसार फ़िल्टर करें","dash.searchLabel":"परियोजनाएँ खोजें","dash.searchNames":"नाम, डेवलपर या प्रायोजक से खोजें","dash.searchAll":"हर फ़ील्ड में खोजें: कोई नाम, विक्रेता या वाक्यांश","dash.searchAllToggle":"पूरे पाठ में खोजें","dash.exportCsv":"पोर्टफ़ोलियो निर्यात करें (CSV)","dash.importJson":"परियोजना JSON आयात करें","dash.loading":"परियोजनाएँ लोड हो रही हैं…","dash.tally.red":"अनुपालन से बाहर","dash.tally.amber":"अद्यतन आवश्यक","dash.tally.green":"सही दिशा में","dash.tally.retired":"सेवानिवृत्त या रोकी गई","dash.tally.all":"सभी सक्रिय","dash.tally.archived":"संग्रहीत","dash.searchNote":"आप जिन परियोजनाओं को खोल सकते हैं, उन सभी के वर्तमान पाठ में खोज हो रही है, संग्रहीत परियोजनाओं सहित। पुराने संस्करणों और ऑडिट लॉग में खोज नहीं होती।","dash.searchNoteServer":"कोई व्यवस्थापक make subject-access से उनमें खोज सकता है।","dash.empty":"अभी कोई एआई परियोजना नहीं है। आपका संगठन जिस पहले समाधान का मूल्यांकन कर रहा है उसे जोड़ें, या अनुपालन चेतावनियाँ कैसे काम करती हैं यह देखने के लिए {count} नमूना परियोजनाएँ लोड करें, हर CHAI उपयोग-मामले के लिए एक।","dash.loadSamples":"नमूना परियोजनाएँ लोड करें","dash.noTextMatch":"किसी भी परियोजना में यह पाठ नहीं है।","dash.noMatch":"कोई परियोजना मेल नहीं खाती। खोज साफ़ करें या कोई दूसरी स्थिति चुनें।","dash.col.project":"परियोजना","dash.col.lifecycle":"जीवनचक्र","dash.col.readiness":"तत्परता","dash.col.nextReview":"अगली समीक्षा","dash.col.status":"स्थिति","dash.sponsor":"प्रायोजक: {name}","dash.noDeveloper":"कोई डेवलपर या प्रायोजक दर्ज नहीं है","dash.updated":"{who} द्वारा {when} अद्यतन किया गया","dash.archivedTag":"संग्रहीत","dash.foundIn":"यहाँ मिला: {places}","dash.andMore":"और {count} अन्य","dash.overdue":"अतिदेय","dash.notSet":"निर्धारित नहीं","dash.notLive":"उपयोग में नहीं","dash.archive":"संग्रहीत करें","dash.restore":"पुनर्स्थापित करें","dash.archiveLabel":"{name} को संग्रहीत करें","dash.restoreLabel":"{name} को पुनर्स्थापित करें","dash.archiveTitle":"संग्रहीत करें: रिकॉर्ड बना रहता है, सक्रिय पोर्टफ़ोलियो से हट जाता है","dash.restoreTitle":"सक्रिय पोर्टफ़ोलियो में वापस लाएँ","dash.thisProject":"यह परियोजना"},"ru":{"@meta":{"locale":"ru","name":"Русский","machineDrafted":true,"reviewers":{}},"lang.label":"Язык","header.brand":"Проверка ИИ в здравоохранении","header.goHome":"Ко всем проектам","header.portfolio":"Портфель","header.connecting":"Подключение…","header.modelCard":"Карточка модели","header.import":"Импортировать проект JSON","header.viewReport":"Открыть отчёт","nav.steps":"Этапы проверки","nav.allProjects":"Все проекты","panel.label":"Предпросмотр применённой карточки модели","panel.title":"Применённая карточка модели, в реальном времени","panel.close":"Закрыть","project.untitled":"ИИ-решение без названия","mode.local":"Только этот браузер","mode.api":"Общее рабочее пространство","mode.artifact":"Артефакт Claude","mode.viewOnly":"Только просмотр","mode.notConnected":"Нет подключения","mode.noAccess":"Нет доступа","safety.scope":"Только метаданные управления: никогда не вводите сведения, позволяющие установить личность пациента.","safety.local.title":"Сохранено только в этом браузере.","safety.local.detail":"На сервер ничего не отправляется: коллеги не видят эти записи, нет журнала аудита и контроля доступа, а очистка данных сайта удаляет их. Для общего рабочего пространства разверните сервер (см. руководство по развёртыванию).","safety.artifact.title":"Хранится в этом артефакте Claude.","safety.artifact.detail":"Записи хранятся в базе данных артефакта, а не на сервере вашей организации. Контроль доступа действует лишь частично, снимков версий нет. Для рабочего пространства с аудитом и контролем доступа разверните сервер (см. руководство по развёртыванию).","safety.server.detail":"Это рабочее пространство предназначено для записей проверки, а не для клинических данных. Если сведения о пациенте введены по ошибке, владелец проекта может удалить их из истории; сообщите об этом в соответствии с политикой вашей организации.","fatal.eyebrow":"Не удаётся запустить","fatal.retry":"Повторить","fatal.denied.title":"У вас нет доступа к этому рабочему пространству","fatal.denied.detail":"Сервер управления отклонил этот вход. Возможно, ваша учётная запись не допущена к этому развёртыванию или ваш сеанс завершился.","fatal.denied.hint":"Может помочь выход и повторный вход. Если нет, попросите администратора этого развёртывания предоставить доступ вашей учётной записи.","fatal.unreachable.title":"Не удаётся связаться с сервером управления","fatal.unreachable.detail":"Это рабочее пространство хранится на сервере, и приложению не удалось с ним связаться. Ничего не потеряно: ваши проекты на сервере.","fatal.unreachable.hint":"Обычно это временно. Если проблема сохраняется, возможно, API или его база данных недоступны; обратитесь к администратору этого развёртывания.","dash.eyebrow":"Управление ИИ","dash.title":"ИИ-проекты на проверке","dash.lede":"Все ИИ-решения, которые ваша организация оценивает или использует, проверенные по жизненному циклу CHAI. Проекты с нарушениями или требующие обновления поднимаются наверх.","dash.addSamples":"Добавить примеры","dash.addSamplesTitle":"Добавить примеры проектов, которых ещё нет в этом рабочем пространстве","dash.newProject":"Новый проект","dash.legacy":"Проверка {name} была сохранена в этом браузере до появления общего рабочего пространства.","dash.legacyUnnamed":"ИИ-решения","dash.legacyAdd":"Добавить в рабочее пространство","dash.legacyDismiss":"Скрыть","dash.newName":"Название ИИ-решения","dash.newNamePlaceholder":"Название ИИ-решения, например раннее предупреждение о сепсисе","dash.create":"Создать проект","dash.cancel":"Отмена","dash.filterLabel":"Фильтр по статусу","dash.searchLabel":"Поиск проектов","dash.searchNames":"Поиск по названию, разработчику или спонсору","dash.searchAll":"Поиск по всем полям: имя, поставщик, фраза","dash.searchAllToggle":"Искать по всему тексту","dash.exportCsv":"Экспорт портфеля (CSV)","dash.importJson":"Импортировать проект JSON","dash.loading":"Загрузка проектов…","dash.tally.red":"Нарушения","dash.tally.amber":"Нужно обновить","dash.tally.green":"В норме","dash.tally.retired":"Выведены или остановлены","dash.tally.all":"Все активные","dash.tally.archived":"В архиве","dash.searchNote":"Поиск идёт по текущему тексту всех проектов, которые вы можете открыть, включая архивные. Предыдущие версии и журнал аудита не просматриваются.","dash.searchNoteServer":"Администратор может искать по ним с помощью make subject-access.","dash.empty":"ИИ-проектов пока нет. Добавьте первое решение, которое оценивает ваша организация, или загрузите примеры проектов ({count}, по одному на каждый сценарий CHAI), чтобы увидеть, как работают предупреждения о соответствии.","dash.loadSamples":"Загрузить примеры проектов","dash.noTextMatch":"Ни один проект не содержит этот текст.","dash.noMatch":"Нет подходящих проектов. Очистите поиск или выберите другой статус.","dash.col.project":"Проект","dash.col.lifecycle":"Жизненный цикл","dash.col.readiness":"Готовность","dash.col.nextReview":"Следующая проверка","dash.col.status":"Статус","dash.sponsor":"Спонсор: {name}","dash.noDeveloper":"Разработчик и спонсор не указаны","dash.updated":"Обновлено {when}, {who}","dash.archivedTag":"в архиве","dash.foundIn":"Найдено в: {places}","dash.andMore":"и ещё {count}","dash.overdue":"просрочено","dash.notSet":"не задано","dash.notLive":"не используется","dash.archive":"В архив","dash.restore":"Восстановить","dash.archiveLabel":"Отправить в архив: {name}","dash.restoreLabel":"Восстановить: {name}","dash.archiveTitle":"В архив: запись сохраняется, но убирается из активного портфеля","dash.restoreTitle":"Вернуть в активный портфель","dash.thisProject":"этот проект"},"zh-Hans":{"@meta":{"locale":"zh-Hans","name":"中文（简体）","machineDrafted":true,"reviewers":{}},"lang.label":"语言","header.brand":"医疗 AI 保障审查","header.goHome":"前往所有项目","header.portfolio":"项目组合","header.connecting":"正在连接…","header.modelCard":"模型卡","header.import":"导入项目 JSON","header.viewReport":"查看报告","nav.steps":"审查步骤","nav.allProjects":"所有项目","panel.label":"应用模型卡预览","panel.title":"应用模型卡（实时）","panel.close":"关闭","project.untitled":"未命名的 AI 解决方案","mode.local":"仅限此浏览器","mode.api":"共享工作区","mode.artifact":"Claude 工件","mode.viewOnly":"只读","mode.notConnected":"未连接","mode.noAccess":"无访问权限","safety.scope":"仅限治理元数据：切勿输入可识别患者身份的信息。","safety.local.title":"仅保存在此浏览器中。","safety.local.detail":"不会向服务器发送任何内容：同事看不到这些记录，没有审计日志，也没有访问控制，清除网站数据会将其删除。如需共享工作区，请部署服务器（参见部署指南）。","safety.artifact.title":"存储在此 Claude 工件中。","safety.artifact.detail":"记录保存在该工件的数据库中，而不是您所在机构运行的服务器上。访问控制仅部分生效，也没有版本快照。如需经过审计、受访问控制的工作区，请部署服务器（参见部署指南）。","safety.server.detail":"此工作区用于审查记录，而非临床数据。如果误输入了患者信息，项目所有者可以将其从历史记录中清除；请按照您所在机构的政策报告此事。","fatal.eyebrow":"无法启动","fatal.retry":"重试","fatal.denied.title":"您无权访问此工作区","fatal.denied.detail":"治理服务器拒绝了此次登录。您的账户可能未获授权使用此部署，或者您的会话可能已结束。","fatal.denied.hint":"退出后重新登录可能会有帮助。如果仍不行，请让此部署的管理员为您的账户授予访问权限。","fatal.unreachable.title":"无法连接治理服务器","fatal.unreachable.detail":"此工作区存储在服务器上，应用无法连接到该服务器。没有丢失任何内容：您的项目都在服务器上。","fatal.unreachable.hint":"这通常是暂时的。如果问题持续存在，可能是 API 或其数据库已停止运行；请联系此部署的管理员。","dash.eyebrow":"AI 治理","dash.title":"审查中的 AI 项目","dash.lede":"您所在机构正在评估或运行的所有 AI 解决方案，均按照 CHAI 生命周期进行检查。不合规或需要更新的项目会排在最前面。","dash.addSamples":"添加示例","dash.addSamplesTitle":"添加此工作区中尚未包含的示例项目","dash.newProject":"新建项目","dash.legacy":"在共享工作区出现之前，{name} 的一份审查已保存在此浏览器中。","dash.legacyUnnamed":"某个 AI 解决方案","dash.legacyAdd":"将其添加到工作区","dash.legacyDismiss":"忽略","dash.newName":"AI 解决方案名称","dash.newNamePlaceholder":"AI 解决方案名称，例如：脓毒症早期预警","dash.create":"创建项目","dash.cancel":"取消","dash.filterLabel":"按状态筛选","dash.searchLabel":"搜索项目","dash.searchNames":"按名称、开发方或发起人搜索","dash.searchAll":"搜索所有字段：姓名、供应商或短语","dash.searchAllToggle":"搜索全部文本","dash.exportCsv":"导出项目组合（CSV）","dash.importJson":"导入项目 JSON","dash.loading":"正在加载项目…","dash.tally.red":"不合规","dash.tally.amber":"需要更新","dash.tally.green":"进展正常","dash.tally.retired":"已停用或已停止","dash.tally.all":"所有活动项目","dash.tally.archived":"已归档","dash.searchNote":"正在搜索您可以打开的所有项目的当前文本，包括已归档的项目。不会搜索早期版本和审计日志。","dash.searchNoteServer":"管理员可以使用 make subject-access 搜索这些内容。","dash.empty":"还没有 AI 项目。添加您所在机构正在评估的第一个解决方案，或加载 {count} 个示例项目（每个 CHAI 用例一个），了解合规提示的工作方式。","dash.loadSamples":"加载示例项目","dash.noTextMatch":"没有项目包含该文本。","dash.noMatch":"没有匹配的项目。请清除搜索或选择其他状态。","dash.col.project":"项目","dash.col.lifecycle":"生命周期","dash.col.readiness":"就绪度","dash.col.nextReview":"下次审查","dash.col.status":"状态","dash.sponsor":"发起人：{name}","dash.noDeveloper":"未记录开发方或发起人","dash.updated":"{who} 于 {when}更新","dash.archivedTag":"已归档","dash.foundIn":"出现位置：{places}","dash.andMore":"另有 {count} 项","dash.overdue":"已逾期","dash.notSet":"未设置","dash.notLive":"未上线","dash.archive":"归档","dash.restore":"恢复","dash.archiveLabel":"归档 {name}","dash.restoreLabel":"恢复 {name}","dash.archiveTitle":"归档：保留记录，并将其从活动项目组合中移除","dash.restoreTitle":"恢复到活动项目组合","dash.thisProject":"此项目"}});
+
 /* ============================================================
    Utilities
    ============================================================ */
@@ -398,11 +404,145 @@ function parseDay(s){ if(!s||!/^\d{4}-\d{2}-\d{2}/.test(s)) return null; const d
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function addMonths(d,n){ const x=new Date(d); x.setMonth(x.getMonth()+n); return x; }
 function daysBetween(a,b){ return Math.round((b-a)/86400000); }
-function fmtDay(s){ const d=parseDay(s); return d? d.toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}) : ""; }
+/* Dates and relative times in the reader's chosen language (02-i18n.js), not the
+   browser's, so the text around a date and the date itself cannot disagree. */
+function fmtDay(s){ const d=parseDay(s); return d? new Intl.DateTimeFormat(intlTag(),{year:"numeric",month:"short",day:"numeric"}).format(d) : ""; }
 function ago(iso){ if(!iso) return ""; const d=new Date(iso); if(isNaN(d)) return ""; const m=Math.round((Date.now()-d)/60000);
-  if(m<1) return "just now"; if(m<60) return `${m} min ago`; const h=Math.round(m/60); if(h<24) return `${h} h ago`; const dd=Math.round(h/24); if(dd<45) return `${dd} days ago`; return fmtDay(iso.slice(0,10)); }
+  const rel=new Intl.RelativeTimeFormat(intlTag(),{numeric:"auto"});
+  if(m<1) return rel.format(0,"minute"); if(m<60) return rel.format(-m,"minute"); const h=Math.round(m/60); if(h<24) return rel.format(-h,"hour"); const dd=Math.round(h/24); if(dd<45) return rel.format(-dd,"day"); return fmtDay(iso.slice(0,10)); }
 let _idSeq = 0;
 const newId = ()=> "p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7)+(_idSeq++).toString(36);
+
+/* ============================================================
+   Core: languages (#80)
+   Every string a person reads comes from a message catalog, app/i18n/<locale>.json,
+   embedded by the build as I18N_CATALOGS. English is the source; a key missing from
+   another catalog falls back to it. t() returns plain text: callers still esc() it
+   into markup, and a catalog never holds HTML.
+
+   Safety-bearing strings (the patient-data notice, the storage-mode banners, listed
+   under "@meta".safety in en.json) are shown in English until a reviewer fluent in
+   the language is recorded for them in that catalog's "@meta".reviewers. A wrong
+   translation of a warning is worse than an English one (D-59).
+   ============================================================ */
+const Locale = Object.freeze({
+  EN: "en", ES: "es", FR: "fr", DE: "de", HI: "hi", RU: "ru", ZH_HANS: "zh-Hans",
+  PSEUDO: "en-XA",   // accented and padded English: shows what is still hard-coded
+});
+/* What the picker offers, each named in its own language. PSEUDO is not offered. */
+const LOCALE_CHOICES = Object.freeze([
+  Locale.EN, Locale.ES, Locale.FR, Locale.DE, Locale.HI, Locale.RU, Locale.ZH_HANS,
+]);
+const LOCALE_KEY = "chai-locale";
+/* The header's language picker, by element id, for the input handler. */
+const HeaderControl = Object.freeze({ LANGUAGE: "lang" });
+
+const catalogOf = loc => I18N_CATALOGS[loc] || null;
+const SAFETY_KEYS = new Set(((I18N_CATALOGS[Locale.EN]["@meta"] || {}).safety) || []);
+
+function isLocale(v){ return Object.values(Locale).includes(v); }
+
+/* A saved choice, then the browser's languages, then English. zh-TW and zh-HK are
+   Traditional Chinese, which this does not have, so they do not match zh-Hans. */
+function resolveLocale(){
+  try{ const saved = localStorage.getItem(LOCALE_KEY); if(isLocale(saved)) return saved; }catch(e){}
+  const wanted = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""]);
+  for(const raw of wanted){
+    const tag = String(raw || "").toLowerCase();
+    if(/^zh(-hans|-cn|-sg|$)/.test(tag) || tag.startsWith("zh-hans")) return Locale.ZH_HANS;  // enum-ok: BCP 47 subtags from navigator.languages
+    if(tag.startsWith("zh")) continue;  // enum-ok: BCP 47 subtag; Traditional Chinese is not offered
+    const primary = tag.split("-")[0];
+    const hit = LOCALE_CHOICES.find(l => l === primary);
+    if(hit) return hit;
+  }
+  return Locale.EN;
+}
+let LOCALE = resolveLocale();
+
+/* The tag Intl understands for the current locale. */
+const intlTag = () => (LOCALE === Locale.PSEUDO ? Locale.EN : LOCALE);
+
+/* Accented, bracketed and about a third longer, with {placeholders} left intact. */
+const PSEUDO_MAP = Object.freeze({a:"á",b:"ƀ",c:"ç",d:"đ",e:"é",f:"ƒ",g:"ĝ",h:"ĥ",i:"í",j:"ĵ",k:"ķ",l:"ĺ",
+  m:"ɱ",n:"ñ",o:"ó",p:"þ",r:"ŕ",s:"š",t:"ţ",u:"ú",w:"ŵ",y:"ý",z:"ž",A:"Á",B:"Ɓ",C:"Ç",D:"Đ",E:"É",
+  F:"Ƒ",G:"Ĝ",H:"Ĥ",I:"Í",J:"Ĵ",K:"Ķ",L:"Ĺ",N:"Ñ",O:"Ó",P:"Þ",R:"Ŕ",S:"Š",T:"Ţ",U:"Ú",W:"Ŵ",Y:"Ý",Z:"Ž"});
+function pseudoize(s){
+  const parts = String(s).split(/(\{\w+\})/);
+  const body = parts.map(p => /^\{\w+\}$/.test(p) ? p : [...p].map(c => PSEUDO_MAP[c] || c).join("")).join("");
+  return `[${body}${"~".repeat(Math.ceil(String(s).length * 0.3))}]`;
+}
+
+/* Is this key's translation in this locale allowed to show? */
+function reviewedFor(loc, key){
+  if(!SAFETY_KEYS.has(key)) return true;
+  const meta = (catalogOf(loc) || {})["@meta"] || {};
+  return Boolean((meta.reviewers || {})[key]);
+}
+
+/* The raw catalog entry for a key, and the locale it came from. */
+function entryFor(key){
+  if(LOCALE === Locale.PSEUDO) return [I18N_CATALOGS[Locale.EN][key], Locale.PSEUDO];
+  const own = catalogOf(LOCALE);
+  if(own && own[key] !== undefined && reviewedFor(LOCALE, key)) return [own[key], LOCALE];
+  return [I18N_CATALOGS[Locale.EN][key], Locale.EN];
+}
+
+/* A message, in the current language, with {name} placeholders filled. A plural
+   message is an object keyed by Intl.PluralRules category and picks by params.count. */
+function t(key, params){
+  let [entry, from] = entryFor(key);
+  if(entry && typeof entry === "object"){
+    const tag = from === Locale.PSEUDO ? Locale.EN : from;
+    const n = params && typeof params.count === "number" ? params.count : 0;
+    entry = entry[new Intl.PluralRules(tag).select(n)] ?? entry.other;
+  }
+  if(typeof entry !== "string") return key;   // a missing key shows itself; tests catch it
+  let out = from === Locale.PSEUDO ? pseudoize(entry) : entry;
+  return out.replace(/\{(\w+)\}/g, (m, k) => (params && k in params ? String(params[k]) : m));
+}
+
+/* A message as HTML: the text is escaped, and each `html` param (markup the caller
+   built and escaped itself, such as a person's name tag) is placed where its
+   {placeholder} was. */
+function tHtml(key, params, html){
+  const p = Object.assign({}, params);
+  const marks = Object.keys(html || {}).map((k, i) => { const m = `\u0001${i}\u0001`; p[k] = m; return [m, html[k]]; });
+  let out = esc(t(key, p));
+  for(const [m, h] of marks) out = out.split(m).join(h);
+  return out;
+}
+
+/* English whatever the reader chose: for machine contracts (JSON, CSV headers) and
+   anything an export must keep stable. */
+function tEn(key, params){
+  const saved = LOCALE; LOCALE = Locale.EN;
+  try{ return t(key, params); } finally { LOCALE = saved; }
+}
+
+/* Static markup in app/index.html names its keys: data-i18n for text, and
+   data-i18n-aria / data-i18n-placeholder / data-i18n-title for attributes. */
+function applyStaticI18n(root){
+  (root || document).querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+  (root || document).querySelectorAll("[data-i18n-aria]").forEach(el => el.setAttribute("aria-label", t(el.dataset.i18nAria)));
+  (root || document).querySelectorAll("[data-i18n-placeholder]").forEach(el => el.setAttribute("placeholder", t(el.dataset.i18nPlaceholder)));
+  (root || document).querySelectorAll("[data-i18n-title]").forEach(el => el.setAttribute("title", t(el.dataset.i18nTitle)));
+  document.documentElement.lang = LOCALE;
+  document.documentElement.dir = "ltr";   // none of the supported languages is right-to-left yet
+}
+
+/* The language picker's options: each name in its own language, marked as such. */
+function localeOptions(){
+  return LOCALE_CHOICES.map(loc => {
+    const name = ((catalogOf(loc) || {})["@meta"] || {}).name || loc;
+    return `<option value="${esc(loc)}" lang="${esc(loc)}"${loc === LOCALE ? " selected" : ""}>${esc(name)}</option>`;
+  }).join("");
+}
+
+function setLocale(loc){
+  if(!isLocale(loc)) return;
+  LOCALE = loc;
+  try{ localStorage.setItem(LOCALE_KEY, loc); }catch(e){}
+}
 
 /* ============================================================
    Core: the project document
@@ -919,6 +1059,11 @@ const Mode = Object.freeze({
    Claude artifact mode was labeled "Shared workspace", identically to the
    self-hosted PostgreSQL server, which hid the difference between data inside
    a hospital's administrative boundary and data outside it (#64). */
+/* The header's label for each mode, as a catalog key (the text is translated; the
+   English text in MODE_LABEL below is what exports carry, so it stays stable). */
+const MODE_LABEL_KEY = Object.freeze({
+  [Mode.LOCAL]: "mode.local", [Mode.API]: "mode.api", [Mode.ARTIFACT]: "mode.artifact",
+});
 const MODE_LABEL = Object.freeze({
   [Mode.LOCAL]:    Object.freeze({text:"This browser only", cls:""}),
   [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
@@ -929,7 +1074,7 @@ const MODE_LABEL = Object.freeze({
    patient's data to be in a governance record, and organizational policy forbids
    it. It is a policy, not a detector, so the wording is an instruction, never a
    claim that no such data is present. */
-const SCOPE_NOTICE = "Governance metadata only: never enter patient-identifiable information.";
+const SCOPE_NOTICE = I18N_CATALOGS[Locale.EN]["safety.scope"];   // English: exports and tests read it
 /* What an export says about where the record was kept, beside the header's label (#93).
    Keyed by Mode like MODE_LABEL, so a mode cannot ship without one and two modes cannot
    share one (R-04). It says where the record lived and what that means for sign-offs
@@ -2579,10 +2724,10 @@ function railRow(v) {
 function renderRail() {
   const ol = document.getElementById("rail");
   const home = `<li class="home-link"><button data-home="1">`
-    + `<span class="num" aria-hidden="true">←</span><span>All projects</span></button></li>`
+    + `<span class="num" aria-hidden="true">←</span><span>${esc(t("nav.allProjects"))}</span></button></li>`
     + `<li class="sep" role="presentation"></li>`;
   ol.innerHTML = home + activeViews().map(railRow).join("");
-  document.getElementById("projName").textContent = S.meta.solution || "Untitled AI solution";
+  document.getElementById("projName").textContent = S.meta.solution || t("project.untitled");
 }
 
 function renderMain(focusTop) {
@@ -2630,40 +2775,37 @@ function dashData(){
 /* The portfolio's search fields, by element id: one definition, read by the
    template and by the input handler (70-events.js). */
 const SearchField = Object.freeze({ QUERY: "q", ALL_TEXT: "qall" });
-const SEARCH_HINT = Object.freeze({
-  NAMES: "Search by name, developer, or sponsor",
-  ALL_TEXT: "Search every field: a name, a vendor, a phrase",
-});
+const SEARCH_HINT = Object.freeze({ NAMES: "dash.searchNames", ALL_TEXT: "dash.searchAll" });
 function renderDashboardShell(){
   document.body.classList.add("home");
-  document.getElementById("projName").textContent = "Portfolio";
+  document.getElementById("projName").textContent = t("header.portfolio");
   const m=document.getElementById("main");
   let legacy=null;
   try{ const raw=localStorage.getItem("chai-review-v1"); if(raw && !localStorage.getItem("chai-legacy-imported")){ const j=JSON.parse(raw); if(j&&j.meta&&(j.meta.solution||Object.keys(j.items||{}).length)) legacy=j; } }catch(e){}
   m.innerHTML = `
     <div class="dash-head">
-      <div><p class="eyebrow">AI governance</p><h1>AI projects under review</h1>
-      <p class="lede">Every AI solution your organization is evaluating or running, checked against the CHAI lifecycle. Projects out of compliance or needing an update rise to the top.</p></div>
+      <div><p class="eyebrow">${esc(t("dash.eyebrow"))}</p><h1>${esc(t("dash.title"))}</h1>
+      <p class="lede">${esc(t("dash.lede"))}</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
-        <button class="btn ro-hide" data-act="samples" title="Add any sample projects not already in this workspace">Add samples</button>
-        <button class="btn primary ro-hide" data-act="new">New project</button>
+        <button class="btn ro-hide" data-act="samples" title="${esc(t("dash.addSamplesTitle"))}">${esc(t("dash.addSamples"))}</button>
+        <button class="btn primary ro-hide" data-act="new">${esc(t("dash.newProject"))}</button>
       </div>
     </div>
-    ${legacy?`<div class="banner ro-hide" id="legacyBanner"><span>A review of <b>${esc(legacy.meta.solution||"an AI solution")}</b> was saved in this browser before the shared workspace existed.</span><span style="display:flex;gap:8px"><button class="btn" data-act="legacy">Add it to the workspace</button><button class="btn ghost" data-act="legacy-dismiss">Dismiss</button></span></div>`:""}
+    ${legacy?`<div class="banner ro-hide" id="legacyBanner"><span>${tHtml("dash.legacy",{},{name:`<b>${esc(legacy.meta.solution||t("dash.legacyUnnamed"))}</b>`})}</span><span style="display:flex;gap:8px"><button class="btn" data-act="legacy">${esc(t("dash.legacyAdd"))}</button><button class="btn ghost" data-act="legacy-dismiss">${esc(t("dash.legacyDismiss"))}</button></span></div>`:""}
     <form class="newform ro-hide" id="newform" hidden>
-      <label for="newname" class="vh">Name of the AI solution</label>
-      <input type="text" id="newname" placeholder="Name of the AI solution, e.g. Sepsis early warning" autocomplete="off">
-      <button class="btn primary" type="submit">Create project</button>
-      <button class="btn ghost" type="button" data-act="new-cancel">Cancel</button>
+      <label for="newname" class="vh">${esc(t("dash.newName"))}</label>
+      <input type="text" id="newname" placeholder="${esc(t("dash.newNamePlaceholder"))}" autocomplete="off">
+      <button class="btn primary" type="submit">${esc(t("dash.create"))}</button>
+      <button class="btn ghost" type="button" data-act="new-cancel">${esc(t("dash.cancel"))}</button>
     </form>
-    <div class="tallies" id="tallies" role="group" aria-label="Filter by status"></div>
+    <div class="tallies" id="tallies" role="group" aria-label="${esc(t("dash.filterLabel"))}"></div>
     <div class="toolbar">
-      <label for="${SearchField.QUERY}" class="vh">Search projects</label>
-      <input type="search" id="${SearchField.QUERY}" placeholder="${UI.qAll?SEARCH_HINT.ALL_TEXT:SEARCH_HINT.NAMES}" value="${esc(UI.q||"")}">
-      <label class="qall"><input type="checkbox" id="${SearchField.ALL_TEXT}"${UI.qAll?" checked":""}> Search all text</label>
+      <label for="${SearchField.QUERY}" class="vh">${esc(t("dash.searchLabel"))}</label>
+      <input type="search" id="${SearchField.QUERY}" placeholder="${esc(t(UI.qAll?SEARCH_HINT.ALL_TEXT:SEARCH_HINT.NAMES))}" value="${esc(UI.q||"")}">
+      <label class="qall"><input type="checkbox" id="${SearchField.ALL_TEXT}"${UI.qAll?" checked":""}> ${esc(t("dash.searchAllToggle"))}</label>
       <span class="spacer"></span>
-      <button class="btn ghost" data-act="dl-csv">Export portfolio (CSV)</button>
-      <button class="btn ghost ro-hide" data-act="import">Import project JSON</button>
+      <button class="btn ghost" data-act="dl-csv">${esc(t("dash.exportCsv"))}</button>
+      <button class="btn ghost ro-hide" data-act="import">${esc(t("dash.importJson"))}</button>
     </div>
     <div id="plistHost"></div>`;
   applyRO(m);
@@ -2671,15 +2813,15 @@ function renderDashboardShell(){
 }
 function updateDashboard(){
   const host=document.getElementById("plistHost"); if(!host) return;
-  const t=document.getElementById("tallies");
-  if(!LOADED){ host.innerHTML=`<p style="color:var(--muted)">Loading projects…</p>`; t.innerHTML=""; return; }
+  const tl=document.getElementById("tallies");
+  if(!LOADED){ host.innerHTML=`<p style="color:var(--muted)">${esc(t("dash.loading"))}</p>`; tl.innerHTML=""; return; }
   const rows=dashData();
   const active=rows.filter(r=>!r.p.archived);
   const cnt=k=>active.filter(r=>r.st.key===k).length;
   const archived=rows.length-active.length;
-  const T=[["red","Out of compliance",cnt("red")],["amber","Needs update",cnt("amber")],["green","On track",cnt("green")],["retired","Retired or stopped",cnt("retired")],["all","All active",active.length]];
-  if(archived) T.push(["archived","Archived",archived]);
-  t.innerHTML = T.map(([k,l,n])=>`<button class="tally ${k==="archived"?"retired":k}" data-filter="${k}" aria-pressed="${UI.filter===k}"><span class="n">${n}</span><span class="t">${l}</span></button>`).join("");
+  const T=[["red",t("dash.tally.red"),cnt("red")],["amber",t("dash.tally.amber"),cnt("amber")],["green",t("dash.tally.green"),cnt("green")],["retired",t("dash.tally.retired"),cnt("retired")],["all",t("dash.tally.all"),active.length]];
+  if(archived) T.push(["archived",t("dash.tally.archived"),archived]);
+  tl.innerHTML = T.map(([k,l,n])=>`<button class="tally ${k==="archived"?"retired":k}" data-filter="${k}" aria-pressed="${UI.filter===k}"><span class="n">${n}</span><span class="t">${esc(l)}</span></button>`).join("");
   const q=(UI.q||"").toLowerCase().trim();
   const everything = !!(UI.qAll && q);
   let list = UI.filter==="archived" ? rows.filter(r=>r.p.archived) : active.filter(r=>UI.filter==="all"||r.st.key===UI.filter);
@@ -2689,35 +2831,35 @@ function updateDashboard(){
   }
   else if(q) list=list.filter(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.org].join(" ").toLowerCase().includes(q));
   const note = everything
-    ? `<p class="small search-note" id="searchNote">Searching the current text of every project you can open, archived ones included. Earlier versions and the audit log are not searched${MODE===Mode.API?"; an administrator can search them with <code>make subject-access</code>":""}.</p>`
+    ? `<p class="small search-note" id="searchNote">${esc(t("dash.searchNote"))}${MODE===Mode.API?` ${esc(t("dash.searchNoteServer"))}`:""}</p>`
     : "";
   const rank={red:0,amber:1,green:2,retired:3};
   list.sort((a,b)=>(rank[a.st.key]-rank[b.st.key]) || (b.f.length-a.f.length) || (a.p.meta.solution||"").localeCompare(b.p.meta.solution||""));
   if(!rows.length){
-    host.innerHTML=`<div class="empty-state"><p>No AI projects yet. Add the first solution your organization is evaluating, or load ${SAMPLES.length} sample projects \u2014 one per CHAI use case \u2014 to see how compliance flags work.</p>
-      <div class="ro-hide" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="new">New project</button><button class="btn" data-act="samples">Load sample projects</button></div></div>`;
+    host.innerHTML=`<div class="empty-state"><p>${esc(t("dash.empty",{count:SAMPLES.length}))}</p>
+      <div class="ro-hide" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="new">${esc(t("dash.newProject"))}</button><button class="btn" data-act="samples">${esc(t("dash.loadSamples"))}</button></div></div>`;
     applyRO(host); return;
   }
   if(!list.length){ host.innerHTML= note + (everything
-      ? `<p style="color:var(--muted);margin-top:18px">No project contains that text.</p>`
-      : `<p style="color:var(--muted);margin-top:18px">No projects match. Clear the search or choose another status.</p>`); return; }
+      ? `<p style="color:var(--muted);margin-top:18px">${esc(t("dash.noTextMatch"))}</p>`
+      : `<p style="color:var(--muted);margin-top:18px">${esc(t("dash.noMatch"))}</p>`); return; }
   const today=parseDay(TODAY());
-  host.innerHTML=`${note}<div class="phead" aria-hidden="true"><span>Project</span><span>Lifecycle</span><span>Readiness</span><span>Next review</span><span>Status</span></div>
-  <ul class="plist">${list.map(r=>{const p=r.p; const late=r.nr&&parseDay(r.nr)<today;
+  host.innerHTML=`${note}<div class="phead" aria-hidden="true"><span>${esc(t("dash.col.project"))}</span><span>${esc(t("dash.col.lifecycle"))}</span><span>${esc(t("dash.col.readiness"))}</span><span>${esc(t("dash.col.nextReview"))}</span><span>${esc(t("dash.col.status"))}</span></div>
+  <ul class="plist">${list.map(r=>{const p=r.p; const late=r.nr&&parseDay(r.nr)<today; const name=p.meta.solution||t("dash.thisProject");
     return `<li class="prow ${r.st.key}" data-open="${esc(p.id)}">
-      <div><button class="pname" data-open="${esc(p.id)}">${esc(p.meta.solution||"Untitled AI solution")}</button>
-        <div class="psub">${esc([p.meta.developer,p.meta.sponsor&&("Sponsor: "+p.meta.sponsor)].filter(Boolean).join(" · ")||"No developer or sponsor recorded")}</div>
-        <div class="psub">Updated ${esc(ago(p.updatedAt))} by ${who(p.updatedBy)}${p.archived?" · archived":""}</div>
-        ${r.hits&&everything?`<div class="psub hits">Found in: ${r.hits.slice(0,4).map(esc).join("; ")}${r.hits.length>4?` and ${r.hits.length-4} more`:""}</div>`:""}</div>
+      <div><button class="pname" data-open="${esc(p.id)}">${esc(p.meta.solution||t("project.untitled"))}</button>
+        <div class="psub">${esc([p.meta.developer,p.meta.sponsor&&t("dash.sponsor",{name:p.meta.sponsor})].filter(Boolean).join(" · ")||t("dash.noDeveloper"))}</div>
+        <div class="psub">${tHtml("dash.updated",{when:ago(p.updatedAt)},{who:who(p.updatedBy)})}${p.archived?` · ${esc(t("dash.archivedTag"))}`:""}</div>
+        ${r.hits&&everything?`<div class="psub hits">${esc(t("dash.foundIn",{places:r.hits.slice(0,4).join("; ")}))}${r.hits.length>4?` ${esc(t("dash.andMore",{count:r.hits.length-4}))}`:""}</div>`:""}</div>
       <div>${lcTrack(p)}</div>
       <div><span class="pct">${r.score}%</span></div>
-      <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">overdue</div>`:""}`:`<span class="small">${phase(p).key==="deployed"?"not set":"not live"}</span>`}</div>
+      <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">${esc(t("dash.overdue"))}</div>`:""}`:`<span class="small">${esc(t(phase(p).key==="deployed"?"dash.notSet":"dash.notLive"))}</span>`}</div>
       <div><span class="st ${r.st.key}">${esc(r.st.label)}</span>
-        ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(f.text)}</li>`).join("")}${r.f.length>3?`<li>and ${r.f.length-3} more</li>`:""}</ul>`:""}
+        ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(f.text)}</li>`).join("")}${r.f.length>3?`<li>${esc(t("dash.andMore",{count:r.f.length-3}))}</li>`:""}</ul>`:""}
         <button class="icon-btn ro-hide parchive" data-archive="${esc(p.id)}"
-          aria-label="${p.archived?"Restore":"Archive"} ${esc(p.meta.solution||"this project")}"
-          title="${p.archived?"Restore to the active portfolio":"Archive: keeps the record, removes it from the active portfolio"}"
-          >${p.archived?"Restore":"Archive"}</button></div>
+          aria-label="${esc(t(p.archived?"dash.restoreLabel":"dash.archiveLabel",{name}))}"
+          title="${esc(t(p.archived?"dash.restoreTitle":"dash.archiveTitle"))}"
+          >${esc(t(p.archived?"dash.restore":"dash.archive"))}</button></div>
     </li>`;}).join("")}</ul>`;
   resolveNames(host);
 }
@@ -2769,8 +2911,8 @@ function onDbError(e){
    Read-only handling, mode badge
    ============================================================ */
 function setMode(text,cls){ const el=document.getElementById("mode"); el.textContent=text; el.className="mode "+(cls||""); }
-function setModeFor(mode){ const l=MODE_LABEL[mode]; if(l) setMode(l.text,l.cls); }
-function setReadOnly(v){ RO=v; document.body.classList.toggle("ro",v); if(v) setMode("View only","ro"); if(CUR) renderMain(false); else if(document.getElementById("plistHost")) renderDashboardShell(); }
+function setModeFor(mode){ const l=MODE_LABEL[mode]; if(l) setMode(t(MODE_LABEL_KEY[mode]),l.cls); }
+function setReadOnly(v){ RO=v; document.body.classList.toggle("ro",v); if(v) setMode(t("mode.viewOnly"),"ro"); if(CUR) renderMain(false); else if(document.getElementById("plistHost")) renderDashboardShell(); }
 function applyRO(root){
   if(!RO) return;
   root.querySelectorAll("input:not([type=search]),textarea,select").forEach(e=>{ if(!e.closest(".fallback")) e.disabled=true; });
@@ -2792,18 +2934,18 @@ function fatalError(title, detail, opts){
   const o = opts || {};
   document.body.classList.remove("home");
   document.body.classList.add("ro");
-  setMode(o.mode || "Not connected", "ro");
+  setMode(o.mode || t("mode.notConnected"), "ro");
   const rail = document.getElementById("rail");
   if(rail) rail.innerHTML = "";
   const m = document.getElementById("main");
   m.innerHTML = `
     <div class="empty-state" role="alert">
-      <p class="eyebrow">Cannot start</p>
+      <p class="eyebrow">${esc(t("fatal.eyebrow"))}</p>
       <h1 style="margin-top:4px">${esc(title)}</h1>
       <p class="lede">${esc(detail)}</p>
       ${o.hint ? `<p class="small" style="color:var(--muted);max-width:60ch">${esc(o.hint)}</p>` : ""}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-        <button class="btn primary" data-act="retry-boot">Try again</button>
+        <button class="btn primary" data-act="retry-boot">${esc(t("fatal.retry"))}</button>
       </div>
     </div>`;
   const retry = m.querySelector('[data-act="retry-boot"]');
@@ -2827,12 +2969,8 @@ function showArtifactNotice(){
   el.id = "artifactNotice";
   el.className = "storage-warning";
   el.setAttribute("role", "note");
-  el.innerHTML = `<b>Stored in this Claude artifact.</b>
-    <span class="sw-detail">Records are kept in the artifact's database, not on a
-    server your organization runs. Access control is only partly enforced and there
-    are no version snapshots. ${SCOPE_NOTICE}
-    For the audited, access-controlled workspace, deploy the server &mdash; see the
-    deployment guide.</span>`;
+  el.innerHTML = `<b>${esc(t("safety.artifact.title"))}</b>
+    <span class="sw-detail">${esc(t("safety.artifact.detail"))} ${esc(t("safety.scope"))}</span>`;
   const header = document.querySelector("header.top");
   if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
 }
@@ -2847,10 +2985,8 @@ function showScopeNotice(){
   el.id = "scopeNotice";
   el.className = "storage-warning";
   el.setAttribute("role", "note");
-  el.innerHTML = `<b>${SCOPE_NOTICE}</b>
-    <span class="sw-detail">This workspace is for review records, not clinical data.
-    If patient information is entered by mistake, a project owner can purge it from
-    the history; report it as your organization's policy requires.</span>`;
+  el.innerHTML = `<b>${esc(t("safety.scope"))}</b>
+    <span class="sw-detail">${esc(t("safety.server.detail"))}</span>`;
   const header = document.querySelector("header.top");
   if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
 }
@@ -2861,13 +2997,27 @@ function showStorageWarning(){
   el.id = "storageWarning";
   el.className = "storage-warning";
   el.setAttribute("role", "note");
-  el.innerHTML = `<b>Saved in this browser only.</b>
-    <span class="sw-detail">Nothing is sent to a server: colleagues cannot see these
-    records, there is no audit log, no access control, and clearing site data
-    deletes them. ${SCOPE_NOTICE}
-    For a shared workspace, deploy the server &mdash; see the deployment guide.</span>`;
+  el.innerHTML = `<b>${esc(t("safety.local.title"))}</b>
+    <span class="sw-detail">${esc(t("safety.local.detail"))} ${esc(t("safety.scope"))}</span>`;
   const header = document.querySelector("header.top");
   if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
+}
+
+/* Re-render everything a reader sees in the new language: static header markup, the
+   mode label, the standing notice for the mode, and the current page. */
+function relocalize(){
+  applyStaticI18n(document);
+  const pick = document.getElementById(HeaderControl.LANGUAGE);
+  if(pick) pick.innerHTML = localeOptions();
+  if(RO) setMode(t("mode.viewOnly"), "ro"); else setModeFor(MODE);
+  ["storageWarning", "artifactNotice", "scopeNotice"].forEach(id => {
+    const el = document.getElementById(id); if(el) el.remove();
+  });
+  if(MODE === Mode.LOCAL) showStorageWarning();
+  else if(MODE === Mode.ARTIFACT) showArtifactNotice();
+  else if(MODE === Mode.API) showScopeNotice();
+  if(document.body.classList.contains("home")) renderDashboardShell();
+  else if(S) renderProject(false);
 }
 
 /* ============================================================
@@ -3594,11 +3744,12 @@ document.addEventListener("submit",async e=>{
 });
 document.addEventListener("input",e=>{
   const el=e.target;
+  if(el.id===HeaderControl.LANGUAGE){ setLocale(el.value); relocalize(); return; }
   if(el.id===SearchField.QUERY){ UI.q=el.value; updateDashboard(); return; }
   if(el.id===SearchField.ALL_TEXT){
     UI.qAll=el.checked;
     const q=document.getElementById(SearchField.QUERY);
-    if(q) q.placeholder = UI.qAll ? SEARCH_HINT.ALL_TEXT : SEARCH_HINT.NAMES;
+    if(q) q.placeholder = t(UI.qAll ? SEARCH_HINT.ALL_TEXT : SEARCH_HINT.NAMES);
     // Names are what people search for, and the lists hold ids: learn the names first.
     if(UI.qAll) warmNames([...PROJECTS.values()].flatMap(idsOfProject)).then(updateDashboard);
     updateDashboard(); return;
@@ -3664,6 +3815,8 @@ function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg
 /* ============================================================
    Boot
    ============================================================ */
+applyStaticI18n(document);
+{ const pick = document.getElementById(HeaderControl.LANGUAGE); if(pick) pick.innerHTML = localeOptions(); }
 renderDashboardShell();
 (async()=>{
   let db=null, user=null;
@@ -3680,7 +3833,7 @@ renderDashboardShell();
   }
   if(db){
     STORE=new DbStore(db); MODE=Mode.ARTIFACT;
-    if(RO) setMode("View only","ro"); else setModeFor(MODE);
+    if(RO) setMode(t("mode.viewOnly"),"ro"); else setModeFor(MODE);
     showArtifactNotice();
   }
   else {
@@ -3704,12 +3857,8 @@ renderDashboardShell();
       // The server knows who you are and said no. Falling back here would
       // hand a denied user a working private workspace -- access control
       // failing open into a usable app. Stop instead.
-      fatalError(
-        "You do not have access to this workspace",
-        "The governance server refused this sign-in. Your account may not be "
-        + "authorized for this deployment, or your session may have ended.",
-        {mode:"No access", hint:"Signing out and back in may help. If it does not, "
-          + "ask whoever administers this deployment to grant your account access."});
+      fatalError(t("fatal.denied.title"), t("fatal.denied.detail"),
+        {mode:t("mode.noAccess"), hint:t("fatal.denied.hint")});
       return;
     }
     else if(api.verdict === "error" || api.verdict === "unreachable" || apiSeenHere()){
@@ -3717,12 +3866,8 @@ renderDashboardShell();
       // failing. Either way this is a deployment with a server, and browser-
       // local storage is not a substitute for it: the work would be invisible
       // to colleagues, absent from the audit log, and stranded on this machine.
-      fatalError(
-        "Cannot reach the governance server",
-        "This workspace is stored on a server, and the app could not reach it. "
-        + "Nothing has been lost -- your projects are on the server.",
-        {hint:"This is usually temporary. If it persists, the API or its database "
-          + "may be down; check with whoever administers this deployment."});
+      fatalError(t("fatal.unreachable.title"), t("fatal.unreachable.detail"),
+        {hint:t("fatal.unreachable.hint")});
       return;
     }
     else {

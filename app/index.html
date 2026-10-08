@@ -25,19 +25,21 @@
 </head>
 <body class="home">
 <header class="top">
-  <button class="brand-btn" id="brandBtn" type="button" aria-label="Go to all projects"><span class="brand">Health AI assurance review<small id="projName">Portfolio</small></span></button>
-  <span class="mode" id="mode">Connecting…</span>
+  <button class="brand-btn" id="brandBtn" type="button" aria-label="Go to all projects" data-i18n-aria="header.goHome"><span class="brand"><span data-i18n="header.brand">Health AI assurance review</span><small id="projName">Portfolio</small></span></button>
+  <span class="mode" id="mode" data-i18n="header.connecting">Connecting…</span>
   <div class="spacer"></div>
   <span class="saved" id="saved" aria-live="polite"></span>
-  <button class="btn ghost preview-toggle proj-only" id="openPreview" type="button">Model card</button>
-  <input type="file" id="importFile" accept="application/json,.json" class="vh" aria-label="Import project JSON">
-  <button class="btn proj-only" id="goReport" type="button">View report</button>
+  <label class="vh" for="lang" data-i18n="lang.label">Language</label>
+  <select class="lang" id="lang"></select>
+  <button class="btn ghost preview-toggle proj-only" id="openPreview" type="button" data-i18n="header.modelCard">Model card</button>
+  <input type="file" id="importFile" accept="application/json,.json" class="vh" aria-label="Import project JSON" data-i18n-aria="header.import">
+  <button class="btn proj-only" id="goReport" type="button" data-i18n="header.viewReport">View report</button>
 </header>
 <div class="shell">
-  <nav class="rail" aria-label="Review steps"><ol id="rail"></ol></nav>
+  <nav class="rail" aria-label="Review steps" data-i18n-aria="nav.steps"><ol id="rail"></ol></nav>
   <main id="main" tabindex="-1"></main>
-  <aside class="panel" id="panel" aria-label="Applied model card preview">
-    <div class="panel-head"><p>Applied model card, live</p><button class="btn ghost panel-close" id="closePreview" type="button">Close</button></div>
+  <aside class="panel" id="panel" aria-label="Applied model card preview" data-i18n-aria="panel.label">
+    <div class="panel-head"><p data-i18n="panel.title">Applied model card, live</p><button class="btn ghost panel-close" id="closePreview" type="button" data-i18n="panel.close">Close</button></div>
     <div id="labelHost"></div>
   </aside>
 </div>

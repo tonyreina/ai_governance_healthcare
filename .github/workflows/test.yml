@@ -51,6 +51,7 @@ jobs:
       - run: pixi run test-workflows
 
       - run: pixi run test-enums
+      - run: pixi run test-check-i18n
 
       # The showcase video on the docs site: present, under its size cap,
       # first-party, and honest about which mode it shows.
@@ -170,6 +171,9 @@ jobs:
       - name: search all text on the portfolio
         if: ${{ !cancelled() }}
         run: pixi run test-text-search
+      - name: languages
+        if: ${{ !cancelled() }}
+        run: pixi run test-i18n
       - name: audit log writes
         if: ${{ !cancelled() }}
         run: pixi run test-audit

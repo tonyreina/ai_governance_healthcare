@@ -46,6 +46,9 @@ test-exports = "python tests/test_exports.py"
 test-untrusted-keys = "python tests/test_untrusted_keys.py"
 # "Search all text" on the portfolio finds every project holding some text (#57).
 test-text-search = "python tests/test_text_search.py"
+# The dashboard in seven languages: resolution, picker, dates, safety fallback, plural
+# rules, and a pseudo-locale ratchet on hard-coded text (#80).
+test-i18n = "python tests/test_i18n.py"
 test-audit = "python tests/test_audit_log.py"
 # Free-text fields opt out of browser spellcheck and form history (#59).
 test-text-fields = "python tests/test_text_fields.py"
@@ -115,6 +118,9 @@ test-dockerignore = "python tests/test_dockerignore.py"
 # and reading .env the way compose does (empty means the default; " #" starts a comment).
 test-preflight = "python tests/test_preflight.py"
 check-spelling = "python scripts/check_spelling.py"
+# Every catalog has en.json's keys, placeholders and plural forms, and no markup (#80).
+check-i18n = "python scripts/check_i18n.py"
+test-check-i18n = "python tests/test_check_i18n.py"
 check-chai = "python scripts/check_chai_updates.py"
 check-chai-write = "python scripts/check_chai_updates.py --write"
 fix-spelling = "python scripts/check_spelling.py --fix"

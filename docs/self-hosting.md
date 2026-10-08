@@ -65,6 +65,38 @@ read only the registry.
     Evidence can be cited in both; a judgment in one is never a judgment in
     the other.
 
+## Languages
+
+The dashboard speaks English, Spanish, French, German, Hindi, Russian and
+Simplified Chinese. It picks the reader's saved choice, then the browser's
+languages, then English, and the picker in the header switches it. The choice
+is per browser: two people can read the same project in different languages.
+
+Every string comes from a message catalog, `app/i18n/<language>.json`, embedded
+into the single dashboard file by the build. English (`en.json`) is the source.
+`pixi run check-i18n` fails if a catalog lacks a key, has an extra one, drops or
+invents a `{placeholder}`, misses a plural form the language needs, or holds
+markup.
+
+The translations are **machine-drafted and unreviewed**. Safety-bearing
+warnings (the patient-data notice and the storage-mode banners, listed under
+`"@meta".safety` in `en.json`) are shown in English until someone fluent in the
+language reviews them. A wrong translation of a warning is worse than an English
+one. To record a review, add the key and who reviewed it, with the date, to
+that catalog's `"@meta".reviewers`, for example
+`"safety.scope": "A. Reviewer, 2026-10-08"`.
+
+Not translated yet: the framework content (CHAI criteria, OPTICA questions, the
+CHAI metrics), which is third-party text with attribution terms; most of the
+project screens; and exports and server messages, which stay English for now.
+`tests/test_i18n.py` counts the hard-coded text left on screen in a pseudo-locale,
+and that count may only go down.
+
+To add a language: copy `en.json` to `app/i18n/<tag>.json`, translate the
+values, set `"@meta"`, add the tag to `Locale` and `LOCALE_CHOICES` in
+`app/js/00-core/02-i18n.js` and its plural categories to `scripts/check_i18n.py`,
+and run `pixi run build-app`.
+
 ## Storage
 
 All persistence goes through two small classes in `app/js/00-core/20-stores.js`,

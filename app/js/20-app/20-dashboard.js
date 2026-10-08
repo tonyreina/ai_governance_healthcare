@@ -17,40 +17,37 @@ function dashData(){
 /* The portfolio's search fields, by element id: one definition, read by the
    template and by the input handler (70-events.js). */
 const SearchField = Object.freeze({ QUERY: "q", ALL_TEXT: "qall" });
-const SEARCH_HINT = Object.freeze({
-  NAMES: "Search by name, developer, or sponsor",
-  ALL_TEXT: "Search every field: a name, a vendor, a phrase",
-});
+const SEARCH_HINT = Object.freeze({ NAMES: "dash.searchNames", ALL_TEXT: "dash.searchAll" });
 function renderDashboardShell(){
   document.body.classList.add("home");
-  document.getElementById("projName").textContent = "Portfolio";
+  document.getElementById("projName").textContent = t("header.portfolio");
   const m=document.getElementById("main");
   let legacy=null;
   try{ const raw=localStorage.getItem("chai-review-v1"); if(raw && !localStorage.getItem("chai-legacy-imported")){ const j=JSON.parse(raw); if(j&&j.meta&&(j.meta.solution||Object.keys(j.items||{}).length)) legacy=j; } }catch(e){}
   m.innerHTML = `
     <div class="dash-head">
-      <div><p class="eyebrow">AI governance</p><h1>AI projects under review</h1>
-      <p class="lede">Every AI solution your organization is evaluating or running, checked against the CHAI lifecycle. Projects out of compliance or needing an update rise to the top.</p></div>
+      <div><p class="eyebrow">${esc(t("dash.eyebrow"))}</p><h1>${esc(t("dash.title"))}</h1>
+      <p class="lede">${esc(t("dash.lede"))}</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
-        <button class="btn ro-hide" data-act="samples" title="Add any sample projects not already in this workspace">Add samples</button>
-        <button class="btn primary ro-hide" data-act="new">New project</button>
+        <button class="btn ro-hide" data-act="samples" title="${esc(t("dash.addSamplesTitle"))}">${esc(t("dash.addSamples"))}</button>
+        <button class="btn primary ro-hide" data-act="new">${esc(t("dash.newProject"))}</button>
       </div>
     </div>
-    ${legacy?`<div class="banner ro-hide" id="legacyBanner"><span>A review of <b>${esc(legacy.meta.solution||"an AI solution")}</b> was saved in this browser before the shared workspace existed.</span><span style="display:flex;gap:8px"><button class="btn" data-act="legacy">Add it to the workspace</button><button class="btn ghost" data-act="legacy-dismiss">Dismiss</button></span></div>`:""}
+    ${legacy?`<div class="banner ro-hide" id="legacyBanner"><span>${tHtml("dash.legacy",{},{name:`<b>${esc(legacy.meta.solution||t("dash.legacyUnnamed"))}</b>`})}</span><span style="display:flex;gap:8px"><button class="btn" data-act="legacy">${esc(t("dash.legacyAdd"))}</button><button class="btn ghost" data-act="legacy-dismiss">${esc(t("dash.legacyDismiss"))}</button></span></div>`:""}
     <form class="newform ro-hide" id="newform" hidden>
-      <label for="newname" class="vh">Name of the AI solution</label>
-      <input type="text" id="newname" placeholder="Name of the AI solution, e.g. Sepsis early warning" autocomplete="off">
-      <button class="btn primary" type="submit">Create project</button>
-      <button class="btn ghost" type="button" data-act="new-cancel">Cancel</button>
+      <label for="newname" class="vh">${esc(t("dash.newName"))}</label>
+      <input type="text" id="newname" placeholder="${esc(t("dash.newNamePlaceholder"))}" autocomplete="off">
+      <button class="btn primary" type="submit">${esc(t("dash.create"))}</button>
+      <button class="btn ghost" type="button" data-act="new-cancel">${esc(t("dash.cancel"))}</button>
     </form>
-    <div class="tallies" id="tallies" role="group" aria-label="Filter by status"></div>
+    <div class="tallies" id="tallies" role="group" aria-label="${esc(t("dash.filterLabel"))}"></div>
     <div class="toolbar">
-      <label for="${SearchField.QUERY}" class="vh">Search projects</label>
-      <input type="search" id="${SearchField.QUERY}" placeholder="${UI.qAll?SEARCH_HINT.ALL_TEXT:SEARCH_HINT.NAMES}" value="${esc(UI.q||"")}">
-      <label class="qall"><input type="checkbox" id="${SearchField.ALL_TEXT}"${UI.qAll?" checked":""}> Search all text</label>
+      <label for="${SearchField.QUERY}" class="vh">${esc(t("dash.searchLabel"))}</label>
+      <input type="search" id="${SearchField.QUERY}" placeholder="${esc(t(UI.qAll?SEARCH_HINT.ALL_TEXT:SEARCH_HINT.NAMES))}" value="${esc(UI.q||"")}">
+      <label class="qall"><input type="checkbox" id="${SearchField.ALL_TEXT}"${UI.qAll?" checked":""}> ${esc(t("dash.searchAllToggle"))}</label>
       <span class="spacer"></span>
-      <button class="btn ghost" data-act="dl-csv">Export portfolio (CSV)</button>
-      <button class="btn ghost ro-hide" data-act="import">Import project JSON</button>
+      <button class="btn ghost" data-act="dl-csv">${esc(t("dash.exportCsv"))}</button>
+      <button class="btn ghost ro-hide" data-act="import">${esc(t("dash.importJson"))}</button>
     </div>
     <div id="plistHost"></div>`;
   applyRO(m);
@@ -58,15 +55,15 @@ function renderDashboardShell(){
 }
 function updateDashboard(){
   const host=document.getElementById("plistHost"); if(!host) return;
-  const t=document.getElementById("tallies");
-  if(!LOADED){ host.innerHTML=`<p style="color:var(--muted)">Loading projects…</p>`; t.innerHTML=""; return; }
+  const tl=document.getElementById("tallies");
+  if(!LOADED){ host.innerHTML=`<p style="color:var(--muted)">${esc(t("dash.loading"))}</p>`; tl.innerHTML=""; return; }
   const rows=dashData();
   const active=rows.filter(r=>!r.p.archived);
   const cnt=k=>active.filter(r=>r.st.key===k).length;
   const archived=rows.length-active.length;
-  const T=[["red","Out of compliance",cnt("red")],["amber","Needs update",cnt("amber")],["green","On track",cnt("green")],["retired","Retired or stopped",cnt("retired")],["all","All active",active.length]];
-  if(archived) T.push(["archived","Archived",archived]);
-  t.innerHTML = T.map(([k,l,n])=>`<button class="tally ${k==="archived"?"retired":k}" data-filter="${k}" aria-pressed="${UI.filter===k}"><span class="n">${n}</span><span class="t">${l}</span></button>`).join("");
+  const T=[["red",t("dash.tally.red"),cnt("red")],["amber",t("dash.tally.amber"),cnt("amber")],["green",t("dash.tally.green"),cnt("green")],["retired",t("dash.tally.retired"),cnt("retired")],["all",t("dash.tally.all"),active.length]];
+  if(archived) T.push(["archived",t("dash.tally.archived"),archived]);
+  tl.innerHTML = T.map(([k,l,n])=>`<button class="tally ${k==="archived"?"retired":k}" data-filter="${k}" aria-pressed="${UI.filter===k}"><span class="n">${n}</span><span class="t">${esc(l)}</span></button>`).join("");
   const q=(UI.q||"").toLowerCase().trim();
   const everything = !!(UI.qAll && q);
   let list = UI.filter==="archived" ? rows.filter(r=>r.p.archived) : active.filter(r=>UI.filter==="all"||r.st.key===UI.filter);
@@ -76,35 +73,35 @@ function updateDashboard(){
   }
   else if(q) list=list.filter(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.org].join(" ").toLowerCase().includes(q));
   const note = everything
-    ? `<p class="small search-note" id="searchNote">Searching the current text of every project you can open, archived ones included. Earlier versions and the audit log are not searched${MODE===Mode.API?"; an administrator can search them with <code>make subject-access</code>":""}.</p>`
+    ? `<p class="small search-note" id="searchNote">${esc(t("dash.searchNote"))}${MODE===Mode.API?` ${esc(t("dash.searchNoteServer"))}`:""}</p>`
     : "";
   const rank={red:0,amber:1,green:2,retired:3};
   list.sort((a,b)=>(rank[a.st.key]-rank[b.st.key]) || (b.f.length-a.f.length) || (a.p.meta.solution||"").localeCompare(b.p.meta.solution||""));
   if(!rows.length){
-    host.innerHTML=`<div class="empty-state"><p>No AI projects yet. Add the first solution your organization is evaluating, or load ${SAMPLES.length} sample projects \u2014 one per CHAI use case \u2014 to see how compliance flags work.</p>
-      <div class="ro-hide" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="new">New project</button><button class="btn" data-act="samples">Load sample projects</button></div></div>`;
+    host.innerHTML=`<div class="empty-state"><p>${esc(t("dash.empty",{count:SAMPLES.length}))}</p>
+      <div class="ro-hide" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="new">${esc(t("dash.newProject"))}</button><button class="btn" data-act="samples">${esc(t("dash.loadSamples"))}</button></div></div>`;
     applyRO(host); return;
   }
   if(!list.length){ host.innerHTML= note + (everything
-      ? `<p style="color:var(--muted);margin-top:18px">No project contains that text.</p>`
-      : `<p style="color:var(--muted);margin-top:18px">No projects match. Clear the search or choose another status.</p>`); return; }
+      ? `<p style="color:var(--muted);margin-top:18px">${esc(t("dash.noTextMatch"))}</p>`
+      : `<p style="color:var(--muted);margin-top:18px">${esc(t("dash.noMatch"))}</p>`); return; }
   const today=parseDay(TODAY());
-  host.innerHTML=`${note}<div class="phead" aria-hidden="true"><span>Project</span><span>Lifecycle</span><span>Readiness</span><span>Next review</span><span>Status</span></div>
-  <ul class="plist">${list.map(r=>{const p=r.p; const late=r.nr&&parseDay(r.nr)<today;
+  host.innerHTML=`${note}<div class="phead" aria-hidden="true"><span>${esc(t("dash.col.project"))}</span><span>${esc(t("dash.col.lifecycle"))}</span><span>${esc(t("dash.col.readiness"))}</span><span>${esc(t("dash.col.nextReview"))}</span><span>${esc(t("dash.col.status"))}</span></div>
+  <ul class="plist">${list.map(r=>{const p=r.p; const late=r.nr&&parseDay(r.nr)<today; const name=p.meta.solution||t("dash.thisProject");
     return `<li class="prow ${r.st.key}" data-open="${esc(p.id)}">
-      <div><button class="pname" data-open="${esc(p.id)}">${esc(p.meta.solution||"Untitled AI solution")}</button>
-        <div class="psub">${esc([p.meta.developer,p.meta.sponsor&&("Sponsor: "+p.meta.sponsor)].filter(Boolean).join(" · ")||"No developer or sponsor recorded")}</div>
-        <div class="psub">Updated ${esc(ago(p.updatedAt))} by ${who(p.updatedBy)}${p.archived?" · archived":""}</div>
-        ${r.hits&&everything?`<div class="psub hits">Found in: ${r.hits.slice(0,4).map(esc).join("; ")}${r.hits.length>4?` and ${r.hits.length-4} more`:""}</div>`:""}</div>
+      <div><button class="pname" data-open="${esc(p.id)}">${esc(p.meta.solution||t("project.untitled"))}</button>
+        <div class="psub">${esc([p.meta.developer,p.meta.sponsor&&t("dash.sponsor",{name:p.meta.sponsor})].filter(Boolean).join(" · ")||t("dash.noDeveloper"))}</div>
+        <div class="psub">${tHtml("dash.updated",{when:ago(p.updatedAt)},{who:who(p.updatedBy)})}${p.archived?` · ${esc(t("dash.archivedTag"))}`:""}</div>
+        ${r.hits&&everything?`<div class="psub hits">${esc(t("dash.foundIn",{places:r.hits.slice(0,4).join("; ")}))}${r.hits.length>4?` ${esc(t("dash.andMore",{count:r.hits.length-4}))}`:""}</div>`:""}</div>
       <div>${lcTrack(p)}</div>
       <div><span class="pct">${r.score}%</span></div>
-      <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">overdue</div>`:""}`:`<span class="small">${phase(p).key==="deployed"?"not set":"not live"}</span>`}</div>
+      <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">${esc(t("dash.overdue"))}</div>`:""}`:`<span class="small">${esc(t(phase(p).key==="deployed"?"dash.notSet":"dash.notLive"))}</span>`}</div>
       <div><span class="st ${r.st.key}">${esc(r.st.label)}</span>
-        ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(f.text)}</li>`).join("")}${r.f.length>3?`<li>and ${r.f.length-3} more</li>`:""}</ul>`:""}
+        ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(f.text)}</li>`).join("")}${r.f.length>3?`<li>${esc(t("dash.andMore",{count:r.f.length-3}))}</li>`:""}</ul>`:""}
         <button class="icon-btn ro-hide parchive" data-archive="${esc(p.id)}"
-          aria-label="${p.archived?"Restore":"Archive"} ${esc(p.meta.solution||"this project")}"
-          title="${p.archived?"Restore to the active portfolio":"Archive: keeps the record, removes it from the active portfolio"}"
-          >${p.archived?"Restore":"Archive"}</button></div>
+          aria-label="${esc(t(p.archived?"dash.restoreLabel":"dash.archiveLabel",{name}))}"
+          title="${esc(t(p.archived?"dash.restoreTitle":"dash.archiveTitle"))}"
+          >${esc(t(p.archived?"dash.restore":"dash.archive"))}</button></div>
     </li>`;}).join("")}</ul>`;
   resolveNames(host);
 }

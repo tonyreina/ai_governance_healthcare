@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""The dashboard in seven languages, in a real browser (#80).
+
+* The language comes from a saved choice, then the browser's languages, then English;
+  Traditional Chinese does not fall into Simplified.
+* The picker switches everything already on screen, sets <html lang>, and is remembered.
+* Dates and relative times follow the chosen language, not the browser's.
+* A safety-bearing warning stays in English until a reviewer is recorded for it in
+  that language (D-59), and switches when one is.
+* The plural categories check-i18n requires are the ones Intl.PluralRules actually uses.
+* Exports and machine-read text stay English (phase 1).
+* A pseudo-locale shows what is still hard-coded. The header must be fully converted;
+  everything else is a ratchet: tests/i18n_baseline.json counts the hard-coded text
+  left on three screens, and the count may only go down (`--update-baseline`).
+
+    pixi run test-i18n
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import re
+import sys
+from pathlib import Path
+
+from playwright.sync_api import sync_playwright
+
+ROOT = Path(__file__).resolve().parent.parent
+APP = ROOT / "docs" / "app" / "index.html"
+BASELINE = ROOT / "tests" / "i18n_baseline.json"
+
+spec = importlib.util.spec_from_file_location(
+    "check_i18n", ROOT / "scripts" / "check_i18n.py"
+)
+ci = importlib.util.module_from_spec(spec)
+sys.modules["check_i18n"] = ci
+spec.loader.exec_module(ci)
+
+failures: list[str] = []
+
+
+def check(name: str, ok: bool, detail: str = "") -> None:
+    print(f"  {'PASS' if ok else 'FAIL'}  {name}{'' if ok else f'  <- {detail}'}")
+    if not ok:
+        failures.append(name)
+
+
+def own_name(locale: str) -> str:
+    """The language's name in itself, from its catalog."""
+    path = ROOT / "app" / "i18n" / f"{locale}.json"
+    return json.loads(path.read_text(encoding="utf-8"))["@meta"]["name"]
+
+
+def open_app(browser, locale: str = "en-US", saved: str | None = None):
+    context = browser.new_context(locale=locale)
+    if saved:
+        context.add_init_script(
+            f"try{{localStorage.setItem('chai-locale',{saved!r})}}catch(e){{}}"
+        )
+    page = context.new_page()
+    page.goto(APP.as_uri())
+    page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=15000)
+    return context, page
+
+
+# Visible text that is plain ASCII words: in the pseudo-locale, anything that came
+# through t() is accented and bracketed, so plain words are hard-coded text (or data).
+PLAIN_TEXT = """(root) => {
+  const out = [];
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const el = n.parentElement;
+    if (!el || el.closest('script,style,[hidden],.vh,select')) continue;
+    if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') continue;
+    const s = n.textContent.trim();
+    if (/[A-Za-z]{3,}/.test(s) && !/[\\u00C0-\\u024F]/.test(s)) out.push(s);
+  }
+  return out;
+}"""
+
+
+def main() -> int:
+    update = "--update-baseline" in sys.argv
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+
+        print("The language comes from the browser, unless one was chosen")
+        for tag, expected in (
+            ("es-MX", "es"), ("fr-CA", "fr"), ("de-AT", "de"), ("hi-IN", "hi"),
+            ("ru-RU", "ru"), ("zh-CN", "zh-Hans"), ("zh-TW", "en"), ("ja-JP", "en"),
+            ("en-GB", "en"),
+        ):  # fmt: skip
+            ctx, page = open_app(browser, tag)
+            got = page.evaluate("LOCALE")
+            check(f"{tag} -> {expected}", got == expected, got)
+            ctx.close()
+        ctx, page = open_app(browser, "es-MX", saved="de")
+        check("a saved choice wins over the browser", page.evaluate("LOCALE") == "de")
+        ctx.close()
+
+        print("Spanish, from the browser")
+        ctx, page = open_app(browser, "es-ES")
+        check(
+            "<html lang> says so",
+            page.evaluate("document.documentElement.lang") == "es",
+        )
+        check(
+            "the dashboard is in Spanish",
+            page.inner_text("h1") == "Proyectos de IA en revisión",
+        )
+        check("so is the header", page.inner_text("#goReport") == "Ver informe")
+        check(
+            "and the header's mode label",
+            page.inner_text("#mode") == "Solo en este navegador",
+        )
+        warning = page.inner_text("#storageWarning")
+        check(
+            "the unreviewed safety warning stays in English",
+            "Saved in this browser only." in warning
+            and "patient-identifiable" in warning,
+            warning[:120],
+        )
+        page.evaluate(
+            """() => { const r = I18N_CATALOGS.es['@meta'].reviewers;
+                       ['safety.local.title','safety.local.detail','safety.scope']
+                         .forEach(k => r[k] = 'Test reviewer, 2026-10-08');
+                       relocalize(); }"""
+        )
+        warning = page.inner_text("#storageWarning")
+        check(
+            "once a reviewer is recorded, it shows in Spanish",
+            "Guardado solo en este navegador." in warning
+            and "Saved in this browser" not in warning,
+            warning[:120],
+        )
+        options = page.eval_on_selector_all(
+            "#lang option", "os => os.map(o => [o.value, o.textContent, o.lang])"
+        )
+        check(
+            "the picker names each language in that language",
+            all(
+                [loc, own_name(loc), loc] in options
+                for loc in ("en", "ru", "hi", "zh-Hans")
+            )
+            and len(options) == 7,
+            str(options),
+        )  # fmt: skip
+
+        print("Switching")
+        page.select_option("#lang", "de")
+        page.wait_for_timeout(200)
+        check(
+            "the page switches without a reload",
+            page.inner_text("#goReport") == "Bericht anzeigen",
+        )
+        check(
+            "<html lang> follows",
+            page.evaluate("document.documentElement.lang") == "de",
+        )
+        check(
+            "the choice is saved",
+            page.evaluate("localStorage.getItem('chai-locale')") == "de",
+        )
+        page.reload()
+        page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=15000)
+        check(
+            "and kept after a reload", page.inner_text("h1") == "KI-Projekte in Prüfung"
+        )
+
+        print("Dates follow the chosen language, not the browser's")
+        check(
+            "German",
+            "März" in page.evaluate("fmtDay('2026-03-14')"),
+            page.evaluate("fmtDay('2026-03-14')"),
+        )
+        page.evaluate("setLocale('zh-Hans')")
+        check(
+            "Chinese",
+            page.evaluate("fmtDay('2026-03-14')") == "2026年3月14日",
+            page.evaluate("fmtDay('2026-03-14')"),
+        )
+        page.evaluate("setLocale('fr')")
+        check(
+            "relative time in French",
+            "il y a"
+            in page.evaluate("ago(new Date(Date.now()-3*3600e3).toISOString())"),
+        )
+        check(
+            "tEn stays English",
+            page.evaluate("tEn('dash.title')") == "AI projects under review",
+        )
+        check(
+            "a missing key shows itself",
+            page.evaluate("t('no.such.key')") == "no.such.key",
+        )
+        page.evaluate("loadSamples()")
+        page.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
+        page.evaluate("openProject([...PROJECTS.keys()][0], 'report')")
+        check(
+            "exports stay English for now",
+            "CHAI assurance review" in page.evaluate("exportMD()")
+            and json.loads(page.evaluate("JSON.stringify(projectJSON(S))"))["storage"][
+                "label"
+            ]
+            in ("This browser only", "Shared workspace", "Claude artifact"),
+        )
+        ctx.close()
+
+        print("The plural forms check-i18n requires are the ones the browser uses")
+        ctx, page = open_app(browser)
+        for locale, needed in ci.PLURALS.items():
+            actual = set(page.evaluate(
+                "(l) => new Intl.PluralRules(l).resolvedOptions()"
+                ".pluralCategories", str(locale)
+            ))  # fmt: skip
+            check(
+                f"{locale}: {sorted(actual)}",
+                actual == set(needed),
+                str(sorted(needed)),
+            )
+        check(
+            "every language the app offers has plural rules",
+            set(page.evaluate("[...LOCALE_CHOICES]")) <= set(ci.PLURALS),
+        )
+        js_locales = set(page.evaluate("Object.values(Locale)")) - {"en-XA"}
+        files = {p.stem for p in (ROOT / "app" / "i18n").glob("*.json")}
+        check(
+            "the app's locales, the checker's and the catalog files are the same set",
+            js_locales == {str(x) for x in ci.Locale} == files
+            and set(page.evaluate("[...LOCALE_CHOICES]")) == files,
+            f"{sorted(js_locales)} {sorted(files)}",
+        )
+
+        print("Pseudo-locale: what is still hard-coded")
+        page.evaluate("setLocale(Locale.PSEUDO); relocalize();")
+        header = page.evaluate(
+            PLAIN_TEXT.replace("(root) =>", "() => ((root) =>")
+            + ")(document.querySelector('header.top'))"
+        )
+        check("the header is fully converted", not header, str(header))
+        page.evaluate("loadSamples()")
+        page.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
+        page.evaluate("goHome()")
+        counts = {}
+        counts["dashboard"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
+        page.evaluate("openProject([...PROJECTS.keys()][0], 'checklist')")
+        page.wait_for_timeout(200)
+        counts["checklist"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
+        page.evaluate("go('report')")
+        page.wait_for_timeout(200)
+        counts["report"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
+        ctx.close()
+        browser.close()
+
+    baseline = json.loads(BASELINE.read_text()) if BASELINE.exists() else {}
+    if update:
+        BASELINE.write_text(json.dumps(counts, indent=2) + "\n")
+        print(f"  baseline written: {counts}")
+    else:
+        for screen, n in counts.items():
+            allowed = baseline.get(screen)
+            check(
+                f"{screen}: {n} hard-coded text node(s), baseline {allowed}",
+                allowed is not None and n <= allowed,
+                "more hard-coded text than before: put it in the catalog",
+            )
+            if allowed is not None and n < allowed:
+                check(
+                    f"{screen}: the baseline is stale; "
+                    "ratchet it down with --update-baseline",
+                    False,
+                    f"{n} < {allowed}",
+                )
+    check(
+        "the plain-text probe sees an unconverted string (mutation)",
+        bool(re.search(r"[A-Za-z]{3,}", "Hard coded"))
+        and not re.search(r"[A-Za-z]{3,}", "[Ĥáŕđ]"),
+    )
+
+    print()
+    if failures:
+        print(f"{len(failures)} check(s) failed")
+        return 1
+    print("i18n checks passed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

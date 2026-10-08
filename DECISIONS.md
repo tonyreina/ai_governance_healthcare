@@ -1031,6 +1031,30 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Supersedes the SLA bullet of D-45 (the rest of D-45 stands).
 - Source: the owner.
 
+### D-59 Embedded catalogs, English warnings until reviewed, and a ratchet
+
+- Status: Accepted
+- Languages and defaults are the owner's (R-55): the six languages plus Russian,
+  Simplified Chinese for Mandarin, a per-browser choice, machine-drafted
+  translations, and safety-bearing text in English until reviewed.
+- Catalogs are JSON files the build embeds as one frozen object, because the
+  dashboard is one file that must work from disk and as an artifact (R-01).
+  `t()` returns text and callers escape it; a catalog never holds HTML, so a
+  translation cannot inject markup. `tHtml()` places markup the caller built.
+- Plurals use the browser's `Intl.PluralRules`; the checker's table of the
+  forms each language needs is tested against it, so neither can drift.
+- The English text of a mode stays in `MODE_LABEL` for exports, and the header
+  uses a catalog key: exports are a record and stay stable.
+- Converting every screen at once was not done. A pseudo-locale counts the text
+  still hard-coded on three screens, and the baseline may only shrink, like the
+  enum ratchet (D-19).
+- The spelling check skips catalogs other than `en.json`, because a word that is
+  British in English can be correct in another language (German, French).
+- Rejected: fetching catalogs at run time (breaks R-01); an i18n library (R-05,
+  and size); translating the framework content now (third-party text with
+  attribution terms, its own plan).
+- Source: the owner, on #80; R-55.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

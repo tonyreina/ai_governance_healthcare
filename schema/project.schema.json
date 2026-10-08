@@ -18,6 +18,18 @@
       "type": "string",
       "format": "date-time"
     },
+    "storage": {
+      "type": "object",
+      "description": "Where the record was kept when this was exported, so a filed copy carries its own provenance (#93). Absent in older exports.",
+      "required": ["mode", "label", "note"],
+      "properties": {
+        "mode": {
+          "enum": ["local", "api", "artifact", "connecting"]
+        },
+        "label": {"type": "string"},
+        "note": {"type": "string"}
+      }
+    },
     "status": {
       "enum": [
         "Out of compliance",

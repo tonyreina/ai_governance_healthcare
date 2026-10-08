@@ -138,6 +138,18 @@ def named_maintainers(meta: dict[str, Any]) -> str:
     return nonempty(meta.get("reviewers"), meta.get("sponsor"))
 
 
+def storage_sentence(export: dict[str, Any]) -> str | None:
+    """Where the source governance record was kept, if the export says (#93).
+
+    Older exports have no `storage` field, and say nothing here.
+    """
+    storage = export.get("storage") or {}
+    if not storage.get("label"):
+        return None
+    note = storage.get("note", "")
+    return f"The governance record was held in: {storage['label']}. {note}"
+
+
 def join_parts(*parts: str | None) -> str:
     return "\n\n".join(p.strip() for p in parts if p and p.strip())
 
@@ -186,6 +198,7 @@ def build(
         "This record describes the DATA. The AI solution it supports is "
         "described under `about`; the governance review it came from is linked "
         "under `isBasedOn`.",
+        storage_sentence(export),
     )
 
     # ---- provenance / responsibility -------------------------------------

@@ -911,3 +911,14 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Enforced by:**
   `tests/test_subject_access.py::every column that records who did something is searched`
   `tests/test_subject_access.py::it changed nothing`
+
+### C-71 An export carries its own provenance
+
+- **Claim:** Each export states which storage mode produced it, in the header's own
+  words, and browser-only exports say sign-offs are self-asserted.
+- **Asserted in:** `app/js/00-core/30-state.js` — "Sign-offs here are self-asserted"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_export_provenance.py::the HTML report states the mode`
+  `tests/test_export_provenance.py::browser-only exports say sign-offs are self-asserted`
+  `tests/test_export_provenance.py::the JSON export states the mode`

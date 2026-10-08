@@ -87,6 +87,8 @@ test-people = "python tests/test_people.py"
 test-session-ui = "python tests/test_session_ui.py"
 # The dashboard reports each export it produces, in the server-backed mode (#33).
 test-export-beacon = "python tests/test_export_beacon.py"
+# Every export says which storage mode produced it, in the header's own words (#93).
+test-export-provenance = "python tests/test_export_provenance.py"
 # `make verify-backup` restores a dump into a throwaway PostgreSQL and checks the
 # guarantees survived; `make restore` asks first (#52). Needs Docker and gpg.
 test-verify-backup = "python tests/test_verify_backup.py"

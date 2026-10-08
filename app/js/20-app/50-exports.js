@@ -20,7 +20,7 @@ function exportHTML(){
      assessments and clinical rationale. STANDALONE_CSS() goes to real trouble
      to inline everything else; this was the one hole left in it. The font
      stacks below end in system-ui. -->
-<style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}</main></body></html>`;
+<style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}<p class="disclaimer" data-provenance><strong>Stored in: ${esc(storageNote().label)}.</strong> ${esc(storageNote().note)}</p></main></body></html>`;
 }
 /* PDF, via the browser's own print-to-PDF.
 
@@ -68,7 +68,7 @@ function exportMD(){
   const line=s=>String(s||"").replace(/\n+/g," ").replace(/\|/g,"\\|");
   const nm=id=>displayName(id);
   L.push(`# ${m.solution||"Untitled AI solution"}: CHAI assurance review`,"");
-  L.push(`- **Status:** ${statusOf(S).label}`,`- **Lifecycle phase:** ${phase(S).label}`,`- **Organization:** ${m.org||"–"}`,`- **Developer:** ${m.developer||"–"}`,`- **Sourcing:** ${m.sourcing||"–"}`,`- **Risk tier:** ${m.riskTier||"–"}`,`- **Clinical sponsor:** ${m.sponsor||"–"}`,`- **Next periodic review:** ${nextReview(S)||"–"}`,`- **Review team:** ${line(m.reviewers)||"–"}`,`- **Scope:** ${line(m.scope)||"–"}`,`- **Generated:** ${TODAY()}`,"");
+  L.push(`- **Status:** ${statusOf(S).label}`,`- **Lifecycle phase:** ${phase(S).label}`,`- **Organization:** ${m.org||"–"}`,`- **Developer:** ${m.developer||"–"}`,`- **Sourcing:** ${m.sourcing||"–"}`,`- **Risk tier:** ${m.riskTier||"–"}`,`- **Clinical sponsor:** ${m.sponsor||"–"}`,`- **Next periodic review:** ${nextReview(S)||"–"}`,`- **Review team:** ${line(m.reviewers)||"–"}`,`- **Scope:** ${line(m.scope)||"–"}`,`- **Generated:** ${TODAY()}`,`- **Stored in:** ${storageNote().label}. ${storageNote().note}`,"");
   const F=flags(S); L.push("## Compliance flags",""); if(F.length) F.forEach(f=>L.push(`- **${f.sev==="red"?"Out of compliance":"Needs update"}:** ${f.text}`)); else L.push("None."); L.push("");
   L.push(`## Readiness`,"",`Overall: **${ov.pct}%** of applicable criteria met (${ov.answered}/${ov.total} answered).`,"","| Principle | Score |","|---|---|");
   Object.entries(PRINCIPLES).forEach(([k,p])=>L.push(`| ${p.name} | ${scoreOf(all.filter(it=>it.p===k)).pct}% |`));
@@ -91,7 +91,7 @@ function projectJSON(p){
   const all=allItems();
   const state=clone(p); delete state.id;
   return {
-    schema:"chai-review/2", generated:new Date().toISOString(),
+    schema:"chai-review/2", generated:new Date().toISOString(), storage:storageNote(),
     status:statusOf(p).label, phase:phase(p).label, next_review:nextReview(p), flags:flags(p),
     meta:p.meta, gates:p.gates, metrics:p.metrics,
     model_card:Object.fromEntries(CARD_FIELDS.map(k=>[k,cardValOf(p,k)])),
@@ -127,8 +127,8 @@ function csvField(value){
 
 function exportCSV(){
   const q=csvField;
-  const head=["Project","Developer","Clinical sponsor","Risk tier","Lifecycle phase","Status","Readiness %","Next review","Flags","Archived","Last updated"];
-  const rows=dashData().map(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.riskTier,phase(r.p).label,r.st.label,r.score,r.nr||"",r.f.map(f=>f.text).join("; "),r.p.archived?"yes":"",(r.p.updatedAt||"").slice(0,10)]);
+  const head=["Project","Developer","Clinical sponsor","Risk tier","Lifecycle phase","Status","Readiness %","Next review","Flags","Archived","Last updated","Stored in"];
+  const rows=dashData().map(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.riskTier,phase(r.p).label,r.st.label,r.score,r.nr||"",r.f.map(f=>f.text).join("; "),r.p.archived?"yes":"",(r.p.updatedAt||"").slice(0,10),storageNote().label]);
   return [head,...rows].map(r=>r.map(q).join(",")).join("\r\n");
 }
 const slug = s=> (s||"ai-solution").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,60) || "ai-solution";

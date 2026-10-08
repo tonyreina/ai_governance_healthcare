@@ -170,6 +170,11 @@ jobs:
       - name: exports are reported to the read trail
         if: ${{ !cancelled() }}
         run: pixi run test-export-beacon
+
+      # Each export states which storage mode produced it (#93).
+      - name: export provenance
+        if: ${{ !cancelled() }}
+        run: pixi run test-export-provenance
       - name: session controls (idle lock, sign-out, lost stream)
         if: ${{ !cancelled() }}
         run: pixi run test-session-ui

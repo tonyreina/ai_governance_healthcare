@@ -22,6 +22,23 @@ const MODE_LABEL = Object.freeze({
   [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
   [Mode.ARTIFACT]: Object.freeze({text:"Claude artifact",   cls:"artifact"}),
 });
+/* What an export says about where the record was kept, beside the header's label (#93).
+   Keyed by Mode like MODE_LABEL, so a mode cannot ship without one and two modes cannot
+   share one (R-04). It says where the record lived and what that means for sign-offs
+   and audit; it does not say whether that place is approved for any class of data
+   (R-21 is open). */
+const MODE_PROVENANCE = Object.freeze({
+  [Mode.LOCAL]:    "Kept in one browser on one computer. Sign-offs here are self-asserted: nothing verifies who made them, and there is no server-side audit log or version history.",
+  [Mode.API]:      "Kept on the self-hosted governance server, with server-side access control, a version history and an audit log. Sign-offs are recorded against the signed-in identity.",
+  [Mode.ARTIFACT]: "Kept in a Claude artifact's own database, not on a server your organization runs. Access control is only partly enforced, and there is no version history.",
+});
+/* The storage mode, as an export records it: the header's own label, a stable machine
+   value, and the sentence above. */
+function storageNote(){
+  const l = MODE_LABEL[MODE];
+  return { mode: MODE, label: l ? l.text : "Unknown",
+           note: MODE_PROVENANCE[MODE] || "The storage mode was not known when this was produced." };
+}
 /* The export formats the dashboard can produce, as the server names them
    (server/app/accessaudit.py ExportFormat). Reported to it when one is produced. */
 const ExportFormat = Object.freeze({

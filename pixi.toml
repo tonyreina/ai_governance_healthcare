@@ -83,6 +83,8 @@ test-log-window = "python tests/test_log_window.py"
 test-doctor = "python tests/test_doctor.py"
 # A user id becomes a person wherever the record is shown (#39).
 test-people = "python tests/test_people.py"
+# The dashboard's idle lock, sign-out link and lost-stream handling (#49).
+test-session-ui = "python tests/test_session_ui.py"
 # What a `docker build` sends to the daemon: no .env, backups, .git or licensed PDF (#63).
 test-dockerignore = "python tests/test_dockerignore.py"
 # The gate behind `make up`: placeholders, literal identities, plain HTTP on the network,

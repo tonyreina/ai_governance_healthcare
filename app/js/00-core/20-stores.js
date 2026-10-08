@@ -89,7 +89,13 @@ class ApiStore{
       // EventSource reconnects on its own; a refresh on reopen closes the gap
       // of anything missed while disconnected.
       this.es.onopen = ()=>{ this.refresh().catch(()=>{}); };
-      this.es.onerror = ()=>{};
+      // EventSource reconnects by itself while readyState is CONNECTING. It gives
+      // up (CLOSED) when the server answers the reconnect with an error, which is
+      // what a session that has ended looks like: the front door refuses it. That
+      // used to be swallowed, so the page went on looking live and never updated
+      // again (#49). Report it, so the app can say it is disconnected.
+      const ES_CLOSED = 2;  // enum-ok: EventSource's own readyState value
+      this.es.onerror = ()=>{ if(this.es && this.es.readyState===ES_CLOSED && err) err({code:"stream_closed"}); };
     }
     return ()=>{ this.cbs = this.cbs.filter(f=>f!==cb); };
   }

@@ -284,6 +284,27 @@ honest answer and is a gap worth closing; see R-19.
   `tests/test_access.py` (the sole-owner warning), `tests/test_doctor.py`, and
   `tests/test_compose_isolation.py` (the setting reaches the API).
 
+### R-38 A revoked session loses its event stream, and a lost stream is reported
+
+- Status: Active
+- The API ends an event stream after `SSE_MAX_LIFETIME_SECONDS` (default 900),
+  so the browser must reconnect through the front door and be authenticated
+  again. A stream that is closed for good is reported in the dashboard and not
+  swallowed.
+- The dashboard can lock itself after `IDLE_LOCK_MINUTES` of inactivity (off by
+  default), saving unsaved edits first, and show a sign-out link to
+  `SIGN_OUT_URL`, which is validated as https or a path on this origin and
+  re-validated in the browser before it becomes a link.
+- The real automatic-logoff control is the front door's session lifetime (45 CFR
+  164.312(a)(2)(iii)); `docs/deploy.md` says where to set it for each, and says
+  those settings are from the providers' documentation and not exercised here.
+- Source: #49; DECISIONS D-40.
+- Enforced by: `server/tests/test_session.py` (a stream ends by itself and
+  reconnecting requires identity again; the URL allowlist; the settings in
+  `/api/health`), `tests/test_session_ui.py` (the lock, saving first, the link
+  and its allowlist, the lost stream, and boot from the server's settings), and
+  `tests/test_compose_isolation.py` (the settings reach the API).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

@@ -98,6 +98,9 @@ controls, and the CIDR check would be checking the attacker's own claim.
 | `PROXY_SHARED_SECRET` | — | Require `X-Proxy-Secret` to match. |
 | `DEV_INSECURE_AUTH` | `false` | **Dev only.** See below. |
 | `CORS_ORIGINS` | — | Off. Explicit list only; the app is same-origin with the API. |
+| `SSE_MAX_LIFETIME_SECONDS` | `900` | Longest an event stream stays open before the server ends it and the browser reconnects through the front door. `0` is no limit. |
+| `IDLE_LOCK_MINUTES` | `0` | Minutes of inactivity before the dashboard locks. `0` is off. Sent to the browser in `/api/health`. |
+| `SIGN_OUT_URL` | — | Where the front door ends a session; an `https` URL or a path on this origin. Shown as a "Sign out" link. |
 | `RUN_MIGRATIONS` | `true` | Apply `migrations/*.sql` at boot, under an advisory lock. **Must be `false`** when the API serves as the restricted role (it cannot create tables); `python -m app.migrate` migrates instead. |
 | `APP_DATABASE_URL` | — | The restricted role's connection string. Wins over the pieces below. |
 | `APP_POSTGRES_USER` | `chai_app` | The restricted role's name. |

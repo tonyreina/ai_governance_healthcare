@@ -28,6 +28,7 @@ const MODE_LABEL = Object.freeze({
    that is quietly false forever. */
 const Act = Object.freeze({
   LOG_OLDER: "log-older",   // load a deeper page of the audit history
+  UNLOCK: "unlock",         // leave the idle lock: reload, through the front door
 });
 let STORE=null, MODE=Mode.CONNECTING, RO=false, CAN_DELETE=true, USER=null;
 // Set when the whole workspace is view-only (an artifact shared read-only).

@@ -22,6 +22,7 @@ import asyncio
 import hashlib
 import json as _json
 import logging
+import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -189,6 +190,8 @@ async def health(
         version=settings.version,
         database="up" if database_up else "down",
         db_role=request.app.state.db_role,
+        idle_lock_minutes=settings.idle_lock_minutes,
+        sign_out_url=settings.sign_out_url,
         auth_mode=settings.auth_mode,
     )
 
@@ -1174,6 +1177,8 @@ async def events(
         ) from exc
 
     async def stream() -> AsyncIterator[str]:
+        started = time.monotonic()
+        lifetime = settings.sse_max_lifetime_seconds
         try:
             # Tell EventSource how long to wait before reconnecting, and send
             # one frame immediately so proxies that buffer until first byte
@@ -1183,13 +1188,28 @@ async def events(
             while True:
                 if await request.is_disconnected():
                     return
+                # The stream authenticated once, when it attached, so it would
+                # keep delivering after the account behind it was disabled (#49).
+                # The API cannot ask the identity provider whether the session is
+                # still good; it can end the stream, and the browser's reconnect
+                # goes back through the front door and is authenticated again.
+                remaining = (
+                    lifetime - (time.monotonic() - started) if lifetime else None
+                )
+                if remaining is not None and remaining <= 0:
+                    log.info("closing an event stream after %.0fs", lifetime)
+                    return
+                # Wake for whichever comes first, the heartbeat or the end of the
+                # stream's life. Waiting a whole heartbeat would let it live that
+                # much longer than the limit says.
+                wait = settings.sse_keepalive_seconds
+                if remaining is not None:
+                    wait = min(wait, remaining)
                 try:
-                    event = await asyncio.wait_for(
-                        subscriber.queue.get(),
-                        timeout=settings.sse_keepalive_seconds,
-                    )
+                    event = await asyncio.wait_for(subscriber.queue.get(), timeout=wait)
                 except TimeoutError:
-                    yield ": ping\n\n"
+                    if remaining is None or time.monotonic() - started < lifetime:
+                        yield ": ping\n\n"
                     continue
                 yield event.sse()
         finally:

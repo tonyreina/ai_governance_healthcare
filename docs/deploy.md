@@ -34,6 +34,7 @@ plain HTTP (TLS is terminated at the front door), and expects:
 |---|---|
 | `PORT` | Port to bind. Set by the platform on all three clouds. |
 | `APP_DATABASE_URL` | PostgreSQL connection string for the **restricted** role the API serves as. See [Two database roles](#two-database-roles). |
+| `SSE_MAX_LIFETIME_SECONDS`, `IDLE_LOCK_MINUTES`, `SIGN_OUT_URL` | Optional session controls. See [Session lifetime and automatic logoff](#session-lifetime-and-automatic-logoff). |
 | `EMERGENCY_ACCESS_IDS` | Optional. Identity ids with owner rights on every project, every use audited. See [Offboarding, and emergency access](#offboarding-and-emergency-access). |
 | `RUN_MIGRATIONS` | `false` when the API serves as a restricted role, which cannot create tables. A migration job runs instead. |
 | `DATABASE_URL` | The **owner's** connection string, for the migration job only. A single-role deployment may put it here and omit the two above, which works and is reported as a weaker setup. |
@@ -144,6 +145,52 @@ things break it on managed platforms:
 - **More than one replica.** An event written on replica A must reach a
   browser subscribed on replica B. Use PostgreSQL `LISTEN`/`NOTIFY` as
   the fan-out bus, or pin the service to a single replica until you do.
+
+### Session lifetime and automatic logoff
+
+45 CFR 164.312(a)(2)(iii), automatic logoff, is *addressable*: implement it, or
+document an equivalent and why. This application has **no session of its own**:
+identity arrives from your front door on every request, so the control that ends
+a session is the front door's, and the equivalent to point at is its session
+lifetime. Set it to what your risk assessment says for shared clinical
+workstations.
+
+| Front door | Where the session lifetime is set | Sign-out |
+|---|---|---|
+| Google IAP | the IAP reauthentication policy on the protected resource (session duration) | `https://YOUR_APP/?gcp-iap-mode=CLEAR_LOGIN_COOKIE` |
+| AWS ALB (`authenticate-oidc`) | the action's `SessionTimeout` (seconds; the default is seven days) | the ALB has no logout endpoint: use your IdP's end-session URL, and keep `SessionTimeout` short |
+| Azure Easy Auth | the authentication settings' cookie expiration (`login.cookieExpiration`) | `/.auth/logout` |
+| oauth2-proxy | `--cookie-expire` and `--cookie-refresh` | `/oauth2/sign_out` |
+
+!!! warning "Not exercised against any real front door"
+
+    These settings come from the providers' documentation. Nothing in this
+    repository starts an IAP, an ALB, Easy Auth or an oauth2-proxy session, so
+    check each against the provider's current documentation before you cite it
+    in a risk assessment.
+
+What this application adds on top, all configured in the environment:
+
+- **`SSE_MAX_LIFETIME_SECONDS`** (default 900). The live-update stream
+  (`/api/events`) authenticates once, when it attaches, so before this a stream
+  opened before an account was disabled kept delivering change notifications
+  after it. The API cannot ask the identity provider whether a session is still
+  good, but it can end the stream, and the browser's reconnect goes back through
+  the front door and is authenticated again. A revoked session therefore loses
+  its stream within this many seconds. `0` is no limit.
+- **`IDLE_LOCK_MINUTES`** (default `0`, off). After this many minutes with no
+  input the dashboard hides the record and asks for a reload, which goes back
+  through the front door. Unsaved edits are saved first. It is a screen lock for
+  an unattended workstation, not a security boundary: the front door's session
+  is.
+- **`SIGN_OUT_URL`**. Shows a "Sign out" link to your front door's sign-out
+  address (the last column above). It must be an `https` URL or a path on this
+  origin; anything else is refused at startup, because it becomes a link in the
+  page.
+
+If the connection to the event stream is lost for good (for instance because the
+session ended and the front door now refuses the reconnect), the dashboard says
+it is disconnected instead of continuing to look live.
 
 ### Offboarding, and emergency access
 

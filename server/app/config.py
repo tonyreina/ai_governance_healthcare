@@ -119,6 +119,39 @@ def _int(name: str, default: int) -> int:
         raise RuntimeError(f"{name} must be an integer, got {value!r}") from exc
 
 
+# What a sign-out URL may be. It becomes a link in the page, so it is an
+# allowlist, not a blocklist of bad schemes: an https URL, or a path on this origin
+# ("/.auth/logout"). Not "//host" (a protocol-relative URL leaves the origin), not
+# plain http, not javascript: or data:, and nothing with whitespace or control
+# characters in it.
+_SIGN_OUT_OK = re.compile(r"^(https://[^\s/]+[^\s]*|/(?!/)[^\s]*)$")
+
+
+def _sign_out_url() -> str:
+    raw = os.environ.get("SIGN_OUT_URL", "")
+    if not raw:
+        return ""
+    if not _SIGN_OUT_OK.fullmatch(raw) or any(ord(ch) < 32 for ch in raw):
+        raise RuntimeError(
+            "SIGN_OUT_URL must be an https URL or a path starting with a single '/' "
+            "(for example /.auth/logout), with no spaces or control characters. It "
+            "becomes a link in the page, so javascript:, data:, http: and "
+            "protocol-relative URLs are refused."
+        )
+    return raw
+
+
+def _idle_lock_minutes() -> int:
+    raw = os.environ.get("IDLE_LOCK_MINUTES", "").strip()
+    if not raw:
+        return 0
+    if not raw.isdigit() or not 0 <= int(raw) <= 1440:
+        raise RuntimeError(
+            "IDLE_LOCK_MINUTES must be a whole number of minutes from 0 (off) to 1440."
+        )
+    return int(raw)
+
+
 def _csv(name: str) -> list[str]:
     return [part.strip() for part in _str(name).split(",") if part.strip()]
 
@@ -288,6 +321,21 @@ class Settings:
     sse_keepalive_seconds: float = 15.0
     sse_queue_size: int = 256
     sse_max_streams_per_user: int = 8
+    # How long one event stream may live before the SERVER ends it. The stream
+    # authenticates once, when it attaches, so without a bound it keeps delivering
+    # after the account behind it is disabled (#49). Ending it makes the browser
+    # reconnect, which goes back through the front door and is authenticated again.
+    # 0 means unlimited, for a deployment whose front door already bounds it.
+    sse_max_lifetime_seconds: float = 900.0
+
+    # --- session controls the browser reads from /api/health --------------
+    # Minutes of inactivity before the dashboard locks itself. 0 is off. The
+    # front door's own session lifetime is the real control; this is defense in
+    # depth for a shared workstation (#49).
+    idle_lock_minutes: int = 0
+    # Where the front door ends a session. Rendered as a "Sign out" link, so it
+    # is validated (see SIGN_OUT_RULES): https, or a path on this origin.
+    sign_out_url: str = ""
 
     # --- misc -------------------------------------------------------------
     version: str = "0.1.0"
@@ -479,6 +527,9 @@ class Settings:
             sse_keepalive_seconds=float(_int("SSE_KEEPALIVE_SECONDS", 15)),
             sse_queue_size=_int("SSE_QUEUE_SIZE", 256),
             sse_max_streams_per_user=_int("SSE_MAX_STREAMS_PER_USER", 8),
+            sse_max_lifetime_seconds=float(_int("SSE_MAX_LIFETIME_SECONDS", 900)),
+            idle_lock_minutes=_idle_lock_minutes(),
+            sign_out_url=_sign_out_url(),
             version=_str("APP_VERSION", "0.1.0"),
             log_page_size=_int("LOG_PAGE_SIZE", 60),
         )

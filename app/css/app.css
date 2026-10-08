@@ -300,6 +300,11 @@ body.home main{max-width:1240px;margin:0 auto;width:100%}
 /* Standing warning for the browser-only storage mode. Not dismissible: it
    describes a property of where the data is going, which does not stop being
    true because somebody clicked an x. */
+#signOut{margin-left:8px;text-decoration:none}
+body.locked > *:not(#lockScreen){display:none!important}
+#lockScreen{position:fixed;inset:0;z-index:1000;background:var(--paper);display:flex;align-items:center;justify-content:center;padding:24px}
+#lockScreen .lock-card{max-width:440px;text-align:left}
+#lockScreen h1{margin:0 0 8px}
 .storage-warning{background:var(--amber-soft);border-bottom:1px solid var(--amber);color:var(--ink);padding:8px 18px;font-size:13px;line-height:1.45;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .storage-warning b{color:var(--amber)}
 .storage-warning .sw-detail{color:var(--muted)}

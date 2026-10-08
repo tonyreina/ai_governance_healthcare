@@ -180,7 +180,17 @@ let logDraining = false;
 
 function writeLog(pid,text){
   if(RO) return;
-  logQueue.push({pid, entry:{at:new Date().toISOString(), by:ME.id||null, text}, tries:0});
+  enqueueLog(pid, {at:new Date().toISOString(), by:ME.id||null, text});
+}
+
+/* The one way an audit entry gets written. Every caller -- a checkpoint note,
+   a created project, a per-edit changelog entry -- goes through here, so a fix
+   to how failures are handled lands everywhere at once. It did not: logChange()
+   kept its own copy ending in `.catch(()=>{})` after this one was fixed, and an
+   edit's history could vanish without a word (#45). */
+function enqueueLog(pid, entry){
+  if(RO) return;
+  logQueue.push({pid, entry, tries:0});
   drainLog();
 }
 
@@ -231,10 +241,9 @@ async function createProject(data,logText){
     await STORE.create(id,data);
     // Goes through the same queue as every other entry, so a transient
     // failure here is retried rather than dropped. See writeLog().
-    logQueue.push({pid:id, tries:0, entry:{
+    enqueueLog(id, {
       at:new Date().toISOString(), by:ME.id||null,
-      text:logText||"Project created", hash:contentHash(data)}});
-    drainLog();
+      text:logText||"Project created", hash:contentHash(data)});
     return id;
   }
   catch(e){ toast(e&&e.code==="quota_exceeded"?"The workspace is full. Archive or delete old projects.":"Couldn't create the project"); return null; }

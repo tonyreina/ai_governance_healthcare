@@ -44,7 +44,28 @@ def install_store(page, script):
     )
 
 
+def check_one_writer_of_audit_entries() -> None:
+    """STORE.log has exactly one caller, so a fix cannot land on only some (#45).
+
+    writeLog() was fixed to retry and report; logChange() kept its own copy that
+    ended in `.catch(() => {})`, and nothing noticed for as long as it did. Every
+    entry now goes through enqueueLog() -> drainLog(), and this fails if a second
+    path to STORE.log appears.
+    """
+    callers = []
+    for source in sorted((APP.parent.parent.parent / "app" / "js").rglob("*.js")):
+        for number, line in enumerate(source.read_text().splitlines(), 1):
+            if "STORE.log(" in line and not line.lstrip().startswith(("/*", "*", "//")):
+                callers.append(f"{source.name}:{number}")
+    check(
+        "STORE.log is called from exactly one place",
+        len(callers) == 1 and callers[0].startswith("40-writes.js"),
+        ", ".join(callers),
+    )
+
+
 def main() -> int:
+    check_one_writer_of_audit_entries()
     with sync_playwright() as p:
         browser = p.chromium.launch()
 
@@ -157,6 +178,72 @@ def main() -> int:
         page.wait_for_timeout(300)
         check(
             "read-only mode writes no entries",
+            page.evaluate("() => __seen.length") == 0,
+        )
+        page.close()
+
+        # 6. logChange() -- the per-edit entry -- goes through the same queue (#45).
+        #    It used to end in `.catch(() => {})`, so an edit whose entry failed
+        #    to write left a record that changed and a history that did not.
+        page = load(browser)
+        install_store(
+            page,
+            """
+            (() => { let n = 0; globalThis.__calls = () => n;
+              return (pid, e) => { n++;
+                globalThis.__last = e;
+                return n < 3 ? Promise.reject({code:'unavailable'}) : Promise.resolve();
+              }; })()
+        """,
+        )
+        page.evaluate("() => logChange('p1', 'meta.org', 'Old Org', 'New Org')")
+        page.wait_for_timeout(2500)
+        check(
+            "an edit's changelog entry is retried until it lands",
+            page.evaluate("() => __calls()") >= 3,
+            f"calls={page.evaluate('() => __calls()')}",
+        )
+        check(
+            "and keeps what changed, from and to",
+            page.evaluate("() => JSON.stringify(__last.change)")
+            == '{"path":"meta.org","from":"Old Org","to":"New Org"}',
+            page.evaluate("() => JSON.stringify(__last)"),
+        )
+        check(
+            "and its prose, author and time",
+            page.evaluate("() => /^Changed /.test(__last.text) && !!__last.at"),
+        )
+        check("the queue drains", page.evaluate("() => pendingLogCount()") == 0)
+        page.close()
+
+        page = load(browser)
+        install_store(page, "(pid, e) => Promise.reject({code:'permission_denied'})")
+        page.evaluate("() => logChange('p1', 'meta.org', 'Old Org', 'New Org')")
+        page.wait_for_timeout(600)
+        saved = page.evaluate("() => document.getElementById('saved').textContent")
+        toast = page.evaluate("() => document.getElementById('toast').textContent")
+        check(
+            "an edit whose entry cannot be written says so in the save indicator",
+            "not recorded" in saved.lower(),
+            saved,
+        )
+        check(
+            "and tells the user the change is not in the audit log",
+            "audit log" in toast.lower(),
+            toast,
+        )
+        page.close()
+
+        page = load(browser)
+        install_store(
+            page,
+            "(() => { globalThis.__seen = [];"
+            " return (pid, e) => { __seen.push(e); return Promise.resolve(); }; })()",
+        )
+        page.evaluate("() => logChange('p1', 'meta.org', 'Same', 'Same')")
+        page.wait_for_timeout(300)
+        check(
+            "an edit that changed nothing still writes no entry",
             page.evaluate("() => __seen.length") == 0,
         )
         page.close()

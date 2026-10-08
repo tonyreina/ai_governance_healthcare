@@ -27,19 +27,33 @@ them, when they acted, and what they did.
 
 ## How long it is kept
 
-**Nothing here expires, and no retention period has been decided.** The audit log,
-the revisions, the deletion record and the read trail are append-only by design,
-and nothing deletes a row on a schedule. "Forever, because the table is
-append-only" is a fact about the software, not a retention policy, and this page
-does not present it as one.
+The project owner decided these periods (R-54). They are a starting point for
+your organization's records retention schedule, which should hold them alongside
+its other committee and compliance records, and which takes precedence.
 
-The retention period is an open question for the owner of the deployment (R-47).
-It has to reconcile two pulls that point in opposite directions: a documented
-retention floor for records that show a medical-device governance decision was
-made (45 CFR 164.316(b)(2)(i) sets six years for the documentation the HIPAA
-Security Rule requires, where that rule applies), and storage limitation in GDPR
-Art. 5(1)(e) (personal data kept no longer than necessary). The software cannot
-choose between them and this page does not.
+| Record | Kept for |
+|---|---|
+| A project, its revisions and its audit log | The life of the AI solution, plus 6 years after it is retired |
+| The read trail (who opened what) | 6 years, or your audit-log policy if shorter |
+| The security event log, in your log system | Your security-log policy (often 1 year readily searchable) |
+| Staff names and emails (`principals`) | While the person is active, then as long as a retained record refers to them |
+| Backups | 35 days rolling, plus any archive your backup policy keeps |
+
+Why: the record exists to show who reviewed a clinical AI tool and on what
+evidence, for as long as anyone could ask, so the clock starts at retirement,
+not at creation. Six years follows the practice hospitals already use for
+compliance documentation (the HIPAA Security Rule's documentation period, 45 CFR
+164.316(b)(2)(i)), and covers most malpractice limitation periods. A litigation
+hold suspends any period. If a tool was used on children, ask counsel whether
+the limitation periods for minors in your state call for longer. Backups bound
+how long an erasure takes to be complete, because a purged value survives in
+every older backup until it expires.
+
+**Nothing deletes on this schedule yet.** The audit log, the revisions, the
+deletion record and the read trail are append-only, and no job ages them out.
+Disposing of a retired project at the end of its period is a manual purge and
+delete today; an automatic disposal step needs a deliberate exception to the
+append-only rule (R-10) and has not been built.
 
 ## What can be erased, and what cannot
 
@@ -124,5 +138,5 @@ the entry, to be completed and owned by the controller:
 | Categories of data | Identifier, name, email, the actions they took and when, what they read, source address |
 | Recipients | *those you give access to the project; the operators of the database and its backups* |
 | Transfers outside the region | *see "Data residency" in [Cloud deployment](deploy.md); a decision for your DPO* |
-| Retention | **Not decided** (R-47). *Fill in once decided.* |
+| Retention | See "How long it is kept" above (R-54); confirm against your records retention schedule |
 | Security measures | See [Security claims](security-claims.md) and [Self-hosting](self-hosting.md) |

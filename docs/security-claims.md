@@ -871,7 +871,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Status:** partial
 - **Gap:** The report is tested; the per-platform alert metrics and flags are from the
   providers' documentation and nothing here creates a database or an alert. Nothing
-  trims the tables: a retention policy is undecided (#57). #54
+  trims the tables: the retention periods are decided (R-54) but nothing applies
+  them yet. #54
 - **Enforced by:**
   `tests/test_doctor.py::the revision count and size are reported`
   `tests/test_doctor.py::the read trail's size is reported too, with why it grows`

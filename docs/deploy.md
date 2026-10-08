@@ -219,6 +219,28 @@ For the Compose stack the same plan is `make backup` on a schedule, a copy to
 off-host storage, and `make verify-backup`; see
 [Self-hosting](self-hosting.md#backups-make-backup-is-a-tool-not-a-backup-strategy).
 
+### Retention and disposal
+
+Records past their retention period are disposed of by an operator, not by the
+server: `make dispose` reports what is due and changes nothing, and
+`make dispose APPLY=1 BY=<your name>` disposes of it and records who did
+([Privacy](privacy.md#disposal-at-the-end-of-the-period) has the detail). Before
+go-live:
+
+1. **Have your records officer approve the schedule.** That means the retention
+   periods (6 years for a retired project's record and for the read trail, by
+   default; your organization's records retention schedule takes precedence)
+   and how often disposal runs (monthly is typical). Record who approved it and
+   when, with your other records-management approvals.
+2. **Set the periods if they differ**, as the database owner, in the
+   `retention_policy` table. The change is stamped with who made it and when.
+3. **Schedule `make dispose`** (or the same `psql` call against your managed
+   database) at the approved interval, and have someone read the report before
+   each `APPLY=1` run.
+4. **Agree who places litigation holds.** An owner of a project places and
+   lifts one on its setup page, with a reason; counsel should know that a hold
+   is how they stop disposal.
+
 ### Two database roles
 
 The audit log and the version history are append-only because of database

@@ -10,9 +10,9 @@ would rather hear about it privately first.
 
 Use GitHub's private reporting: on the repository's **Security** tab, choose
 **Report a vulnerability**. That opens a private advisory only the maintainer can
-see. If the button is not there, the repository has not enabled it yet: open an
-issue that says only that you have a security report and would like a private
-channel, with no details, and the maintainer will arrange one.
+see. If you cannot use it, open an issue that says only that you have a security
+report and would like a private channel, with no details, and the maintainer
+will arrange one.
 
 Please include what you found, how to reproduce it, and which version or commit.
 A report from someone who tried it against their own deployment is welcome;

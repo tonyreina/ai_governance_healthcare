@@ -263,7 +263,7 @@
   "te.lede": "CHAI 建议在填写模型卡时参考该用例的测试与评估框架。选择指标会添加其名称和类别；数值和人群仍需由您自行测量。",
   "te.useCase": "用例",
   "te.select": "选择用例",
-  "te.note": "这些指标名称是对 CHAI 英文名称的非官方机器翻译草稿；以英文原文为准。链接中的说明为英文，添加的指标保留 CHAI 的英文名称。",
+  "te.note": "这些指标名称是对 CHAI 英文名称的非官方翻译，已由 Cody Chen 审阅并批准；以英文原文为准。链接中的说明为英文，添加的指标保留 CHAI 的英文名称。",
   "gate.gaps": {
     "other": "第 1–{n} 阶段中有 {count} 项未回答或不满足"
   },
@@ -469,7 +469,7 @@
   "label.regulatory": "监管批准",
   "label.keywords": "关键词：",
   "label.summary": "摘要",
-  "fw.note": "本页的框架文字是对本项目英文文本的非官方机器翻译草稿；以英文原文为准。",
+  "fw.note": "本页的框架文字是对本项目英文文本的非官方翻译，已由 Cody Chen 审阅并批准；以英文原文为准。",
   "toast.legacyImported": "审查已添加到工作区",
   "toast.exampleFilled": "已填入示例",
   "toast.reviewRecorded": "已记录定期审查",

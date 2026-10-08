@@ -170,6 +170,24 @@ def main() -> int:
             and "Saved in this browser" not in warning,
             warning[:120],
         )
+        zh.evaluate("loadSamples()")
+        zh.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
+        zh.evaluate("openProject([...PROJECTS.keys()][0], STAGES[0].id)")
+        zh.wait_for_timeout(200)
+        note = zh.inner_text(".fw-note")
+        check(
+            "the framework note cites the review, not a machine draft",
+            "Cody Chen" in note and "机器" not in note,
+            note,
+        )
+        notes = zh.evaluate(
+            "['fw.note', 'te.note'].map(k => I18N_CATALOGS['zh-Hans'][k])"
+        )
+        check(
+            "and so does the metric-name note",
+            all("Cody Chen" in n and "机器" not in n for n in notes),
+            str(notes),
+        )
         ctx_zh.close()
 
         print("Hebrew reads right to left")

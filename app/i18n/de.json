@@ -25,6 +25,8 @@
   "mode.viewOnly": "Nur Lesen",
   "mode.notConnected": "Nicht verbunden",
   "mode.noAccess": "Kein Zugriff",
+  "mode.accessEnded": "Zugriff beendet",
+  "mode.disconnected": "Getrennt: zum erneuten Verbinden neu laden",
   "safety.scope": "Nur Governance-Metadaten: Geben Sie niemals Informationen ein, die Patienten identifizieren.",
   "safety.local.title": "Nur in diesem Browser gespeichert.",
   "safety.local.detail": "Nichts wird an einen Server gesendet: Kolleginnen und Kollegen sehen diese Datensätze nicht, es gibt kein Prüfprotokoll und keine Zugriffskontrolle, und das Löschen der Websitedaten löscht sie. Für einen gemeinsamen Arbeitsbereich stellen Sie den Server bereit (siehe Bereitstellungsanleitung).",

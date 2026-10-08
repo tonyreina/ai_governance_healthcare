@@ -25,6 +25,8 @@
   "mode.viewOnly": "只读",
   "mode.notConnected": "未连接",
   "mode.noAccess": "无访问权限",
+  "mode.accessEnded": "访问已结束",
+  "mode.disconnected": "已断开连接：请重新加载以重新连接",
   "safety.scope": "仅限治理元数据：切勿输入可识别患者身份的信息。",
   "safety.local.title": "仅保存在此浏览器中。",
   "safety.local.detail": "不会向服务器发送任何内容：同事看不到这些记录，没有审计日志，也没有访问控制，清除网站数据会将其删除。如需共享工作区，请部署服务器（参见部署指南）。",

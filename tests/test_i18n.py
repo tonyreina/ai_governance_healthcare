@@ -255,6 +255,16 @@ def main() -> int:
             "its unreviewed disclaimer stays English",
             "not a certification, legal opinion, or regulatory determination" in body,
         )
+        # The mode indicator after the connection fails: set by code, not on open.
+        for code, key in [("revoked", "mode.accessEnded"), ("", "mode.disconnected")]:
+            page.evaluate("(c) => onDbError({code: c})", code)
+            shown = page.inner_text("#mode")
+            check(
+                f"the mode reads German after {code or 'a disconnect'}",
+                shown == page.evaluate("(k) => t(k)", key) and shown != key,
+                shown,
+            )
+        page.evaluate("setReadOnly(false); setModeFor(MODE)")
         page.evaluate("toast(t('toast.archived'))")
         check("a notice is German", page.inner_text("#toast") == "Projekt archiviert")
         check(

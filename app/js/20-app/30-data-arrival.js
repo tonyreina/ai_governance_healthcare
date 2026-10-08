@@ -13,6 +13,6 @@ function onProjects(list){
   } else updateDashboard();
 }
 function onDbError(e){
-  if(e&&e.code==="revoked"){ setReadOnly(true); setMode("Access ended","ro"); }
-  else { setMode("Disconnected: reload to reconnect","ro"); }
+  if(e&&e.code==="revoked"){ setReadOnly(true); setMode(t("mode.accessEnded"),"ro"); }
+  else { setMode(t("mode.disconnected"),"ro"); }
 }

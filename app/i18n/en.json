@@ -37,6 +37,8 @@
   "mode.viewOnly": "View only",
   "mode.notConnected": "Not connected",
   "mode.noAccess": "No access",
+  "mode.accessEnded": "Access ended",
+  "mode.disconnected": "Disconnected: reload to reconnect",
   "safety.scope": "Governance metadata only: never enter patient-identifiable information.",
   "safety.local.title": "Saved in this browser only.",
   "safety.local.detail": "Nothing is sent to a server: colleagues cannot see these records, there is no audit log, no access control, and clearing site data deletes them. For a shared workspace, deploy the server (see the deployment guide).",

@@ -33,6 +33,10 @@ ENV_FILE = Path(".env")
 # because this reads `.env` ALONE and has to decide what compose will do with it.
 # tests/test_preflight.py fails if either drifts from compose.yaml.
 DEFAULT_BIND = "127.0.0.1"
+GOOGLE_PREFIX = "accounts.google.com:"
+# HTTP header names are case-insensitive, and Caddy placeholders keep the case
+# the operator wrote.
+GOOGLE_HEADER = re.compile(r"x-goog-authenticated-user", re.IGNORECASE)
 DEFAULT_SITE = "http://:80"
 
 # Values that look set but mean "I have not done this yet". Compared casefolded.
@@ -129,6 +133,34 @@ def check(env: dict[str, str]) -> list[str]:
                 "    Use a placeholder naming the header your SSO front door\n"
                 "    sets -- see the blocks in .env.example -- or run the local\n"
                 "    stack with `make dev`, which supplies a dev identity safely."
+            )
+
+    # Google IAP prefixes its identity headers with "accounts.google.com:". The
+    # API strips it only if IDENTITY_STRIP_PREFIX says to, and access lists are
+    # matched against the stripped id. Compose passes the variable through
+    # EMPTY by default, so a Google source with no prefix stores prefixed ids,
+    # which stop matching the day the same people arrive any other way (a move to
+    # Cloud Run's IDENTITY_MODE=iap, or simply setting the prefix later). Every
+    # project then vanishes from its owner with no error anywhere (#35).
+    if any(
+        GOOGLE_HEADER.search(env.get(name, ""))
+        for name in (
+            "IDENTITY_ID_SOURCE",
+            "IDENTITY_NAME_SOURCE",
+            "IDENTITY_EMAIL_SOURCE",
+        )
+    ):
+        prefix = env.get("IDENTITY_STRIP_PREFIX", "")
+        if prefix != GOOGLE_PREFIX:
+            problems.append(
+                f"IDENTITY_STRIP_PREFIX={prefix!r}, but an identity source reads a\n"
+                "    Google IAP header, whose values arrive as\n"
+                f"    {GOOGLE_PREFIX}person@hospital.org. Set\n"
+                f"      IDENTITY_STRIP_PREFIX={GOOGLE_PREFIX}\n"
+                "    before anyone signs in. Without it every access list is built\n"
+                "    from prefixed ids, and the day you move to Cloud Run's\n"
+                "    IDENTITY_MODE=iap, or set the prefix later, every project\n"
+                "    silently disappears from its owner."
             )
 
     # `${VAR:-default}` substitutes the default when the variable is unset OR EMPTY,

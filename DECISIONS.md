@@ -1116,6 +1116,34 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   looking); one global hold switch (one dispute would freeze every project).
 - Source: the owner, on #57; R-56.
 
+### D-63 Right to left by logical properties and isolated user text
+
+- Status: Accepted
+- The owner added Hebrew on 2026-10-08, on #80, the first language written right
+  to left; the proposal had asked for this to be decided before it was a
+  retrofit.
+- **The layout mirrors itself.** `<html dir>` follows the language
+  (`localeDir()`), and the stylesheet uses logical properties
+  (`margin-inline-start`, `text-align:start`, `inset-inline-start`, the
+  `border-start-end-radius` family); the inset accent shadows read a `--dir`
+  variable. `check-i18n` refuses a physical left or right, an uneven
+  four-value `margin`/`padding`/`border-radius`, or a one-sided inset shadow,
+  in the stylesheet or a script's inline style; `rtl-ok: <reason>` excuses one
+  that is symmetric or off screen.
+- **Text keeps its own direction.** What a person typed is shown through
+  `bdi()`, a `<bdi>` that takes its direction from its own text, and fields use
+  `unicode-bidi:plaintext`. English that `t()` shows in place of a translation
+  (an unreviewed warning, a missing key) is wrapped in a left-to-right isolate
+  in a right-to-left page. Without these, an English name in a Hebrew page
+  shows its period at the wrong end.
+- Rejected: detecting every paragraph's direction from its first strong
+  character (Hebrew strings that begin with "CHAI", "MD5" or "OPTICA" would be
+  laid out left to right); a separate right-to-left stylesheet (two layouts to
+  keep in step).
+- The pseudo-locale probe skips `<bdi>`, since it holds data, not interface
+  text; the counts it reported had been mostly data.
+- Source: the owner, on #80; R-55.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

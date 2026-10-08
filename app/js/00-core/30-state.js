@@ -151,8 +151,8 @@ async function resolveNames(root){
   root=root||document;
   const els=[...root.querySelectorAll("[data-uid]")];
   const ids=[...new Set(els.map(e=>e.dataset.uid).filter(Boolean))];
-  els.forEach(e=>{ if(!e.dataset.uid) e.textContent = MODE===Mode.LOCAL?"you (this browser)":"someone"; });
+  els.forEach(e=>{ if(!e.dataset.uid) e.textContent = t(MODE===Mode.LOCAL?"who.localYou":"who.someone"); });
   await primeNames(ids);
   els.forEach(e=>{ const i=e.dataset.uid; if(i) e.textContent = displayName(i); });
 }
-const who = id => `<span data-uid="${esc(id||"")}">${esc(displayName(id))}</span>`;
+const who = id => `<bdi data-uid="${esc(id||"")}">${esc(displayName(id))}</bdi>`;

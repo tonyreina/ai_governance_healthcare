@@ -468,5 +468,7 @@
   "toast.legacyImported": "समीक्षा कार्यक्षेत्र में जोड़ी गई",
   "toast.exampleFilled": "उदाहरण भरा गया",
   "toast.reviewRecorded": "आवधिक समीक्षा दर्ज की गई",
-  "print.frameTitle": "मुद्रण के लिए रिपोर्ट"
+  "print.frameTitle": "मुद्रण के लिए रिपोर्ट",
+  "who.localYou": "आप (यह ब्राउज़र)",
+  "who.someone": "कोई"
 }

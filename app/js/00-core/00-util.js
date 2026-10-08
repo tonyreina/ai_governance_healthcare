@@ -2,6 +2,10 @@
    Utilities
    ============================================================ */
 const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+/* What a person typed, escaped and isolated: <bdi> takes its direction from its own
+   text, so an English name keeps its punctuation in a Hebrew page and a Hebrew one
+   in an English page (D-63). For element content only, never an attribute. */
+const bdi = s => `<bdi>${esc(s)}</bdi>`;
 const clone = o => o==null ? o : JSON.parse(JSON.stringify(o));
 const isObj = v => v && typeof v==="object" && !Array.isArray(v);
 /* Keys that reach an object's prototype instead of a property of its own. JSON.parse

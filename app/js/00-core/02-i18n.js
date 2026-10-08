@@ -12,12 +12,19 @@
    ============================================================ */
 const Locale = Object.freeze({
   EN: "en", ES: "es", FR: "fr", DE: "de", HI: "hi", RU: "ru", ZH_HANS: "zh-Hans",
+  HE: "he",
   PSEUDO: "en-XA",   // accented and padded English: shows what is still hard-coded
 });
 /* What the picker offers, each named in its own language. PSEUDO is not offered. */
 const LOCALE_CHOICES = Object.freeze([
   Locale.EN, Locale.ES, Locale.FR, Locale.DE, Locale.HI, Locale.RU, Locale.ZH_HANS,
+  Locale.HE,
 ]);
+/* Languages written right to left. The layout uses logical properties
+   (margin-inline-start, text-align:start), so setting <html dir> mirrors it;
+   check-i18n refuses a left or right that would not (D-63). */
+const RTL_LOCALES = new Set([Locale.HE]);
+const localeDir = loc => (RTL_LOCALES.has(loc) ? "rtl" : "ltr");  // enum-ok: HTML dir attribute values
 const LOCALE_KEY = "chai-locale";
 /* The header's language picker, by element id, for the input handler. */
 const HeaderControl = Object.freeze({ LANGUAGE: "lang" });
@@ -36,7 +43,7 @@ function resolveLocale(){
     const tag = String(raw || "").toLowerCase();
     if(/^zh(-hans|-cn|-sg|$)/.test(tag) || tag.startsWith("zh-hans")) return Locale.ZH_HANS;  // enum-ok: BCP 47 subtags from navigator.languages
     if(tag.startsWith("zh")) continue;  // enum-ok: BCP 47 subtag; Traditional Chinese is not offered
-    const primary = tag.split("-")[0];
+    const primary = tag.split("-")[0] === "iw" ? Locale.HE : tag.split("-")[0];  // enum-ok: "iw" is the retired ISO 639 code for Hebrew, still sent by some browsers
     const hit = LOCALE_CHOICES.find(l => l === primary);
     if(hit) return hit;
   }
@@ -83,7 +90,10 @@ function t(key, params){
   }
   if(typeof entry !== "string") return key;   // a missing key shows itself; tests catch it
   let out = from === Locale.PSEUDO ? pseudoize(entry) : entry;
-  return out.replace(/\{(\w+)\}/g, (m, k) => (params && k in params ? String(params[k]) : m));
+  out = out.replace(/\{(\w+)\}/g, (m, k) => (params && k in params ? String(params[k]) : m));
+  // English shown in a right-to-left page (an unreviewed warning, a missing key) is
+  // isolated left to right, so its punctuation stays where English puts it (D-63).
+  return from === Locale.EN && RTL_LOCALES.has(LOCALE) ? `\u2066${out}\u2069` : out;
 }
 
 /* A message as HTML: the text is escaped, and each `html` param (markup the caller
@@ -130,7 +140,7 @@ function applyStaticI18n(root){
   (root || document).querySelectorAll("[data-i18n-placeholder]").forEach(el => el.setAttribute("placeholder", t(el.dataset.i18nPlaceholder)));
   (root || document).querySelectorAll("[data-i18n-title]").forEach(el => el.setAttribute("title", t(el.dataset.i18nTitle)));
   document.documentElement.lang = LOCALE;
-  document.documentElement.dir = "ltr";   // none of the supported languages is right-to-left yet
+  document.documentElement.dir = localeDir(LOCALE);
 }
 
 /* The language picker's options: each name in its own language, marked as such. */

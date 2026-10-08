@@ -480,5 +480,7 @@
   "toast.legacyImported": "Review added to the workspace",
   "toast.exampleFilled": "Example filled in",
   "toast.reviewRecorded": "Periodic review recorded",
-  "print.frameTitle": "Report for printing"
+  "print.frameTitle": "Report for printing",
+  "who.localYou": "you (this browser)",
+  "who.someone": "someone"
 }

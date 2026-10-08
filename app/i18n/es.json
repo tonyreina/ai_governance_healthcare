@@ -476,5 +476,7 @@
   "toast.legacyImported": "Revisión añadida al espacio de trabajo",
   "toast.exampleFilled": "Ejemplo completado",
   "toast.reviewRecorded": "Revisión periódica registrada",
-  "print.frameTitle": "Informe para imprimir"
+  "print.frameTitle": "Informe para imprimir",
+  "who.localYou": "usted (este navegador)",
+  "who.someone": "alguien"
 }

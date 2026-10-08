@@ -26,7 +26,7 @@ function railRow(v) {
 function renderRail() {
   const ol = document.getElementById("rail");
   const home = `<li class="home-link"><button data-home="1">`
-    + `<span class="num" aria-hidden="true">←</span><span>${esc(t("nav.allProjects"))}</span></button></li>`
+    + `<span class="num flip-rtl" aria-hidden="true">←</span><span>${esc(t("nav.allProjects"))}</span></button></li>`
     + `<li class="sep" role="presentation"></li>`;
   ol.innerHTML = home + activeViews().map(railRow).join("");
   document.getElementById("projName").textContent = S.meta.solution || t("project.untitled");

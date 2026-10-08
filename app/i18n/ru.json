@@ -484,5 +484,7 @@
   "toast.legacyImported": "Проверка добавлена в рабочее пространство",
   "toast.exampleFilled": "Пример заполнен",
   "toast.reviewRecorded": "Периодическая проверка записана",
-  "print.frameTitle": "Отчет для печати"
+  "print.frameTitle": "Отчет для печати",
+  "who.localYou": "вы (этот браузер)",
+  "who.someone": "кто-то"
 }

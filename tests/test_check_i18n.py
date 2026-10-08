@@ -150,6 +150,7 @@ def main() -> int:
     for label, js in [
         ("a toast", 'toast("Example filled in");'),
         ("a label a handler swaps", 'btn.textContent=open?"Hide details":"More";'),
+        ("a lowercase phrase", 'e.textContent = local ? "you (this browser)" : "x";'),
         (
             "a tooltip set by code",
             'frame.setAttribute("title", "Report for printing");',
@@ -170,6 +171,34 @@ def main() -> int:
         "i18n-ok needs a reason",
         bool(rl({"a.js": 'toast("Hi there"); // i18n-ok:'}))
         and not rl({"a.js": 'toast("ChatGPT"); // i18n-ok: a product name'}),
+    )
+
+    print("Left and right, in a layout that has to mirror (Hebrew)")
+    pd = ci.physical_direction_problems
+    for label, css in [
+        ("a left margin", ".a{margin-left:6px}"),
+        ("a right border", ".a{border-right:1px solid}"),
+        ("left-aligned text", ".a{text-align:left}"),
+        ("a position from the left", ".a{position:absolute;left:0}"),
+        ("an uneven four-value padding", ".a{padding:22px 12px 40px 20px}"),
+        ("an inset shadow on one side", ".a{box-shadow:inset 3px 0 0 red}"),
+        ("an uneven corner radius", ".a{border-radius:0 6px 6px 0}"),
+    ]:
+        check(f"{label} is noticed (mutation)", bool(pd({"app.css": css})))
+    check(
+        "the logical forms pass",
+        not pd({"app.css": ".a{margin-inline-start:6px;text-align:start;"
+                "padding:22px 12px;border-radius:6px;inset-inline-start:0;"
+                "box-shadow:0 1px 2px red}"}),
+    )  # fmt: skip
+    check(
+        "an inline style in a script counts",
+        bool(pd({"a.js": '`<select style="margin-left:8px">`'})),
+    )
+    check(
+        "rtl-ok needs a reason",
+        bool(pd({"app.css": ".a{left:50%} /* rtl-ok: */"}))
+        and not pd({"app.css": ".a{left:50%} /* rtl-ok: centered */"}),
     )
 
     print("Framework catalogs (D-60)")

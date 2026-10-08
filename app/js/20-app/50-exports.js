@@ -13,7 +13,7 @@ ${css}`;
 function exportHTML(){
   // In the reader's language (R-55, D-60); the JSON and CSV exports stay English.
   const prov = storageNoteShown();
-  return `<!DOCTYPE html><html lang="${esc(LOCALE)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  return `<!DOCTYPE html><html lang="${esc(LOCALE)}" dir="${localeDir(LOCALE)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(S.meta.solution||t("export.untitled"))} – ${esc(t("export.titleSuffix"))}</title>
 <!-- No webfont link. The exported report is the artifact that gets emailed
      around a hospital and opened on clinical workstations, and a stylesheet
@@ -42,7 +42,7 @@ function exportPDF(){
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
   frame.setAttribute("title", t("print.frameTitle"));
-  frame.style.cssText = "position:fixed;left:-9999px;top:0;width:820px;height:1160px;border:0";
+  frame.style.cssText = "position:fixed;left:-9999px;top:0;width:820px;height:1160px;border:0";  // rtl-ok: off screen either way
   frame.onload = () => {
     const win = frame.contentWindow;
     const go = () => {

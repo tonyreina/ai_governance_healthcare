@@ -52,6 +52,10 @@ def own_name(locale: str) -> str:
     return json.loads(path.read_text(encoding="utf-8"))["@meta"]["name"]
 
 
+def own_h1(page) -> str:
+    return page.evaluate("I18N_CATALOGS.he['dash.title']")
+
+
 def open_app(browser, locale: str = "en-US", saved: str | None = None):
     context = browser.new_context(locale=locale)
     if saved:
@@ -66,12 +70,13 @@ def open_app(browser, locale: str = "en-US", saved: str | None = None):
 
 # Visible text that is plain ASCII words: in the pseudo-locale, anything that came
 # through t() is accented and bracketed, so plain words are hard-coded text (or data).
+# <bdi> holds what a person typed (bdi() in 00-util.js), which is data, not a gap.
 PLAIN_TEXT = """(root) => {
   const out = [];
   const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = walk.nextNode(); n; n = walk.nextNode()) {
     const el = n.parentElement;
-    if (!el || el.closest('script,style,[hidden],.vh,select')) continue;
+    if (!el || el.closest('script,style,[hidden],.vh,select,bdi')) continue;
     if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') continue;
     const s = n.textContent.trim();
     if (/[A-Za-z]{3,}/.test(s) && !/[\\u00C0-\\u024F]/.test(s)) out.push(s);
@@ -89,6 +94,7 @@ def main() -> int:
         for tag, expected in (
             ("es-MX", "es"), ("fr-CA", "fr"), ("de-AT", "de"), ("hi-IN", "hi"),
             ("ru-RU", "ru"), ("zh-CN", "zh-Hans"), ("zh-TW", "en"), ("ja-JP", "en"),
+            ("he-IL", "he"), ("iw", "he"),
             ("en-GB", "en"),
         ):  # fmt: skip
             ctx, page = open_app(browser, tag)
@@ -141,11 +147,53 @@ def main() -> int:
             "the picker names each language in that language",
             all(
                 [loc, own_name(loc), loc] in options
-                for loc in ("en", "ru", "hi", "zh-Hans")
+                for loc in ("en", "ru", "hi", "zh-Hans", "he")
             )
-            and len(options) == 7,
+            and len(options) == 8,
             str(options),
         )  # fmt: skip
+
+        print("Hebrew reads right to left")
+        ctx_he, he = open_app(browser, "he-IL")
+        he.set_viewport_size({"width": 1400, "height": 900})
+        check(
+            "<html dir> is rtl and <html lang> is he",
+            he.evaluate("[document.documentElement.dir, document.documentElement.lang]")
+            == ["rtl", "he"],
+        )
+        check("the dashboard is in Hebrew", he.inner_text("h1") == own_h1(he))
+        he.evaluate("loadSamples()")
+        he.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
+        he.evaluate("openProject([...PROJECTS.keys()][0], 'setup')")
+        he.wait_for_timeout(200)
+        rail, main_box = (
+            he.locator(sel).bounding_box() for sel in ("nav.rail", "main")
+        )
+        check(
+            "the step rail moves to the right of the page",
+            rail["x"] > main_box["x"],
+            f"rail {rail['x']}, main {main_box['x']}",
+        )
+        edge = he.evaluate(
+            """() => { const n = document.querySelector('.note');
+                       if (!n) return null; const s = getComputedStyle(n);
+                       return [s.borderRightWidth, s.borderLeftWidth]; }"""
+        )
+        check(
+            "a note's accent border is on the reading edge (the right)",
+            edge == ["3px", "0px"],
+            str(edge),
+        )
+        check(
+            "the HTML report says rtl too",
+            'dir="rtl"' in he.evaluate("exportHTML()"),
+        )
+        he.evaluate("setLocale('en'); relocalize();")
+        check(
+            "and switching to English turns it back",
+            he.evaluate("document.documentElement.dir") == "ltr",
+        )
+        ctx_he.close()
 
         print("Switching")
         page.select_option("#lang", "de")
@@ -228,7 +276,7 @@ def main() -> int:
         html = page.evaluate("exportHTML()")
         check(
             "the HTML export is German and says so",
-            '<html lang="de">' in html and "Konformitätshinweise" in html,
+            '<html lang="de" dir="ltr">' in html and "Konformitätshinweise" in html,
         )
         check(
             "its unreviewed provenance note stays English",

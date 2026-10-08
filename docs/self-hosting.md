@@ -67,10 +67,19 @@ read only the registry.
 
 ## Languages
 
-The dashboard speaks English, Spanish, French, German, Hindi, Russian and
-Simplified Chinese. It picks the reader's saved choice, then the browser's
-languages, then English, and the picker in the header switches it. The choice
-is per browser: two people can read the same project in different languages.
+The dashboard speaks English, Spanish, French, German, Hindi, Russian,
+Simplified Chinese and Hebrew. It picks the reader's saved choice, then the
+browser's languages, then English, and the picker in the header switches it. The
+choice is per browser: two people can read the same project in different
+languages.
+
+Hebrew reads right to left, and the whole layout mirrors: the step rail moves to
+the right, accents sit on the reading edge, tables run right to left. Text a
+person typed keeps its own direction, so an English vendor name in a Hebrew page
+keeps its punctuation, and so does English shown because a warning is not yet
+reviewed. The stylesheet uses logical properties (`margin-inline-start`,
+`text-align:start`), and `check-i18n` fails on a left or right that would not
+mirror.
 
 Every string comes from a message catalog, `app/i18n/<language>.json`, embedded
 into the single dashboard file by the build. English (`en.json`) is the source.
@@ -97,8 +106,10 @@ the framework definitions stays the source: `tests/test_framework_i18n.py` fails
 if a criterion changes without its catalogs. A record still stores the English
 value, such as a checkpoint decision. OPTICA's chapters and questions are
 translated the same way, and so are the names of CHAI's suggested metrics (a
-metric you add keeps CHAI's English name). Not translated yet: the server's
-messages.
+metric you add keeps CHAI's English name). The server's error messages are
+English, but the dashboard never shows them: it shows its own translated text
+for each error code.
+
 `tests/test_i18n.py` counts the hard-coded text left on screen in a pseudo-locale,
 and that count may only go down.
 

@@ -89,8 +89,8 @@ function updateDashboard(){
   host.innerHTML=`${note}<div class="phead" aria-hidden="true"><span>${esc(t("dash.col.project"))}</span><span>${esc(t("dash.col.lifecycle"))}</span><span>${esc(t("dash.col.readiness"))}</span><span>${esc(t("dash.col.nextReview"))}</span><span>${esc(t("dash.col.status"))}</span></div>
   <ul class="plist">${list.map(r=>{const p=r.p; const late=r.nr&&parseDay(r.nr)<today; const name=p.meta.solution||t("dash.thisProject");
     return `<li class="prow ${r.st.key}" data-open="${esc(p.id)}">
-      <div><button class="pname" data-open="${esc(p.id)}">${esc(p.meta.solution||t("project.untitled"))}</button>
-        <div class="psub">${esc([p.meta.developer,p.meta.sponsor&&t("dash.sponsor",{name:p.meta.sponsor})].filter(Boolean).join(" · ")||t("dash.noDeveloper"))}</div>
+      <div><button class="pname" data-open="${esc(p.id)}">${p.meta.solution?bdi(p.meta.solution):esc(t("project.untitled"))}</button>
+        <div class="psub">${[p.meta.developer&&bdi(p.meta.developer),p.meta.sponsor&&tHtml("dash.sponsor",{},{name:bdi(p.meta.sponsor)})].filter(Boolean).join(" · ")||esc(t("dash.noDeveloper"))}</div>
         <div class="psub">${tHtml("dash.updated",{when:ago(p.updatedAt)},{who:who(p.updatedBy)})}${p.archived?` · ${esc(t("dash.archivedTag"))}`:""}</div>
         ${r.hits&&everything?`<div class="psub hits">${esc(t("dash.foundIn",{places:r.hits.slice(0,4).join("; ")}))}${r.hits.length>4?` ${esc(t("dash.andMore",{count:r.hits.length-4}))}`:""}</div>`:""}</div>
       <div>${lcTrack(p)}</div>

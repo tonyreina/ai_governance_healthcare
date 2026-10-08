@@ -476,5 +476,7 @@
   "toast.legacyImported": "Revue ajoutée à l'espace de travail",
   "toast.exampleFilled": "Exemple rempli",
   "toast.reviewRecorded": "Revue périodique enregistrée",
-  "print.frameTitle": "Rapport à imprimer"
+  "print.frameTitle": "Rapport à imprimer",
+  "who.localYou": "vous (ce navigateur)",
+  "who.someone": "quelqu'un"
 }

@@ -625,8 +625,12 @@ honest answer and is a gap worth closing; see R-19.
 
 - Status: Active
 - The owner chose, 2026-10-08: English, Spanish, French, German, Hindi, Russian
-  and Mandarin, written as Simplified Chinese (`zh-Hans`). The choice is per
-  browser, not stored with a project.
+  and Mandarin, written as Simplified Chinese (`zh-Hans`), and later the same
+  day Hebrew (`he`), the first language written right to left. The choice is
+  per browser, not stored with a project.
+- A right-to-left language mirrors the whole layout (`<html dir>`, logical CSS
+  properties), and user-typed text and English fallbacks keep their own
+  direction (D-63). `check-i18n` fails on a physical left or right.
 - Every string a reader sees comes from `app/i18n/<tag>.json`, embedded in the
   single file (R-01); English is the source. `check-i18n` fails on a missing or
   extra key, a changed placeholder, a missing plural form, markup in a value, or

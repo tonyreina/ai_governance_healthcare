@@ -468,5 +468,7 @@
   "toast.legacyImported": "Prüfung zum Arbeitsbereich hinzugefügt",
   "toast.exampleFilled": "Beispiel ausgefüllt",
   "toast.reviewRecorded": "Regelmäßige Überprüfung erfasst",
-  "print.frameTitle": "Bericht zum Drucken"
+  "print.frameTitle": "Bericht zum Drucken",
+  "who.localYou": "Sie (dieser Browser)",
+  "who.someone": "jemand"
 }

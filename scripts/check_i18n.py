@@ -43,6 +43,7 @@ class Locale(StrEnum):
     HI = "hi"
     RU = "ru"
     ZH_HANS = "zh-Hans"
+    HE = "he"
 
 
 # CLDR plural categories each supported language uses for cardinal numbers.
@@ -55,6 +56,7 @@ PLURALS: dict[Locale, frozenset[str]] = {
     Locale.HI: frozenset({"one", "other"}),
     Locale.RU: frozenset({"one", "few", "many", "other"}),
     Locale.ZH_HANS: frozenset({"other"}),
+    Locale.HE: frozenset({"one", "two", "other"}),
 }
 
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
@@ -176,7 +178,7 @@ def usage_problems(source: dict, texts: dict[str, str]) -> list[str]:
 # would slip past it: a toast, a label swapped by a handler, a tooltip set by code.
 RUNTIME_LITERAL = re.compile(
     r"""\b(?:toast|fatalError|setMode)\(\s*["'`][A-Za-z]"""
-    r"""|\.(?:textContent|innerText|title|placeholder)\s*=[^;]*?["'`][A-Z][a-z]+\s"""
+    r"""|\.(?:textContent|innerText|title|placeholder)\s*=[^;]*?["'`][A-Za-z][a-z]+\s"""
     r"""|setAttribute\(\s*["'](?:title|aria-label|placeholder|alt)["']\s*,\s*["'`][A-Za-z]"""
 )
 RUNTIME_OK = "i18n-ok:"
@@ -201,6 +203,62 @@ def runtime_literal_problems(texts: dict[str, str]) -> list[str]:
                     Path(name).relative_to(ROOT) if Path(name).is_absolute() else name
                 )
                 problems.append(f"{where}:{n}: English set on screen without t()")
+    return problems
+
+
+# Left and right that should follow the reading direction (Hebrew is right to left).
+# The logical forms (margin-inline-start, text-align:start, inset-inline-start, the
+# border-start-end-radius family) mirror on their own; these do not.
+_LENGTH = r"-?[\d.]+[a-z%]*"
+PHYSICAL_DIRECTION = re.compile(
+    r"(?:margin|padding|border)-(?:left|right)\b"
+    r"|text-align:\s*(?:left|right)\b"
+    r"|float:\s*(?:left|right)\b"
+    r"|(?<![\w-])(?:left|right)\s*:"
+    r"|border-(?:top|bottom)-(?:left|right)-radius"
+    r"|box-shadow:\s*inset\s+(?!0[\s;])" + _LENGTH
+)
+_VALUE = rf"(?:{_LENGTH}|auto)"
+# margin/padding: top right bottom left. Mirrors only if right equals left.
+SPACING_4 = re.compile(
+    rf"(?<![\w-])(?:margin|padding)\s*:\s*{_VALUE}\s+({_VALUE})\s+{_VALUE}\s+({_VALUE})"
+)
+# border-radius: top-left top-right bottom-right bottom-left. Mirrors only if each
+# pair across the vertical axis matches.
+RADIUS_4 = re.compile(
+    rf"(?<![\w-])border-radius\s*:\s*({_VALUE})\s+({_VALUE})\s+({_VALUE})\s+({_VALUE})"
+)
+INLINE_STYLE = re.compile(r'style="([^"]*)"|cssText\s*=\s*"([^"]*)"')
+RTL_OK = "rtl-ok:"
+DIRECTION_SOURCES = [ROOT / "app" / "css" / "app.css"]
+
+
+def uneven(line: str) -> bool:
+    return any(m.group(1) != m.group(2) for m in SPACING_4.finditer(line)) or any(
+        m.group(1) != m.group(2) or m.group(3) != m.group(4)
+        for m in RADIUS_4.finditer(line)
+    )
+
+
+def physical_direction_problems(texts: dict[str, str]) -> list[str]:
+    """Layout tied to left or right, in the stylesheet or a script's inline style.
+
+    `rtl-ok: <reason>` on the line excuses one that is symmetric or off screen
+    (`left:50%` with a centering transform); the reason is mandatory.
+    """
+    problems = []
+    for name, text in texts.items():
+        for n, line in enumerate(text.splitlines(), 1):
+            ok = line.split(RTL_OK, 1)
+            if len(ok) == 2 and ok[1].strip(" */").strip():
+                continue
+            if name.endswith(".js"):
+                line = " ".join(a or b for a, b in INLINE_STYLE.findall(line))
+            if PHYSICAL_DIRECTION.search(line) or uneven(line):
+                where = (
+                    Path(name).relative_to(ROOT) if Path(name).is_absolute() else name
+                )
+                problems.append(f"{where}:{n}: left/right will not mirror in Hebrew")
     return problems
 
 
@@ -255,6 +313,12 @@ def main() -> int:
     texts = {str(p): p.read_text(encoding="utf-8") for p in SOURCES}
     problems += usage_problems(source, texts)
     problems += runtime_literal_problems(texts)
+    problems += physical_direction_problems(
+        {
+            **{str(p): p.read_text(encoding="utf-8") for p in DIRECTION_SOURCES},
+            **{k: v for k, v in texts.items() if k.endswith(".js")},
+        }
+    )
     for problem in problems:
         print(f"  {problem}", file=sys.stderr)
     if problems:

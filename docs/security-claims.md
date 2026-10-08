@@ -456,11 +456,15 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-37 The AWS audience setting matches what the load balancer signs
 
 - **Claim:** The task definition sets `IDENTITY_AUDIENCE` to the value the API
-  compares against.
-- **Asserted in:** `docs/deploy.md` — "listener/app/chai/a/b"
-- **Status:** violated
-- **Gap:** The ALB signs with the load balancer ARN, not the listener ARN, so
-  every request would 401. #51
+  compares against, and the API refuses to start on a listener ARN.
+- **Asserted in:** `docs/deploy.md` — "loadbalancer/app/chai/a"
+- **Status:** partial
+- **Gap:** No test has a live ALB, so that it puts its load balancer ARN in
+  `signer` rests on AWS's documented token format. #51 is fixed to that extent.
+- **Enforced by:**
+  `server/tests/test_auth.py::TestAlbAudienceIsTheLoadBalancerArn::test_every_arn_the_docs_show_for_the_audience_starts`
+  `server/tests/test_auth.py::TestAlbAudienceIsTheLoadBalancerArn::test_a_listener_arn_is_refused_at_startup`
+  `server/tests/test_auth.py::TestAlbAudienceIsTheLoadBalancerArn::test_the_load_balancer_arn_is_what_the_alb_signs`
 
 ### C-38 MFA is whatever the hospital already requires
 

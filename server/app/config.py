@@ -23,6 +23,7 @@ by oauth2-proxy and most nginx auth_request setups.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from urllib.parse import quote, urlsplit
@@ -286,6 +287,23 @@ class Settings:
                 "that carries a signed assertion (x-goog-iap-jwt-assertion, "
                 "x-amzn-oidc-data, X-MS-TOKEN-AAD-ID-TOKEN), or unset "
                 "IDENTITY_AUDIENCE. See docs/deploy.md."
+            )
+
+        # An ALB signs x-amzn-oidc-data with its LOAD BALANCER's ARN in the
+        # token header's `signer`. A listener's ARN looks almost the same and
+        # can never match, so every request would be a 401 that reads as an SSO
+        # fault, and the operator's likeliest next move is to unset the
+        # audience, which turns off the check that catches a token minted for
+        # another service (#51).
+        if re.search(r":listener(-rule)?/", self.identity_audience):
+            raise RuntimeError(
+                f"IDENTITY_AUDIENCE={self.identity_audience!r} is a listener ARN. "
+                "An ALB signs with its load balancer ARN "
+                "(arn:aws:elasticloadbalancing:REGION:ACCOUNT:loadbalancer/app/"
+                "NAME/ID), so this value can never match and every request "
+                "would be a 401. Use the load balancer's ARN: aws elbv2 "
+                "describe-load-balancers --query "
+                "'LoadBalancers[].LoadBalancerArn'. See docs/deploy.md."
             )
 
     @property

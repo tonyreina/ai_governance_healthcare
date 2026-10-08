@@ -35,7 +35,7 @@ plain HTTP (TLS is terminated at the front door), and expects:
 | `PORT` | Port to bind. Set by the platform on all three clouds. |
 | `DATABASE_URL` | PostgreSQL connection string. |
 | `IDENTITY_MODE` | `iap`, `alb` or `easyauth` — which header to read. |
-| `IDENTITY_AUDIENCE` | Expected `aud` (GCP), listener ARN (AWS) or client ID (Azure). Read **only** when `IDENTITY_HEADER_FORMAT=jwt` — the API refuses to start otherwise. |
+| `IDENTITY_AUDIENCE` | Expected `aud` (GCP), **load balancer** ARN (AWS, not the listener's) or client ID (Azure). Read **only** when `IDENTITY_HEADER_FORMAT=jwt` — the API refuses to start otherwise. |
 
 `GET /api/health` returns `{"status":"ok","version":"..."}` and must not
 require authentication — every platform below health-checks it from
@@ -646,14 +646,20 @@ dump of a crash report:
   { "name": "IDENTITY_MODE", "value": "alb" },
   { "name": "IDENTITY_AUDIENCE",
     "value":
-      "arn:aws:elasticloadbalancing:us-east-1:1234:listener/app/chai/a/b" },
+      "arn:aws:elasticloadbalancing:us-east-1:1234:loadbalancer/app/chai/a" },
   { "name": "TRUSTED_PROXY_CIDR", "value": "10.0.0.0/16" },
   { "name": "REQUIRE_IDENTITY", "value": "true" }
 ]
 ```
 
 `alb` is the one preset whose format is already `jwt`, so it reads
-`x-amzn-oidc-data` and compares the `aud` claim to `IDENTITY_AUDIENCE`.
+`x-amzn-oidc-data`. An ALB's token has no `aud` claim: it names the load
+balancer in the JWT *header's* `signer` field, and that is what
+`IDENTITY_AUDIENCE` is compared to. So the value is the **load balancer's** ARN
+(`...:loadbalancer/app/NAME/ID`, the `$ALB_ARN` from the setup below), never a
+listener's (`...:listener/app/...`), which looks almost the same and can never
+match. The API refuses to start on a listener ARN rather than answer 401 to
+every request.
 Set `TRUSTED_PROXY_CIDR` to the VPC range the load balancer's ENIs sit in,
 so the task refuses identity headers arriving from anywhere else.
 

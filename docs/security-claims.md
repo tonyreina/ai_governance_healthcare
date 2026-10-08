@@ -922,3 +922,17 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_export_provenance.py::the HTML report states the mode`
   `tests/test_export_provenance.py::browser-only exports say sign-offs are self-asserted`
   `tests/test_export_provenance.py::the JSON export states the mode`
+
+### C-72 The data scope is stated in every mode
+
+- **Claim:** Every storage mode, the self-hosted server included, tells the user
+  never to enter patient-identifiable information, and the docs say so first.
+- **Asserted in:** `app/js/00-core/30-state.js` — "Governance metadata only: never enter patient-identifiable information."
+- **Status:** partial
+- **Gap:** A statement of policy. Nothing inspects what is typed into the
+  free-text fields, so the tests prove the instruction is shown, not that it is
+  followed. Detection is R-22, open. #34
+- **Enforced by:**
+  `tests/test_boot_storage.py::healthy API -> the data scope is stated in the layout`
+  `tests/test_boot_storage.py::static host -> the warning states the same data scope`
+  `tests/test_data_scope.py::the comparison table says Never in every mode`

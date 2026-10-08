@@ -89,6 +89,8 @@ test-session-ui = "python tests/test_session_ui.py"
 test-export-beacon = "python tests/test_export_beacon.py"
 # Every export says which storage mode produced it, in the header's own words (#93).
 test-export-provenance = "python tests/test_export_provenance.py"
+# The data scope (governance metadata only, never patient data, any mode) leads the docs (#34).
+test-data-scope = "python tests/test_data_scope.py"
 # `make verify-backup` restores a dump into a throwaway PostgreSQL and checks the
 # guarantees survived; `make restore` asks first (#52). Needs Docker and gpg.
 test-verify-backup = "python tests/test_verify_backup.py"

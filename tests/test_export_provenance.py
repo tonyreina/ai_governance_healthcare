@@ -9,9 +9,9 @@ it, in the same words the live header uses (MODE_LABEL), so the two cannot drift
 
 Per mode and per format, in a real browser: the printable HTML (which is also what
 the PDF prints), Markdown, JSON and the portfolio CSV. The Croissant record is built
-from the JSON, so it is checked too. R-04: one mode's label is never another's. R-21 is
-open, so the text says where the record was kept, not whether that is an approved place
-for any class of data.
+from the JSON, so it is checked too. R-04: one mode's label is never another's. The data
+scope is the same in every mode (R-49), so the text says where the record was kept,
+never that a place is approved for any class of data.
 
     pixi run test-export-provenance
 """

@@ -4,6 +4,12 @@ A single-page tool that walks a hospital AI governance team through the
 [Coalition for Health AI (CHAI)](https://chai.org) six-stage lifecycle for each
 AI solution they evaluate or run, and tracks the whole portfolio on one dashboard.
 
+**Governance metadata only.** Never enter patient-identifiable information, in
+any storage mode, the self-hosted server included. A governance review has no
+need for a patient's data, and the tool is not designed, configured or reviewed
+to hold it. It does hold personal data about staff (who reviewed and signed
+what); see [docs/privacy.md](docs/privacy.md).
+
 - **Portfolio dashboard**: every AI project with its lifecycle position, readiness
   score, next periodic review date, and a status of *Out of compliance*,
   *Needs update*, *On track*, or *Retired*, with the reasons spelled out.

@@ -22,11 +22,17 @@ const MODE_LABEL = Object.freeze({
   [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
   [Mode.ARTIFACT]: Object.freeze({text:"Claude artifact",   cls:"artifact"}),
 });
+/* The data scope, stated in every storage mode (#34, R-49). The owner decided this
+   tool holds governance metadata only, in any mode: there is no reason for a
+   patient's data to be in a governance record, and organizational policy forbids
+   it. It is a policy, not a detector, so the wording is an instruction, never a
+   claim that no such data is present. */
+const SCOPE_NOTICE = "Governance metadata only: never enter patient-identifiable information.";
 /* What an export says about where the record was kept, beside the header's label (#93).
    Keyed by Mode like MODE_LABEL, so a mode cannot ship without one and two modes cannot
    share one (R-04). It says where the record lived and what that means for sign-offs
-   and audit; it does not say whether that place is approved for any class of data
-   (R-21 is open). */
+   and audit. The data scope is the same in every mode (SCOPE_NOTICE, R-49), so
+   nothing here implies one mode is fit for data another is not. */
 const MODE_PROVENANCE = Object.freeze({
   [Mode.LOCAL]:    "Kept in one browser on one computer. Sign-offs here are self-asserted: nothing verifies who made them, and there is no server-side audit log or version history.",
   [Mode.API]:      "Kept on the self-hosted governance server, with server-side access control, a version history and an audit log. Sign-offs are recorded against the signed-in identity.",

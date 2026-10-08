@@ -29,6 +29,7 @@ renderDashboardShell();
       rememberApiHere();
       STORE=new ApiStore("/api"); MODE=Mode.API; CAN_DELETE=true;
       setModeFor(MODE);
+      showScopeNotice();
       startSession(api.health);   // sign-out link and idle lock, as the server configured
       // Identity is established by the proxy, so the browser cannot choose it.
       try{

@@ -175,6 +175,12 @@ jobs:
       - name: export provenance
         if: ${{ !cancelled() }}
         run: pixi run test-export-provenance
+
+      # Governance metadata only, never patient data, in any mode, stated where a
+      # deployer reads first (#34). The in-app notice is in test-boot.
+      - name: data scope
+        if: ${{ !cancelled() }}
+        run: pixi run test-data-scope
       - name: session controls (idle lock, sign-out, lost stream)
         if: ${{ !cancelled() }}
         run: pixi run test-session-ui

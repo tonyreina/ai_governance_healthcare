@@ -5,6 +5,14 @@ A single-page tool that walks a hospital AI governance team through the
 AI solution they evaluate or run, and tracks the whole portfolio on one
 dashboard.
 
+!!! warning "Governance metadata only"
+
+    **Governance metadata only.** Never enter patient-identifiable information,
+    in any storage mode, the self-hosted server included. A governance review
+    has no need for a patient's data, and the tool is not designed, configured
+    or reviewed to hold it. It does hold personal data about staff; see
+    [Privacy and retention](privacy.md).
+
 [Open the dashboard :material-arrow-right:](app/index.html){ .md-button .md-button--primary }
 
 ## See it in action

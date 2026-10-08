@@ -43,6 +43,7 @@ function renderMain(focusTop) {
 
   applyRO(m);
   resolveNames(m);
+  fillHold();   // a no-op unless this view has the hold section
   if (focusTop) { window.scrollTo({ top: 0 }); m.focus({ preventScroll: true }); }
   else if (fk) { const el = m.querySelector(fk); if (el) el.focus({ preventScroll: true }); }
 }

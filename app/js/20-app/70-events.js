@@ -63,6 +63,7 @@ document.addEventListener("click",async e=>{
   // Add a CHAI-recommended metric. Name and category only: the value, the
   // interval and the population are measurements the organization has to make,
   // and pre-filling them would be inventing results.
+  if(btn.dataset.holdAction){ openHoldDialog(btn.dataset.holdAction); return; }
   if(btn.dataset.te && !RO){
     const name=btn.dataset.te;
     if(!S.metrics.some(m=>(m.name||"").trim().toLowerCase()===name.trim().toLowerCase())){

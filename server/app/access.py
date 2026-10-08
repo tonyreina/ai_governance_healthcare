@@ -26,6 +26,7 @@ Two deliberate holes, both load-bearing:
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -33,10 +34,18 @@ from fastapi import HTTPException, status
 from .securitylog import SecurityEvent, emit
 
 
+class Level(StrEnum):
+    """What a request needs on a project. ``require`` checks it; a denial logs it."""
+
+    READ = "read"
+    WRITE = "write"
+    OWN = "own"
+
+
 def denied(
     user_id: str | None,
     project_id: str | None,
-    need: str,
+    need: Level,
     held: str,
     code: int,
 ) -> None:
@@ -141,7 +150,7 @@ def can_own(
 def require(
     doc: dict[str, Any],
     user_id: str | None,
-    level: str,
+    level: Level,
     *,
     enforced: bool = True,
     project_id: str | None = None,
@@ -159,9 +168,7 @@ def require(
     (``app/emergency.py``): a path around the access lists that is not recorded is
     just a backdoor (#42).
     """
-    checks = {"read": can_read, "write": can_write, "own": can_own}
-    if level not in checks:  # pragma: no cover - programming error
-        raise ValueError(f"unknown level {level!r}")
+    checks = {Level.READ: can_read, Level.WRITE: can_write, Level.OWN: can_own}
 
     if not can_read(doc, user_id, enforced=enforced):
         if emergency:
@@ -175,7 +182,7 @@ def require(
         if emergency:
             return True
         held = role_of(doc, user_id) or "no"
-        need = "an owner" if level == "own" else "write access"
+        need = "an owner" if level is Level.OWN else "write access"
         denied(
             user_id, project_id, level, role_of(doc, user_id), status.HTTP_403_FORBIDDEN
         )
@@ -221,7 +228,7 @@ def guard_owner_only_fields(
             denied(
                 user_id,
                 project_id,
-                "own",
+                Level.OWN,
                 role_of(before, user_id),
                 status.HTTP_403_FORBIDDEN,
             )
@@ -255,7 +262,7 @@ def guard_access_change(
         denied(
             user_id,
             project_id,
-            "own",
+            Level.OWN,
             role_of(before, user_id),
             status.HTTP_403_FORBIDDEN,
         )

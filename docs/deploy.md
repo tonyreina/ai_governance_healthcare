@@ -400,6 +400,8 @@ recording that a project was deleted.
 | `project.created` | info | `actor`, `project` | A project was created. |
 | `project.deleted` | info | `actor`, `project` | A project was deleted (its history is kept; see the deletion tombstone). |
 | `versions.purged` | warning | `actor`, `project`, `revisions`, `log_entries`, `incarnation`, `purged_at`, `through_rev`, `through_seq` | A version history and its audit log were destroyed. Review every one. Keep these: they re-apply the purge after a restore. |
+| `hold.placed` | warning | `actor`, `project` | A litigation hold now stops this project's disposal. The reason is not logged; it is with the hold. |
+| `hold.lifted` | warning | `actor`, `project` | A litigation hold was lifted, so the project can be disposed of when due. Confirm counsel agreed. |
 | `ratelimit.tripped` | warning | `key`, `limit`, `window_seconds` | A client hit the rate limit. Once per client per window. |
 | `stream.refused` | warning | `actor` | Too many open event streams for one user. |
 | `stream.attached` | info | `actor`, `action`, `source_ip` | An event stream was opened. The read trail records it too. |

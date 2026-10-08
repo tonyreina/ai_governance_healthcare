@@ -62,6 +62,8 @@ class SecurityEvent(StrEnum):
     PROJECT_CREATED = "project.created"
     PROJECT_DELETED = "project.deleted"
     VERSIONS_PURGED = "versions.purged"
+    HOLD_PLACED = "hold.placed"
+    HOLD_LIFTED = "hold.lifted"
     RATELIMIT_TRIPPED = "ratelimit.tripped"
     STREAM_REFUSED = "stream.refused"
     STREAM_ATTACHED = "stream.attached"

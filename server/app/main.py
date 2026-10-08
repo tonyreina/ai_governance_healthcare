@@ -45,6 +45,7 @@ from .events import EventBroker
 from .principals import PrincipalRecorder
 from .roles import DbRole
 from .routes import router
+from .securitylog import SecurityEvent, configure_logging, emit
 
 log = logging.getLogger("chai")
 
@@ -257,18 +258,11 @@ class BodySizeLimitMiddleware:
             await self._reject(send)
 
 
-def configure_logging(level: str) -> None:
-    logging.basicConfig(
-        level=getattr(logging, level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
-    )
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Open the pool, migrate, start listening; tear all three down in order."""
     settings: Settings = app.state.settings
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.log_format)
     log.info("CHAI governance API %s starting", settings.version)
     log_auth_posture(settings)
 
@@ -309,7 +303,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.warning(
             "emergency access is configured for %s: these identities hold owner "
             "rights on EVERY project, and every use is recorded in that project's "
-            "audit log and as access.breakglass on the chai.emergency logger.",
+            "audit log and as an access.breakglass security event.",
             ", ".join(sorted(settings.emergency_access_ids)),
         )
     app.state.principals = PrincipalRecorder(db)
@@ -346,6 +340,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.rate_limit_window_seconds,
         settings.rate_limit_max_requests,
     )
+    announced: dict[str, float] = {}  # when each client's trip was last reported
 
     if settings.cors_origins:
         log.warning(
@@ -370,6 +365,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if _is_api_path(path) and request.method != "OPTIONS" and path != "/api/health":
             key = _rate_limit_key(request, settings)
             if not await rate_limiter.allow(key):
+                # Once per client per window: a flood of refused requests must not
+                # become a flood of log lines, which is the denial of service again.
+                now = time.monotonic()
+                if now - announced.get(key, -1e9) >= settings.rate_limit_window_seconds:
+                    announced[key] = now
+                    if len(announced) > 10_000:
+                        announced.clear()
+                    emit(
+                        SecurityEvent.RATELIMIT_TRIPPED,
+                        f"rate limit tripped for {key}",
+                        key=key,
+                        limit=settings.rate_limit_max_requests,
+                        window_seconds=settings.rate_limit_window_seconds,
+                    )
                 return JSONResponse(
                     status_code=429,
                     headers={"Retry-After": str(settings.rate_limit_window_seconds)},
@@ -420,11 +429,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if request.method not in SAFE_METHODS:
             site = request.headers.get("sec-fetch-site")
             if site is not None and site not in settings.csrf_trusted_sites:
-                log.warning(
-                    "rejected cross-site %s %s (Sec-Fetch-Site: %s)",
-                    request.method,
-                    request.url.path,
-                    site,
+                emit(
+                    SecurityEvent.CSRF_REJECTED,
+                    f"rejected cross-site {request.method} {request.url.path} "
+                    f"(Sec-Fetch-Site: {site})",
+                    method=request.method,
+                    path=request.url.path,
+                    site=site,
                 )
                 return JSONResponse(
                     status_code=403,

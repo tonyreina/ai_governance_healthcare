@@ -636,8 +636,9 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Why reads are throttled and writes are not: a dashboard refetches the log and
   versions on every change event, so an unthrottled read entry would write hundreds
   of rows per hour for one open tab. One per person per project per ten minutes
-  still says it happened and who. Every use, throttled or not, is a warning on
-  `chai.emergency`. Revisit if a stricter reading of "every use" is wanted.
+  still says it happened and who. Every use, throttled or not, is an
+  `access.breakglass` security event. Revisit if a stricter reading of "every
+  use" is wanted.
 - Known limit: a delete's log entry goes with the project (by design, D-10/R-11).
   The warning and the tombstone remain. SSE streams are not widened: a break-glass
   identity is not in a project's audience, so it fetches rather than being pushed.
@@ -670,6 +671,37 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Rejected, for now: closing the stream when the identity's *access* to a
   project changes. Events are already filtered by the audience at publish time.
 - Source: #49; R-38.
+
+### D-41 One security-event stream, JSON, tagged, and not the application log
+
+- Status: Accepted
+- `emit(SecurityEvent.X, message, **fields)` writes through a dedicated
+  `chai.security` logger. The JSON formatter tags every line with its `stream`
+  (`security` or `app`) so a sink can route and retain them separately (the
+  issue's option 4) and an alert is a field match (option 1). The human-readable
+  message is kept, so `LOG_FORMAT=text` and existing tests still read naturally.
+- The security logger is held at INFO regardless of `LOG_LEVEL`, because an
+  event that disappears when someone turns the application log down is not an
+  audit.
+- Values are `json.dumps`ed, so an identity with a quote or newline stays in its
+  own string. Tokens and secrets are never fields: a token that cannot be
+  decoded logs only the exception's class.
+- The rate-limit event is once per client per window, or a flood of refused
+  requests would become a flood of log lines, which is the denial of service
+  again.
+- It replaced the per-module loggers `chai.access` and `chai.emergency`, which
+  could not be filtered together and whose names were in the docs as the thing
+  to alert on. Those references now point at the events.
+- Found while testing: `configure_logging` took a string and compared it to the
+  enum by identity, so passing `"json"` silently selected the text format. It
+  now coerces at its boundary (`LogFormat(fmt)`), which also rejects an unknown
+  value.
+- Rejected: a log shipper in the stack. A hospital has its own collector, and
+  one more container that holds the security stream is one more thing to harden.
+- Rejected: an audit table for these (option 3 of #33 is the read trail, which
+  is a different thing). A database admin can alter a table; a sink outside the
+  database is the tamper-evident copy. Both are in #33.
+- Source: #38; R-39.
 
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 

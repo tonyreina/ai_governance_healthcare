@@ -312,6 +312,25 @@ def session_settings_reach_the_api(compose: dict) -> list[str]:
     ]
 
 
+def logs_are_capped(compose: dict) -> list[str]:
+    """Every service's log has a size cap (#38).
+
+    Docker's default keeps a container's log without bound, so a chatty service fills
+    the host's disk, and the audit trail's own database with it. The cap is also what
+    makes local retention finite and honest: it is not a retention policy, which is
+    why docs/deploy.md says where to send the security stream.
+    """
+    problems = []
+    for name, svc in compose.get("services", {}).items():
+        logging_cfg = svc.get("logging") or {}
+        opts = logging_cfg.get("options") or {}
+        if logging_cfg.get("driver") != "json-file":
+            problems.append(f"{name} does not use the json-file log driver")
+        if not opts.get("max-size") or not opts.get("max-file"):
+            problems.append(f"{name} has no log size cap (max-size and max-file)")
+    return problems
+
+
 def emergency_setting_reaches_the_api(compose: dict) -> list[str]:
     """EMERGENCY_ACCESS_IDS is documented as a .env setting, so compose must pass it.
 
@@ -341,6 +360,7 @@ def every_rule(compose: dict) -> list[str]:
         *owner_credential_stays_in_migrate(compose),
         *emergency_setting_reaches_the_api(compose),
         *session_settings_reach_the_api(compose),
+        *logs_are_capped(compose),
         *cloud_proxy_image_is_unprivileged(
             (ROOT / "proxy" / "Dockerfile").read_text(encoding="utf-8")
         ),
@@ -513,6 +533,18 @@ def main() -> int:
         "migrate losing the owner credential",
         lambda s: s[MIGRATE]["environment"].pop("POSTGRES_PASSWORD"),
     )
+    for svc_name in compose["services"]:
+        broken = copy.deepcopy(compose)
+        broken["services"][svc_name].pop("logging")
+        check(
+            f"{svc_name} losing its log cap is noticed", bool(logs_are_capped(broken))
+        )
+        broken = copy.deepcopy(compose)
+        broken["services"][svc_name]["logging"] = {"driver": "json-file"}
+        check(
+            f"{svc_name} with a log driver but no size cap is noticed",
+            bool(logs_are_capped(broken)),
+        )
     for name in SESSION_SETTINGS:
         broken = copy.deepcopy(compose)
         del broken["services"][API]["environment"][name]

@@ -28,6 +28,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from urllib.parse import quote, urlsplit
 
+from .securitylog import LogFormat
+
 DEFAULT_IDENTITY_HEADER = "X-Forwarded-Email"
 
 
@@ -139,6 +141,16 @@ def _sign_out_url() -> str:
             "protocol-relative URLs are refused."
         )
     return raw
+
+
+def _log_format() -> LogFormat:
+    value = os.environ.get("LOG_FORMAT", "").strip().lower() or LogFormat.JSON
+    try:
+        return LogFormat(value)
+    except ValueError:
+        raise RuntimeError(
+            f"LOG_FORMAT must be 'json' or 'text', got {value!r}"
+        ) from None
 
 
 def _idle_lock_minutes() -> int:
@@ -314,6 +326,9 @@ class Settings:
     rate_limit_window_seconds: int = 60
     rate_limit_max_requests: int = 240
     log_level: str = "info"
+    # "json": one object per line, security events tagged and named (#38). "text":
+    # the old human-readable line, for a terminal.
+    log_format: LogFormat = LogFormat.JSON
     port: int = 8000
 
     # --- events -----------------------------------------------------------
@@ -522,6 +537,7 @@ class Settings:
             rate_limit_window_seconds=_int("RATE_LIMIT_WINDOW_SECONDS", 60),
             rate_limit_max_requests=_int("RATE_LIMIT_MAX_REQUESTS", 240),
             log_level=_str("LOG_LEVEL", "info").lower(),
+            log_format=_log_format(),
             port=_int("PORT", _int("API_PORT", 8000)),
             events_channel=_str("EVENTS_CHANNEL", "chai_events"),
             sse_keepalive_seconds=float(_int("SSE_KEEPALIVE_SECONDS", 15)),

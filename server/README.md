@@ -106,7 +106,8 @@ controls, and the CIDR check would be checking the attacker's own claim.
 | `APP_POSTGRES_USER` | `chai_app` | The restricted role's name. |
 | `APP_POSTGRES_PASSWORD` | — | Its password. With this set the API serves as that role, and `DATABASE_URL`/`POSTGRES_PASSWORD` (the owner's) belong to `python -m app.migrate` only. See `app/roles.py` for exactly what the role may do. |
 | `EVENTS_CHANNEL` | `chai_events` | `LISTEN`/`NOTIFY` channel. |
-| `LOG_LEVEL` | `info` | |
+| `LOG_LEVEL` | `info` | The application log's level. Security events are held at INFO whatever this says. |
+| `LOG_FORMAT` | `json` | `json`: one object per line, security events named and tagged `"stream": "security"`. `text`: the human-readable line. |
 
 ### Per cloud
 
@@ -169,16 +170,16 @@ access-controlled exactly like the first page.
 `EMERGENCY_ACCESS_IDS` (comma-separated identity ids) names identities that
 hold owner rights on every project, for a record whose only owner has left. Every
 use is recorded in that project's own audit log as a system entry (`event:
-access.breakglass`, never redacted by a purge) and as a warning on the
-`chai.emergency` logger; reads of the same project by the same person are one entry
-per ten minutes, writes are never throttled. Off by default. See
+access.breakglass`, never redacted by a purge) and as an `access.breakglass`
+security event (see below); reads of the same project by the same person are one
+entry per ten minutes, writes are never throttled. Off by default. See
 `docs/deploy.md`, "Offboarding, and emergency access".
 
 ## Denied access is logged
 
 A request from an authenticated user that is refused on a project they have no
-right to produces one warning on the `chai.access` logger, with a stable name
-so an alert can match it without parsing prose:
+right to produces one `access.denied` security event, with a stable name so an
+alert can match it without parsing prose:
 
 ```text
 (one line; wrapped here)

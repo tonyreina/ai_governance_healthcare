@@ -35,6 +35,7 @@ plain HTTP (TLS is terminated at the front door), and expects:
 | `PORT` | Port to bind. Set by the platform on all three clouds. |
 | `APP_DATABASE_URL` | PostgreSQL connection string for the **restricted** role the API serves as. See [Two database roles](#two-database-roles). |
 | `SSE_MAX_LIFETIME_SECONDS`, `IDLE_LOCK_MINUTES`, `SIGN_OUT_URL` | Optional session controls. See [Session lifetime and automatic logoff](#session-lifetime-and-automatic-logoff). |
+| `LOG_FORMAT` | `json` (default) or `text`. See [Security events](#security-events-collecting-retaining-and-alerting). |
 | `EMERGENCY_ACCESS_IDS` | Optional. Identity ids with owner rights on every project, every use audited. See [Offboarding, and emergency access](#offboarding-and-emergency-access). |
 | `RUN_MIGRATIONS` | `false` when the API serves as a restricted role, which cannot create tables. A migration job runs instead. |
 | `DATABASE_URL` | The **owner's** connection string, for the migration job only. A single-role deployment may put it here and omit the two above, which works and is reported as a weaker setup. |
@@ -146,6 +147,67 @@ things break it on managed platforms:
   browser subscribed on replica B. Use PostgreSQL `LISTEN`/`NOTIFY` as
   the fan-out bus, or pin the service to a single replica until you do.
 
+### Security events: collecting, retaining and alerting
+
+The only record of a delete, a purge, a rejected request or a 401 used to be a
+line of English on container stdout, which nothing collected, so a restart lost
+it and nothing could alert on it. 45 CFR 164.308(a)(1)(ii)(D) asks for regular
+review of activity and 164.308(a)(6)(ii) for security incident detection.
+
+The API now writes **one JSON object per line** (`LOG_FORMAT=json`, the default),
+and every security-relevant event has a **stable name** and fields. Each line is
+tagged `"stream": "security"` (application chatter is `"stream": "app"`), so a
+log sink can alert on the first and **retain it for longer** than the second:
+six years of debug logging is not the ask. The security stream is held at INFO
+whatever `LOG_LEVEL` says, so turning the application log down never stops
+recording that a project was deleted.
+
+| Event | Level | Fields | What it means |
+|---|---|---|---|
+| `auth.no_identity` | warning | `method`, `path`, `header` | A request reached the API with no identity header. In a correct deployment this cannot happen: the proxy sets it on every request. **Alert on any**: it means traffic reached the API around the proxy. |
+| `auth.peer_rejected` | warning | `method`, `path`, `peer` | The TCP peer was outside `TRUSTED_PROXY_CIDR`. **Alert on any.** |
+| `auth.secret_rejected` | warning | `method`, `path`, `header` | A request lacked the `PROXY_SHARED_SECRET` header (the value is never logged). **Alert on any.** |
+| `auth.token_unreadable` | warning | `header`, `reason` | A signed identity assertion could not be decoded (the token is never logged). |
+| `auth.audience_rejected` | warning | `aud`, `signer`, `expected` | A token minted for another service reached this one. |
+| `csrf.rejected` | warning | `method`, `path`, `site` | A cross-site write was refused. |
+| `access.denied` | warning | `actor`, `project`, `need`, `held`, `status` | An authenticated user reached for a project they have no right to. A burst from one `actor` is worth a page. |
+| `access.breakglass` | warning | `actor`, `project`, `action` | Emergency access was used. **Alert on any**, then check the project's own audit log. |
+| `project.created` | info | `actor`, `project` | A project was created. |
+| `project.deleted` | info | `actor`, `project` | A project was deleted (its history is kept; see the deletion tombstone). |
+| `versions.purged` | warning | `actor`, `project`, `revisions`, `log_entries` | A version history and its audit log were destroyed. Review every one. |
+| `ratelimit.tripped` | warning | `key`, `limit`, `window_seconds` | A client hit the rate limit. Once per client per window. |
+| `stream.refused` | warning | `actor` | Too many open event streams for one user. |
+
+The names are an interface: an alert is written against them, so a test fails if
+this table and the code ever disagree.
+
+Fields are ids and facts, never a document, a token or a secret, and every value
+is JSON-encoded, so an identity containing a quote or a newline stays inside its
+own string and cannot forge a second record.
+
+**Where it goes.** In the Compose stack every service uses Docker's `json-file`
+driver capped at 10 MB by 5 files. That makes local retention *finite and
+honest*, about 50 MB a service, and it is **not** a retention policy: ship the
+logs to a collector (journald, syslog, Loki, your SIEM) and retain them there.
+`LOG_FORMAT=text` gives the readable line for a terminal.
+
+On a cloud, stdout goes to the platform's log service, and what to configure
+there is the part this repository cannot test:
+
+| | Sink | An alert on `auth.no_identity` | Retention |
+|---|---|---|---|
+| Google Cloud Run | Cloud Logging (a JSON line becomes `jsonPayload`; `severity` is read) | a log-based alert on `jsonPayload.event="auth.no_identity"` | the log bucket's retention; route `jsonPayload.stream="security"` to its own bucket |
+| AWS ECS | CloudWatch Logs via the `awslogs` driver | a metric filter with the pattern `{ $.event = "auth.no_identity" }` | the log group's retention (2192 days is six years) |
+| Azure Container Apps | Log Analytics (`ContainerAppConsoleLogs_CL`) | a log alert on `Log_s has '"event": "auth.no_identity"'` | the table's retention |
+
+!!! warning "Not exercised against any real log service"
+
+    The names, fields and the one-object-per-line format are tested here, against
+    the real output. The sink, filter and retention settings above come from the
+    providers' documentation and have not been run. Check them before you cite
+    them, and set a retention that matches your own policy: how long you must keep
+    audit records is your decision, not this table's.
+
 ### Session lifetime and automatic logoff
 
 45 CFR 164.312(a)(2)(iii), automatic logoff, is *addressable*: implement it, or
@@ -238,9 +300,9 @@ reassign, archive, delete and purge.
   not granted by this project's access list."), tagged `event: access.breakglass`,
   which a purge never redacts. Reads of the same project by the same person are
   one entry per ten minutes (a dashboard polls); every write, archive, purge or
-  reassignment is its own entry. **Every** use, throttled or not, is also a warning
-  on the `chai.emergency` logger, `access.breakglass actor=... project=...`. Alert
-  on that.
+  reassignment is its own entry. **Every** use, throttled or not, is also an
+  `access.breakglass` [security event](#security-events-collecting-retaining-and-alerting).
+  Alert on that.
 - A *delete* cannot leave an entry in the project's log, because the log goes with
   the project by design. It is recorded by that warning and by the deletion
   tombstone's `deleted_by`.

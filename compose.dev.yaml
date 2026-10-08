@@ -47,6 +47,8 @@ services:
       # it lacks shows up on a laptop, not first in production.
       APP_POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:-dev-only-app-not-a-secret}
       LOG_LEVEL: debug
+      # Readable in a terminal. Production is JSON; set LOG_FORMAT=json to see it.
+      LOG_FORMAT: ${LOG_FORMAT:-text}
       # Loosened so a request straight to 127.0.0.1:8000 from the host (which
       # arrives from the Docker gateway, not the proxy) is not rejected.
       TRUSTED_PROXY_CIDR: 0.0.0.0/0

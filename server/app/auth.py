@@ -57,6 +57,7 @@ from typing import Any
 from fastapi import HTTPException, Request, status
 
 from .config import Settings
+from .securitylog import SecurityEvent, emit
 
 log = logging.getLogger("chai.auth")
 
@@ -163,7 +164,13 @@ def _check_peer(request: Request, settings: Settings) -> None:
     try:
         peer = ipaddress.ip_address(client.host)
     except ValueError:
-        log.warning("unparseable peer address %r", client.host)
+        emit(
+            SecurityEvent.AUTH_PEER_REJECTED,
+            f"unparseable peer address {client.host!r}",
+            method=request.method,
+            path=request.url.path,
+            peer=client.host,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Request did not come through the authenticating proxy.",
@@ -171,11 +178,13 @@ def _check_peer(request: Request, settings: Settings) -> None:
     for net in _networks(settings.trusted_proxy_cidrs):
         if peer in net:
             return
-    log.warning(
-        "rejected %s %s from %s: outside TRUSTED_PROXY_CIDR",
-        request.method,
-        request.url.path,
-        peer,
+    emit(
+        SecurityEvent.AUTH_PEER_REJECTED,
+        f"rejected {request.method} {request.url.path} from {peer}: "
+        "outside TRUSTED_PROXY_CIDR",
+        method=request.method,
+        path=request.url.path,
+        peer=str(peer),
     )
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -188,8 +197,12 @@ def _check_shared_secret(request: Request, settings: Settings) -> None:
         return
     presented = request.headers.get(settings.proxy_secret_header, "")
     if not hmac.compare_digest(presented, settings.proxy_shared_secret):
-        log.warning(
-            "rejected request without a valid %s header", settings.proxy_secret_header
+        emit(
+            SecurityEvent.AUTH_SECRET_REJECTED,
+            f"rejected request without a valid {settings.proxy_secret_header} header",
+            method=request.method,
+            path=request.url.path,
+            header=settings.proxy_secret_header,
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -253,7 +266,12 @@ def _identity_from_jwt(raw: str, settings: Settings) -> Identity:
     try:
         header, claims = _jwt_segments(raw)
     except (ValueError, json.JSONDecodeError) as exc:
-        log.warning("could not decode %s: %s", settings.identity_header, exc)
+        emit(
+            SecurityEvent.AUTH_TOKEN_UNREADABLE,
+            f"could not decode {settings.identity_header}: {type(exc).__name__}",
+            header=settings.identity_header,
+            reason=type(exc).__name__,  # never the value: it is a credential
+        )
         raise _unauthorized(
             f"{settings.identity_header} is not a readable JWT."
         ) from exc
@@ -272,11 +290,13 @@ def _identity_from_jwt(raw: str, settings: Settings) -> Identity:
         if settings.identity_audience not in candidates and (
             signer != settings.identity_audience
         ):
-            log.warning(
-                "rejected assertion: aud=%r signer=%r, expected %r",
-                audience,
-                signer,
-                settings.identity_audience,
+            emit(
+                SecurityEvent.AUTH_AUDIENCE_REJECTED,
+                f"rejected assertion: aud={audience!r} signer={signer!r}, "
+                f"expected {settings.identity_audience!r}",
+                aud=audience,
+                signer=signer,
+                expected=settings.identity_audience,
             )
             raise _unauthorized(
                 f"{settings.identity_header} was not issued for this service."
@@ -360,11 +380,13 @@ def identity_from_request(request: Request, settings: Settings) -> Identity:
     if not raw:
         if not settings.require_identity:
             return ANONYMOUS
-        log.warning(
-            "no %s header on %s %s -- is this request bypassing the proxy?",
-            settings.identity_header,
-            request.method,
-            request.url.path,
+        emit(
+            SecurityEvent.AUTH_NO_IDENTITY,
+            f"no {settings.identity_header} header on {request.method} "
+            f"{request.url.path} -- is this request bypassing the proxy?",
+            header=settings.identity_header,
+            method=request.method,
+            path=request.url.path,
         )
         raise _unauthorized(
             f"No {settings.identity_header} header. This API only accepts "

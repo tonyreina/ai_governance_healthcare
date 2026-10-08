@@ -77,6 +77,8 @@ test-isolation = "python tests/test_check_isolation.py"
 test-backup-crypto = "python tests/test_backup_crypto.py"
 # examples/croissant_export.py: no named individuals unless asked (#60).
 test-croissant = "python tests/test_croissant_export.py"
+# The audit history is a window, and says so; LocalStore keeps every entry (#40).
+test-log-window = "python tests/test_log_window.py"
 # What a `docker build` sends to the daemon: no .env, backups, .git or licensed PDF (#63).
 test-dockerignore = "python tests/test_dockerignore.py"
 # The gate behind `make up`: placeholders, literal identities, plain HTTP on the network,

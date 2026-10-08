@@ -155,6 +155,9 @@ jobs:
       - name: audit log writes
         if: ${{ !cancelled() }}
         run: pixi run test-audit
+      - name: audit history window and paging
+        if: ${{ !cancelled() }}
+        run: pixi run test-log-window
       - name: free-text fields do not feed the browser's spellchecker
         if: ${{ !cancelled() }}
         run: pixi run test-text-fields

@@ -228,6 +228,7 @@ function reportBody(names){
     <h2>Applied model card</h2>
     <div style="max-width:560px">${labelHTML()}</div>
     <h2>Sign-off history</h2>
+    ${logWindowNote()?`<p style="color:var(--muted);font-size:13px"><strong>${esc(logWindowNote())}</strong></p>`:""}
     ${LOG.length?`<div class="r-wrap"><table class="rtable"><tbody>${LOG.map(e=>`<tr><td style="width:120px">${esc(fmtDay((e.at||"").slice(0,10)))}</td><td>${esc(e.text)}</td><td>${nm(e.by)}</td></tr>`).join("")}</tbody></table></div>`:`<p>No recorded events.</p>`}
     <h2>Appendix: full checklist</h2>
     ${STAGES.map(s=>`<h3 style="font-size:15px;margin:18px 0 6px">${s.n}. ${esc(s.title)}</h3><div class="r-wrap"><table class="rtable"><tbody>

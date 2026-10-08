@@ -117,6 +117,32 @@ and require the `signer` to be your load balancer's ARN. `IDENTITY_AUDIENCE` cat
 a token minted for a different service in the same account; without a signature
 check it stops misconfiguration, not a determined forger.
 
+## Reading the whole audit history
+
+`GET /api/projects/{id}/log` returns the newest page (60 by default, newest
+first). It used to be the only page. Now:
+
+- `?limit=N` asks for up to 500 entries.
+- `X-Log-Total` is how many entries the project has in all, so a caller can say
+  "newest 60 of 412" instead of presenting a window as the history.
+- `X-Log-Next` is present only when there is more. Pass it as `?before=` to get
+  the next page. It is opaque and safe in a URL; do not build one yourself.
+
+```bash
+# every entry, oldest last, for a regulator
+url=/api/projects/sepsis-2026/log
+while [ -n "$url" ]; do
+  curl -si "https://host$url" -H "$AUTH" | tee page.txt | sed -n '/^\r$/,$p'
+  next=$(sed -n 's/^[Xx]-[Ll]og-[Nn]ext: \(.*\)\r$/\1/p' page.txt)
+  url=${next:+/api/projects/sepsis-2026/log?before=$next}
+done
+```
+
+The dashboard's changelog shows the window it has and says so ("Showing the
+newest 60 of 412 entries"), with a *Show older entries* button on the server
+store that goes up to 500; every export carries the same sentence. Paging is
+access-controlled exactly like the first page.
+
 ## Denied access is logged
 
 A request from an authenticated user that is refused on a project they have no

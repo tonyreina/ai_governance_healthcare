@@ -22,6 +22,13 @@ const MODE_LABEL = Object.freeze({
   [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
   [Mode.ARTIFACT]: Object.freeze({text:"Claude artifact",   cls:"artifact"}),
 });
+/* `data-act` values for buttons. The older actions are still bare strings in
+   70-events.js (baselined in scripts/enum_baseline.json); a NEW action goes here,
+   so a typo is `Act.LOG_OLDR` -> undefined -> a failing test, not a comparison
+   that is quietly false forever. */
+const Act = Object.freeze({
+  LOG_OLDER: "log-older",   // load a deeper page of the audit history
+});
 let STORE=null, MODE=Mode.CONNECTING, RO=false, CAN_DELETE=true, USER=null;
 // Set when the whole workspace is view-only (an artifact shared read-only).
 // Outranks any per-project role: it is a property of how you got here.
@@ -31,6 +38,12 @@ let PROJECTS=new Map(), LOADED=false;
 let CUR=null;              // open project id
 let S=null;                // working copy of open project
 let LOG=[], unsubLog=null;
+/* How many entries the project has in all, when the store says. LOG is a WINDOW
+   onto the history (the newest page), never the whole of it, and an export or a
+   view that renders it must say so: a PDF filed as the record of a two-year
+   review used to show the newest 60 entries and nothing about the rest (#40).
+   null means the store cannot tell. */
+let LOG_TOTAL=null;
 const openItems=new Set();
 const pending={}, timers={}, flushing={};
 let UI={view:"setup", project:null, filter:"all", q:""};

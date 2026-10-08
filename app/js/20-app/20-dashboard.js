@@ -93,7 +93,7 @@ function goHome(){
   flushAllChanges();
   if(CUR && pending[CUR]) flush(CUR);
   if(unsubLog){ unsubLog(); unsubLog=null; }
-  CUR=null; S=null; LOG=[]; openItems.clear(); saveUI();
+  CUR=null; S=null; LOG=[]; LOG_TOTAL=null; openItems.clear(); saveUI();
   document.getElementById("panel").classList.remove("open");
   renderDashboardShell(); window.scrollTo({top:0});
 }
@@ -101,14 +101,14 @@ function openProject(id,view){
   flushAllChanges();          // leaving a project ends any edit in progress
   const p=PROJECTS.get(id); if(!p) return;
   if(unsubLog){ unsubLog(); unsubLog=null; }
-  CUR=id; S=normalize(clone(p)); LOG=[]; openItems.clear();
+  CUR=id; S=normalize(clone(p)); LOG=[]; LOG_TOTAL=null; openItems.clear();
   // Read-only is a property of this project and this user, not of the
   // workspace: the same person may own one review and only read another.
   RO = WORKSPACE_RO || !canWrite(S);
   document.body.classList.toggle("ro", RO);
   CAN_DELETE = !WORKSPACE_RO && canOwn(S);
   UI.view=view||"setup"; saveUI();
-  unsubLog=STORE.subscribeLog(id,l=>{ LOG=l||[]; if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
+  unsubLog=STORE.subscribeLog(id,(l,meta)=>{ LOG=l||[]; LOG_TOTAL=(meta && Number.isFinite(meta.total)) ? meta.total : null; if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
   renderProject(true);
 }
 function go(view){ flushAllChanges(); UI.view=view; saveUI(); renderRail(); renderMain(true); document.getElementById("panel").classList.remove("open"); }

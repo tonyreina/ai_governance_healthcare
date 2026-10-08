@@ -664,14 +664,26 @@ class DbStore{
 class LocalStore{
   constructor(){ this.k="chai-portfolio-local-v1"; this.d=this.load(); this.subs=[]; this.logSubs={}; }
   load(){ try{ return JSON.parse(localStorage.getItem(this.k)) || {projects:{},logs:{}}; }catch(e){ return {projects:{},logs:{}}; } }
-  persist(){ try{ localStorage.setItem(this.k,JSON.stringify(this.d)); }catch(e){} }
+  persist(){
+    try{ localStorage.setItem(this.k,JSON.stringify(this.d)); return true; }
+    catch(e){
+      // A full or blocked browser store used to fail here without a word, so the
+      // user kept working in a session that was not saving (#40). Say so.
+      if(typeof toast==="function") toast("Browser storage is full: this change could not be saved. Export your records.");
+      return false;
+    }
+  }
   emit(){ const list=Object.entries(this.d.projects).map(([id,v])=>({id,...clone(v)})); this.subs.forEach(f=>setTimeout(()=>f(list))); }
   subscribeAll(cb){ this.subs.push(cb); this.emit(); return ()=>{ this.subs=this.subs.filter(x=>x!==cb); }; }
   async create(id,data){ this.d.projects[id]=clone(data); this.persist(); this.emit(); }
   async update(id,patch){ if(!this.d.projects[id]) throw {code:"invalid_argument"}; deepMerge(this.d.projects[id],patch); this.persist(); this.emit(); }
   async remove(id){ delete this.d.projects[id]; delete this.d.logs[id]; this.persist(); this.emit(); }
-  async log(id,e){ const l=(this.d.logs[id]||(this.d.logs[id]=[])); l.unshift(e); this.d.logs[id]=l.slice(0,100); this.persist(); (this.logSubs[id]||[]).forEach(f=>setTimeout(()=>f(clone(this.d.logs[id])))); }
-  subscribeLog(id,cb){ (this.logSubs[id]||(this.logSubs[id]=[])).push(cb); setTimeout(()=>cb(clone(this.d.logs[id]||[]))); return ()=>{ this.logSubs[id]=(this.logSubs[id]||[]).filter(x=>x!==cb); }; }
+  /* Keeps every entry. It used to keep 100 and DELETE the rest, so in browser-only
+     mode entry 101 was not hidden from a view, it was gone (#40). The browser's
+     own quota is the limit, and persist() says when it is reached. */
+  async log(id,e){ const l=(this.d.logs[id]||(this.d.logs[id]=[])); l.unshift(e); this.persist(); this.emitLog(id); }
+  emitLog(id){ (this.logSubs[id]||[]).forEach(f=>setTimeout(()=>{ const l=clone(this.d.logs[id]||[]); f(l,{total:l.length}); })); }
+  subscribeLog(id,cb){ (this.logSubs[id]||(this.logSubs[id]=[])).push(cb); setTimeout(()=>{ const l=clone(this.d.logs[id]||[]); cb(l,{total:l.length}); }); return ()=>{ this.logSubs[id]=(this.logSubs[id]||[]).filter(x=>x!==cb); }; }
 }
 
 /* ApiStore: a self-hosted backend over REST + Server-Sent Events.
@@ -687,7 +699,7 @@ class LocalStore{
    the list. For a governance tool with tens of projects that is cheaper than
    reconciling partial state, and it cannot drift. */
 class ApiStore{
-  constructor(base){ this.base=base||"/api"; this.es=null; this.cbs=[]; this.cache=[]; }
+  constructor(base){ this.base=base||"/api"; this.es=null; this.cbs=[]; this.cache=[]; this.logDepth={}; this.logPulls={}; }
 
   async req(path,opts){
     const r = await fetch(this.base+path, Object.assign({
@@ -743,16 +755,35 @@ class ApiStore{
   purgeVersions(id){ return this.req(`/projects/${encodeURIComponent(id)}/versions`,{method:"DELETE"}); }
   log(id,e){ return this.req(`/projects/${encodeURIComponent(id)}/log`,{method:"POST",body:JSON.stringify(e)}); }
 
+  /* The log arrives as a WINDOW: the newest page, with the project's total in
+     X-Log-Total so a view or an export can say "newest 60 of 412". showOlderLog
+     asks for a deeper page, up to the server's cap (500); older than that is
+     reached through the API's `before` cursor, not through this view (#40). */
   subscribeLog(id,cb){
     let stop=false;
-    const pull = ()=> this.req(`/projects/${encodeURIComponent(id)}/log`)
-      .then(rows=>{ if(!stop && Array.isArray(rows)) cb(rows); }).catch(()=>{});
+    const pull = async ()=>{
+      try{
+        const depth = this.logDepth[id];
+        const r = await fetch(this.base+`/projects/${encodeURIComponent(id)}/log`+(depth?`?limit=${depth}`:""),
+          {headers:{"Content-Type":"application/json"}, credentials:"same-origin"});
+        if(!r.ok) return;
+        const rows = await r.json();
+        const total = parseInt(r.headers.get("X-Log-Total"),10);
+        if(!stop && Array.isArray(rows)) cb(rows,{total:Number.isFinite(total)?total:null});
+      }catch(e){}
+    };
+    this.logPulls[id] = pull;
     pull();
     // The log is append-only and low-traffic, so it rides the same change
     // signal as the project list rather than opening a second stream.
     const onChange = ()=> pull();
     this.cbs.push(onChange);
-    return ()=>{ stop=true; this.cbs = this.cbs.filter(f=>f!==onChange); };
+    return ()=>{ stop=true; delete this.logPulls[id]; this.cbs = this.cbs.filter(f=>f!==onChange); };
+  }
+  showOlderLog(id){
+    this.logDepth[id] = Math.min(500, (this.logDepth[id]||60) + 60);
+    const pull = this.logPulls[id];
+    return pull ? pull() : Promise.resolve();
   }
 }
 
@@ -849,6 +880,13 @@ const MODE_LABEL = Object.freeze({
   [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
   [Mode.ARTIFACT]: Object.freeze({text:"Claude artifact",   cls:"artifact"}),
 });
+/* `data-act` values for buttons. The older actions are still bare strings in
+   70-events.js (baselined in scripts/enum_baseline.json); a NEW action goes here,
+   so a typo is `Act.LOG_OLDR` -> undefined -> a failing test, not a comparison
+   that is quietly false forever. */
+const Act = Object.freeze({
+  LOG_OLDER: "log-older",   // load a deeper page of the audit history
+});
 let STORE=null, MODE=Mode.CONNECTING, RO=false, CAN_DELETE=true, USER=null;
 // Set when the whole workspace is view-only (an artifact shared read-only).
 // Outranks any per-project role: it is a property of how you got here.
@@ -858,6 +896,12 @@ let PROJECTS=new Map(), LOADED=false;
 let CUR=null;              // open project id
 let S=null;                // working copy of open project
 let LOG=[], unsubLog=null;
+/* How many entries the project has in all, when the store says. LOG is a WINDOW
+   onto the history (the newest page), never the whole of it, and an export or a
+   view that renders it must say so: a PDF filed as the record of a two-year
+   review used to show the newest 60 entries and nothing about the rest (#40).
+   null means the store cannot tell. */
+let LOG_TOTAL=null;
 const openItems=new Set();
 const pending={}, timers={}, flushing={};
 let UI={view:"setup", project:null, filter:"all", q:""};
@@ -1258,6 +1302,16 @@ function diffDocs(before, after, prefix = "", out = []) {
   return out;
 }
 
+/* LOG is the newest page of the history, not the history. Say so wherever it is
+   shown or exported, so a view of 60 entries is never taken for all of them (#40).
+   Empty when LOG is the whole of it. */
+const LOG_PAGE = 60;
+function logWindowNote(){
+  if(LOG_TOTAL!==null && LOG_TOTAL>LOG.length) return `Showing the newest ${LOG.length} of ${LOG_TOTAL} entries.`;
+  if(LOG_TOTAL===null && LOG.length>=LOG_PAGE) return `Showing the newest ${LOG.length} entries; older entries may exist.`;
+  return "";
+}
+
 /* ============================================================
    Core: DOM helpers
    Form fields, focus preservation and small formatters. No
@@ -1544,10 +1598,22 @@ function changelogHTML(){
 
   return `<p class="eyebrow">Audit trail</p><h1>Changelog</h1>
   <p class="lede">Every change to this record, with who made it and when.
-  ${LOG.length>=60?"The newest 60 are shown; older entries stay in the store.":""}</p>
+  ${logWindowNote()?`<br><strong>${esc(logWindowNote())}</strong>`:""}</p>
+  ${olderLogControl()}
   ${rows}
   ${fingerprintHTML(now)}
   ${pager()}`;
+}
+
+/* Older entries, where the store can fetch them. Past the server's page cap the
+   rest is reached through the API, and this says so rather than going quiet. */
+function olderLogControl(){
+  if(LOG_TOTAL===null || LOG_TOTAL<=LOG.length) return "";
+  if(STORE && typeof STORE.showOlderLog==="function" && LOG.length<500)
+    return `<p><button class="btn" data-act="${Act.LOG_OLDER}">Show older entries</button></p>`;
+  if(STORE && typeof STORE.showOlderLog==="function")
+    return `<p class="small" style="color:var(--muted)">This view shows at most 500 entries. The full history is available from the API: <code>GET /api/projects/{id}/log?before=&lt;X-Log-Next&gt;</code>.</p>`;
+  return "";
 }
 
 /* The record's current fingerprint, with the caveat attached. A hash
@@ -1989,6 +2055,7 @@ function reportBody(names){
     <h2>Applied model card</h2>
     <div style="max-width:560px">${labelHTML()}</div>
     <h2>Sign-off history</h2>
+    ${logWindowNote()?`<p style="color:var(--muted);font-size:13px"><strong>${esc(logWindowNote())}</strong></p>`:""}
     ${LOG.length?`<div class="r-wrap"><table class="rtable"><tbody>${LOG.map(e=>`<tr><td style="width:120px">${esc(fmtDay((e.at||"").slice(0,10)))}</td><td>${esc(e.text)}</td><td>${nm(e.by)}</td></tr>`).join("")}</tbody></table></div>`:`<p>No recorded events.</p>`}
     <h2>Appendix: full checklist</h2>
     ${STAGES.map(s=>`<h3 style="font-size:15px;margin:18px 0 6px">${s.n}. ${esc(s.title)}</h3><div class="r-wrap"><table class="rtable"><tbody>
@@ -2456,7 +2523,7 @@ function goHome(){
   flushAllChanges();
   if(CUR && pending[CUR]) flush(CUR);
   if(unsubLog){ unsubLog(); unsubLog=null; }
-  CUR=null; S=null; LOG=[]; openItems.clear(); saveUI();
+  CUR=null; S=null; LOG=[]; LOG_TOTAL=null; openItems.clear(); saveUI();
   document.getElementById("panel").classList.remove("open");
   renderDashboardShell(); window.scrollTo({top:0});
 }
@@ -2464,14 +2531,14 @@ function openProject(id,view){
   flushAllChanges();          // leaving a project ends any edit in progress
   const p=PROJECTS.get(id); if(!p) return;
   if(unsubLog){ unsubLog(); unsubLog=null; }
-  CUR=id; S=normalize(clone(p)); LOG=[]; openItems.clear();
+  CUR=id; S=normalize(clone(p)); LOG=[]; LOG_TOTAL=null; openItems.clear();
   // Read-only is a property of this project and this user, not of the
   // workspace: the same person may own one review and only read another.
   RO = WORKSPACE_RO || !canWrite(S);
   document.body.classList.toggle("ro", RO);
   CAN_DELETE = !WORKSPACE_RO && canOwn(S);
   UI.view=view||"setup"; saveUI();
-  unsubLog=STORE.subscribeLog(id,l=>{ LOG=l||[]; if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
+  unsubLog=STORE.subscribeLog(id,(l,meta)=>{ LOG=l||[]; LOG_TOTAL=(meta && Number.isFinite(meta.total)) ? meta.total : null; if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
   renderProject(true);
 }
 function go(view){ flushAllChanges(); UI.view=view; saveUI(); renderRail(); renderMain(true); document.getElementById("panel").classList.remove("open"); }
@@ -2665,7 +2732,7 @@ function exportMD(){
   L.push("","## Applied model card","");
   CARD.forEach(sec=>{L.push(`### ${sec.sec}`,""); sec.fields.forEach(f=>L.push(`- **${f[1]}:** ${line(cardValOf(S,f[0]))||"_Not provided_"}`)); L.push("");
     if(sec.sec==="Trust ingredients"){ L.push("### Key metrics",""); if(S.metrics.length){L.push("| Category | Metric | Value | 95% CI | Population |","|---|---|---|---|---|"); S.metrics.forEach(x=>L.push(`| ${x.cat} | ${line(x.name)} | ${line(x.value)} | ${line(x.ci)} | ${line(x.pop)} |`));} else L.push("_None entered_"); L.push("");}});
-  L.push("## Sign-off history",""); if(LOG.length) LOG.forEach(e=>L.push(`- ${(e.at||"").slice(0,10)}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push("None."); L.push("");
+  L.push("## Sign-off history",""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${(e.at||"").slice(0,10)}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push("None."); L.push("");
   L.push("## Appendix: full checklist","");
   STAGES.forEach(s=>{L.push(`### ${s.n}. ${s.title}`,""); s.items.forEach(it=>{const d=S.items[it.id]||{}; L.push(`- [${it.p}] ${it.text}: **${st(d.status)}**${d.evidence?` (${line(d.evidence)})`:""}`);}); L.push("");});
   L.push("---","_Structured around the CHAI six-stage lifecycle and Applied Model Card. Checklist wording is paraphrased; this is an internal governance record, not a CHAI certification._");
@@ -3170,6 +3237,7 @@ document.addEventListener("click",async e=>{
   if(a==="import"){ document.getElementById("importFile").click(); return; }
   if(a==="dl-csv"){ download(`ai-governance-portfolio-${TODAY()}.csv`, exportCSV()); return; }
   if(!S) return;
+  if(a===Act.LOG_OLDER){ if(STORE && STORE.showOlderLog) STORE.showOlderLog(CUR); return; }
   if(a==="claim"){
     if(!ME.id){ toast("No signed-in user to claim ownership"); return; }
     S.access=accessPatch(S,ME.id,"owner"); queuePatch(CUR,Object.assign({access:S.access},stamp()));

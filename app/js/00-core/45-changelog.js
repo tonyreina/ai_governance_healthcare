@@ -125,3 +125,13 @@ function diffDocs(before, after, prefix = "", out = []) {
   }
   return out;
 }
+
+/* LOG is the newest page of the history, not the history. Say so wherever it is
+   shown or exported, so a view of 60 entries is never taken for all of them (#40).
+   Empty when LOG is the whole of it. */
+const LOG_PAGE = 60;
+function logWindowNote(){
+  if(LOG_TOTAL!==null && LOG_TOTAL>LOG.length) return `Showing the newest ${LOG.length} of ${LOG_TOTAL} entries.`;
+  if(LOG_TOTAL===null && LOG.length>=LOG_PAGE) return `Showing the newest ${LOG.length} entries; older entries may exist.`;
+  return "";
+}

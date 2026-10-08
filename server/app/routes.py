@@ -23,11 +23,20 @@ import hashlib
 import json as _json
 import logging
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from fastapi.responses import StreamingResponse
 
 from .access import (
@@ -814,24 +823,84 @@ async def purge_versions(
 # --- audit log --------------------------------------------------------------
 
 
+# The largest page a caller may ask for. A project's whole history is paged, not
+# fetched in one go, so no request can make the server build an unbounded list.
+LOG_MAX_PAGE = 500
+
+
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+
+def _log_cursor(at: datetime, seq: int) -> str:
+    """``<microseconds since epoch>.<seq>``: opaque, exact, and safe in a URL.
+
+    An ISO timestamp as a cursor carries ``+`` and ``:``, and a query string turns
+    ``+`` into a space, so a client that forgot to encode it broke silently.
+    """
+    return f"{(at - _EPOCH) // timedelta(microseconds=1)}.{seq}"
+
+
+def _parse_log_cursor(raw: str | None) -> tuple[datetime | None, int | None]:
+    """An ``X-Log-Next`` cursor, or (None, None) for the first page."""
+    if raw is None:
+        return None, None
+    try:
+        micros, dot, seq = raw.partition(".")
+        if not dot:
+            raise ValueError("no separator")
+        return _EPOCH + timedelta(microseconds=int(micros)), int(seq)
+    except (ValueError, OverflowError) as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "before must be an X-Log-Next cursor from a previous page.",
+        ) from exc
+
+
 @router.get(
     "/projects/{project_id}/log",
     response_model=list[LogEntryOut],
     tags=["audit log"],
 )
 async def read_log(
+    response: Response,
     project_id: str = ProjectId,
+    limit: int | None = Query(
+        default=None,
+        ge=1,
+        description=(
+            "Entries per page. Default is the server's page size; "
+            f"capped at {LOG_MAX_PAGE}."
+        ),
+    ),
+    before: str | None = Query(
+        default=None,
+        description="Cursor from a previous page's X-Log-Next: only older entries.",
+    ),
     db: Database = Depends(get_db),
     settings: Settings = Depends(get_settings),
     identity: Identity = Depends(get_identity),
 ) -> list[LogEntryOut]:
-    """The newest entries, descending by ``at`` -- what ``subscribeLog`` shows.
+    """One page of the audit log, newest first -- what ``subscribeLog`` shows.
+
+    The default page is the newest ``LOG_PAGE_SIZE`` (60). It used to be the only
+    page: there was no way to ask for anything older, so entry 61 onward was
+    unreachable through the API and every export carried the window silently
+    (#40). Now:
+
+    * ``X-Log-Total`` is the number of entries the project has, so a caller can
+      say "showing 60 of 412" instead of passing a window off as the history;
+    * ``X-Log-Next`` is a cursor, present only when there is more. Pass it as
+      ``?before=`` for the next page. It is ``(at, seq)``, which the existing
+      index ``(project_id, at DESC, seq DESC)`` serves exactly, and ``seq`` breaks
+      ties so two entries in the same microsecond neither repeat nor vanish.
 
     A missing project returns an empty list rather than 404. The app subscribes
     to a log and deletes a project from two different code paths, and a 404
     racing a delete would surface as an error toast for something the user just
     did on purpose.
     """
+    page = min(limit or settings.log_page_size, LOG_MAX_PAGE)
+    cursor_at, cursor_seq = _parse_log_cursor(before)
     async with db.acquire() as conn:
         # The log is the project's history; seeing it is seeing the project.
         # A missing project still returns an empty list rather than 404 -- see
@@ -849,14 +918,25 @@ async def read_log(
             )
         rows = await conn.fetch(
             """
-            SELECT entry, purged_at FROM project_log
+            SELECT seq, at, entry, purged_at FROM project_log
              WHERE project_id = $1
+               AND ($2::timestamptz IS NULL OR (at, seq) < ($2, $3))
              ORDER BY at DESC, seq DESC
-             LIMIT $2
+             LIMIT $4
             """,
             project_id,
-            settings.log_page_size,
+            cursor_at,
+            cursor_seq,
+            page + 1,  # one extra, to know whether there is another page
         )
+        total = await conn.fetchval(
+            "SELECT count(*) FROM project_log WHERE project_id = $1", project_id
+        )
+    response.headers["X-Log-Total"] = str(total)
+    if len(rows) > page:
+        rows = rows[:page]
+        last = rows[-1]
+        response.headers["X-Log-Next"] = _log_cursor(last["at"], last["seq"])
     # `purged` comes from a column the client cannot set, never from the entry.
     return [
         LogEntryOut(

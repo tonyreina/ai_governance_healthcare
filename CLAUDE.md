@@ -102,6 +102,10 @@ you do not have (Docker, a database), say that it was not run rather than
 implying it passed. CI will run all of them; do not use that as a reason not to
 run them first.
 
+`main` is protected: a pull request cannot merge until `tests passed`, and nobody
+can bypass it. If a check is red, fix the cause. Do not try `gh pr merge --admin`,
+and do not weaken or skip a check to get green (see "A skip is a failure").
+
 ### Where a test is not needed
 
 Say so in the change, with the reason: a documentation-only edit, a generated

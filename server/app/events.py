@@ -162,7 +162,11 @@ class EventBroker:
         channel: str = "chai_events",
         queue_size: int = 256,
         max_streams_per_user: int = 8,
+        retry_seconds: float = 5.0,
+        max_retry_seconds: float = 60.0,
     ) -> None:
+        self._retry_seconds = retry_seconds
+        self._max_retry_seconds = max_retry_seconds
         self._db = db
         self._channel = channel
         self._queue_size = queue_size
@@ -189,12 +193,16 @@ class EventBroker:
         except (OSError, asyncpg.PostgresError) as exc:
             self.local_only = True
             log.error(
-                "could not LISTEN on %r (%s). Falling back to in-process events: "
-                "changes will NOT reach other replicas.",
+                "could not LISTEN on %r (%s). Falling back to in-process events "
+                "for now: changes will NOT reach other replicas until this "
+                "succeeds. Retrying.",
                 self._channel,
                 exc,
             )
-            return
+            # No `return`. The supervisor is what retries, and it used to be
+            # skipped here, so a refusal at boot -- the likeliest moment, since
+            # the API starts the instant the database reports healthy -- left
+            # the process degraded for its whole life (#43).
         self._supervisor = asyncio.create_task(
             self._supervise(), name="chai-events-supervisor"
         )
@@ -211,21 +219,33 @@ class EventBroker:
 
         A managed Postgres failover closes every session. Without this the SSE
         streams stay open and silently stop delivering, which is the worst of
-        both worlds.
+        both worlds. It also retries a LISTEN that never succeeded at startup.
         """
+        delay = self._retry_seconds
         while not self._stopping:
-            await asyncio.sleep(5.0)
+            await asyncio.sleep(delay)
             conn = self._conn
             if conn is not None and not conn.is_closed():
+                delay = self._retry_seconds
                 continue
             if self._stopping:
                 return
-            log.warning("listener connection lost; reconnecting")
+            log.warning(
+                "listener connection %s; reconnecting",
+                ("was never established" if conn is None else "lost"),
+            )
             try:
                 await self._open_listener()
             except (OSError, asyncpg.PostgresError) as exc:
-                log.warning("listener reconnect failed: %s", exc)
+                # Back off, to a ceiling: behind a transaction-pooling proxy
+                # (PgBouncer) LISTEN can never work, and retrying that every
+                # few seconds forever is pointless noise.
+                delay = min(delay * 2, self._max_retry_seconds)
+                log.warning(
+                    "listener reconnect failed: %s (next try in %.0fs)", exc, delay
+                )
                 continue
+            delay = self._retry_seconds
             # Anything that happened while we were disconnected was missed.
             self._fanout(Event(RESYNC, None, _now()))
 

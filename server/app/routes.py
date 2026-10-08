@@ -52,6 +52,7 @@ from .events import (
 from .merge import MAX_DEPTH as MERGE_MAX_DEPTH
 from .merge import TooDeep, merged
 from .models import (
+    EventDelivery,
     HealthOut,
     HealthStatus,
     LogEntryIn,
@@ -131,6 +132,7 @@ async def health(
     response: Response,
     settings: Settings = Depends(get_settings),
     db: Database = Depends(get_db),
+    broker: EventBroker = Depends(get_broker),
 ) -> HealthOut:
     """Liveness and readiness. **Deliberately unauthenticated.**
 
@@ -156,6 +158,7 @@ async def health(
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return HealthOut(
         status=HealthStatus.OK if database_up else HealthStatus.UNAVAILABLE,
+        events=EventDelivery.LOCAL_ONLY if broker.local_only else EventDelivery.LIVE,
         version=settings.version,
         database="up" if database_up else "down",
         auth_mode=settings.auth_mode,

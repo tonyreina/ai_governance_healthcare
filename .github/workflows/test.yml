@@ -149,6 +149,9 @@ jobs:
       - name: audit log writes
         if: ${{ !cancelled() }}
         run: pixi run test-audit
+      - name: free-text fields do not feed the browser's spellchecker
+        if: ${{ !cancelled() }}
+        run: pixi run test-text-fields
       - name: CHAI metric picker
         if: ${{ !cancelled() }}
         run: pixi run test-te

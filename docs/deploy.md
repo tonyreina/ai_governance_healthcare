@@ -85,6 +85,21 @@ things break it on managed platforms:
   browser subscribed on replica B. Use PostgreSQL `LISTEN`/`NOTIFY` as
   the fan-out bus, or pin the service to a single replica until you do.
 
+### Browser spellcheck on workstations
+
+What a person types into the dashboard can leave the workstation before it is
+saved, if the browser's spellchecker is cloud-backed. Chrome's *Enhanced spell
+check* sends typed text to Google, and some Safari and macOS settings route text
+through Apple. Evidence and rationale fields are where a patient identifier gets
+pasted by mistake, and none of this application's controls apply before a save.
+
+The dashboard turns spellcheck and form history off on its multi-line fields, but
+it cannot see or set the browser's own policy. **Disable cloud-backed spellcheck
+by policy on workstations that use this tool** (Chrome: the
+`SpellCheckServiceEnabled` policy set to false; Edge: `SpellcheckEnabled`, or
+the equivalent in your management tooling). That is the control that can be
+enforced, and it also covers fields this application does not control.
+
 ## The auth model: reverse-proxy header trust
 
 Each cloud front door does the same three things: it intercepts the

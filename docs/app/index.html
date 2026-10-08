@@ -1263,12 +1263,21 @@ function diffDocs(before, after, prefix = "", out = []) {
    Form fields, focus preservation and small formatters. No
    knowledge of any framework.
    ============================================================ */
+/* Attributes for the multi-line fields people write evidence, rationale and
+   risk notes in. A textarea defaults to spellcheck on, and a cloud-backed
+   spellchecker (Chrome's "Enhanced spell check", some Safari and macOS settings)
+   sends what is typed to a third party as it is typed -- before it is saved,
+   and before any server-side control can apply. These fields are where a
+   patient identifier gets pasted by mistake (the purge path exists for that),
+   so they opt out, and out of the browser's form history too. A test sweeps the
+   rendered DOM so a textarea added later is held to the same rule (#59). */
+const NO_BROWSER_ASSIST = 'spellcheck="false" autocomplete="off"';
 const get = (path)=> path.split(".").reduce((o,k)=>o==null?undefined:o[k], S);
 function field(path,label,hint,long,opts,kind){
   const v=esc(get(path)||""); const id="f_"+path.replace(/\./g,"_");
   let input;
   if(opts) input=`<select id="${id}" data-bind="${path}"><option value="">Choose…</option>${opts.map(o=>`<option${get(path)===o?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
-  else if(long) input=`<textarea id="${id}" data-bind="${path}" rows="3">${v}</textarea>`;
+  else if(long) input=`<textarea id="${id}" data-bind="${path}" rows="3" ${NO_BROWSER_ASSIST}>${v}</textarea>`;
   // `date` gives the browser's own picker and its validation. Asking someone
   // to type YYYY-MM-DD invites 03/04/2026, which is two different dates
   // depending on where the reader is -- not a good property for the date a
@@ -1779,7 +1788,7 @@ function ciHTML(it){
       <div class="seg" role="group" aria-label="Status">${Object.entries(STATUS).map(([k,l])=>`<button data-set="${it.id}" data-s="${k}" aria-pressed="${st===k}">${l}</button>`).join("")}</div>
     </div>
     <div class="ci-detail">
-      <div><label for="ev_${it.id}">Evidence or notes</label><textarea id="ev_${it.id}" rows="2" data-bind="items.${it.id}.evidence">${esc(d.evidence||"")}</textarea></div>
+      <div><label for="ev_${it.id}">Evidence or notes</label><textarea id="ev_${it.id}" rows="2" data-bind="items.${it.id}.evidence" ${NO_BROWSER_ASSIST}>${esc(d.evidence||"")}</textarea></div>
       <div><label for="ow_${it.id}">Owner</label><input type="text" id="ow_${it.id}" data-bind="items.${it.id}.owner" value="${esc(d.owner||"")}"></div>
       <div><label for="du_${it.id}">Due</label><input type="date" id="du_${it.id}" data-bind="items.${it.id}.due" value="${esc(d.due||"")}"></div>
     </div>
@@ -2174,10 +2183,10 @@ function opticaItemHTML(it) {
         `<button data-set="${esc(it.key)}" data-store="optica.answers" data-s="${k}" aria-pressed="${st === k}">${l}</button>`).join("")}</div>
     </div>
     <div class="ci-detail">
-      <div><label for="oev_${esc(it.key)}">Evidence or notes</label><textarea id="oev_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.evidence">${esc(d.evidence || "")}</textarea></div>
+      <div><label for="oev_${esc(it.key)}">Evidence or notes</label><textarea id="oev_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.evidence" ${NO_BROWSER_ASSIST}>${esc(d.evidence || "")}</textarea></div>
       <div><label for="oow_${esc(it.key)}">Owner</label><input type="text" id="oow_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.owner" value="${esc(d.owner || "")}"></div>
       <div><label for="odu_${esc(it.key)}">Due</label><input type="date" id="odu_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.due" value="${esc(d.due || "")}"></div>
-      ${st === "declined" ? `<div class="wide"><label for="odr_${esc(it.key)}">Why this was declined</label><textarea id="odr_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.declineReason">${esc(d.declineReason || "")}</textarea></div>` : ""}
+      ${st === "declined" ? `<div class="wide"><label for="odr_${esc(it.key)}">Why this was declined</label><textarea id="odr_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.declineReason" ${NO_BROWSER_ASSIST}>${esc(d.declineReason || "")}</textarea></div>` : ""}
     </div>
   </li>`;
 }

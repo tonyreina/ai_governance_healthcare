@@ -598,3 +598,19 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   detect it being switched off. It was verified by hand, by trying to merge a
   throwaway PR with the check pending and then red; both were refused. Re-check it
   with `gh api repos/OWNER/REPO/rules/branches/main`.
+
+### C-49 The dashboard's multi-line fields do not feed the browser's spellchecker
+
+- **Claim:** The free-text fields turn spellcheck and form history off, so what is
+  typed into them is not sent to a cloud spellchecker by the dashboard's own
+  markup.
+- **Asserted in:** `docs/deploy.md` — "The dashboard turns spellcheck and form
+  history off on its multi-line fields"
+- **Status:** partial
+- **Gap:** Single-line inputs (owners, metric names, dates) keep the browser's
+  default, on purpose, and a browser or extension may ignore the attribute. The
+  deployment guide therefore also tells operators to disable cloud-backed
+  spellcheck by policy, which nothing here can enforce. #59
+- **Enforced by:**
+  `tests/test_text_fields.py::every editable textarea opts out of spellcheck and form history`
+  `tests/test_text_fields.py::a field with the browser defaults is noticed`

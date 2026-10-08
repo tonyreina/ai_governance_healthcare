@@ -27,7 +27,7 @@ function ciHTML(it){
       <div class="seg" role="group" aria-label="Status">${Object.entries(STATUS).map(([k,l])=>`<button data-set="${it.id}" data-s="${k}" aria-pressed="${st===k}">${l}</button>`).join("")}</div>
     </div>
     <div class="ci-detail">
-      <div><label for="ev_${it.id}">Evidence or notes</label><textarea id="ev_${it.id}" rows="2" data-bind="items.${it.id}.evidence">${esc(d.evidence||"")}</textarea></div>
+      <div><label for="ev_${it.id}">Evidence or notes</label><textarea id="ev_${it.id}" rows="2" data-bind="items.${it.id}.evidence" ${NO_BROWSER_ASSIST}>${esc(d.evidence||"")}</textarea></div>
       <div><label for="ow_${it.id}">Owner</label><input type="text" id="ow_${it.id}" data-bind="items.${it.id}.owner" value="${esc(d.owner||"")}"></div>
       <div><label for="du_${it.id}">Due</label><input type="date" id="du_${it.id}" data-bind="items.${it.id}.due" value="${esc(d.due||"")}"></div>
     </div>

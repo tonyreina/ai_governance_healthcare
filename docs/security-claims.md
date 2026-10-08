@@ -876,3 +876,16 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_doctor.py::the revision count and size are reported`
   `tests/test_doctor.py::the read trail's size is reported too, with why it grows`
   `tests/test_doctor.py::it says these tables never shrink by themselves`
+
+### C-68 The deployment guide makes no legal claim about a region
+
+- **Claim:** The deployment guide leaves the region to the reader and does not say
+  that any region meets a legal requirement.
+- **Asserted in:** `docs/deploy.md` — "This guide is not legal advice"
+- **Status:** partial
+- **Gap:** The test checks that the section exists, names no region as adequate or
+  compliant, and that no command example names a region. It cannot tell whether
+  the provider region names are current; they are marked unverified. #58
+- **Enforced by:**
+  `tests/test_deploy_residency.py::no command example names a concrete region`
+  `tests/test_deploy_residency.py::the Data residency section is complete`

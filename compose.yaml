@@ -140,12 +140,21 @@ services:
       # the API crashed on startup reading the password as a port number. The
       # documented generator (`openssl rand -base64 32`) produces a "/" about half
       # the time. The API assembles the URL itself, with the password encoded.
-      # Set DATABASE_URL instead to point at a managed instance.
+      # Set APP_DATABASE_URL instead to point at a managed instance.
+      #
+      # The API gets the RESTRICTED role's credential and NOT the owner's (#48).
+      # The owner can disable the append-only triggers that the audit log and the
+      # version history depend on, and the API is the process an attacker would
+      # compromise, so it must not hold that credential. It lives in the one-shot
+      # `migrate` service below, which creates the schema and this role.
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
-      POSTGRES_USER: ${POSTGRES_USER:-chai}
       POSTGRES_DB: ${POSTGRES_DB:-chai}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (cp .env.example .env)}
+      APP_POSTGRES_USER: ${APP_POSTGRES_USER:-chai_app}
+      APP_POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:-}
+      APP_DATABASE_URL: ${APP_DATABASE_URL:-}
+      # A restricted role cannot create tables; `migrate` does it, first.
+      RUN_MIGRATIONS: "false"
       API_PORT: "8000"
 
       # Which headers carry identity. The API reads these and NOTHING else --
@@ -188,12 +197,57 @@ services:
         # for a container that has been created. Without `condition:
         # service_healthy` the API races initdb and crash-loops on first boot.
         condition: service_healthy
+      migrate:
+        # The schema and the role this API connects as exist before it starts.
+        condition: service_completed_successfully
 
     # No healthcheck here on purpose: server/Dockerfile defines a HEALTHCHECK
     # that already knows which port the app bound (PORT, then API_PORT, then
     # 8000) and uses the interpreter that is in the image. Repeating it here
     # would be a second definition to keep in sync, and the two would drift.
     # `docker compose ps` shows the image's result either way.
+
+  # ---------------------------------------------------------------------------
+  # The schema, and the restricted role the API serves as (#48).
+  #
+  # The ONLY service that holds the database owner's credential. It applies the
+  # migrations, creates or updates the serving role from APP_POSTGRES_PASSWORD
+  # and grants it exactly what app/roles.py lists, then exits. Idempotent, so it
+  # runs on every `up`, which also makes rotating APP_POSTGRES_PASSWORD a restart.
+  #
+  # On `data` only: it never shares a network with the internet-facing side, and
+  # nothing is published. Same image as the API, a different command.
+  # ---------------------------------------------------------------------------
+  migrate:
+    image: ${API_IMAGE:-chai-governance-api:local}
+    build:
+      context: ./server
+    command: ["python", "-m", "app.migrate"]
+    restart: "no"
+    networks:
+      - data
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-chai}
+      POSTGRES_DB: ${POSTGRES_DB:-chai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (cp .env.example .env)}
+      DATABASE_URL: ${DATABASE_URL:-}
+      APP_POSTGRES_USER: ${APP_POSTGRES_USER:-chai_app}
+      APP_POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 256m
+    cpus: 1
+    pids_limit: 64
 
   # ---------------------------------------------------------------------------
   # Caddy. The only service with a published port.

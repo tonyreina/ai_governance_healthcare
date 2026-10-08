@@ -26,7 +26,7 @@ import asyncpg
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from .conftest import TEST_EMAIL, requires_db
+from .conftest import TEST_EMAIL, owner_connection, requires_db
 
 SECRET = "MRN-00123456"
 REDACTED = "[content purged]"
@@ -336,7 +336,7 @@ class TestDeletionLeavesATombstone:
     async def test_it_cannot_be_changed_or_removed_by_hand(self, client: AsyncClient):
         await client.post("/api/projects/x3", json={"meta": {"solution": "Gone"}})
         await client.delete("/api/projects/x3")
-        async with client.app.state.db.acquire() as conn:
+        async with owner_connection() as conn:
             for statement in (
                 "UPDATE project_deletion SET deleted_by = 'someone-else' WHERE project_id = 'x3'",
                 "DELETE FROM project_deletion WHERE project_id = 'x3'",

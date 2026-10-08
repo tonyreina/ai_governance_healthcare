@@ -26,7 +26,7 @@ from app.events import Event
 from app.main import create_app
 from httpx import AsyncClient
 
-from .conftest import TEST_EMAIL, TEST_HEADERS, requires_db
+from .conftest import TEST_EMAIL, TEST_HEADERS, requires_db, reset_database
 
 pytestmark = [requires_db, pytest.mark.db]
 
@@ -51,8 +51,7 @@ async def base_url(settings: Settings) -> AsyncIterator[str]:
         pytest.fail("uvicorn did not start")
 
     sock: socket.socket = server.servers[0].sockets[0]
-    async with app.state.db.acquire() as conn:
-        await conn.execute("TRUNCATE project_log, projects RESTART IDENTITY CASCADE")
+    await reset_database()
 
     try:
         yield f"http://127.0.0.1:{sock.getsockname()[1]}"
@@ -297,7 +296,7 @@ class TestStreamsAreFiltered:
         owner, so there is no way to reach this state through the API. It is
         the state of every project created before access control existed.
         """
-        conn = await asyncpg.connect(settings.database_url)
+        conn = await asyncpg.connect(settings.serving_database_url)
         try:
             await conn.set_type_codec(
                 "jsonb",

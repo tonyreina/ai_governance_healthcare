@@ -567,6 +567,35 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   entries written between pages shift it.
 - Source: #40; R-34.
 
+### D-37 Two roles, with the owner's credential in a one-shot job
+
+- Status: Accepted
+- `python -m app.migrate` (compose's `migrate` service) holds the owner's
+  credential, applies migrations and creates the restricted role; the API gets only
+  the restricted role's. `APP_POSTGRES_PASSWORD` is required by `make up` and must
+  differ from the owner's.
+- Why a separate job and not "migrate at boot, then switch roles": a process that
+  starts with the owner's credential still has it in its environment and memory.
+  The compromise being defended against is exactly an attacker in the API
+  process.
+- Why not derive the restricted password from the owner's (an HMAC), which would
+  need no new setting: the API would have to be given the owner's password to
+  compute it, which is the thing being removed.
+- Why `GRANTS` is explicit and nothing is inherited: a new table must name what
+  the API may do to it. A test fails if one does not. `project_log` gets UPDATE
+  (the purge redacts in place; its trigger permits only that) and no DELETE,
+  because a project's log is removed by `ON DELETE CASCADE`, which runs with the
+  table owner's rights.
+- Found by running the whole suite as the restricted role: four tests exercised
+  the triggers by issuing statements the restricted role is now refused earlier,
+  by a privilege check. They connect as the owner, since the triggers bind the
+  owner too; `test_roles.py` covers the role being refused.
+- Rejected: row-level security or moving the merge into the database (the
+  issue's own non-goals).
+- Rejected: leaving it to the operator to grant by hand. That is the configuration
+  nobody tests.
+- Source: #48; R-35.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

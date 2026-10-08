@@ -214,6 +214,33 @@ honest answer and is a gap worth closing; see R-19.
   exactly once, in order) and `tests/test_log_window.py` (the disclosure in each
   export, the deeper page, the cap, `LocalStore`).
 
+### R-35 The API serves as a role that cannot undo the append-only triggers
+
+- Status: Active
+- The append-only guarantees (R-10, R-12, R-27) are triggers, and a table's owner
+  or a superuser can disable them in one statement. So the API serves as a
+  restricted role (`app/roles.py`): the project tables' DML it needs, no
+  `TRUNCATE`, no DDL, no trigger control, no access to `schema_migrations`. The
+  owner's credential lives in the one-shot `migrate` job and is **not** in the
+  API's environment. `GRANTS` lists every table, and a test fails if one exists
+  that it does not name.
+- A deployment with no restricted role still works, serves as the owner, logs a
+  warning at startup, reports `"db_role":"owner"` on `/api/health`, and fails
+  `make doctor`. It is weaker, not broken.
+- History: the API ran migrations and served traffic as the table owner, a
+  superuser in compose, so the triggers constrained the application's bugs and
+  not the application (#48).
+- Not covered: a PostgreSQL superuser bypasses everything; guard that password.
+  The cloud job definitions in `docs/deploy.md` have not been run against a real
+  managed database.
+- Source: #48; DECISIONS D-37.
+- Enforced by: `server/tests/test_roles.py` (the statements it is refused, its
+  exact privileges, idempotence and rotation), the whole `server/` suite run as
+  the restricted role (`TEST_APP_ROLE=1`, in CI), `tests/test_compose_isolation.py`
+  (the API holds no owner credential), `tests/test_stack.py` (the running API
+  cannot disable a trigger with the credential it holds), `tests/test_preflight.py`
+  and `tests/test_doctor.py`.
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active
@@ -255,7 +282,7 @@ honest answer and is a gap worth closing; see R-19.
   server-side.
 - Source: `server/migrations/001_init.sql`, `003_version_access.sql`.
 - Enforced by: database triggers; `server/tests/test_versions.py`. The triggers
-  do not bind the application's own role (#48).
+  bind a role only if it cannot disable them, which is R-35.
 
 ### R-11 History outlives the record it describes
 

@@ -658,3 +658,25 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_denial_log.py::test_a_reader_trying_to_write_is_logged`
   `server/tests/test_denial_log.py::test_the_line_does_not_leak_the_document`
   `server/tests/test_denial_log.py::test_permitted_requests_log_no_denial`
+
+### C-53 The API cannot disable the append-only triggers
+
+- **Claim:** The API serves as a restricted database role that cannot disable a
+  trigger, truncate a table, alter the schema or hold the owner's credential, so
+  the audit log and history are append-only against the application and not only
+  against its bugs.
+- **Asserted in:** `docs/self-hosting.md` — "it **cannot** disable or drop a
+  trigger, truncate, alter a table or create one"
+- **Status:** partial
+- **Gap:** A PostgreSQL superuser bypasses it, and the owner's password is still
+  in `.env` on the host and in the `migrate` job. A deployment that does not set
+  `APP_POSTGRES_PASSWORD` serves as the owner (reported on `/api/health`, logged,
+  and failed by `make doctor`). The cloud job definitions have not been run against
+  a real managed database. #48
+- **Enforced by:**
+  `server/tests/test_roles.py::test_it_is_refused_every_statement_that_removes_a_guarantee`
+  `server/tests/test_roles.py::test_its_table_privileges_are_exactly_the_documented_ones`
+  `server/tests/test_roles.py::test_every_table_has_a_decided_grant`
+  `tests/test_compose_isolation.py::the api being given the owner's password`
+  `tests/test_stack.py::using the credential the API holds, the triggers cannot be disabled`
+  `tests/test_stack.py::the API container holds no owner credential`

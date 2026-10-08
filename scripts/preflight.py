@@ -119,6 +119,38 @@ def check(env: dict[str, str]) -> list[str]:
                 "      openssl rand -base64 32"
             )
 
+    # The API serves as a RESTRICTED database role, created by the `migrate` job
+    # from this password (#48). It must exist, be as strong as the owner's, and
+    # differ from it: the point of two roles is that the credential in the API
+    # container is not the owner's, and a shared password would make it one.
+    if not env.get("APP_DATABASE_URL"):
+        app_password = env.get("APP_POSTGRES_PASSWORD", "")
+        if not app_password:
+            problems.append(
+                "APP_POSTGRES_PASSWORD is empty. It is the password of the\n"
+                "    restricted role the API connects as; the owner's password\n"
+                "    (POSTGRES_PASSWORD) stays in the one-shot migrate job. Generate\n"
+                "    a DIFFERENT one:\n"
+                "      openssl rand -base64 32"
+            )
+        elif app_password.casefold() in PLACEHOLDERS:
+            problems.append(
+                f"APP_POSTGRES_PASSWORD is the placeholder {app_password!r}.\n"
+                "    Generate one:  openssl rand -base64 32"
+            )
+        elif len(app_password) < 16:
+            problems.append(
+                f"APP_POSTGRES_PASSWORD is {len(app_password)} characters. Use at "
+                "least 16:\n      openssl rand -base64 32"
+            )
+        elif app_password == password:
+            problems.append(
+                "APP_POSTGRES_PASSWORD is the same as POSTGRES_PASSWORD. Then the\n"
+                "    credential in the API container is the owner's, which can\n"
+                "    disable the append-only triggers, and the two roles protect\n"
+                "    nothing. Generate a different one:  openssl rand -base64 32"
+            )
+
     # An identity source is safe when it is empty (the proxy 401s every request)
     # or a Caddy placeholder (the value comes from the SSO front door per
     # request). A literal makes every visitor the same person.

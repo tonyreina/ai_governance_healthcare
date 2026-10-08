@@ -18,15 +18,40 @@ Without ``TEST_DATABASE_URL`` the database tests skip and say why.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import os
 from collections.abc import AsyncIterator
+from urllib.parse import quote, urlsplit, urlunsplit
 
+import asyncpg
 import pytest
 from app.config import Settings
+from app.db import Database
 from app.main import create_app
+from app.roles import provision
 from httpx import ASGITransport, AsyncClient
 
 DB_URL = os.getenv("TEST_DATABASE_URL") or os.getenv("DATABASE_URL") or ""
+
+# TEST_APP_ROLE=1 runs the WHOLE suite with the API connected as the restricted
+# serving role (app/roles.py), the way a real deployment does (#48). The owner
+# only prepares the schema and the role, and resets the data between tests. CI
+# runs the suite both ways: as the owner (what a single-role setup does) and as
+# the restricted role, because "the role can do its job" is only shown by doing it.
+APP_ROLE_MODE = bool(os.getenv("TEST_APP_ROLE"))
+SUITE_ROLE = "chai_app_suite"
+SUITE_PASSWORD = "suite-role-password-0123456789"
+
+
+def _url_as(role: str, password: str) -> str:
+    parts = urlsplit(DB_URL)
+    host = parts.netloc.rsplit("@", 1)[-1]
+    netloc = f"{quote(role, safe='')}:{quote(password, safe='')}@{host}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
+APP_ROLE_URL = _url_as(SUITE_ROLE, SUITE_PASSWORD) if DB_URL else ""
 
 # CI sets REQUIRE_TESTS=1. A test that cannot run then FAILS instead of skipping,
 # because a skip reports as a pass: that is how CI once ran none of these (#32).
@@ -58,8 +83,72 @@ def make_settings(**overrides: object) -> Settings:
         "sse_keepalive_seconds": 1.0,
         "version": "test",
     }
+    if APP_ROLE_MODE:
+        # As deployed: the API holds only the restricted role and never migrates.
+        base.update(
+            database_url="", app_database_url=APP_ROLE_URL, run_migrations=False
+        )
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]
+
+
+async def _prepare_owner_side() -> None:
+    """What the migrate job does: the schema, and the restricted role."""
+    owner = Database(DB_URL, min_size=1, max_size=1)
+    await owner.connect()
+    try:
+        await owner.migrate()
+        async with owner.acquire() as conn:
+            await provision(conn, SUITE_ROLE, SUITE_PASSWORD)
+    finally:
+        await owner.close()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def app_role_prepared() -> None:
+    # Always, not only in app-role mode: the schema and the role are cheap and
+    # idempotent, and tests that start a restricted app of their own need both.
+    if DB_URL:
+        asyncio.run(_prepare_owner_side())
+
+
+@contextlib.asynccontextmanager
+async def owner_connection() -> AsyncIterator[asyncpg.Connection]:
+    """A connection as the table OWNER, whichever role the API under test uses.
+
+    For tests of the triggers themselves (what the database refuses even the
+    owner). The restricted role is refused those statements earlier, by a
+    privilege check, which tests/test_roles.py covers; these tests need to reach
+    the trigger.
+    """
+    conn = await asyncpg.connect(DB_URL)
+    try:
+        yield conn
+    finally:
+        await conn.close()
+
+
+async def reset_database() -> None:
+    """Empty every table, as the OWNER, whichever role the API under test uses."""
+    conn = await asyncpg.connect(DB_URL)
+    try:
+        # project_version is listed explicitly: it has no foreign key to
+        # projects, on purpose (002_versions.sql), so CASCADE does not reach it and
+        # its rows survived between tests. A snapshot left behind by an earlier
+        # test collides with the new rev 1 of a project reusing the same id, and
+        # the ON CONFLICT swallows it, so the leak showed up as a test that
+        # passed or failed depending on what ran before it.
+        #
+        # TRUNCATE rather than DELETE so the bigserial in project_log restarts
+        # and assertions about order are unaffected by earlier tests. It also
+        # does not fire the row-level triggers that (correctly) refuse DELETE on
+        # project_version.
+        await conn.execute(
+            "TRUNCATE project_deletion, project_version, project_log, projects "
+            "RESTART IDENTITY CASCADE"
+        )
+    finally:
+        await conn.close()
 
 
 @pytest.fixture
@@ -77,26 +166,8 @@ async def client(settings: Settings) -> AsyncIterator[AsyncClient]:
     """
     app = create_app(settings)
     async with app.router.lifespan_context(app):
-        # Every test starts from an empty database. TRUNCATE rather than DELETE
-        # so the bigserial in project_log restarts and assertions about order
-        # are not affected by earlier tests.
-        async with app.state.db.acquire() as conn:
-            # project_version is listed explicitly: it has no foreign key to
-            # projects, on purpose (002_versions.sql), so CASCADE does not
-            # reach it and its rows survived between tests. A snapshot left
-            # behind by an earlier test collides with the new rev 1 of a
-            # project reusing the same id, and the ON CONFLICT swallows it --
-            # so the leak showed up as a test that passed or failed depending
-            # on what ran before it.
-            #
-            # TRUNCATE rather than DELETE so the bigserial in project_log
-            # restarts and assertions about order are not affected by earlier
-            # tests. It also does not fire the row-level triggers that
-            # (correctly) refuse DELETE on project_version.
-            await conn.execute(
-                "TRUNCATE project_deletion, project_version, project_log, projects "
-                "RESTART IDENTITY CASCADE"
-            )
+        # Every test starts from an empty database.
+        await reset_database()
         transport = ASGITransport(app=app)
         async with AsyncClient(
             transport=transport, base_url="http://api.test", headers=TEST_HEADERS

@@ -139,6 +139,7 @@ def _audience(doc: dict[str, Any], settings: Settings) -> frozenset[str] | None:
 @router.get("/health", response_model=HealthOut, tags=["meta"])
 async def health(
     response: Response,
+    request: Request,
     settings: Settings = Depends(get_settings),
     db: Database = Depends(get_db),
     broker: EventBroker = Depends(get_broker),
@@ -170,6 +171,7 @@ async def health(
         events=EventDelivery.LOCAL_ONLY if broker.local_only else EventDelivery.LIVE,
         version=settings.version,
         database="up" if database_up else "down",
+        db_role=request.app.state.db_role,
         auth_mode=settings.auth_mode,
     )
 

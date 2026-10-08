@@ -164,6 +164,8 @@ def shared_secret_reaches_both_ends(compose: dict) -> list[str]:
     ]
 
 
+MIGRATE = "migrate"
+OWNER_SECRETS = ("POSTGRES_PASSWORD", "POSTGRES_USER", "DATABASE_URL")
 PROXY_INIT = "proxy-perms"
 NON_ROOT = {"0", "root", ""}
 
@@ -194,7 +196,7 @@ def container_hardening(compose: dict) -> list[str]:
         if not svc.get("cpus"):
             problems.append(f"{name} has no cpus limit")
 
-    for name in (API, PROXY):
+    for name in (API, PROXY, MIGRATE):
         svc = service(compose, name)
         if "ALL" not in [str(c).upper() for c in svc.get("cap_drop", [])]:
             problems.append(f"{name} does not cap_drop ALL")
@@ -251,6 +253,48 @@ def cloud_proxy_image_is_unprivileged(dockerfile: str) -> list[str]:
     return problems
 
 
+def owner_credential_stays_in_migrate(compose: dict) -> list[str]:
+    """The API serves as a restricted role; only `migrate` holds the owner's (#48).
+
+    The owner can disable the append-only triggers the audit log and version
+    history depend on. If the API container held that credential, a compromised API
+    could do it in one statement, which is the finding. So the API gets the
+    restricted role's credential and no trace of the owner's, does not migrate, and
+    waits for the job that creates its schema and role.
+    """
+    problems = []
+    api = service(compose, API)
+    env = api.get("environment", {})
+    leaked = [k for k in OWNER_SECRETS if k in env]
+    if leaked:
+        problems.append(f"api is given the owner's credential: {leaked}")
+    if "APP_POSTGRES_PASSWORD" not in env and "APP_DATABASE_URL" not in env:
+        problems.append("api is given no restricted-role credential")
+    if str(env.get("RUN_MIGRATIONS")).lower() != "false":
+        problems.append("api would try to migrate, which a restricted role cannot do")
+    gate = (api.get("depends_on") or {}).get(MIGRATE, {})
+    if gate.get("condition") != "service_completed_successfully":
+        problems.append("api does not wait for migrate to finish")
+
+    migrate = service(compose, MIGRATE)
+    if not migrate:
+        problems.append("there is no migrate service, so nothing creates the role")
+    else:
+        nets = migrate.get("networks", [])
+        nets = list(nets.keys()) if isinstance(nets, dict) else list(nets)
+        if nets != [DATA]:
+            problems.append(f"migrate must be on [{DATA}] only, found {nets}")
+        if migrate.get("ports"):
+            problems.append("migrate publishes a port")
+        if "POSTGRES_PASSWORD" not in migrate.get("environment", {}):
+            problems.append("migrate has no owner credential to migrate with")
+        if migrate.get("restart") not in ("no", False, None):
+            problems.append("migrate must run once, not restart")
+        if "app.migrate" not in " ".join(map(str, migrate.get("command", []))):
+            problems.append("migrate does not run app.migrate")
+    return problems
+
+
 def every_rule(compose: dict) -> list[str]:
     return [
         *api_ports(compose),
@@ -263,6 +307,7 @@ def every_rule(compose: dict) -> list[str]:
         *override_file_is_named(),
         *shared_secret_reaches_both_ends(compose),
         *container_hardening(compose),
+        *owner_credential_stays_in_migrate(compose),
         *cloud_proxy_image_is_unprivileged(
             (ROOT / "proxy" / "Dockerfile").read_text(encoding="utf-8")
         ),
@@ -392,6 +437,56 @@ def main() -> int:
         lambda s: s[PROXY].pop("depends_on"),
     )
     hardening_mutation("the ownership fixer being removed", lambda s: s.pop(PROXY_INIT))
+
+    def role_mutation(label: str, mutate) -> None:
+        broken = copy.deepcopy(compose)
+        mutate(broken["services"])
+        check(f"{label} is noticed", bool(owner_credential_stays_in_migrate(broken)))
+
+    role_mutation(
+        "the api being given the owner's password",
+        lambda s: s[API]["environment"].update(POSTGRES_PASSWORD="x"),
+    )
+    role_mutation(
+        "the api being given a DATABASE_URL",
+        lambda s: s[API]["environment"].update(DATABASE_URL="postgresql://x"),
+    )
+    role_mutation(
+        "the api losing both of its restricted credentials",
+        lambda s: [
+            s[API]["environment"].pop(k)
+            for k in ("APP_POSTGRES_PASSWORD", "APP_DATABASE_URL")
+        ],
+    )
+    role_mutation(
+        "the api being told to migrate",
+        lambda s: s[API]["environment"].update(RUN_MIGRATIONS="true"),
+    )
+    role_mutation(
+        "the api not waiting for migrate", lambda s: s[API]["depends_on"].pop(MIGRATE)
+    )
+    role_mutation("the migrate service being removed", lambda s: s.pop(MIGRATE))
+    role_mutation(
+        "migrate joining the internet-facing network",
+        lambda s: s[MIGRATE].update(networks=["data", "edge"]),
+    )
+    role_mutation(
+        "migrate publishing a port", lambda s: s[MIGRATE].update(ports=["9:9"])
+    )
+    role_mutation(
+        "migrate restarting forever", lambda s: s[MIGRATE].update(restart="always")
+    )
+    role_mutation(
+        "migrate losing the owner credential",
+        lambda s: s[MIGRATE]["environment"].pop("POSTGRES_PASSWORD"),
+    )
+    hardening_mutation(
+        "migrate keeping its default capabilities", lambda s: s[MIGRATE].pop("cap_drop")
+    )
+    hardening_mutation(
+        "migrate with a writable root filesystem",
+        lambda s: s[MIGRATE].update(read_only=False),
+    )
 
     real = (ROOT / "proxy" / "Dockerfile").read_text(encoding="utf-8")
     check(

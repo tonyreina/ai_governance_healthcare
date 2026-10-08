@@ -96,7 +96,10 @@ controls, and the CIDR check would be checking the attacker's own claim.
 | `PROXY_SHARED_SECRET` | — | Require `X-Proxy-Secret` to match. |
 | `DEV_INSECURE_AUTH` | `false` | **Dev only.** See below. |
 | `CORS_ORIGINS` | — | Off. Explicit list only; the app is same-origin with the API. |
-| `RUN_MIGRATIONS` | `true` | Apply `migrations/*.sql` at boot, under an advisory lock. |
+| `RUN_MIGRATIONS` | `true` | Apply `migrations/*.sql` at boot, under an advisory lock. **Must be `false`** when the API serves as the restricted role (it cannot create tables); `python -m app.migrate` migrates instead. |
+| `APP_DATABASE_URL` | — | The restricted role's connection string. Wins over the pieces below. |
+| `APP_POSTGRES_USER` | `chai_app` | The restricted role's name. |
+| `APP_POSTGRES_PASSWORD` | — | Its password. With this set the API serves as that role, and `DATABASE_URL`/`POSTGRES_PASSWORD` (the owner's) belong to `python -m app.migrate` only. See `app/roles.py` for exactly what the role may do. |
 | `EVENTS_CHANNEL` | `chai_events` | `LISTEN`/`NOTIFY` channel. |
 | `LOG_LEVEL` | `info` | |
 

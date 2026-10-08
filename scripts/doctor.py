@@ -214,6 +214,58 @@ class Doctor:
             "  make prune",
         )
 
+    def check_app_password(
+        self, env: dict[str, str], services: dict[str, dict]
+    ) -> None:
+        """Can the API's restricted role log in with the password in .env?
+
+        Unlike the owner's, this one is re-applied by the `migrate` job on every
+        start, so a mismatch is fixed by running it again, not by an ALTER ROLE.
+        """
+        if env.get("DATABASE_URL") or env.get("APP_DATABASE_URL"):
+            return  # a managed instance: nothing here can test its credentials
+        state = services.get("db", {}).get("State")
+        if state != "running":  # enum-ok: docker compose's container state name
+            return
+        password = env.get("APP_POSTGRES_PASSWORD", "")
+        if not password:
+            self.fail(
+                "APP_POSTGRES_PASSWORD is empty in .env",
+                "Run `make preflight` -- it explains this one.",
+            )
+            return
+        user = env.get("APP_POSTGRES_USER", "chai_app")
+        result = run(
+            [
+                *COMPOSE,
+                "exec",
+                "-T",
+                "-e",
+                "PGPASSWORD",
+                "db",
+                "psql",
+                "-h",
+                "db",
+                "-U",
+                user,
+                "-d",
+                env.get("POSTGRES_DB", "chai"),
+                "-tAc",
+                "select 1",
+            ],
+            env={**os.environ, "PGPASSWORD": password},
+        )
+        if result.returncode == 0 and result.stdout.strip() == "1":
+            say(OK, f"the restricted role {user!r} accepts APP_POSTGRES_PASSWORD")
+            return
+        self.fail(
+            f"the restricted role {user!r} rejects APP_POSTGRES_PASSWORD",
+            "The API connects as this role, so it cannot reach its database.",
+            "The migrate job creates the role and re-applies this password on",
+            "every start, so run it again:",
+            "  docker compose up -d --force-recreate migrate api",
+        )
+
     def check_reachable(self, env: dict[str, str]) -> None:
         """Is the API alive, and is the dashboard being served?
 
@@ -237,6 +289,8 @@ class Doctor:
                 "  docker compose logs api",
             )
 
+        self.check_role(health)
+
         dashboard = self.wget("http://127.0.0.1:80/")
         if "<" in dashboard:
             say(OK, f"the dashboard is served at http://localhost:{port}/")
@@ -246,6 +300,32 @@ class Doctor:
                 "docs/app/index.html is mounted from the host and is built there:",
                 "  pixi run build-app",
             )
+
+    def check_role(self, health: str) -> None:
+        """Is the API serving as a role that cannot undo the append-only triggers?
+
+        The audit log and version history are append-only because of triggers, and
+        a table's owner (or a superuser) can switch a trigger off in one statement.
+        /api/health says which the API connected as (#48). A deployment that skipped
+        the role split works, and silently has guarantees that bind its bugs only,
+        so this says so.
+        """
+        if '"db_role":"restricted"' in health.replace(" ", ""):
+            say(OK, "the API serves as a restricted database role")
+        elif '"db_role":"owner"' in health.replace(" ", ""):
+            self.fail(
+                "the API serves as the table owner or a superuser",
+                "The append-only triggers on the audit log and version history",
+                "constrain the application's bugs, not the application, and not",
+                "anything holding its credential: the owner can disable them.",
+                "",
+                "Set APP_POSTGRES_PASSWORD in .env (a different value from",
+                "POSTGRES_PASSWORD), then:",
+                "  docker compose up -d --force-recreate migrate api",
+                "`migrate` creates the restricted role; the API then serves as it.",
+            )
+        else:
+            say(WARN, "the API did not report which database role it uses")
 
     def wget(self, url: str) -> str:
         """Fetch a URL from inside the proxy container. Caddy's image has wget."""
@@ -264,6 +344,7 @@ def main() -> int:
     services = doctor.services()
     doctor.check_running(services)
     doctor.check_password(env, services)
+    doctor.check_app_password(env, services)
     if services.get("proxy", {}).get("State") == "running":
         doctor.check_reachable(env)
     print()

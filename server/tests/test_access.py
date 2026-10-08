@@ -15,7 +15,7 @@ import pytest
 from app.access import can_own, can_read, can_write, role_of, unclaimed
 from httpx import ASGITransport, AsyncClient
 
-from .conftest import TEST_EMAIL, make_settings, requires_db
+from .conftest import TEST_EMAIL, make_settings, requires_db, reset_database
 
 OWNER = TEST_EMAIL
 WRITER = "writer@hospital.example"
@@ -251,10 +251,7 @@ class TestEnforcementDisabled:
 
         app = create_app(settings)
         async with app.router.lifespan_context(app):
-            async with app.state.db.acquire() as conn:
-                await conn.execute(
-                    "TRUNCATE project_log, projects RESTART IDENTITY CASCADE"
-                )
+            await reset_database()
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://api.test"
             ) as http:

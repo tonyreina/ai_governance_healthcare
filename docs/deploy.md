@@ -33,7 +33,9 @@ plain HTTP (TLS is terminated at the front door), and expects:
 | Variable | Purpose |
 |---|---|
 | `PORT` | Port to bind. Set by the platform on all three clouds. |
-| `DATABASE_URL` | PostgreSQL connection string. |
+| `APP_DATABASE_URL` | PostgreSQL connection string for the **restricted** role the API serves as. See [Two database roles](#two-database-roles). |
+| `RUN_MIGRATIONS` | `false` when the API serves as a restricted role, which cannot create tables. A migration job runs instead. |
+| `DATABASE_URL` | The **owner's** connection string, for the migration job only. A single-role deployment may put it here and omit the two above, which works and is reported as a weaker setup. |
 | `IDENTITY_MODE` | `iap`, `alb` or `easyauth` — which header to read. |
 | `IDENTITY_AUDIENCE` | Expected `aud` (GCP), **load balancer** ARN (AWS, not the listener's) or client ID (Azure). Read **only** when `IDENTITY_HEADER_FORMAT=jwt` — the API refuses to start otherwise. |
 
@@ -64,6 +66,39 @@ there is no `pgdata` volume here and no `db` service, so the
 [rotation trap in the compose stack](self-hosting.md#rotating-the-database-password)
 does not apply. Prefer the platform's identity-based connection — Cloud SQL IAM
 auth, RDS IAM auth, Entra ID — over a password you have to rotate at all.
+
+### Two database roles
+
+The audit log and the version history are append-only because of database
+triggers, and a table's owner can switch a trigger off with one statement. So
+the API must not hold the owner's credential: it serves as a **restricted role**
+that can read and write the project tables and nothing else, and a separate job
+holds the owner.
+
+1. **The owner** (`DATABASE_URL`) runs `python -m app.migrate` as a one-off job
+   before each deploy: a Cloud Run job, an ECS `run-task`, a Container Apps job.
+   It applies the migrations, then creates or updates the restricted role from
+   `APP_POSTGRES_USER` (default `chai_app`) and `APP_POSTGRES_PASSWORD`. It is
+   idempotent, so run it on every deploy; it also re-applies the password, so
+   rotating that is a re-run, not a manual `ALTER ROLE`.
+2. **The service** gets `APP_DATABASE_URL` (the restricted role, with
+   `?sslmode=verify-full`) and `RUN_MIGRATIONS=false`, and **never** the owner's
+   `DATABASE_URL`. If the secret store lets the service read both, the split does
+   nothing.
+
+If the platform's identity-based database login (Cloud SQL IAM, RDS IAM, Entra)
+creates the user for you, run `python -m app.migrate --print-grants` and apply
+what it prints to that user as the owner: it is exactly what the job grants.
+
+`GET /api/health` reports `"db_role":"restricted"` when this is in place and
+`"owner"` when the API owns the tables or is a superuser, and the API logs a
+warning at startup in that case. `make doctor` fails on it for the compose stack.
+
+!!! warning "Not exercised against a real cloud database"
+
+    The role split is tested against PostgreSQL and the full Compose stack. The
+    cloud job definitions above are the shape, not a tested recipe: none has been
+    run against Cloud SQL, RDS or Azure Database for PostgreSQL.
 
 !!! note "Do not implement the merge with `jsonb` concatenation"
 

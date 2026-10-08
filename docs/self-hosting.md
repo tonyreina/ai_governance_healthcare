@@ -291,6 +291,39 @@ another purge. The identifiers of the people who made changes (`created_by`,
 question from erasing content, and it has a real tension with keeping an audit
 trail.
 
+### Two database roles
+
+The audit log and the version history are append-only because of database
+triggers, and a table's owner can switch a trigger off with one statement. The
+Postgres user `.env` calls `POSTGRES_USER` owns every table (and, in this
+image, is a superuser), so an API that connected as it would only be bound by the
+triggers as long as the API behaved.
+
+So the API does not. Two roles:
+
+| Role | Password | Held by | Can |
+|---|---|---|---|
+| owner (`POSTGRES_USER`) | `POSTGRES_PASSWORD` | the one-shot `migrate` service only | everything: create tables, disable triggers |
+| restricted (`APP_POSTGRES_USER`, default `chai_app`) | `APP_POSTGRES_PASSWORD` | the `api` service | read and write the project tables; it **cannot** disable or drop a trigger, truncate, alter a table or create one |
+
+`migrate` runs before the API on every `up`: it applies migrations and creates the
+restricted role with exactly the grants in `server/app/roles.py`
+(`docker compose run --rm migrate python -m app.migrate --print-grants` lists
+them). The `api` container is given the restricted role's password and none of the
+owner's. Set `APP_POSTGRES_PASSWORD` to a **different** `openssl rand -base64 32`
+than `POSTGRES_PASSWORD`; `make up` refuses to start if it is empty, short, a
+placeholder or the same.
+
+Rotating `APP_POSTGRES_PASSWORD` is a restart, because `migrate` re-applies it:
+
+```bash
+docker compose up -d --force-recreate migrate api
+```
+
+`make doctor` checks that the restricted role accepts its password and that the
+API reports serving as it. A Postgres superuser still bypasses all of this, which
+is why the owner's password is the one to guard, and why it lives only in a job.
+
 ### Rotating the database password
 
 `POSTGRES_PASSWORD` is read by PostgreSQL **once**, when it initializes an

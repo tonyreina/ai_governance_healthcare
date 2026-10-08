@@ -23,6 +23,8 @@ from urllib.parse import parse_qs, urlsplit
 
 import asyncpg
 
+from .roles import DbRole
+
 log = logging.getLogger("chai.db")
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
@@ -146,9 +148,11 @@ class Database:
     ) -> None:
         if not dsn:
             raise RuntimeError(
-                "Neither DATABASE_URL nor POSTGRES_PASSWORD is set. The API needs "
-                "PostgreSQL; there is no in-memory fallback, because the audit "
-                "log has to outlive the container."
+                "No database credential is set: neither DATABASE_URL / "
+                "POSTGRES_PASSWORD (the owner) nor APP_DATABASE_URL / "
+                "APP_POSTGRES_PASSWORD (the restricted serving role). The API "
+                "needs PostgreSQL; there is no in-memory fallback, because the "
+                "audit log has to outlive the container."
             )
         self.dsn = normalize_dsn(dsn)
         warning = check_dsn_encryption(self.dsn)
@@ -277,6 +281,26 @@ class Database:
         else:
             log.info("schema is up to date")
         return applied
+
+    async def serving_role(self) -> DbRole:
+        """Is this connection the table owner or a superuser, or a restricted role?
+
+        The append-only triggers constrain a role only if it cannot disable or
+        drop them, and that is a property of the role, not of the code (#48).
+        """
+        async with self.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT r.rolsuper,
+                       EXISTS (SELECT 1 FROM pg_tables
+                                WHERE schemaname = 'public'
+                                  AND tableowner = current_user) AS owns_tables
+                  FROM pg_roles r WHERE r.rolname = current_user
+                """
+            )
+        if row["rolsuper"] or row["owns_tables"]:
+            return DbRole.OWNER
+        return DbRole.RESTRICTED
 
     async def ping(self) -> bool:
         try:

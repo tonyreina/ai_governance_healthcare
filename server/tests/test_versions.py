@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-from .conftest import TEST_EMAIL, requires_db
+from .conftest import TEST_EMAIL, owner_connection, requires_db
 
 
 @requires_db
@@ -55,7 +55,7 @@ class TestVersions:
         import asyncpg
 
         await client.post("/api/projects/pv5", json={"meta": {"solution": "Five"}})
-        async with client.app.state.db.acquire() as conn:
+        async with owner_connection() as conn:
             with pytest.raises(asyncpg.RestrictViolationError):
                 await conn.execute(
                     "UPDATE project_version SET content_md5 = 'x' WHERE project_id = $1",
@@ -267,7 +267,7 @@ class TestPurge:
         import pytest
 
         await client.post("/api/projects/pvp5", json={"meta": {"solution": "Fixed"}})
-        async with client.app.state.db.acquire() as conn:
+        async with owner_connection() as conn:
             with pytest.raises(asyncpg.exceptions.RestrictViolationError):
                 await conn.execute(
                     "UPDATE project_version SET doc = '{\"meta\":{}}'::jsonb "

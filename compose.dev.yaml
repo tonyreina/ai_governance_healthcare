@@ -26,6 +26,11 @@ services:
       # file has no default, so a real deployment still has to supply one.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-only-not-a-secret}
 
+  migrate:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-only-not-a-secret}
+      APP_POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:-dev-only-app-not-a-secret}
+
   api:
     ports:
       # ======================================================================
@@ -38,7 +43,9 @@ services:
       - "127.0.0.1:${DEV_API_PORT:-8000}:8000"
 
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-only-not-a-secret}
+      # The API serves as the restricted role even in dev (#48), so a permission
+      # it lacks shows up on a laptop, not first in production.
+      APP_POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:-dev-only-app-not-a-secret}
       LOG_LEVEL: debug
       # Loosened so a request straight to 127.0.0.1:8000 from the host (which
       # arrives from the Docker gateway, not the proxy) is not rejected.

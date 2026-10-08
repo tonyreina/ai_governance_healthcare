@@ -180,13 +180,42 @@ def build_database_url(env: Mapping[str, str]) -> str:
     password = env.get("POSTGRES_PASSWORD") or ""
     if not password:
         return ""
-    user = quote(env.get("POSTGRES_USER") or "chai", safe="")
+    return _assemble_url(env, env.get("POSTGRES_USER") or "chai", password)
+
+
+def _assemble_url(env: Mapping[str, str], user: str, password: str) -> str:
+    """A URL from its pieces, every part percent-encoded."""
+    quoted_user = quote(user, safe="")
     database = quote(env.get("POSTGRES_DB") or "chai", safe="")
     host = env.get("POSTGRES_HOST") or "localhost"
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"  # an IPv6 literal
     port = env.get("POSTGRES_PORT") or "5432"
-    return f"postgresql://{user}:{quote(password, safe='')}@{host}:{port}/{database}"
+    return (
+        f"postgresql://{quoted_user}:{quote(password, safe='')}"
+        f"@{host}:{port}/{database}"
+    )
+
+
+def build_app_database_url(env: Mapping[str, str]) -> str:
+    """The URL the API SERVES as, when it is not the table owner. "" if unset.
+
+    The owner (``DATABASE_URL`` / ``POSTGRES_*``) creates the schema and can
+    disable the append-only triggers; the API should hold a restricted role
+    instead (``app/roles.py``, #48). An explicit ``APP_DATABASE_URL`` wins, for a
+    managed instance; otherwise ``APP_POSTGRES_USER`` (default ``chai_app``) and
+    ``APP_POSTGRES_PASSWORD`` are combined with the same host, port and database.
+    """
+    explicit = (env.get("APP_DATABASE_URL") or "").strip()
+    if explicit:
+        problem = _bad_url_reason(explicit)
+        if problem:
+            raise RuntimeError(problem.replace("DATABASE_URL", "APP_DATABASE_URL"))
+        return explicit
+    password = env.get("APP_POSTGRES_PASSWORD") or ""
+    if not password:
+        return ""
+    return _assemble_url(env, env.get("APP_POSTGRES_USER") or "chai_app", password)
 
 
 @dataclass(frozen=True)
@@ -195,6 +224,8 @@ class Settings:
 
     # --- database ---------------------------------------------------------
     database_url: str = ""
+    # What the API serves as, when that is a restricted role rather than the owner.
+    app_database_url: str = ""
     db_pool_min: int = 1
     db_pool_max: int = 10
     db_connect_timeout: float = 10.0
@@ -257,6 +288,11 @@ class Settings:
     log_page_size: int = 60
 
     @property
+    def serving_database_url(self) -> str:
+        """The connection the API's traffic uses: the restricted role if given."""
+        return self.app_database_url or self.database_url
+
+    @property
     def auth_mode(self) -> str:
         """One short string for ``/api/health`` and the startup log."""
         if self.dev_insecure_auth:
@@ -278,6 +314,18 @@ class Settings:
         weakens security is precisely the kind that survives in production.
         """
         self._reject_unguarded_insecure_auth()
+
+        # A restricted serving role cannot create tables, so a process that serves
+        # as one and is also told to migrate fails at the first migration, with a
+        # permission error that points nowhere useful. Say what to do instead.
+        if self.app_database_url and self.run_migrations:
+            raise RuntimeError(
+                "APP_POSTGRES_PASSWORD / APP_DATABASE_URL is set, so this process "
+                "serves as the restricted database role, which cannot migrate. Set "
+                "RUN_MIGRATIONS=false here and run `python -m app.migrate` as the "
+                "database owner (compose's `migrate` service does) before starting "
+                "the API. See docs/self-hosting.md."
+            )
 
         if self.identity_audience and self.identity_header_format != "jwt":
             raise RuntimeError(
@@ -377,6 +425,7 @@ class Settings:
 
         settings = cls(
             database_url=build_database_url(os.environ),
+            app_database_url=build_app_database_url(os.environ),
             db_pool_min=_int("DB_POOL_MIN", 1),
             db_pool_max=_int("DB_POOL_MAX", 10),
             db_connect_timeout=float(_int("DB_CONNECT_TIMEOUT", 10)),

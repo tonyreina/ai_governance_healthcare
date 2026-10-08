@@ -60,6 +60,9 @@ jobs:
       # security model rests on is asserted against the real compose.yaml.
       - run: pixi run test-claims
 
+      # `make doctor` reads docker's answers correctly, including the role checks.
+      - run: pixi run test-doctor
+
       # The Croissant example publishes no named people by default.
       - run: pixi run test-croissant
 
@@ -111,8 +114,17 @@ jobs:
       # The merge-parity test runs the browser's own deepMerge under node.
       - run: node --version
 
-      - name: pytest
+      - name: pytest, connected as the table owner
         working-directory: server
+        run: pytest -q -rs
+
+      # The same suite, with the API connected as the restricted role it serves as
+      # in a real deployment (#48). "The role can do its job" is only shown by
+      # doing it: this is every API test passing without the owner's privileges.
+      - name: pytest, connected as the restricted role
+        working-directory: server
+        env:
+          TEST_APP_ROLE: "1"
         run: pytest -q -rs
 
   browser:
@@ -210,6 +222,8 @@ jobs:
           # apply; this stack exists for one test run and is then destroyed.
           {
             echo "POSTGRES_PASSWORD=$password"
+            # The API's restricted role gets its own password (#48).
+            echo "APP_POSTGRES_PASSWORD=$(openssl rand -base64 32)"
             echo "IDENTITY_ID_SOURCE=ci@localhost"
             echo "IDENTITY_NAME_SOURCE=CI User"
             echo "IDENTITY_EMAIL_SOURCE=ci@localhost"

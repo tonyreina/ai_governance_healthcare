@@ -14,6 +14,13 @@ function dashData(){
   const rows=list.map(p=>({p, st:statusOf(p), f:flags(p), score:scoreOf(allItems(),p.items).pct, nr:nextReview(p)}));
   return rows;
 }
+/* The portfolio's search fields, by element id: one definition, read by the
+   template and by the input handler (70-events.js). */
+const SearchField = Object.freeze({ QUERY: "q", ALL_TEXT: "qall" });
+const SEARCH_HINT = Object.freeze({
+  NAMES: "Search by name, developer, or sponsor",
+  ALL_TEXT: "Search every field: a name, a vendor, a phrase",
+});
 function renderDashboardShell(){
   document.body.classList.add("home");
   document.getElementById("projName").textContent = "Portfolio";
@@ -38,8 +45,9 @@ function renderDashboardShell(){
     </form>
     <div class="tallies" id="tallies" role="group" aria-label="Filter by status"></div>
     <div class="toolbar">
-      <label for="q" class="vh">Search projects</label>
-      <input type="search" id="q" placeholder="Search by name, developer, or sponsor" value="${esc(UI.q||"")}">
+      <label for="${SearchField.QUERY}" class="vh">Search projects</label>
+      <input type="search" id="${SearchField.QUERY}" placeholder="${UI.qAll?SEARCH_HINT.ALL_TEXT:SEARCH_HINT.NAMES}" value="${esc(UI.q||"")}">
+      <label class="qall"><input type="checkbox" id="${SearchField.ALL_TEXT}"${UI.qAll?" checked":""}> Search all text</label>
       <span class="spacer"></span>
       <button class="btn ghost" data-act="dl-csv">Export portfolio (CSV)</button>
       <button class="btn ghost ro-hide" data-act="import">Import project JSON</button>
@@ -60,8 +68,16 @@ function updateDashboard(){
   if(archived) T.push(["archived","Archived",archived]);
   t.innerHTML = T.map(([k,l,n])=>`<button class="tally ${k==="archived"?"retired":k}" data-filter="${k}" aria-pressed="${UI.filter===k}"><span class="n">${n}</span><span class="t">${l}</span></button>`).join("");
   const q=(UI.q||"").toLowerCase().trim();
+  const everything = !!(UI.qAll && q);
   let list = UI.filter==="archived" ? rows.filter(r=>r.p.archived) : active.filter(r=>UI.filter==="all"||r.st.key===UI.filter);
-  if(q) list=list.filter(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.org].join(" ").toLowerCase().includes(q));
+  if(everything){
+    // Every project the viewer can open, archived included, whatever the status filter.
+    list = rows.map(r=>Object.assign(r,{hits:textHits(r.p,q)})).filter(r=>r.hits.length);
+  }
+  else if(q) list=list.filter(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.org].join(" ").toLowerCase().includes(q));
+  const note = everything
+    ? `<p class="small search-note" id="searchNote">Searching the current text of every project you can open, archived ones included. Earlier versions and the audit log are not searched${MODE===Mode.API?"; an administrator can search them with <code>make subject-access</code>":""}.</p>`
+    : "";
   const rank={red:0,amber:1,green:2,retired:3};
   list.sort((a,b)=>(rank[a.st.key]-rank[b.st.key]) || (b.f.length-a.f.length) || (a.p.meta.solution||"").localeCompare(b.p.meta.solution||""));
   if(!rows.length){
@@ -69,14 +85,17 @@ function updateDashboard(){
       <div class="ro-hide" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="new">New project</button><button class="btn" data-act="samples">Load sample projects</button></div></div>`;
     applyRO(host); return;
   }
-  if(!list.length){ host.innerHTML=`<p style="color:var(--muted);margin-top:18px">No projects match. Clear the search or choose another status.</p>`; return; }
+  if(!list.length){ host.innerHTML= note + (everything
+      ? `<p style="color:var(--muted);margin-top:18px">No project contains that text.</p>`
+      : `<p style="color:var(--muted);margin-top:18px">No projects match. Clear the search or choose another status.</p>`); return; }
   const today=parseDay(TODAY());
-  host.innerHTML=`<div class="phead" aria-hidden="true"><span>Project</span><span>Lifecycle</span><span>Readiness</span><span>Next review</span><span>Status</span></div>
+  host.innerHTML=`${note}<div class="phead" aria-hidden="true"><span>Project</span><span>Lifecycle</span><span>Readiness</span><span>Next review</span><span>Status</span></div>
   <ul class="plist">${list.map(r=>{const p=r.p; const late=r.nr&&parseDay(r.nr)<today;
     return `<li class="prow ${r.st.key}" data-open="${esc(p.id)}">
       <div><button class="pname" data-open="${esc(p.id)}">${esc(p.meta.solution||"Untitled AI solution")}</button>
         <div class="psub">${esc([p.meta.developer,p.meta.sponsor&&("Sponsor: "+p.meta.sponsor)].filter(Boolean).join(" · ")||"No developer or sponsor recorded")}</div>
-        <div class="psub">Updated ${esc(ago(p.updatedAt))} by ${who(p.updatedBy)}${p.archived?" · archived":""}</div></div>
+        <div class="psub">Updated ${esc(ago(p.updatedAt))} by ${who(p.updatedBy)}${p.archived?" · archived":""}</div>
+        ${r.hits&&everything?`<div class="psub hits">Found in: ${r.hits.slice(0,4).map(esc).join("; ")}${r.hits.length>4?` and ${r.hits.length-4} more`:""}</div>`:""}</div>
       <div>${lcTrack(p)}</div>
       <div><span class="pct">${r.score}%</span></div>
       <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">overdue</div>`:""}`:`<span class="small">${phase(p).key==="deployed"?"not set":"not live"}</span>`}</div>

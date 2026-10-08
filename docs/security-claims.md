@@ -644,3 +644,17 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_compose_isolation.py::the cloud proxy image: dropping USER is noticed`
   `tests/test_stack.py::the proxy runs as an unprivileged user`
   `tests/test_stack.py::the proxy and the api have a read-only root filesystem`
+
+### C-52 Denied access is logged
+
+- **Claim:** A refused request on a project the caller has no right to leaves one
+  `access.denied` line naming who, which project, what was needed and what they
+  held, without the document's contents.
+- **Asserted in:** `server/README.md` — "produces one warning on the `chai.access`
+  logger"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_denial_log.py::test_a_stranger_reading_a_project_is_logged`
+  `server/tests/test_denial_log.py::test_a_reader_trying_to_write_is_logged`
+  `server/tests/test_denial_log.py::test_the_line_does_not_leak_the_document`
+  `server/tests/test_denial_log.py::test_permitted_requests_log_no_denial`

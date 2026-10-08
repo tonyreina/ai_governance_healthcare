@@ -182,6 +182,19 @@ honest answer and is a gap worth closing; see R-19.
   for each part, and the cloud Dockerfile) and `tests/test_stack.py`, which
   `docker inspect`s the running containers.
 
+### R-33 A denial is logged, and the log never carries the document
+
+- Status: Active
+- Every authorization refusal on an existing project (the 404 that hides it
+  from a non-reader, and the 403s for a missing write or owner right) logs one
+  `access.denied` warning on `chai.access`: actor, project id, what was needed,
+  what the user held, and the status returned. It never logs document contents.
+  A project that does not exist is not a denial.
+- Why: a compromised staff account probing other people's records left no trace
+  (#53). Denied access is the highest-signal, lowest-volume security event.
+- Source: #53; 45 CFR 164.308(a)(1)(ii)(D).
+- Enforced by: `server/tests/test_denial_log.py`, against a real PostgreSQL.
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

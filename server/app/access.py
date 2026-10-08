@@ -26,9 +26,44 @@ Two deliberate holes, both load-bearing:
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import HTTPException, status
+
+# Its own logger, so a deployment can route denials to an alert on their own.
+log = logging.getLogger("chai.access")
+
+
+def denied(
+    user_id: str | None,
+    project_id: str | None,
+    need: str,
+    held: str,
+    code: int,
+) -> None:
+    """Record one denial. The caller raises its own exception.
+
+    The single place an authorization refusal is recorded (#53). It used to be
+    nowhere, so a compromised account probing other people's records left no
+    trace: the only record was Caddy's uncollected access log, which cannot tell
+    a denial from a hit. The name `access.denied` is stable so an alert can match
+    it without parsing prose. `%r` quotes the actor and project so a crafted id
+    cannot forge a second log line.
+
+    It logs who, which project, what was needed, what they held and what the
+    caller will be told. Never the document: the project id is necessary and its
+    contents are exactly what the denial protected.
+    """
+    log.warning(
+        "access.denied actor=%r project=%r need=%s held=%s status=%d",
+        user_id,
+        project_id,
+        need,
+        held or "none",
+        code,
+    )
+
 
 ROLES = ("owner", "writer", "reader")
 
@@ -95,6 +130,7 @@ def require(
     level: str,
     *,
     enforced: bool = True,
+    project_id: str | None = None,
 ) -> None:
     """Raise unless the user holds `level` on this project.
 
@@ -107,11 +143,17 @@ def require(
         raise ValueError(f"unknown level {level!r}")
 
     if not can_read(doc, user_id, enforced=enforced):
+        denied(
+            user_id, project_id, level, role_of(doc, user_id), status.HTTP_404_NOT_FOUND
+        )
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
 
     if not checks[level](doc, user_id, enforced=enforced):
         held = role_of(doc, user_id) or "no"
         need = "an owner" if level == "own" else "write access"
+        denied(
+            user_id, project_id, level, role_of(doc, user_id), status.HTTP_403_FORBIDDEN
+        )
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             f"You have {held} access to this project; this needs {need}.",
@@ -134,6 +176,7 @@ def guard_owner_only_fields(
     user_id: str | None,
     *,
     enforced: bool = True,
+    project_id: str | None = None,
 ) -> None:
     """Refuse a writer's attempt to change an owner-only field.
 
@@ -148,6 +191,13 @@ def guard_owner_only_fields(
         if patch[field] == before.get(field):
             continue
         if not can_own(before, user_id, enforced=enforced):
+            denied(
+                user_id,
+                project_id,
+                "own",
+                role_of(before, user_id),
+                status.HTTP_403_FORBIDDEN,
+            )
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 f"Only an owner can change {field!r} on this project.",
@@ -160,6 +210,7 @@ def guard_access_change(
     user_id: str | None,
     *,
     enforced: bool = True,
+    project_id: str | None = None,
 ) -> None:
     """Police changes to the access list itself.
 
@@ -173,6 +224,13 @@ def guard_access_change(
         return
 
     if not can_own(before, user_id, enforced=enforced):
+        denied(
+            user_id,
+            project_id,
+            "own",
+            role_of(before, user_id),
+            status.HTTP_403_FORBIDDEN,
+        )
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             "Only an owner can change who has access to this project.",

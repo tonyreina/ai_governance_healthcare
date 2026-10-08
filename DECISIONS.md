@@ -802,7 +802,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   otherwise never appear. This has not run in Actions yet: the next scheduled or
   manual run is its first.
 - The SLA in `SECURITY.md` is a set of **targets** the owner should confirm;
-  they are a policy, and are mine only as a first draft.
+  they are a policy, and are mine only as a first draft. (Superseded by D-58:
+  the owner declined them.)
 - Rejected: signing and attestation (the issue's own non-goal); a `docker run`
   of Trivy by a floating tag; failing every pull request on third-party image
   findings.
@@ -1016,6 +1017,19 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - What it caught is no longer checked anywhere: a lookalike letter in a URL or
   an identifier in the docs or code.
 - Source: the owner; #80.
+
+### D-58 The security policy promises no response or fix times
+
+- Status: Accepted
+- The owner's decision, 2026-10-08: the project has one developer and cannot
+  commit to the targets D-45 drafted (acknowledge in 5 business days, fix a
+  critical in 14). A target a reporter or a hospital reads is a commitment,
+  whatever it is called, so the policy states none. It keeps how to report
+  privately, that remediation goes in order of severity, what is in scope, and
+  that a deployment needing a response commitment must get it from whoever
+  operates it.
+- Supersedes the SLA bullet of D-45 (the rest of D-45 stands).
+- Source: the owner.
 
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 

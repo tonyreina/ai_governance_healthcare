@@ -204,6 +204,25 @@ def main() -> int:
             {"Erfüllt", "Teilweise", "Nicht erfüllt"} <= set(segs),
             str(segs),
         )
+        # Labels a click handler swaps in, which the pseudo-locale count cannot see.
+        de = page.evaluate("(ks) => ks.map(k => t(k))", ["ci.more", "ci.hide"])
+        more = page.locator(".ci .more").first
+        more.click()
+        opened = more.inner_text()
+        more.click()
+        check(
+            "an item's details toggle reads German both ways",
+            [more.inner_text(), opened] == de,
+            f"{[more.inner_text(), opened]} != {de}",
+        )
+        item = page.locator(".ci").nth(1)
+        item.locator(".seg button").nth(1).click()
+        page.wait_for_timeout(100)
+        check(
+            "marking an item partial opens it with a German label",
+            item.locator(".more").inner_text() == de[1],
+            item.locator(".more").inner_text(),
+        )
         # Exports follow the reader (D-60): the HTML report is German, marked as such,
         # and its unreviewed safety text (the provenance note) stays English.
         html = page.evaluate("exportHTML()")

@@ -171,6 +171,39 @@ def usage_problems(source: dict, texts: dict[str, str]) -> list[str]:
     ] + [f"app/i18n/en.json: {k!r} is never used" for k in sorted(keys - named)]
 
 
+# Text the app puts on screen at run time, after a click or a save. The pseudo-locale
+# ratchet in tests/test_i18n.py only sees what a screen shows when it opens, so these
+# would slip past it: a toast, a label swapped by a handler, a tooltip set by code.
+RUNTIME_LITERAL = re.compile(
+    r"""\b(?:toast|fatalError)\(\s*["'`][A-Za-z]"""
+    r"""|\.(?:textContent|innerText|title|placeholder)\s*=[^;]*?["'`][A-Z][a-z]+\s"""
+    r"""|setAttribute\(\s*["'](?:title|aria-label|placeholder|alt)["']\s*,\s*["'`][A-Za-z]"""
+)
+RUNTIME_OK = "i18n-ok:"
+
+
+def runtime_literal_problems(texts: dict[str, str]) -> list[str]:
+    """English handed straight to the screen by code, instead of through t().
+
+    `i18n-ok: <reason>` on the line excuses one that is not language (a symbol, a
+    product name); the reason is mandatory.
+    """
+    problems = []
+    for name, text in texts.items():
+        if not name.endswith(".js"):
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            ok = line.split(RUNTIME_OK, 1)
+            if len(ok) == 2 and ok[1].strip():
+                continue
+            if RUNTIME_LITERAL.search(line):
+                where = (
+                    Path(name).relative_to(ROOT) if Path(name).is_absolute() else name
+                )
+                problems.append(f"{where}:{n}: English set on screen without t()")
+    return problems
+
+
 def framework_problems(source: dict, catalogs: dict[str, dict]) -> list[str]:
     """The framework content (D-60): app/i18n/framework/en.json is the English the
     definitions hold (tests/test_framework_i18n.py keeps it so), and every other
@@ -221,6 +254,7 @@ def main() -> int:
         problems.append("app/i18n/framework/en.json is missing")
     texts = {str(p): p.read_text(encoding="utf-8") for p in SOURCES}
     problems += usage_problems(source, texts)
+    problems += runtime_literal_problems(texts)
     for problem in problems:
         print(f"  {problem}", file=sys.stderr)
     if problems:

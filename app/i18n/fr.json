@@ -470,5 +470,9 @@
   "label.regulatory": "Autorisation réglementaire",
   "label.keywords": "Mots-clés :",
   "label.summary": "Résumé",
-  "fw.note": "Le texte du référentiel sur cette page est une traduction non officielle, rédigée automatiquement, du texte anglais de ce projet ; l'original anglais fait foi."
+  "fw.note": "Le texte du référentiel sur cette page est une traduction non officielle, rédigée automatiquement, du texte anglais de ce projet ; l'original anglais fait foi.",
+  "toast.legacyImported": "Revue ajoutée à l'espace de travail",
+  "toast.exampleFilled": "Exemple rempli",
+  "toast.reviewRecorded": "Revue périodique enregistrée",
+  "print.frameTitle": "Rapport à imprimer"
 }

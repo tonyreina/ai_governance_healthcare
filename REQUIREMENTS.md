@@ -186,9 +186,9 @@ honest answer and is a gap worth closing; see R-19.
 
 - Status: Active
 - Every authorization refusal on an existing project (the 404 that hides it
-  from a non-reader, and the 403s for a missing write or owner right) logs one
-  `access.denied` warning on `chai.access`: actor, project id, what was needed,
-  what the user held, and the status returned. It never logs document contents.
+  from a non-reader, and the 403s for a missing write or owner right) emits one
+  `access.denied` security event: actor, project id, what was needed, what the
+  user held, and the status returned. It never logs document contents.
   A project that does not exist is not a denial.
 - Why: a compromised staff account probing other people's records left no trace
   (#53). Denied access is the highest-signal, lowest-volume security event.
@@ -267,12 +267,13 @@ honest answer and is a gap worth closing; see R-19.
   reassignable, archivable, deletable and purgeable (45 CFR
   164.312(a)(2)(ii)). It is **off by default**: with the variable unset nobody
   has it.
-- **Every use is recorded where the project's owners will see it**: a system entry
-  (`event: access.breakglass`, never redacted by a purge) in the project's own audit
-  log, plus a warning on `chai.emergency`. Reads of the same project by the same
-  person are throttled to one entry per ten minutes (a dashboard polls); writes
-  never are. A delete cannot leave a log entry (the log goes with the project) and
-  is recorded by the warning and the tombstone's `deleted_by`.
+- **Every use is recorded where the project's owners will see it**: a system
+  entry (`event: access.breakglass`, never redacted by a purge) in the project's
+  own audit log, plus an `access.breakglass` security event. Reads of the same
+  project by the same person are throttled to one entry per ten minutes (a
+  dashboard polls); writes never are. A delete cannot leave a log entry (the log
+  goes with the project) and is recorded by the security event and the
+  tombstone's `deleted_by`.
 - The identity is only ever what the proxy asserted, compared to configuration.
   A client cannot claim it.
 - Owners are warned in the dashboard when they are a project's only owner, and
@@ -304,6 +305,29 @@ honest answer and is a gap worth closing; see R-19.
   `/api/health`), `tests/test_session_ui.py` (the lock, saving first, the link
   and its allowlist, the lost stream, and boot from the server's settings), and
   `tests/test_compose_isolation.py` (the settings reach the API).
+
+### R-39 Security events are named, structured and separable
+
+- Status: Active
+- Every security-relevant event (a missing identity, a rejected peer or shared
+  secret, an unreadable or wrong-audience token, a cross-site write, a denial,
+  emergency access, a create, a delete, a purge, a tripped rate limit, a refused
+  stream) is emitted through `app/securitylog.py` with a **stable name** from
+  `SecurityEvent` and fields that are ids and facts, never a document, a token
+  or a secret. In `LOG_FORMAT=json` (the default) each is one JSON object per
+  line tagged `"stream": "security"`, and the security stream is held at INFO
+  whatever `LOG_LEVEL` says.
+- The names are an interface: `docs/deploy.md` lists them and a test fails if
+  the list and the enum drift. A new event is a new enum member and a new row.
+- Every service's log is capped by the `json-file` driver. That bounds local
+  retention; it is **not** a retention policy, and this repository collects,
+  retains and alerts on nothing itself: the sink and its retention are the
+  operator's, and the per-cloud settings in the docs are unverified.
+- Source: #38; DECISIONS D-41.
+- Enforced by: `server/tests/test_security_events.py` (the real output, each
+  event, no secret in it, no forged second line),
+  `tests/test_compose_isolation.py` (the caps), and `tests/test_stack.py` (the
+  running API's own log).
 
 ### R-28 A project's creator is always one of its owners
 

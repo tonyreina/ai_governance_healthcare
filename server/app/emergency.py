@@ -13,8 +13,8 @@ backdoor is that **every use is recorded where the project's owners will see it*
 * each use that matters (any write, archive, delete or purge, and the first read of a
   project in a window) writes a system entry into that project's own audit log, which
   a purge never redacts, with the stable event name ``access.breakglass``;
-* every use, throttled or not, is a warning on the ``chai.emergency`` logger, which is
-  what an alert should match;
+* every use, throttled or not, is an ``access.breakglass`` security event
+  (``securitylog``), which is what an alert should match;
 * the identity is only ever the one the proxy asserted, so the list of who holds this
   is configuration, not something a client can claim.
 
@@ -24,7 +24,6 @@ design); the warning and the deletion tombstone's ``deleted_by`` record it inste
 
 from __future__ import annotations
 
-import logging
 import time
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -32,8 +31,7 @@ from enum import StrEnum
 import asyncpg
 
 from .auth import Identity
-
-log = logging.getLogger("chai.emergency")
+from .securitylog import SecurityEvent, emit
 
 # A dashboard polls: opening one project as the break-glass identity fetches its
 # versions and log again on every change event. Reads of the same project by the same
@@ -74,11 +72,13 @@ class EmergencyAudit:
         use: Use,
     ) -> None:
         """Note that this identity used emergency access on this project."""
-        log.warning(
-            "access.breakglass actor=%r project=%r action=%s",
-            identity.id,
-            project_id,
-            action,
+        emit(
+            SecurityEvent.ACCESS_BREAKGLASS,
+            f"access.breakglass actor={identity.id!r} project={project_id!r} "
+            f"action={action}",
+            actor=identity.id,
+            project=project_id,
+            action=action,
         )
         if use is Use.DELETE:
             # The project's log goes with it. The warning and the deletion
@@ -110,6 +110,10 @@ class EmergencyAudit:
     def note_listing(self, identity: Identity, count: int) -> None:
         """A list that included projects only emergency access could see."""
         if count:
-            log.warning(
-                "access.breakglass actor=%r action=list count=%d", identity.id, count
+            emit(
+                SecurityEvent.ACCESS_BREAKGLASS,
+                f"access.breakglass actor={identity.id!r} action=list count={count}",
+                actor=identity.id,
+                action="list",
+                count=count,
             )

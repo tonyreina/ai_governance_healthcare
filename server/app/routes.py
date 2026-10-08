@@ -76,6 +76,7 @@ from .models import (
 )
 from .principals import MAX_ID_LENGTH, MAX_LOOKUP
 from .principals import resolve as resolve_principals
+from .securitylog import SecurityEvent, emit
 from .signoff import attribute_signoffs
 
 log = logging.getLogger("chai.routes")
@@ -353,7 +354,13 @@ async def create_project(
             Event(PROJECT_CREATED, project_id, audience=_audience(doc, settings)),
             conn,
         )
-    log.info("project %s created by %s", project_id, identity.id)
+    emit(
+        SecurityEvent.PROJECT_CREATED,
+        f"project {project_id} created by {identity.id}",
+        level=logging.INFO,
+        actor=identity.id,
+        project=project_id,
+    )
     return ProjectOut.from_row(project_id, doc)
 
 
@@ -544,7 +551,13 @@ async def delete_project(
             ),
             conn,
         )
-    log.info("project %s deleted by %s", project_id, identity.id)
+    emit(
+        SecurityEvent.PROJECT_DELETED,
+        f"project {project_id} deleted by {identity.id}",
+        level=logging.INFO,
+        actor=identity.id,
+        project=project_id,
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -926,12 +939,14 @@ async def purge_versions(
                     ),
                     conn,
                 )
-    log.warning(
-        "version history of %s purged by %s (%d revision(s), %d log entries)",
-        project_id,
-        identity.id,
-        purged or 0,
-        entries or 0,
+    emit(
+        SecurityEvent.VERSIONS_PURGED,
+        f"version history of {project_id} purged by {identity.id} "
+        f"({purged or 0} revision(s), {entries or 0} log entries)",
+        actor=identity.id,
+        project=project_id,
+        revisions=purged or 0,
+        log_entries=entries or 0,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -1170,7 +1185,11 @@ async def events(
     try:
         subscriber = broker.attach(identity.id)
     except TooManyStreams as exc:
-        log.warning("refused an event stream: %s", exc)
+        emit(
+            SecurityEvent.STREAM_REFUSED,
+            f"refused an event stream: {exc}",
+            actor=identity.id,
+        )
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
             "Too many open event streams for this user. Close some tabs.",

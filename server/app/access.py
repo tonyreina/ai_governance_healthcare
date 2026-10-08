@@ -26,13 +26,11 @@ Two deliberate holes, both load-bearing:
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from fastapi import HTTPException, status
 
-# Its own logger, so a deployment can route denials to an alert on their own.
-log = logging.getLogger("chai.access")
+from .securitylog import SecurityEvent, emit
 
 
 def denied(
@@ -55,13 +53,15 @@ def denied(
     caller will be told. Never the document: the project id is necessary and its
     contents are exactly what the denial protected.
     """
-    log.warning(
-        "access.denied actor=%r project=%r need=%s held=%s status=%d",
-        user_id,
-        project_id,
-        need,
-        held or "none",
-        code,
+    emit(
+        SecurityEvent.ACCESS_DENIED,
+        f"access.denied actor={user_id!r} project={project_id!r} need={need} "
+        f"held={held or 'none'} status={code}",
+        actor=user_id,
+        project=project_id,
+        need=need,
+        held=held or "none",
+        status=code,
     )
 
 

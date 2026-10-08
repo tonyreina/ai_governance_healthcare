@@ -650,8 +650,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** A refused request on a project the caller has no right to leaves one
   `access.denied` line naming who, which project, what was needed and what they
   held, without the document's contents.
-- **Asserted in:** `server/README.md` — "produces one warning on the `chai.access`
-  logger"
+- **Asserted in:** `server/README.md` — "produces one `access.denied` security event"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_denial_log.py::test_a_stranger_reading_a_project_is_logged`
@@ -703,7 +702,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   project's owners will see it"
 - **Status:** partial
 - **Gap:** Reads of one project by one person are throttled to one entry per ten
-  minutes (every read is still a warning on `chai.emergency`), and a delete cannot
+  minutes (every read is still an `access.breakglass` security event), and a delete cannot
   leave a log entry because the log goes with the project; it is recorded by the
   warning and the tombstone. Nothing here tests that a deployment alerts on the
   warning. #42
@@ -740,3 +739,29 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Gap:** Nothing here starts an IAP, an ALB, an Easy Auth or an oauth2-proxy
   session, so these come from the providers' documentation and could be out of date.
   The page says so. #49
+
+### C-58 Security events are named and the docs list exactly them
+
+- **Claim:** Every security-relevant event has a stable name and fields, written as
+  one JSON object tagged `"stream": "security"`, and the table in the deployment
+  guide is the complete list.
+- **Asserted in:** `docs/deploy.md` — "a test fails if this table and the code ever
+  disagree"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_security_events.py::test_the_documented_events_are_exactly_the_ones_the_code_can_emit`
+  `server/tests/test_security_events.py::test_every_line_is_one_json_object_with_a_stream`
+  `server/tests/test_security_events.py::test_a_request_with_no_identity_is_a_named_event`
+  `server/tests/test_security_events.py::test_a_hostile_actor_id_cannot_forge_a_second_line`
+  `tests/test_stack.py::creates, deletes and purges are named security events`
+
+### C-59 Security events are collected, retained and alerted on
+
+- **Claim:** The deployment guide tells an operator how to collect, retain and alert on
+  the security stream on each platform.
+- **Asserted in:** `docs/deploy.md` — "Where it goes."
+- **Status:** unenforced
+- **Gap:** This repository emits the events and tests that it does. It collects,
+  retains and alerts on nothing: the sink, the filters and the retention are the
+  operator's, and the per-cloud settings come from the providers' documentation and
+  have not been run. The guide says so. #38

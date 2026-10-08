@@ -16,6 +16,7 @@ Docker.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -455,6 +456,48 @@ def main() -> int:
             direct_api_status({**identity, "X-Proxy-Secret": secret}) == 200,
             str(direct_api_status({**identity, "X-Proxy-Secret": secret})),
         )
+
+    print("Security events (#38)")
+    # The earlier checks created, purged and deleted projects through the real proxy.
+    # What the API container wrote about that is what a log sink would receive.
+    raw = subprocess.run(
+        ["docker", "compose", "logs", "--no-color", "--no-log-prefix", "api"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    ).stdout
+    records = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if line.startswith("{"):
+            with contextlib.suppress(ValueError):
+                records.append(json.loads(line))
+    check(
+        "the API's log is JSON, one object per line",
+        len(records) > 5 and all("stream" in r and "ts" in r for r in records),
+        f"{len(records)} JSON lines of {len(raw.splitlines())}",
+    )
+    security = [r for r in records if r.get("stream") == "security"]
+    seen = {r.get("event") for r in security}
+    check(
+        "creates, deletes and purges are named security events",
+        {"project.created", "project.deleted", "versions.purged"} <= seen,
+        str(sorted(e for e in seen if e)),
+    )
+    check(
+        "they carry who and which project",
+        all(
+            r.get("actor") and r.get("project")
+            for r in security
+            if r.get("event") in ("project.created", "project.deleted")
+        ),
+    )
+    check(
+        "application chatter is not in the security stream",
+        not any(
+            r.get("event") is None for r in records if r.get("stream") == "security"
+        ),
+    )
 
     print("Browser")
     try:

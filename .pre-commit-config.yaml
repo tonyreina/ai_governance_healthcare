@@ -66,12 +66,6 @@ repos:
         language: system
         types: [text]
 
-      - id: check-homographs
-        name: check for confusable characters
-        entry: pixi run check-homographs
-        language: system
-        types: [text]
-
       # A closed set of values gets an enumerated type, not a bare string. It is
       # a ratchet: scripts/enum_baseline.json holds the existing uses, a new one
       # fails, and fixing one fails until the baseline is ratcheted down. Run

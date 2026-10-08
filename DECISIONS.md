@@ -1004,6 +1004,19 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   have their own owners and policies).
 - Source: the owner, on #57; R-54.
 
+### D-57 The confusable-character check is removed
+
+- Status: Accepted
+- The owner's instruction, 2026-10-08. `scripts/check_homographs.py` failed any
+  file holding Greek, Cyrillic, Armenian or fullwidth characters, because one
+  link once spelled a word with a Cyrillic "o". The dashboard is gaining
+  translations (#80), and a Simplified Chinese catalog uses fullwidth
+  punctuation as a matter of course, so the check would have blocked the
+  languages the owner chose. It also had no tests of its own.
+- What it caught is no longer checked anywhere: a lookalike letter in a URL or
+  an identifier in the docs or code.
+- Source: the owner; #80.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

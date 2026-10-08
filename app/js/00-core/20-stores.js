@@ -19,7 +19,7 @@ class LocalStore{
     catch(e){
       // A full or blocked browser store used to fail here without a word, so the
       // user kept working in a session that was not saving (#40). Say so.
-      if(typeof toast==="function") toast("Browser storage is full: this change could not be saved. Export your records.");
+      if(typeof toast==="function") toast(t("toast.storageFull"));
       return false;
     }
   }

@@ -7,7 +7,7 @@ function onProjects(list){
   if(first && UI.project && PROJECTS.has(UI.project) && !CUR){ openProject(UI.project,UI.view); return; }
   if(CUR){
     const r=PROJECTS.get(CUR);
-    if(!r){ toast("This project was deleted"); goHome(); return; }
+    if(!r){ toast(t("toast.deletedElsewhere")); goHome(); return; }
     S=normalize(deepMerge(clone(r), clone(pending[CUR]||{})));
     softRefresh();
   } else updateDashboard();

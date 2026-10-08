@@ -139,19 +139,19 @@ function renderCardForm(){
 function labelHTML(p){
   p=p||S;
   const v=k=>cardValOf(p,k);
-  const dd=k=>v(k)?esc(v(k)):`<span class="empty">Not provided</span>`;
+  const dd=k=>v(k)?esc(v(k)):`<span class="empty">${esc(t("label.notProvided"))}</span>`;
   const rows=keys=>keys.map(([k,l])=>`<div class="l-row"><dt>${esc(l)}</dt><dd>${dd(k)}</dd></div>`).join("");
   const sec=name=>CARD.find(s=>s.sec===name).fields.map(f=>[f[0],f[1]]);
   const ms=p.metrics.filter(m=>m.name||m.value);
   const metricsBlock = ms.length
     ? METRIC_CATS.map(c=>{const g=ms.filter(m=>m.cat===c); if(!g.length) return "";
-        return `<div class="l-mcat">${esc(c)}</div>${g.map(m=>`<div class="l-metric"><span>${esc(m.name||"Metric")}${m.pop?`, ${esc(m.pop)}`:""}</span><span>${esc(m.value||"–")}${m.ci?` <span style="font-weight:400">(${esc(m.ci)})</span>`:""}</span></div>`).join("")}`;}).join("")
-    : `<div class="l-row"><span class="empty">No metrics entered</span></div>`;
+        return `<div class="l-mcat">${esc(c)}</div>${g.map(m=>`<div class="l-metric"><span>${esc(m.name||t("metrics.col.metric"))}${m.pop?`, ${esc(m.pop)}`:""}</span><span>${esc(m.value||"–")}${m.ci?` <span style="font-weight:400">(${esc(m.ci)})</span>`:""}</span></div>`).join("")}`;}).join("")
+    : `<div class="l-row"><span class="empty">${esc(t("label.noMetrics"))}</span></div>`;
   return `<div class="label">
-    <p class="l-kicker">Applied model card</p>
-    <h2 class="l-name">${v("name")?esc(v("name")):'<span class="empty">Unnamed solution</span>'}</h2>
-    <p class="l-dev">Developer: <b>${dd("developer")}</b></p>
-    <p class="l-dev">Inquiries or issues: ${dd("contact")}</p>
+    <p class="l-kicker">${esc(t("card.title"))}</p>
+    <h2 class="l-name">${v("name")?esc(v("name")):`<span class="empty">${esc(t("label.unnamed"))}</span>`}</h2>
+    <p class="l-dev">${tHtml("label.developer",{},{name:`<b>${dd("developer")}</b>`})}</p>
+    <p class="l-dev">${tHtml("label.contact",{},{value:dd("contact")})}</p>
     <div class="r8"></div>
     <div class="l-grid">
       <div><b>Release stage</b>${dd("releaseStage")}</div><div><b>Release date</b>${dd("releaseDate")}</div><div><b>Version</b>${dd("version")}</div>
@@ -171,7 +171,7 @@ function labelHTML(p){
     <div class="r4"></div>
     <p class="l-sec">Resources</p><dl>${rows(sec("Resources"))}</dl>
     <div class="r1"></div>
-    <p class="l-foot">Structure follows the CHAI Applied Model Card template (draft v0.1). Prepared by the deploying organization; not a CHAI certification.</p>
+    <p class="l-foot">${esc(t("label.foot"))}</p>
   </div>`;
 }
 function renderLabel(){ if(S) document.getElementById("labelHost").innerHTML = labelHTML(); }
@@ -186,58 +186,58 @@ function reportBody(names){
   const all=allItems(); const ov=scoreOf(all);
   const unanswered=all.filter(it=>!(S.items[it.id]||{}).status).length;
   const gaps=all.filter(it=>{const st=(S.items[it.id]||{}).status; return !st||st==="notmet"||st==="partial";});
-  const tag=st=>`<span class="tag ${st||"none"}">${st?STATUS[st]:"Unanswered"}</span>`;
+  const tag=st=>`<span class="tag ${st||"none"}">${esc(st?t(STATUS_KEY[st]):t("report.unanswered"))}</span>`;
   const m=S.meta, F=flags(S), st=statusOf(S), nr=nextReview(S);
   return `<div class="r-head">
-      <p class="eyebrow">CHAI lifecycle assurance review</p>
-      <h1>${esc(m.solution||"Untitled AI solution")}</h1>
+      <p class="eyebrow">${esc(t("report.eyebrow"))}</p>
+      <h1>${esc(m.solution||t("project.untitled"))}</h1>
       <div class="r-meta">
-        <div><b>Status</b>${esc(st.label)}</div><div><b>Lifecycle phase</b>${esc(phase(S).label)}</div>
-        <div><b>Organization</b>${esc(m.org||"–")}</div><div><b>Developer</b>${esc(m.developer||"–")}</div>
-        <div><b>Sourcing</b>${esc(m.sourcing||"–")}</div><div><b>Risk tier</b>${esc(m.riskTier||"–")}</div>
-        <div><b>Clinical sponsor</b>${esc(m.sponsor||"–")}</div><div><b>Next periodic review</b>${nr?esc(fmtDay(nr)):"–"}</div>
-        <div><b>Report generated</b>${esc(fmtDay(TODAY()))}</div>
+        <div><b>${esc(t("report.status"))}</b>${esc(statusLabel(st))}</div><div><b>${esc(t("report.phase"))}</b>${esc(phaseLabel(phase(S)))}</div>
+        <div><b>${esc(t("report.org"))}</b>${esc(m.org||"–")}</div><div><b>${esc(t("report.developer"))}</b>${esc(m.developer||"–")}</div>
+        <div><b>${esc(t("report.sourcing"))}</b>${esc(m.sourcing?(SOURCING_KEY[m.sourcing]?t(SOURCING_KEY[m.sourcing]):m.sourcing):"–")}</div><div><b>${esc(t("report.riskTier"))}</b>${esc(m.riskTier?(RISK_KEY[m.riskTier]?t(RISK_KEY[m.riskTier]):m.riskTier):"–")}</div>
+        <div><b>${esc(t("report.sponsor"))}</b>${esc(m.sponsor||"–")}</div><div><b>${esc(t("report.nextReview"))}</b>${nr?esc(fmtDay(nr)):"–"}</div>
+        <div><b>${esc(t("report.generated"))}</b>${esc(fmtDay(TODAY()))}</div>
       </div>
-      ${m.reviewers?`<p style="font-size:13.5px;margin:10px 0 0"><b>Review team:</b> ${esc(m.reviewers)}</p>`:""}
-      ${m.scope?`<p style="font-size:13.5px;margin:4px 0 0"><b>Scope:</b> ${esc(m.scope)}</p>`:""}
+      ${m.reviewers?`<p style="font-size:13.5px;margin:10px 0 0"><b>${esc(t("report.team"))}</b> ${esc(m.reviewers)}</p>`:""}
+      ${m.scope?`<p style="font-size:13.5px;margin:4px 0 0"><b>${esc(t("report.scope"))}</b> ${esc(m.scope)}</p>`:""}
     </div>
-    <h2>Compliance flags</h2>
-    ${F.length?`<ul class="gaplist" style="font-size:14px">${F.map(f=>`<li><span class="tag ${f.sev==="red"?"notmet":"partial"}">${f.sev==="red"?"Out of compliance":"Needs update"}</span> ${esc(f.text)}</li>`).join("")}</ul>`:`<p>No open flags.</p>`}
-    <h2>Readiness</h2>
-    <div class="overall"><span class="big">${ov.pct}%</span><p>of applicable criteria met (partial counts as half, unanswered as zero). ${ov.answered} of ${ov.total} items answered${unanswered?`; ${unanswered} still open`:""}.</p></div>
+    <h2>${esc(t("report.flags"))}</h2>
+    ${F.length?`<ul class="gaplist" style="font-size:14px">${F.map(f=>`<li><span class="tag ${f.sev==="red"?"notmet":"partial"}">${esc(t(f.sev==="red"?"status.red":"status.amber"))}</span> ${esc(flagText(f))}</li>`).join("")}</ul>`:`<p>${esc(t("report.noFlags"))}</p>`}
+    <h2>${esc(t("report.readiness"))}</h2>
+    <div class="overall"><span class="big">${ov.pct}%</span><p>${esc(t("report.readinessDetail",{answered:ov.answered,total:ov.total}))}${unanswered?esc(t("report.stillOpen",{count:unanswered})):""}.</p></div>
     <div class="bars">${Object.entries(PRINCIPLES).map(([k,p])=>{const sc=scoreOf(all.filter(it=>it.p===k)); return `<div class="bar"><span>${esc(p.name)}</span><span class="track"><span class="fill ${barCls(sc.pct)}" style="width:${sc.pct}%;display:block"></span></span><span class="pct">${sc.pct}%</span></div>`;}).join("")}</div>
-    <h2>Lifecycle status</h2>
-    <div class="r-wrap"><table class="rtable"><thead><tr><th>Stage</th><th>Answered</th><th>Met</th><th>Partial</th><th>Not met</th><th>Score</th></tr></thead><tbody>
+    <h2>${esc(t("report.lifecycle"))}</h2>
+    <div class="r-wrap"><table class="rtable"><thead><tr><th>${esc(t("report.col.stage"))}</th><th>${esc(t("report.col.answered"))}</th><th>${esc(t("status.met"))}</th><th>${esc(t("status.partial"))}</th><th>${esc(t("status.notmet"))}</th><th>${esc(t("report.col.score"))}</th></tr></thead><tbody>
     ${STAGES.map(s=>{const cnt=k=>s.items.filter(it=>(S.items[it.id]||{}).status===k).length; const sc=scoreOf(s.items);
       return `<tr><td>${s.n}. ${esc(s.title)}</td><td>${sc.answered}/${sc.total}</td><td>${cnt("met")}</td><td>${cnt("partial")}</td><td>${cnt("notmet")}</td><td><b>${sc.pct}%</b></td></tr>`;}).join("")}
     </tbody></table></div>
-    <h2>Checkpoint decisions</h2>
-    <div class="r-wrap"><table class="rtable"><thead><tr><th>Checkpoint</th><th>Decision</th><th>Decided by</th><th>Date</th><th>Rationale and conditions</th></tr></thead><tbody>
-    ${Object.entries(GATES).map(([k,G])=>{const g=S.gates[k]||{}; return `<tr><td>${G.title}<br><span style="color:var(--muted);font-size:12px">${esc(G.q)}</span></td><td>${g.decision?`<b>${esc(g.decision)}</b>`:'<span style="color:var(--muted)">Not yet decided</span>'}</td><td>${esc(g.by||"")}${g.signedBy?`<br><span style="color:var(--muted);font-size:12px">recorded by ${nm(g.signedBy)}</span>`:""}</td><td>${esc(g.date||"")}</td><td style="white-space:pre-wrap">${esc(g.rationale||"")}</td></tr>`;}).join("")}
+    <h2>${esc(t("report.checkpoints"))}</h2>
+    <div class="r-wrap"><table class="rtable"><thead><tr><th>${esc(t("report.col.checkpoint"))}</th><th>${esc(t("gate.decision"))}</th><th>${esc(t("gate.by"))}</th><th>${esc(t("report.col.date"))}</th><th>${esc(t("gate.rationale"))}</th></tr></thead><tbody>
+    ${Object.entries(GATES).map(([k,G])=>{const g=S.gates[k]||{}; return `<tr><td>${G.title}<br><span style="color:var(--muted);font-size:12px">${esc(G.q)}</span></td><td>${g.decision?`<b>${esc(g.decision)}</b>`:`<span style="color:var(--muted)">${esc(t("report.notDecided"))}</span>`}</td><td>${esc(g.by||"")}${g.signedBy?`<br><span style="color:var(--muted);font-size:12px">${tHtml("report.recordedBy",{},{who:nm(g.signedBy)})}</span>`:""}</td><td>${esc(g.date||"")}</td><td style="white-space:pre-wrap">${esc(g.rationale||"")}</td></tr>`;}).join("")}
     </tbody></table></div>
-    <h2>Open gaps and actions</h2>
-    ${gaps.length?`<div class="r-wrap"><table class="rtable"><thead><tr><th>Stage</th><th>Criterion</th><th>Principle</th><th>Status</th><th>Owner</th><th>Due</th></tr></thead><tbody>
+    <h2>${esc(t("report.gaps"))}</h2>
+    ${gaps.length?`<div class="r-wrap"><table class="rtable"><thead><tr><th>${esc(t("report.col.stage"))}</th><th>${esc(t("report.col.criterion"))}</th><th>${esc(t("report.col.principle"))}</th><th>${esc(t("report.status"))}</th><th>${esc(t("ci.owner"))}</th><th>${esc(t("ci.due"))}</th></tr></thead><tbody>
       ${gaps.map(it=>{const d=S.items[it.id]||{}; const late=d.due&&parseDay(d.due)<parseDay(TODAY()); return `<tr><td>${it.stage.n}</td><td>${esc(it.text)}${d.evidence?`<br><span style="color:var(--muted);font-size:12.5px;white-space:pre-wrap">${esc(d.evidence)}</span>`:""}</td><td>${esc(PRINCIPLES[it.p].name)}</td><td>${tag(d.status)}</td><td>${esc(d.owner||"–")}</td><td${late?' style="color:var(--red);font-weight:700"':""}>${esc(d.due||"–")}</td></tr>`;}).join("")}
-    </tbody></table></div>`:`<p>No open gaps. Every applicable criterion is met.</p>`}
-    <h2>Applied model card</h2>
+    </tbody></table></div>`:`<p>${esc(t("report.noGaps"))}</p>`}
+    <h2>${esc(t("card.title"))}</h2>
     <div style="max-width:560px">${labelHTML()}</div>
-    <h2>Sign-off history</h2>
+    <h2>${esc(t("report.history"))}</h2>
     ${logWindowNote()?`<p style="color:var(--muted);font-size:13px"><strong>${esc(logWindowNote())}</strong></p>`:""}
-    ${LOG.length?`<div class="r-wrap"><table class="rtable"><tbody>${LOG.map(e=>`<tr><td style="width:120px">${esc(fmtDay((e.at||"").slice(0,10)))}</td><td>${esc(e.text)}</td><td>${nm(e.by)}</td></tr>`).join("")}</tbody></table></div>`:`<p>No recorded events.</p>`}
-    <h2>Appendix: full checklist</h2>
+    ${LOG.length?`<div class="r-wrap"><table class="rtable"><tbody>${LOG.map(e=>`<tr><td style="width:120px">${esc(fmtDay((e.at||"").slice(0,10)))}</td><td>${esc(e.text)}</td><td>${nm(e.by)}</td></tr>`).join("")}</tbody></table></div>`:`<p>${esc(t("report.noEvents"))}</p>`}
+    <h2>${esc(t("report.appendix"))}</h2>
     ${STAGES.map(s=>`<h3 style="font-size:15px;margin:18px 0 6px">${s.n}. ${esc(s.title)}</h3><div class="r-wrap"><table class="rtable"><tbody>
       ${s.items.map(it=>{const d=S.items[it.id]||{}; return `<tr><td style="width:46px"><span class="pchip">${it.p}</span></td><td>${esc(it.text)}${d.evidence?`<br><span style="color:var(--muted);font-size:12.5px;white-space:pre-wrap">${esc(d.evidence)}</span>`:""}</td><td style="width:110px">${tag(d.status)}</td></tr>`;}).join("")}
     </tbody></table></div>`).join("")}
-    <p class="disclaimer">This report organizes a local review around the Coalition for Health AI (CHAI) six-stage lifecycle and five principles, and the structure of the CHAI Applied Model Card. Checklist wording is a paraphrased summary, not the official CHAI Responsible AI Checklist. It is an internal governance record, not a certification, legal opinion, or regulatory determination.</p>`;
+    <p class="disclaimer">${esc(t("report.disclaimer"))}</p>`;
 }
 function renderReport(){
   return `<div class="report">
     <div class="r-actions" id="ractions">
-      <button class="btn primary" data-act="dl-html">Download report (HTML)</button>
-      <button class="btn" data-act="dl-pdf">Download PDF</button>
-      <button class="btn" data-act="dl-md">Download Markdown</button>
-      <button class="btn" data-act="dl-json">Download project data (JSON)</button>
-      <button class="btn ghost" data-act="print">Print</button>
+      <button class="btn primary" data-act="dl-html">${esc(t("report.dlHtml"))}</button>
+      <button class="btn" data-act="dl-pdf">${esc(t("report.dlPdf"))}</button>
+      <button class="btn" data-act="dl-md">${esc(t("report.dlMd"))}</button>
+      <button class="btn" data-act="dl-json">${esc(t("report.dlJson"))}</button>
+      <button class="btn ghost" data-act="print">${esc(t("report.print"))}</button>
     </div>
     <div id="dlFallback"></div>
     ${reportBody()}

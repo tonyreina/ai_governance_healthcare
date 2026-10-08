@@ -296,7 +296,7 @@ def main() -> int:
         labels = page.evaluate(
             "Object.fromEntries(Object.values(Mode)"
             ".filter(m => m !== Mode.CONNECTING)"
-            ".map(m => [m, SAVED_LABEL[m]]))"
+            ".map(m => [m, SAVED_LABEL[m] && savedLabel(m)]))"
         )
         check(
             "every Mode has a saved label",

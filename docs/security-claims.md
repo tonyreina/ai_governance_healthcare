@@ -573,7 +573,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   offers destroying it as a separate unticked choice, does the
   destroy step first, and does not delete the project if that step
   fails. The modes with no history do not offer it.
-- **Asserted in:** `app/js/20-app/50-exports.js` — "Its version history is
+- **Asserted in:** `app/i18n/en.json` — "Its version history is
   kept."
 - **Status:** enforced
 - **Enforced by:**

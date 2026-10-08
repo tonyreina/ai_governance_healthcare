@@ -46,7 +46,7 @@ test-exports = "python tests/test_exports.py"
 test-untrusted-keys = "python tests/test_untrusted_keys.py"
 # "Search all text" on the portfolio finds every project holding some text (#57).
 test-text-search = "python tests/test_text_search.py"
-# The dashboard in seven languages: resolution, picker, dates, safety fallback, plural
+# The dashboard in eight languages: resolution, picker, dates, safety fallback, plural
 # rules, and a pseudo-locale ratchet on hard-coded text (#80).
 test-i18n = "python tests/test_i18n.py"
 # Framework content: catalogs match the definitions, screens are marked, records stay English (#80, D-60).

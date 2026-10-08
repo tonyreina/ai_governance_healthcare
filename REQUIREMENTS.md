@@ -687,6 +687,24 @@ honest answer and is a gap worth closing; see R-19.
   against real migrations), `server/tests/test_holds.py` (the hold API) and
   `tests/test_holds_ui.py` (the setup page).
 
+### R-57 The docs home page speaks to a hospital executive, and does not overclaim
+
+- Status: Active
+- The owner's instruction, 2026-10-08: the docs say why the project exists and
+  what gap it fills in hospital AI governance, in terms a hospital CEO would
+  understand and could act on, and the rest of the docs follow the code.
+- `docs/index.md` and `docs/adopting.md` make the case, and they state the limits
+  as plainly as the benefits: no license fee but also no support contract, no
+  claim that it makes patients safer, no certification, no patient data. They
+  claim no customer, price, support term or certification the project cannot back.
+- The pages are organized by who reads them (executive, governance committee, IT
+  and security, privacy and records, developer), and a page that states what the
+  software does is rewritten when the code changes it.
+- Source: the owner, this session; DECISIONS D-65.
+- Enforced by: `tests/test_data_scope.py` (the data scope leads each page a
+  deployer reads first) and `pixi run check-claims` (a security sentence names its
+  test). The rest is by review: nothing checks that a page's prose is true.
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

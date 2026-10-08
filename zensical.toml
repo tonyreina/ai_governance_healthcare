@@ -1,7 +1,7 @@
 [project]
 site_url = "https://tonyreina.github.io/ai_governance_healthcare/"
 site_name = "AI Governance for Healthcare"
-site_description = "A governance review tool that walks a hospital AI team through the CHAI six-stage lifecycle and tracks the whole portfolio on one dashboard."
+site_description = "A system of record for hospital AI governance: every AI tool reviewed against the CHAI lifecycle, approved by named people, and brought back for review when it is due."
 
 copyright = "Licensed under the Apache License, Version 2.0"
 
@@ -12,6 +12,9 @@ edit_uri = "edit/main/docs/"
 nav = [
   { "Home" = "index.md" },
   { "Open the dashboard" = "app/index.html" },
+  { "Adopting it" = "adopting.md" },
+  { "A review, start to finish" = "guide.md" },
+  { "How statuses are decided" = "compliance-rules.md" },
   { "The frameworks" = [
     "frameworks/index.md",
     "frameworks/chai.md",
@@ -21,14 +24,14 @@ nav = [
     "frameworks/optica-checklist.md",
     "frameworks/evidence.md",
   ] },
-  { "Running it" = "running.md" },
   { "Crosswalk" = "crosswalk.md" },
-  { "Compliance rules" = "compliance-rules.md" },
-  { "Python exports" = "exports.md" },
+  { "Running it" = "running.md" },
   { "Self-hosting" = "self-hosting.md" },
   { "Cloud deployment" = "deploy.md" },
   { "Privacy and retention" = "privacy.md" },
   { "Security claims" = "security-claims.md" },
+  { "Exports" = "exports.md" },
+  { "Developing it" = "developing.md" },
   { "Notice & license" = "notice.md" },
   { "chai: namespace" = "ns/index.md" },
 ]

@@ -1,27 +1,45 @@
 # CHAI governance API
 
 The shared-storage backend for the dashboard. It implements the six-method
-store contract the browser uses, over REST plus Server-Sent Events, on
-PostgreSQL.
+store contract the browser uses, plus the operations only a server can honor,
+over REST and Server-Sent Events, on PostgreSQL.
 
 For running this behind Google Cloud IAP, an AWS ALB or Azure Easy Auth, see
-[`docs/deploy.md`](../docs/deploy.md).
+[`docs/deploy.md`](../docs/deploy.md). For the Compose stack, see
+[`docs/self-hosting.md`](../docs/self-hosting.md).
 
 ## The contract
 
 | Store method | HTTP |
 |---|---|
 | `subscribeAll(cb, err)` | `GET /api/projects` + `GET /api/events` |
-| `create(id, data)` | `POST /api/projects/{id}` — 409 if it exists |
-| `update(id, patch)` | `PATCH /api/projects/{id}` — deep merge |
+| `create(id, data)` | `POST /api/projects/{id}`: 409 if it exists |
+| `update(id, patch)` | `PATCH /api/projects/{id}`: deep merge |
 | `remove(id)` | `DELETE /api/projects/{id}`: removes the project and its live log, keeps the version history, writes a tombstone |
-| `purgeVersions(id)` | `DELETE /api/projects/{id}/versions`: destroys the content of every revision **and** of the audit log. Owners only; irreversible. Server store only |
 | `log(id, entry)` | `POST /api/projects/{id}/log` |
 | `subscribeLog(id, cb)` | `GET /api/projects/{id}/log` + `GET /api/events` |
 
-Plus `GET /api/health` (unauthenticated), `GET /api/me`, and
-`GET /api/principals?ids=a,b,c`, which turns identity ids into names and emails
-(see below).
+Only the server store has these, and the dashboard offers each only when the
+store does:
+
+| Store method | HTTP |
+|---|---|
+| `purgeVersions(id)` | `DELETE /api/projects/{id}/versions`: destroys the content of every revision **and** of the audit log. Owners only; irreversible |
+| `getHold(id)`, `setHold(id, action, reason)` | `GET` and `POST /api/projects/{id}/hold`: a litigation hold stops disposal. Owners only; a reason is required |
+| `recordExport(id, format)` | `POST /api/projects/{id}/exports`, and `POST /api/exports` for the portfolio CSV: the dashboard reports an export it built, so it joins the read trail |
+
+The rest of the API:
+
+| | |
+|---|---|
+| `GET /api/health` | Unauthenticated. Status, version, `db_role`, `events`, and the session settings the browser needs |
+| `GET /api/me` | Who the proxy says you are |
+| `GET /api/principals?ids=a,b,c` | Names and emails for identity ids, for people the caller can already see (below) |
+| `GET /api/projects/{id}/versions`, `.../versions/{rev}` | The revision list, and one revision, for anyone who can read the project. A purged revision answers empty with `purged: true` |
+| `GET /api/events` | One event per change, for as long as the stream is held |
+
+Every read of a record is also written to `access_event`, in the transaction of
+the read. See [the read trail](../docs/deploy.md#the-read-trail).
 
 The two `subscribe*` methods are a fetch plus a stream: fetch once, hold
 `/api/events` open, refetch what an event says changed. Events carry an id and
@@ -195,6 +213,27 @@ line carries the project id and never the document. A request for a project that
 does not exist is not a denial and is not logged. A burst of these from one actor
 is worth an alert; the per-cloud alert policy is where that lives.
 
+## Retention and litigation holds
+
+How long records are kept is decided (R-54) and stored in the one-row
+`retention_policy` table, 6 years for a retired project's record and for the read
+trail by default. Disposal is **not** something the API does. `dispose_due()`, in
+`migrations/008_retention.sql` and `009_principal_disposal.sql`, is run by an
+operator as the database owner (`make dispose APPLY=1`). In one transaction it
+deletes the live record of each retired project past its period and leaves a
+tombstone, purges its revisions, deletes read-trail rows past their period, and
+removes staff names no retained record refers to; it records the run in
+`disposal_run`. The API's role cannot execute it and has no `DELETE` on the read
+trail, and the read trail's trigger refuses a `DELETE` of a row younger than the
+period or belonging to a project under a hold.
+
+A hold is the one retention action the API performs: `POST /api/projects/{id}/hold`
+adds a row to the append-only `retention_hold` table, and a project whose latest
+row is a `place` is skipped by `dispose_due()`. Placing it writes `hold.placed`
+to the security log and a system entry, without the reason, to the project's log.
+Who may do this, and what an operator does, is in
+[`docs/privacy.md`](../docs/privacy.md).
+
 ## Dev mode
 
 `DEV_INSECURE_AUTH=1` authenticates every request as one fixed fake user and
@@ -214,7 +253,7 @@ a trigger refusing an `UPDATE`. A fake would test the fake.
 
 ```bash
 docker run -d --name chai-test-db -p 55432:5432 \
-  -e POSTGRES_PASSWORD=test -e POSTGRES_DB=chai_test postgres:16-alpine
+  -e POSTGRES_PASSWORD=test -e POSTGRES_DB=chai_test postgres:17-alpine
 
 pip install -e '.[dev]'
 TEST_DATABASE_URL=postgresql://postgres:test@localhost:55432/chai_test pytest -q
@@ -226,16 +265,33 @@ Without `TEST_DATABASE_URL` the database tests skip and say why.
 
 ```text
 app/
-  main.py      app factory, lifespan, CORS off, error handler
-  config.py    environment -> Settings, with the per-cloud presets
-  auth.py      identity from the proxy header; the peer and secret checks
-  db.py        asyncpg pool, DSN normalizing, migrations under a lock
-  merge.py     the deep merge, mirroring the browser's
-  models.py    pydantic models for the envelope, not for the document
-  routes.py    every endpoint in the contract
-  events.py    LISTEN/NOTIFY -> SSE fan-out
+  main.py        app factory, lifespan, CORS off, errors, rate and size limits
+  config.py      environment -> Settings, with the per-cloud presets
+  auth.py        identity from the proxy header; the peer and secret checks
+  access.py      roles (Level), the access checks, and the record of a denial
+  accessaudit.py the read trail: what is recorded, and the export formats
+  emergency.py   break-glass access, and its record in the project's own log
+  db.py          asyncpg pool, DSN normalizing, migrations under a lock
+  migrate.py     the one-shot migration job and the restricted role's grants
+  roles.py       the database role the API serves as, and exactly what it may do
+  merge.py       the deep merge, mirroring the browser's
+  models.py      pydantic models for the envelope, not for the document
+  routes.py      every endpoint in the contract
+  events.py      LISTEN/NOTIFY -> SSE fan-out
+  principals.py  identity ids -> names, only for people the caller can see
+  signoff.py     checkpoint sign-offs, attributed to the authenticated caller
+  retention.py   litigation hold actions, and who a disposal names
+  securitylog.py the named security events, one JSON object per line
 migrations/
-  001_init.sql projects + project_log, with the append-only trigger
+  001_init.sql                 projects, project_log, the append-only trigger
+  002_versions.sql             project_version: a copy on every save
+  003_version_access.sql       history keeps its access list; the purge
+  004_version_incarnation.sql  one history per incarnation of an id
+  005_disposal.sql             the deletion tombstone; the purge redacts the log
+  006_principals.sql           names and emails the proxy asserted
+  007_access_event.sql         the read trail
+  008_retention.sql            retention policy, holds, dispose_due()
+  009_principal_disposal.sql   staff names no retained record refers to
 tests/
 ```
 

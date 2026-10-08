@@ -1,8 +1,13 @@
-# CHAI Governance Review
+# AI Governance for Healthcare
 
-A single-page tool that walks a hospital AI governance team through the
-[Coalition for Health AI (CHAI)](https://chai.org) six-stage lifecycle for each
-AI solution they evaluate or run, and tracks the whole portfolio on one dashboard.
+**Know which AI is running in your hospital, who approved it, and whether anyone
+is still watching.**
+
+A system of record for hospital AI governance. Every AI tool your organization
+evaluates or runs is reviewed against the
+[Coalition for Health AI (CHAI)](https://chai.org) lifecycle, approved at
+go/no-go checkpoints by named people, and brought back for review when it is
+due, on one dashboard.
 
 **Governance metadata only.** Never enter patient-identifiable information, in
 any storage mode, the self-hosted server included. A governance review has no
@@ -10,22 +15,53 @@ need for a patient's data, and the tool is not designed, configured or reviewed
 to hold it. It does hold personal data about staff (who reviewed and signed
 what); see [docs/privacy.md](docs/privacy.md).
 
-- **Portfolio dashboard**: every AI project with its lifecycle position, readiness
-  score, next periodic review date, and a status of *Out of compliance*,
-  *Needs update*, *On track*, or *Retired*, with the reasons spelled out.
-- **Lifecycle checklists**: 41 criteria across the six CHAI stages, each
-  tagged to one of CHAI's five principles, with status, evidence, owner, and
-  due date.
-- **Four go/no-go checkpoints** (after stages 1, 4, 5 and 6) with decision,
-  rationale, and a sign-off history.
-- **Applied model card** following the field structure of the CHAI Applied Model
-  Card, with a live preview.
-- **Exports**: standalone HTML report, Markdown, JSON (per project) and CSV (portfolio).
-
-**Live site:** <https://tonyreina.github.io/ai_governance_healthcare/> —
+**Live site:** <https://tonyreina.github.io/ai_governance_healthcare/>:
 documentation, with a **demonstration** copy of the dashboard at
 [`/app/`](https://tonyreina.github.io/ai_governance_healthcare/app/). That copy
 stores everything in your browser. It is not a system of record.
+
+## Why this exists
+
+Serious frameworks for governing health AI now exist: CHAI's lifecycle and the
+OPTICA adoption checklist from Clalit Health Services, which the WHO Regional
+Office for Europe named among four complementary approaches in 2026. But a
+framework is a document. It tells a committee what to ask. It does not remember
+the answers, assign the follow-up, notice that a review is overdue, or show a
+board which tools need attention.
+
+And approval at purchase is the start of governance, not the end: how well a
+clinical AI model works depends on your patients and your data, and it can drift
+or be changed after the committee has gone home. What a hospital needs is a
+review that recurs, and a record that shows it did. That record is what this
+builds. It does not claim to make patients safer; no framework has yet been shown
+to ([the evidence](docs/frameworks/evidence.md)). It makes governance legible,
+attributable and reviewable.
+
+## What you get
+
+- **Portfolio dashboard**: every AI project with its lifecycle position, readiness
+  score, next periodic review date, and a status of *Out of compliance*,
+  *Needs update*, *On track*, or *Retired*, with the reasons spelled out. The
+  status is computed from the record by fixed rules
+  ([how](docs/compliance-rules.md)).
+- **Lifecycle checklists**: 41 criteria across the six CHAI stages, each tagged
+  to one of CHAI's five principles, with status, evidence, owner, and due date.
+- **Four go/no-go checkpoints** (after stages 1, 4, 5 and 6) with decision,
+  rationale, and a sign-off history attributed to the signed-in person.
+- **Applied model card** following the field structure of the CHAI Applied Model
+  Card, with a live preview, and a picker for CHAI's recommended metrics.
+- **OPTICA adoption review**, optional per project: 77 questions answered by five
+  stakeholders, never mixed into the CHAI status.
+- **An audit trail enforced by the database**: append-only history, a record of
+  who read what, retention periods, litigation holds and subject-access tools.
+- **Exports**: standalone HTML report, PDF, Markdown, JSON (per project) and CSV
+  (portfolio), in the reader's language.
+- **Eight languages**: English, Spanish, French, German, Hindi, Russian,
+  Simplified Chinese and Hebrew (right to left).
+
+It does not find AI tools, test models, or hold patient data, and it is not a
+certification. [Adopting it](docs/adopting.md) sets out what it takes and what to
+ask your own organization first.
 
 **Walkthrough:** a [90-second video](https://tonyreina.github.io/ai_governance_healthcare/#see-it-in-action)
 of the dashboard on the Docker stack, using sample data. It shows the server-backed
@@ -66,17 +102,20 @@ make up                       # refuses to start on unsafe settings
 what is missing and why it matters. The stack binds to loopback by default,
 because it speaks plain HTTP and expects TLS to be terminated in front of it.
 
-- **[Deployment guide](docs/deploy.md)** — Google Cloud (IAP), AWS (ALB + OIDC)
+- **[Self-hosting](docs/self-hosting.md)**: the Compose stack, identity, backups,
+  encryption, the two database roles, and the commands an operator uses.
+- **[Cloud deployment](docs/deploy.md)**: Google Cloud (IAP), AWS (ALB + OIDC)
   and Azure (Easy Auth), each with a *Close the back door* section. Those
   sections are not hardening; they are the deployment. The API trusts an
   identity header, so it must be unreachable except through the proxy.
-- **[Self-hosting](docs/self-hosting.md)** — how the app is built, the store
-  contract, and how to back it with something else.
+- **[Privacy and retention](docs/privacy.md)**: what personal data the server
+  holds, how long, and how it is disposed of.
 
 ```bash
-make dev          # local stack: fixed dev identity, hot reload, exposed ports
+make dev               # local stack: fixed dev identity, hot reload, exposed API
+make doctor            # diagnose a stack that is up but not working
 make check-isolation   # prove the API is not reachable except through the proxy
-make down         # stop. The pgdata volume survives this.
+make down              # stop. The pgdata volume survives this.
 ```
 
 ### Evaluate it without deploying anything
@@ -94,74 +133,37 @@ python3 -m http.server 8000 --directory docs
 # then visit http://localhost:8000/app/
 ```
 
-All persistence goes through one interface (`subscribeAll`, `create`, `update`,
-`remove`, `log`, `subscribeLog`), implemented by `ApiStore` (the Docker stack),
-`DbStore` (artifact) and `LocalStore` (browser). To back the tool with
-something else — Firestore, Supabase, your own service — add a fourth class
-with the same methods. The app selects one at boot and **never silently falls
-back**: if a server was expected and cannot be reached, it stops and says so.
+All persistence goes through one interface, implemented by `ApiStore` (the
+Docker stack), `DbStore` (artifact) and `LocalStore` (browser). To back the tool
+with something else, add a class with the same methods. The app selects one at
+boot and **never silently falls back**: if a server was expected and cannot be
+reached, it stops and says so. See [Developing it](docs/developing.md#the-store).
 
-## Documentation site
+## Documentation
 
-The docs are built with [Zensical](https://zensical.org), configured in
-`zensical.toml`, with sources in `docs/`. The dashboard lives at
-`docs/app/index.html` and is copied into the build verbatim, so the published
-site serves the docs at `/` and the app at `/app/`.
+The site is built from [`docs/`](docs/) and published at the link above.
 
-The environment is managed with [pixi](https://pixi.sh):
+| If you are... | Read |
+|---|---|
+| A CEO, board member or executive sponsor | [Adopting it](docs/adopting.md) |
+| On the governance committee | [A review, start to finish](docs/guide.md), and [how statuses are decided](docs/compliance-rules.md) |
+| In IT or security | [Self-hosting](docs/self-hosting.md), [Cloud deployment](docs/deploy.md) and the [security claims](docs/security-claims.md), each with the test that enforces it |
+| The privacy or records officer | [Privacy and retention](docs/privacy.md) |
+| Comparing the frameworks | [The frameworks](docs/frameworks/index.md) and the [crosswalk](docs/crosswalk.md) |
+| A developer | [Developing it](docs/developing.md), [the API](server/README.md) and [Python exports](docs/exports.md) |
 
-```bash
-pixi run docs-serve    # live preview at http://localhost:8000
-pixi run docs-build    # writes ./site
-```
-
-## Linting and git hooks
-
-Markdown is linted with [rumdl](https://rumdl.dev), configured in `.rumdl.toml`
-with the `mkdocs` flavor so Material admonitions and attribute lists are not
-reported as errors. Git hooks are managed with [prek](https://prek.j178.dev), a
-drop-in replacement for pre-commit.
-
-```bash
-pixi run hooks-install   # install the git hook shims, once per clone
-pixi run check           # run every hook over all files
-pixi run lint            # rumdl only
-pixi run lint-fix        # rumdl, fixing what it can in place
-```
-
-The same hooks run in CI via `.github/workflows/lint.yml`, so CI cannot drift
-from what contributors get locally.
-
-### Publishing the documentation site
-
-`.github/workflows/pages.yml` builds with Zensical and publishes on every push
-to `main`. Enable it once under **Settings → Pages → Build and deployment
-→ Source: GitHub Actions**.
-
-## Compliance rules
-
-Status is computed in the browser by `flags()`, in
-`app/js/10-frameworks/10-chai/10-rules.js`. See
-[`docs/compliance-rules.md`](docs/compliance-rules.md) for the full list and how
-to change it.
-
-## Working with exports in Python
-
-Each project exports as JSON (schema in [`schema/project.schema.json`](schema/project.schema.json)).
-
-```bash
-python examples/load_export.py my-project-chai-review.json
-```
-
-`examples/fairlearn_to_metrics.py` takes a Fairlearn `MetricFrame` and appends its
-subgroup results to an export's key metrics, so evaluation output flows straight
-into the model card. Re-import the file from the dashboard (**Import project JSON**);
-an import creates a new project.
+`REQUIREMENTS.md` records what must stay true of this project and
+`DECISIONS.md` why it is built the way it is; [CLAUDE.md](CLAUDE.md) sets the
+working rules.
 
 ## About CHAI content
 
 This project is independent and is not affiliated with or endorsed by CHAI.
 See [NOTICE.md](NOTICE.md).
+
+## Reporting a vulnerability
+
+Please do not open a public issue. See [SECURITY.md](SECURITY.md).
 
 ## License
 

@@ -9,10 +9,10 @@ would rather hear about it privately first.
 **Please do not open a public issue for a security problem.**
 
 Use GitHub's private reporting: on the repository's **Security** tab, choose
-**Report a vulnerability**. That opens a private advisory only the maintainers
-can see. If the button is not there, the repository has not enabled it yet: open
-an issue that says only that you have a security report and would like a private
-channel, with no details, and a maintainer will arrange one.
+**Report a vulnerability**. That opens a private advisory only the maintainer can
+see. If the button is not there, the repository has not enabled it yet: open an
+issue that says only that you have a security report and would like a private
+channel, with no details, and the maintainer will arrange one.
 
 Please include what you found, how to reproduce it, and which version or commit.
 A report from someone who tried it against their own deployment is welcome;
@@ -20,20 +20,19 @@ please do not test against anyone else's.
 
 ## What to expect: acknowledgment and remediation
 
-These are **targets we will try to meet, not guarantees**. This is a small
-project.
+This project has one developer, working on it as time allows. **There are no
+response or fix times**, and none is promised: a report is read and handled as
+soon as it can be.
 
-| Step | Target |
-|---|---|
-| Acknowledge your report | within 5 business days |
-| Assess and tell you how we rate it | within 10 business days |
-| Fix, **critical** (remote, unauthenticated, or breaks the audit trail) | within 14 days |
-| Fix, **high** | within 30 days |
-| Fix, **medium** | within 90 days |
-| Fix, **low** | next release |
+Remediation is handled in order of severity. A **critical** report (remote,
+unauthenticated, or one that breaks the audit trail) comes before anything else,
+then high, medium and low.
 
-When a fix is released we publish an advisory describing what was affected,
-which versions, and what to do, and we credit you if you want credit.
+When a fix is released, an advisory describes what was affected, which versions,
+and what to do, and you are credited if you want to be.
+
+If your organization needs a response commitment for a deployment it runs, that
+has to come from whoever operates it for you, not from this project.
 
 ## What is in scope
 

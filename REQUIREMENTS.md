@@ -416,8 +416,9 @@ honest answer and is a gap worth closing; see R-19.
   a fix available**, and writes a CycloneDX SBOM. Findings in the official
   database and proxy base images are reported, not blocking. `.trivyignore` is
   empty and an entry needs a reason and a date.
-- `SECURITY.md` says how to report privately and states remediation **targets**
-  (not guarantees).
+- `SECURITY.md` says how to report privately and how remediation is ordered by
+  severity. Since D-58 it states **no** response or fix times: the project has
+  one developer, and the owner commits to none.
 - A scheduled job must not push to `main`, which is protected: the CHAI snapshot
   goes to a branch and a pull request.
 - Not done: signing or attesting images (the issue's own non-goal). Pixi, which

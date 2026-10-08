@@ -147,7 +147,7 @@ def dependabot_problems(config: dict) -> list[str]:
 def security_policy_problems(text: str) -> list[str]:
     needed = {
         "how to report": "report",
-        "a remediation timeline": "remediat",
+        "how remediation is handled": "remediat",
         "severity": "critical",
         "what is in scope": "scope",
     }
@@ -155,6 +155,17 @@ def security_policy_problems(text: str) -> list[str]:
     return [
         f"SECURITY.md lacks {what}" for what, word in needed.items() if word not in low
     ]
+
+
+# The owner commits to no response or fix times (D-58): a one-developer project
+# cannot keep them, and a stated target reads as a commitment to whoever relies on it.
+TIME_PROMISE = re.compile(
+    r"\bwithin\s+\d+|\b\d+\s+(?:business\s+)?(?:hours?|days?|weeks?)\b", re.I
+)
+
+
+def time_promises(text: str) -> list[str]:
+    return [m.group(0) for m in TIME_PROMISE.finditer(text)]
 
 
 def push_to_default_branch(workflow_text: str) -> list[str]:
@@ -330,6 +341,17 @@ def main() -> int:
     )
     check(
         "an empty policy is noticed", len(security_policy_problems("# Security")) == 4
+    )
+    check(
+        "SECURITY.md promises no response or fix times",
+        not time_promises(policy),
+        ", ".join(time_promises(policy)),
+    )
+    check(
+        "a stated time is noticed (mutation)",
+        bool(time_promises("Acknowledge within 5 business days."))
+        and bool(time_promises("Critical fixes in 14 days."))
+        and not time_promises("Handled in order of severity."),
     )
 
     print("Updating is documented, because `up -d` alone does not")

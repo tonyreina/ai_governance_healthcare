@@ -853,15 +853,15 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_supply_chain.py::security.yml scans HIGH and CRITICAL, on a schedule`
   `tests/test_supply_chain.py::pip is not in the runtime image`
 
-### C-66 Reports are handled within the stated targets
+### C-66 The security policy promises no response times
 
-- **Claim:** A reported vulnerability is acknowledged and fixed within the targets in
-  the security policy.
-- **Asserted in:** `SECURITY.md` — "These are **targets we will try to meet, not guarantees**."
-- **Status:** unenforced
-- **Gap:** A policy, not a mechanism: nothing here measures it, and the numbers are a
-  first draft for the owner to confirm. Private vulnerability reporting, which the
-  policy points to, is a repository setting that is currently off. #37
+- **Claim:** `SECURITY.md` commits to no response or fix times, so no one relying on
+  it is told the project will meet one.
+- **Asserted in:** `SECURITY.md` — "There are no
+  response or fix times"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_supply_chain.py::SECURITY.md promises no response or fix times`
 
 ### C-67 Growth is reported and the disk alerts are documented
 

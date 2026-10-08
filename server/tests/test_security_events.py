@@ -154,6 +154,36 @@ async def test_create_delete_and_purge_are_named_events(cap: Capture) -> None:
         assert found[0]["stream"] == "security"
 
 
+async def test_a_purge_event_carries_what_a_restore_needs_to_redo_it(
+    cap: Capture,
+) -> None:
+    """The security log alone can re-apply a purge to an older restored dump (#116):
+    the incarnation, the moment, and the last revision and audit entry it reached,
+    all matching the rows the purge actually changed."""
+    from .conftest import owner_connection
+
+    async with cap.client(**TEST_HEADERS) as http:
+        await http.post("/api/projects/redo", json={"meta": {"solution": "S"}})
+        await http.patch("/api/projects/redo", json={"meta": {"scope": "a"}})
+        await http.post("/api/projects/redo/log", json={"text": "one"})
+        await http.post("/api/projects/redo/log", json={"text": "two"})
+        assert (await http.delete("/api/projects/redo/versions")).status_code == 204
+    [event] = cap.events("versions.purged")
+    async with owner_connection() as conn:
+        rev, incarnation, purged_at = await conn.fetchrow(
+            "SELECT max(rev), min(incarnation::text), min(purged_at)"
+            " FROM project_version WHERE project_id = 'redo'"
+        )
+        seq, log_purged_at = await conn.fetchrow(
+            "SELECT max(seq), min(purged_at) FROM project_log"
+            " WHERE project_id = 'redo' AND NOT is_system"
+        )
+    assert event["through_rev"] == rev and event["revisions"] >= 1
+    assert event["through_seq"] == seq and event["log_entries"] == 2
+    assert event["incarnation"] == incarnation
+    assert event["purged_at"] == purged_at.isoformat() == log_purged_at.isoformat()
+
+
 async def test_the_rate_limit_tripping_is_a_named_event() -> None:
     async with Capture(
         make_settings(rate_limit_max_requests=3, rate_limit_window_seconds=60)

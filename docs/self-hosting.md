@@ -375,9 +375,10 @@ match, for a scheduled job. It does not look for names or dates on their own,
 because a governance record is made of them, so a clean run is not a finding that
 no patient information is present.
 
-**What none of this reaches.** Backups made earlier still hold the data, and
-`make restore` puts it back, so a restore after a purge must be followed by
-another purge. The identifiers of the people who made changes (`created_by`,
+**What none of this reaches.** Backups made earlier still hold the data. `make
+restore` re-applies the live database's purges after it restores, and says so
+when it cannot; see [Privacy and retention](privacy.md) for rebuilding the purges
+from the security log. The identifiers of the people who made changes (`created_by`,
 `updated_by`, `changed_by`, `by_id`) are not removed either; that is a separate
 question from erasing content, and it has a real tension with keeping an audit
 trail.

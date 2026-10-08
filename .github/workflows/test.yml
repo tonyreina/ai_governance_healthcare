@@ -252,6 +252,11 @@ jobs:
       - name: phi scan
         run: pixi run test-phi-scan
 
+      # A restore puts purges back: a real dump taken before a purge, restored after
+      # it, and the ledger re-applied (#116).
+      - name: purge ledger
+        run: pixi run test-purge-ledger
+
       # `make verify-backup`: a real dump restored into a throwaway PostgreSQL, and
       # `make restore` asking before it overwrites anything (#52).
       - name: backups restore

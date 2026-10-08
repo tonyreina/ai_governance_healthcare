@@ -26,7 +26,7 @@ POSTGRES_DB   ?= chai
 HTTP_PORT     ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help env preflight doctor up dev down logs ps config build-app shell psql backup backup-plaintext restore verify-backup subject-access phi-scan prune check-isolation lock
+.PHONY: help env preflight doctor up dev down logs ps config build-app shell psql backup backup-plaintext restore reapply-purges verify-backup subject-access phi-scan prune check-isolation lock
 
 help:  ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -140,17 +140,35 @@ backup-plaintext:  ## UNENCRYPTED pg_dump. Throwaway databases only.
 # It asks first, like `make prune`, because it overwrites the live database with a
 # dump (--clean drops what is there). CONFIRM=YES skips the question for automation;
 # it is a deliberate word, not a flag that is easy to pass by accident.
+#
+# A dump taken before a purge still holds what the purge destroyed, so a plain restore
+# undid it (#116). The live database's purges are captured to a ledger first and
+# re-applied after. If the live database cannot be read, it says so and goes on: the
+# ledger can be rebuilt from the security log (docs/privacy.md).
+PSQL_OWNER = $(COMPOSE) exec -T $(DB_SERVICE) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
 restore:  ## Restore a dump: make restore FILE=backups/....sql.gz.gpg  (DESTRUCTIVE)
 	@test -n "$(FILE)" || { echo "usage: make restore FILE=backups/<file>.sql.gz.gpg"; exit 1; }
 	@if [ "$(CONFIRM)" != YES ]; then \
 	  printf 'This will OVERWRITE the live database with %s. Type YES to continue: ' "$(FILE)"; \
 	  read ans && [ "$$ans" = YES ] || { echo; echo aborted; exit 1; }; \
 	fi
-	@case "$(FILE)" in \
+	@ledger="$(BACKUP_DIR)/purge-ledger-$$(date -u +%Y%m%dT%H%M%SZ).json"; \
+	if ! python3 scripts/purge_ledger.py --psql "$(PSQL_OWNER)" capture --out "$$ledger"; then \
+	  ledger=""; \
+	  echo "WARNING: could not read the purges from the live database, so purges made after this dump will NOT be re-applied. See docs/privacy.md." >&2; \
+	fi; \
+	case "$(FILE)" in \
 	  *.gpg) test -n "$$BACKUP_PASSPHRASE" || { echo "BACKUP_PASSPHRASE is needed to read $(FILE)" >&2; exit 1; }; \
 	         scripts/backup_crypto.sh decrypt "$(FILE)" ;; \
 	  *)     cat "$(FILE)" ;; \
-	esac | gunzip -c | $(COMPOSE) exec -T $(DB_SERVICE) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+	esac | gunzip -c | $(PSQL_OWNER) || exit 1; \
+	if [ -n "$$ledger" ]; then python3 scripts/purge_ledger.py --psql "$(PSQL_OWNER)" reapply "$$ledger"; fi
+
+# Re-apply purges from ledger files: one `make restore` wrote, or one rebuilt from the
+# security log with `python3 scripts/purge_ledger.py from-log LOG --out LEDGER` (#116).
+reapply-purges:  ## Re-apply purges after a restore: make reapply-purges LEDGER=backups/purge-ledger-....json
+	@test -n "$(LEDGER)" || { echo "usage: make reapply-purges LEDGER=<ledger.json>"; exit 1; }
+	@python3 scripts/purge_ledger.py --psql "$(PSQL_OWNER)" reapply $(LEDGER)
 
 # Where one person's identifier is stored, for a subject access request (#57).
 subject-access:  ## Find where one person's identifier is stored: make subject-access WHO=a@b.org

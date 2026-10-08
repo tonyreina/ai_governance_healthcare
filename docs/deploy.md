@@ -399,7 +399,7 @@ recording that a project was deleted.
 | `access.breakglass` | warning | `actor`, `project`, `action` | Emergency access was used. **Alert on any**, then check the project's own audit log. |
 | `project.created` | info | `actor`, `project` | A project was created. |
 | `project.deleted` | info | `actor`, `project` | A project was deleted (its history is kept; see the deletion tombstone). |
-| `versions.purged` | warning | `actor`, `project`, `revisions`, `log_entries` | A version history and its audit log were destroyed. Review every one. |
+| `versions.purged` | warning | `actor`, `project`, `revisions`, `log_entries`, `incarnation`, `purged_at`, `through_rev`, `through_seq` | A version history and its audit log were destroyed. Review every one. Keep these: they re-apply the purge after a restore. |
 | `ratelimit.tripped` | warning | `key`, `limit`, `window_seconds` | A client hit the rate limit. Once per client per window. |
 | `stream.refused` | warning | `actor` | Too many open event streams for one user. |
 | `stream.attached` | info | `actor`, `action`, `source_ip` | An event stream was opened. The read trail records it too. |

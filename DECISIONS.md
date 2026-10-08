@@ -966,6 +966,26 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Revisit if erasure requests become real.
 - Source: the owner, on #57; R-10, R-46.
 
+### D-55 The purge ledger lives outside the dump: the live database, then the log
+
+- Status: Accepted
+- A purge is recorded in the rows it changes, which is exactly what an older dump
+  overwrites. So the ledger has to come from somewhere the dump does not: the live
+  database just before the restore (the ordinary case), or the security log, which
+  is shipped off the host (the case where the database is what was lost).
+- A purge empties every revision of one incarnation and redacts every entry of
+  the project's log, so one ledger line is enough: project, incarnation, moment,
+  person, and the last revision and entry reached. Re-applying matches on those,
+  and on time, because a restored sequence can reuse a number.
+- The re-apply is the same transition the purge made, so the append-only
+  triggers (R-10, R-12) allow it unchanged; nothing is relaxed for it. It runs as
+  the owner, as `make restore` already does.
+- The ledger names who purged what, so it is written mode 600 into `backups/`.
+- Rejected: a ledger written at backup time (it holds only purges older than the
+  newest dump, which a restore of that dump already has); re-applying from the
+  restored database itself (the purge is what the old dump lacks).
+- Source: #116, #57; R-53.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

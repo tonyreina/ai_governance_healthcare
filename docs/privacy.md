@@ -88,14 +88,28 @@ is for.
 
 A dump taken **before** a purge, restored **afterward**, reinstates every purged
 document and redacted entry, because the dump holds their content. So a purge made
-for an erasure request can be undone by an ordinary recovery, and nothing flags
-it.
+for an erasure request could be undone by an ordinary recovery.
 
-After any `make restore`, re-apply every purge made since the dump was taken
-(the audit log records each one), and keep dumps no longer than your retention
-decision allows. Old backups hold erased content for as long as they exist, which
-is a retention matter for the backup copies too. Nothing re-applies purges for you
-yet (#116).
+`make restore` puts the purges back. Before it overwrites the database it reads
+every purge the live database holds into a ledger file in `backups/` (who purged
+which project, when, and how far; no content), and after the restore it applies
+them again, with their original time and person. Each project's audit log gets a
+system entry saying so. Run twice, it changes nothing the second time.
+
+If the live database cannot be read (it is the thing you are recovering from),
+`make restore` says that purges will **not** be re-applied, and carries on. The
+security log still has every purge (`versions.purged` carries what a re-apply
+needs), so rebuild the ledger from it and apply that:
+
+```bash
+python3 scripts/purge_ledger.py from-log security.jsonl --out ledger.json
+make reapply-purges LEDGER=ledger.json
+```
+
+Purge events written before this existed lack those fields; the script counts
+them and they have to be re-applied by hand. And old backups still hold erased
+content for as long as they exist, which is a retention matter for the backup
+copies too.
 
 ## Records of processing (GDPR Art. 30)
 

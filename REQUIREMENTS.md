@@ -143,6 +143,22 @@ honest answer and is a gap worth closing; see R-19.
   (`test_creator_stays_an_owner_when_naming_someone_else` and the tests beside
   it), against a real PostgreSQL.
 
+### R-29 A Docker build context holds only what its Dockerfile copies
+
+- Status: Active
+- `proxy/Dockerfile` builds with the repository root as its context, so the root
+  `.dockerignore` is an allowlist (`*`, then the two paths the Dockerfile COPYs).
+  `.env`, `backups/`, `.git/` and the licensed source PDF must never be sent to
+  the daemon, whatever a Dockerfile happens to copy. `server/.dockerignore` keeps
+  `.env*` and the tests out of the API image's context.
+- A new `COPY` of another path needs that path allowed in the same change.
+- History: no root `.dockerignore` existed, so every build uploaded the whole
+  tree (#63). The image never held the secrets; the exposure was the context
+  itself, on a remote or shared builder, one `COPY . .` from a published secret.
+- Source: #63; DECISIONS D-32.
+- Enforced by: `tests/test_dockerignore.py`, against the real contexts and a
+  real build, with decoys; it also shows the decoys leak without the file.
+
 ## Audit and data
 
 ### R-10 The audit log and version history are append-only

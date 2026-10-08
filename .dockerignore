@@ -1,0 +1,12 @@
+# The build context for proxy/Dockerfile is the repository root, so without this
+# every `docker build` uploaded the whole working tree to the daemon: .env (the
+# database password), backups/, .git/ and the licensed source PDF (#63).
+#
+# An ALLOWLIST, not a blocklist: exclude everything, then admit the paths the
+# Dockerfile COPYs. A blocklist protects against the secrets someone thought of;
+# this protects against the next file nobody did. If proxy/Dockerfile needs
+# another path, add it here, and tests/test_dockerignore.py will tell you if
+# that opens something it should not.
+*
+!proxy/Caddyfile
+!docs/app/

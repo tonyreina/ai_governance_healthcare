@@ -449,6 +449,22 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   after.
 - Source: #56; R-07, R-19.
 
+### D-32 The root `.dockerignore` is an allowlist
+
+- Status: Accepted
+- It excludes everything (`*`) and admits `proxy/Caddyfile` and `docs/app/`,
+  the only paths `proxy/Dockerfile` COPYs.
+- Why an allowlist: the context is the whole repository, which holds a
+  password file, encrypted and plaintext backups, the git history and a
+  licensed PDF. A blocklist guards against the secrets somebody thought of; an
+  allowlist guards against the next file nobody did.
+- Rejected: narrowing the context so the Dockerfile does not need the root
+  (build the dashboard into `proxy/` first). It changes the documented build
+  command to save a two-line file.
+- Rejected: a CI check that a built image contains no `.env`. The image was
+  never the problem; the context is, and that is what is tested.
+- Source: #63; R-29.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

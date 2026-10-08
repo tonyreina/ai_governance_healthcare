@@ -182,6 +182,10 @@ jobs:
       - name: proxy
         run: pixi run test-proxy
 
+      # What `docker build` uploads to the daemon: no .env, backups, .git or PDF.
+      - name: build contexts
+        run: pixi run test-dockerignore
+
       - name: bring up the stack
         run: |
           # The generator the docs and preflight tell people to use. Base64 emits

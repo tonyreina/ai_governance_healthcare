@@ -35,6 +35,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 COMPOSE = ROOT / "compose.yaml"
+DEV = ROOT / "compose.dev.yaml"
 
 API, DB, PROXY = "api", "db", "proxy"
 EDGE, DATA = "edge", "data"
@@ -367,6 +368,37 @@ def every_rule(compose: dict) -> list[str]:
     ]
 
 
+def dead_ports(base: dict, dev: dict) -> list[str]:
+    """A published port on a service that no routable network reaches does nothing.
+
+    Docker makes no host binding for a container that is only on `internal: true`
+    networks, and compose does not complain, so the file reads as if the port works
+    (#88). The dev override must not claim one.
+    """
+    internal = {
+        name
+        for name, net in (base.get("networks") or {}).items()
+        if (net or {}).get("internal")
+    }
+    problems = []
+    for name, svc in (dev.get("services") or {}).items():
+        if not svc.get("ports"):
+            continue
+        nets = service(base, name).get("networks", [])
+        nets = list(nets.keys()) if isinstance(nets, dict) else list(nets)
+        if nets and all(n in internal for n in nets):
+            problems.append(
+                f"{name} publishes {svc['ports']} but is only on internal "
+                f"network(s) {nets}, so Docker creates no host binding"
+            )
+    return problems
+
+
+def mentions_dead_db_port(text: str) -> bool:
+    """Prose or config that offers the database on a host port nothing opens."""
+    return "DEV_DB_PORT" in text
+
+
 # --- tests -------------------------------------------------------------------
 
 
@@ -381,7 +413,34 @@ def main() -> int:
         all(service(compose, n) for n in (API, DB, PROXY)),
     )
 
+    dev = yaml.safe_load(DEV.read_text(encoding="utf-8"))
+    dead = dead_ports(compose, dev)
+    check(
+        "the dev override publishes no port that does nothing",
+        not dead,
+        "; ".join(dead),
+    )
+    for path in (".env.example", "compose.dev.yaml"):
+        check(
+            f"{path} offers no DEV_DB_PORT, which has no effect",
+            not mentions_dead_db_port((ROOT / path).read_text(encoding="utf-8")),
+        )
+    running = (ROOT / "docs" / "running.md").read_text(encoding="utf-8")
+    check(
+        "running.md does not point the server tests at the stack's own database",
+        "localhost:5432" not in running,
+    )
+
     print("Mutation tests: each rule must notice when it is broken")
+
+    probe = {"services": {DB: {"ports": ["127.0.0.1:5432:5432"]}}}
+    check(
+        "a dev port on an internal-only service is noticed",
+        bool(dead_ports(compose, probe)),
+    )
+    probe = {"services": {API: {"ports": ["127.0.0.1:8000:8000"]}}}
+    check("a dev port on the api is not", not dead_ports(compose, probe))
+    check("a DEV_DB_PORT mention is noticed", mentions_dead_db_port("DEV_DB_PORT=5432"))
 
     broken = copy.deepcopy(compose)
     broken["services"][API]["ports"] = ["127.0.0.1:8000:8000"]

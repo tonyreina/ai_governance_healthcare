@@ -11,16 +11,16 @@
 # What it changes:
 #   * identity becomes a fixed local developer, with no SSO front door
 #   * the API hot-reloads from the working tree
-#   * Postgres and the API are published on 127.0.0.1 so psql, pytest and
-#     an HTTP client can reach them directly
+#   * the API is published on 127.0.0.1 so an HTTP client can reach it directly
+#
+# The database is NOT published. It sits only on an `internal: true` network, and
+# Docker makes no host binding for such a container, so a port mapping here would
+# look like it works and do nothing (#88). Use `make psql`; run the server tests
+# against a throwaway container (server/README.md).
 # =============================================================================
 
 services:
   db:
-    ports:
-      # 127.0.0.1 only -- NOT 0.0.0.0. On a laptop on hospital wifi, "5432:5432"
-      # offers the database to the whole subnet.
-      - "127.0.0.1:${DEV_DB_PORT:-5432}:5432"
     environment:
       # A default so `make dev` works on a fresh clone with no .env. The base
       # file has no default, so a real deployment still has to supply one.

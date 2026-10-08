@@ -218,12 +218,23 @@ def main() -> int:
         ),
     )
     check(
+        # A non-loopback bind now also needs the storage-encryption confirmation
+        # (#47), so it is given here: this check is about TLS, not storage.
         "a hostname makes Caddy provision TLS, so 0.0.0.0 is fine",
-        problems(HTTP_BIND="0.0.0.0", SITE_ADDRESS="governance.example.org") == [],
+        problems(
+            HTTP_BIND="0.0.0.0",
+            SITE_ADDRESS="governance.example.org",
+            STORAGE_ENCRYPTION_CONFIRMED="1",
+        )
+        == [],
     )
     check(
         "https:// is TLS too",
-        problems(HTTP_BIND="0.0.0.0", SITE_ADDRESS="https://governance.example.org")
+        problems(
+            HTTP_BIND="0.0.0.0",
+            SITE_ADDRESS="https://governance.example.org",
+            STORAGE_ENCRYPTION_CONFIRMED="1",
+        )
         == [],
     )
     check(
@@ -351,6 +362,44 @@ def main() -> int:
         "the shipped template plus a base64 password and an identity passes",
         pf.check(done) == [],
         str(pf.check(done)),
+    )
+
+    print("A production-shaped stack needs a decision about encryption at rest (#47)")
+    exposed = {"HTTP_BIND": "0.0.0.0", "SITE_ADDRESS": "governance.example.org"}
+    check(
+        "a non-loopback bind with no confirmation is refused",
+        mentions(problems(**exposed), "STORAGE_ENCRYPTION_CONFIRMED"),
+    )
+    check(
+        "the refusal says what encrypting it means and why it matters",
+        mentions(problems(**exposed), "164.402")
+        and mentions(problems(**exposed), "unencrypted"),
+    )
+    check(
+        "STORAGE_ENCRYPTION_CONFIRMED=1 accepts it",
+        not mentions(
+            problems(**exposed, STORAGE_ENCRYPTION_CONFIRMED="1"),
+            "STORAGE_ENCRYPTION_CONFIRMED",
+        ),
+    )
+    for wrong in ("0", "true", "yes", ""):
+        check(
+            f"{wrong!r} is not a confirmation",
+            mentions(
+                problems(**exposed, STORAGE_ENCRYPTION_CONFIRMED=wrong),
+                "STORAGE_ENCRYPTION_CONFIRMED",
+            ),
+        )
+    check(
+        "loopback needs no confirmation: that is a laptop",
+        not mentions(problems(), "STORAGE_ENCRYPTION_CONFIRMED"),
+    )
+    check(
+        "a managed database is the provider's storage, not this volume",
+        not mentions(
+            problems(**exposed, DATABASE_URL="postgresql://u@h/db?sslmode=verify-full"),
+            "STORAGE_ENCRYPTION_CONFIRMED",
+        ),
     )
 
     print("The API's restricted role needs its own password (#48)")

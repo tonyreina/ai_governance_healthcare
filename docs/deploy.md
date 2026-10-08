@@ -70,6 +70,28 @@ there is no `pgdata` volume here and no `db` service, so the
 does not apply. Prefer the platform's identity-based connection — Cloud SQL IAM
 auth, RDS IAM auth, Entra ID — over a password you have to rotate at all.
 
+### Encryption at rest
+
+45 CFR 164.312(a)(2)(iv) is *addressable*: implement it or document why an
+equivalent is reasonable. On a managed database the provider's storage encryption
+is the usual answer, and what to confirm differs:
+
+| | Storage encryption | Customer-managed key |
+|---|---|---|
+| Cloud SQL | on by default, with Google-managed keys | optional, chosen when the instance is created |
+| RDS | **off unless you pass `--storage-encrypted` when you create the instance**, and it cannot be turned on for an existing one (restore from an encrypted copy of a snapshot); the command below sets it | optional, with `--kms-key-id` |
+| Azure Database for PostgreSQL | on by default, with service-managed keys | optional |
+
+!!! warning "Not exercised against any real managed database"
+
+    These come from the providers' documentation. Confirm the setting on the
+    instance you actually have (not the one in this guide), and record that you
+    did: the point of an addressable standard is the decision, and a default
+    nobody checked is not one.
+
+The Compose stack's own `pgdata` volume is not covered by any of this. See
+[Self-hosting](self-hosting.md#encryption-at-rest).
+
 ### Backup and recovery
 
 45 CFR 164.308(a)(7) makes a data backup plan and a disaster recovery plan

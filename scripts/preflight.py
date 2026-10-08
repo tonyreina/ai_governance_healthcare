@@ -33,6 +33,9 @@ ENV_FILE = Path(".env")
 # because this reads `.env` ALONE and has to decide what compose will do with it.
 # tests/test_preflight.py fails if either drifts from compose.yaml.
 DEFAULT_BIND = "127.0.0.1"
+# Host names that mean "only this machine". Names defined by the network stack, not by
+# this project, so a constant is the right shape (CLAUDE.md, on protocol values).
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 GOOGLE_PREFIX = "accounts.google.com:"
 # HTTP header names are case-insensitive, and Caddy placeholders keep the case
 # the operator wrote.
@@ -202,13 +205,38 @@ def check(env: dict[str, str]) -> list[str]:
     bind = env.get("HTTP_BIND") or DEFAULT_BIND
     site = env.get("SITE_ADDRESS") or DEFAULT_SITE
     serves_plain_http = site.startswith("http://")
-    if bind not in ("127.0.0.1", "::1", "localhost") and serves_plain_http:
+    if bind not in LOOPBACK_HOSTS and serves_plain_http:
         problems.append(
             f"HTTP_BIND={bind} publishes the stack to the network while\n"
             f"    SITE_ADDRESS={site} serves plain HTTP. Either set SITE_ADDRESS to a\n"
             "    hostname so Caddy gets a certificate, or leave HTTP_BIND on loopback\n"
             "    and terminate TLS in front. Override with `make up FORCE=1` if\n"
             "    something this cannot see already terminates TLS."
+        )
+
+    # Encryption at rest. Nothing in a container can verify it, so this cannot check
+    # it. What it can do is refuse to bring up a production-shaped stack (reachable
+    # beyond this machine, using the stack's own database volume) until somebody has
+    # said, on the record, that they dealt with it. 45 CFR 164.312(a)(2)(iv) is
+    # addressable, which means implement it or document why an equivalent is
+    # reasonable; either way it is a decision, and a silent default is not one (#47).
+    uses_own_volume = not env.get("DATABASE_URL")
+    if (
+        uses_own_volume
+        and bind not in LOOPBACK_HOSTS
+        and env.get("STORAGE_ENCRYPTION_CONFIRMED") != "1"
+    ):
+        problems.append(
+            "The database lives in the Docker volume `pgdata`, which is an\n"
+            "    unencrypted directory on this host's disk unless the disk is\n"
+            "    encrypted. A stolen or improperly disposed disk is then readable.\n"
+            "    If this stack holds protected health information, whether that is a\n"
+            "    reportable breach can turn on it (see 45 CFR 164.402; ask your\n"
+            "    privacy officer). Put the Docker data root on an encrypted volume\n"
+            "    (LUKS/dm-crypt, or your cloud's encrypted disks), then set\n"
+            "      STORAGE_ENCRYPTION_CONFIRMED=1\n"
+            "    in .env. That is you telling us it is done: nothing here can check.\n"
+            '    docs/self-hosting.md, "Encryption at rest", has the steps.'
         )
 
     return problems

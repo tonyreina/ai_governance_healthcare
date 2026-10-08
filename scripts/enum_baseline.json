@@ -176,9 +176,6 @@
       "patient-discharge-summarization": 1,
       "sepsis-risk-prediction": 1
     },
-    "scripts/preflight.py": {
-      "localhost": 1
-    },
     "server/app/access.py": {
       "own": 1,
       "owner": 2,

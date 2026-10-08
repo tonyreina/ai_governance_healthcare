@@ -266,6 +266,50 @@ class Doctor:
             "  docker compose up -d --force-recreate migrate api",
         )
 
+    def check_storage(self, env: dict[str, str], services: dict[str, dict]) -> None:
+        """What is under the database volume, as far as the host can say (#47).
+
+        45 CFR 164.312(a)(2)(iv), encryption at rest, is addressable: a decision, not a
+        default. This cannot prove anything about a disk it cannot see. It reports what
+        the host shows, and says plainly when it cannot tell, so "it is encrypted" is
+        never inferred from silence.
+        """
+        if env.get("DATABASE_URL") or env.get("APP_DATABASE_URL"):
+            return  # a managed database: the provider's storage, not this volume
+        state = services.get("db", {}).get("State")
+        if state != "running":  # enum-ok: docker compose's container state name
+            return
+        volume = run(
+            ["docker", "volume", "inspect", VOLUME, "--format", "{{.Mountpoint}}"]
+        )
+        mountpoint = volume.stdout.strip()
+        if volume.returncode != 0 or not mountpoint:
+            say(WARN, "cannot tell what the database volume is stored on")
+            return
+        device = run(["findmnt", "-no", "SOURCE", "-T", mountpoint]).stdout.strip()
+        layers = run(["lsblk", "-sno", "TYPE", device]).stdout.split() if device else []
+        if "crypt" in layers:
+            say(
+                OK,
+                f"the database volume is on an encrypted device (dm-crypt: {device})",
+            )
+        elif layers:
+            say(
+                WARN,
+                f"the database volume is on {device} with no encryption layer",
+                "If this host's disk is not encrypted, `pgdata` is readable by whoever",
+                "holds the disk. A cloud provider may encrypt below this level, which",
+                "this cannot see. Either way, record the decision: set",
+                "STORAGE_ENCRYPTION_CONFIRMED=1 in .env once it is dealt with.",
+            )
+        else:
+            say(
+                WARN,
+                "cannot tell whether the database volume is encrypted at rest",
+                f"(its data lives at {mountpoint}; the host did not report a device).",
+                "Docker Desktop and some hosts hide this. Check the host's disk.",
+            )
+
     def check_sole_owners(self, env: dict[str, str], services: dict[str, dict]) -> None:
         """How many projects have exactly one owner (a warning, not a failure).
 
@@ -401,6 +445,7 @@ def main() -> int:
     doctor.check_password(env, services)
     doctor.check_app_password(env, services)
     doctor.check_sole_owners(env, services)
+    doctor.check_storage(env, services)
     if services.get("proxy", {}).get("State") == "running":
         doctor.check_reachable(env)
     print()

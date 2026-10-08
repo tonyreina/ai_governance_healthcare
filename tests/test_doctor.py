@@ -50,6 +50,10 @@ with open(os.environ["CALLS"], "a") as f:
 joined = " ".join(args)
 if "ps --format json" in joined or "ps --format" in joined:
     print("\n".join(json.dumps(r) for r in sc["services"]))
+elif "volume inspect" in joined:
+    print("/var/lib/docker/volumes/chai-governance_pgdata/_data")
+elif "info" in joined and "DockerRootDir" in joined:
+    print("/var/lib/docker")
 elif "psql" in joined and "jsonb_array_length" in joined:
     print(sc.get("sole_owners", 0))
 elif "psql" in joined:
@@ -81,7 +85,11 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 
 def doctor(
-    health: str, logins: dict[str, bool], env_text: str = ENV, sole_owners: int = 0
+    health: str,
+    logins: dict[str, bool],
+    env_text: str = ENV,
+    sole_owners: int = 0,
+    block_types: str | None = None,
 ):
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
@@ -91,6 +99,14 @@ def doctor(
         stub = bindir / "docker"
         stub.write_text(STUB)
         stub.chmod(0o755)
+        # The storage report asks the host, so findmnt and lsblk are stood in for too.
+        (bindir / "findmnt").write_text("#!/bin/sh\necho /dev/mapper/vg-data\n")
+        (bindir / "lsblk").write_text(
+            "#!/bin/sh\n"
+            + (f'printf "%s\\n" {block_types}\n' if block_types else "exit 1\n")
+        )
+        for tool in ("findmnt", "lsblk"):
+            (bindir / tool).chmod(0o755)
         calls = work / "calls.jsonl"
         done = subprocess.run(
             [sys.executable, str(DOCTOR)],
@@ -214,6 +230,42 @@ def main() -> int:
         "none is reported as fine",
         "no project depends on a single owner" in done.stdout,
     )
+
+    print("What backs the database volume (#47)")
+    done, _ = doctor(
+        HEALTH["restricted"],
+        {"chai": True, "chai_app": True},
+        block_types="lvm crypt part disk",
+    )
+    check(
+        "a volume on dm-crypt is reported as encrypted",
+        "encrypted" in done.stdout and "dm-crypt" in done.stdout,
+        done.stdout[-500:],
+    )
+    check("and that is not a warning about it", done.returncode == 0)
+    done, _ = doctor(
+        HEALTH["restricted"],
+        {"chai": True, "chai_app": True},
+        block_types="part disk",
+    )
+    check(
+        "a volume on plain disks is reported as not visibly encrypted",
+        "no encryption layer" in done.stdout
+        and "STORAGE_ENCRYPTION_CONFIRMED" in done.stdout,
+        done.stdout[-500:],
+    )
+    check(
+        "and does not claim to know what a cloud provider does below the disk",
+        "cannot see" in done.stdout.lower(),
+    )
+    done, _ = doctor(HEALTH["restricted"], {"chai": True, "chai_app": True})
+    check(
+        "when the host cannot be inspected it says it cannot tell, not that it is fine",
+        "cannot tell" in done.stdout.lower()
+        and "on an encrypted device" not in done.stdout,
+        done.stdout[-500:],
+    )
+    check("and that is not a failure", done.returncode == 0)
 
     print()
     if failures:

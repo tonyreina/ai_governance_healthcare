@@ -289,6 +289,48 @@ which is the number to write down.
 `YES` first (`CONFIRM=YES` skips the question for automation). Practice the
 restore somewhere that is not production before you need it.
 
+### Encryption at rest
+
+The database lives in the Docker volume `pgdata`, which is an ordinary directory
+on the host's disk. **Nothing in this stack encrypts it.** If the disk is not
+encrypted, whoever holds the disk (stolen, returned to a vendor, improperly
+disposed of) can read every record.
+
+45 CFR 164.312(a)(2)(iv), encryption at rest, is *addressable*: implement it, or
+document why an equivalent is reasonable. Either way it has to be a decision on
+the record, and there is a practical reason to make it. If this stack holds
+protected health information, whether a lost disk is a reportable breach can
+turn on whether the data was encrypted to the standard HHS describes (45 CFR
+164.402); ask your privacy officer. Whether this system is approved for
+protected health information at all is a separate question this repository has
+not answered.
+
+To encrypt it, put **Docker's data root** (`/var/lib/docker` by default, which
+holds `pgdata`) on an encrypted volume:
+
+- **A host you manage:** LUKS/dm-crypt on the device that holds the data root,
+  or an encrypted filesystem, and `data-root` in `/etc/docker/daemon.json` if
+  you moved it. Keep the key somewhere other than that host.
+- **A cloud VM:** the provider's encrypted disks (encrypted EBS volumes,
+  encrypted Persistent Disks, encrypted managed disks), enabled when the disk is
+  created. Check the setting on the disk that backs the data root, not on the
+  boot disk.
+
+Then set `STORAGE_ENCRYPTION_CONFIRMED=1` in `.env`. **That is you telling the
+stack it is done: nothing inside a container can check.** `make up` refuses a
+stack that is reachable beyond this machine (a non-loopback `HTTP_BIND`) that
+uses its own database volume until you do, so the decision is made by someone,
+once, on the record. `make doctor` reports what the host shows under the volume
+(a dm-crypt layer, or none, or that it cannot tell); treat "none" as "ask",
+because a cloud provider may encrypt below what the host can see.
+
+`make backup` already encrypts every dump with a passphrase of its own (see
+above); that is separate from, and does not replace, an encrypted volume.
+
+Not covered: application-level or column-level encryption of the project
+documents. It would break the `jsonb` merge, version history and every query,
+for a threat the disk-level control already addresses.
+
 ### Deleting and destroying data
 
 There are three different things, and they reach different amounts. **Deleting a

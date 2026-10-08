@@ -375,6 +375,28 @@ honest answer and is a gap worth closing; see R-19.
   passphrase, a truncated dump, a dump that lost its triggers and a missing file
   each fail and leave no container; the prompt).
 
+### R-42 Encryption at rest is a decision on the record, not a default
+
+- Status: Active
+- The stack's own `pgdata` volume is not encrypted by this repository and the
+  docs say so. `make up` refuses a stack that is reachable beyond this machine
+  (a non-loopback `HTTP_BIND`) and uses its own database volume until
+  `STORAGE_ENCRYPTION_CONFIRMED=1` is set, which means someone put Docker's data
+  root on an encrypted volume and said so. Only `1` counts. A managed database
+  (`DATABASE_URL`) is the provider's storage and needs no confirmation here.
+- `make doctor` reports what the host shows under the volume and says plainly
+  when it cannot tell. It never infers "encrypted" from silence.
+- It **cannot verify** encryption: nothing in a container can. The confirmation
+  is a declaration, which is what an addressable standard (45 CFR
+  164.312(a)(2)(iv)) asks for. The docs are conditional on whether the system
+  holds ePHI, because that is open (R-21).
+- Not covered: column- or document-level encryption, which would break the
+  `jsonb` merge and every query.
+- Source: #47; DECISIONS D-44.
+- Enforced by: `tests/test_preflight.py` (the refusal, the exact accepted value,
+  the exemptions) and `tests/test_doctor.py` (what is reported for each host
+  shape).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

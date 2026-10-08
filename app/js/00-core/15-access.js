@@ -30,6 +30,11 @@
    ============================================================ */
 const ROLES = ["owner", "writer", "reader"];
 const ROLE_LABEL = { owner: "Owner", writer: "Write access", reader: "Read-only" };
+/* What the reader sees for a role, and the sentence that says which they hold. The
+   English ROLE_LABEL above is kept for anything a record or an export stores. */
+const ROLE_KEY = Object.freeze({ owner: "role.owner", writer: "role.writer", reader: "role.reader" });
+const ROLE_YOU_KEY = Object.freeze({ owner: "access.you.owner", writer: "access.you.writer", reader: "access.you.reader" });
+const roleLabel = r => t(ROLE_KEY[r]);
 
 const blankAccess = () => ({ owners: [], writers: [], readers: [] });
 

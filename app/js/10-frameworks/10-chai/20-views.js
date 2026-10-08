@@ -184,8 +184,8 @@ function renderLabel(){ if(S) document.getElementById("labelHost").innerHTML = l
 
 /* ---------- report ---------- */
 function historyHTML(){
-  if(!LOG.length) return `<p style="font-size:14px;color:var(--muted)">No recorded events yet.</p>`;
-  return `<ul class="history">${LOG.slice(0,25).map(e=>`<li><time>${esc(fmtDay((e.at||"").slice(0,10)))}</time><span>${esc(e.text)} <span style="color:var(--muted)">by ${who(e.by)}</span></span></li>`).join("")}</ul>`;
+  if(!LOG.length) return `<p style="font-size:14px;color:var(--muted)">${esc(t("history.none"))}</p>`;
+  return `<ul class="history">${LOG.slice(0,25).map(e=>`<li><time>${esc(fmtDay((e.at||"").slice(0,10)))}</time><span>${esc(e.text)} <span style="color:var(--muted)">${tHtml("log.by",{},{who:who(e.by)})}</span></span></li>`).join("")}</ul>`;
 }
 function reportBody(names){
   const nm = id => names ? esc(displayName(id)) : who(id);

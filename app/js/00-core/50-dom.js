@@ -13,10 +13,13 @@
    rendered DOM so a textarea added later is held to the same rule (#59). */
 const NO_BROWSER_ASSIST = 'spellcheck="false" autocomplete="off"';
 const get = (path)=> path.split(".").reduce((o,k)=>o==null||!safeKey(k)?undefined:o[k], S);
-function field(path,label,hint,long,opts,kind){
+/* `label` and `hint` arrive translated. A select's options are the values stored in
+   the record, which stay English so the data does not change with the reader's
+   language; `optLabel` turns a stored value into what the reader sees. */
+function field(path,label,hint,long,opts,kind,optLabel){
   const v=esc(get(path)||""); const id="f_"+path.replace(/\./g,"_");
   let input;
-  if(opts) input=`<select id="${id}" data-bind="${path}"><option value="">Choose…</option>${opts.map(o=>`<option${get(path)===o?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
+  if(opts) input=`<select id="${id}" data-bind="${path}"><option value="">${esc(t("field.choose"))}</option>${opts.map(o=>`<option value="${esc(o)}"${get(path)===o?" selected":""}>${esc(optLabel?optLabel(o):o)}</option>`).join("")}</select>`;
   else if(long) input=`<textarea id="${id}" data-bind="${path}" rows="3" ${NO_BROWSER_ASSIST}>${v}</textarea>`;
   // `date` gives the browser's own picker and its validation. Asking someone
   // to type YYYY-MM-DD invites 03/04/2026, which is two different dates
@@ -34,7 +37,7 @@ function pager(){
   const i=views.findIndex(v=>v.id===UI.view);
   const prev=views[i-1], next=views[i+1];
   const name=v=>v?(v.short||v.label||""):"";
-  return `<div class="pager">${prev?`<button class="btn" data-go="${prev.id}">Back to ${esc(name(prev))}</button>`:`<button class="btn" data-home="1">Back to all projects</button>`}${next?`<button class="btn primary" data-go="${next.id}">Continue to ${esc(name(next))}</button>`:""}</div>`;
+  return `<div class="pager">${prev?`<button class="btn" data-go="${prev.id}">${esc(t("pager.back",{name:name(prev)}))}</button>`:`<button class="btn" data-home="1">${esc(t("pager.home"))}</button>`}${next?`<button class="btn primary" data-go="${next.id}">${esc(t("pager.continue",{name:name(next)}))}</button>`:""}</div>`;
 }
 function focusKey(el){
   if(!el||!el.dataset) return null; const d=el.dataset;

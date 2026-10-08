@@ -168,6 +168,34 @@ def main() -> int:
             "and kept after a reload", page.inner_text("h1") == "KI-Projekte in Prüfung"
         )
 
+        print("A choice is shown in the reader's language and stored in English")
+        page.evaluate("loadSamples()")
+        page.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
+        page.evaluate("openProject([...PROJECTS.keys()][0], 'setup')")
+        page.wait_for_timeout(200)
+        check("the rail is in German", "Projekteinrichtung" in page.inner_text("#rail"))
+        options = page.eval_on_selector_all(
+            "#f_meta_riskTier option", "os => os.map(o => [o.value, o.textContent])"
+        )
+        check(
+            "risk tier options read German and keep the English value",
+            ["High", "Hoch"] in options and ["Low", "Niedrig"] in options,
+            str(options),
+        )
+        page.select_option("#f_meta_riskTier", "High")
+        page.wait_for_timeout(200)
+        check(
+            "the record stores the English value",
+            page.evaluate("S.meta.riskTier") == "High",
+            str(page.evaluate("S.meta.riskTier")),
+        )
+        check(
+            "the pager reads German",
+            "Weiter zu" in page.inner_text(".pager"),
+            page.inner_text(".pager"),
+        )
+        page.evaluate("goHome()")
+
         print("Dates follow the chosen language, not the browser's")
         check(
             "German",

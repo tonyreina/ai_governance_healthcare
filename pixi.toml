@@ -42,6 +42,8 @@ check-app = "python scripts/check_app.py"
 test-app = "python tests/test_optica.py"
 test-boot = "python tests/test_boot_storage.py"
 test-exports = "python tests/test_exports.py"
+# No key in a document can write to an object's prototype: merge, path set and get (#124).
+test-untrusted-keys = "python tests/test_untrusted_keys.py"
 test-audit = "python tests/test_audit_log.py"
 # Free-text fields opt out of browser spellcheck and form history (#59).
 test-text-fields = "python tests/test_text_fields.py"

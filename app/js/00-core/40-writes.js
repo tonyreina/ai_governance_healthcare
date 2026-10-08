@@ -81,14 +81,17 @@ async function flush(pid,attempt){
 }
 function patchFromPath(path,val){
   const ks=path.split("."); const out={}; let o=out;
+  if(!ks.every(safeKey)) return out;
   for(let i=0;i<ks.length-1;i++){ o=o[ks[i]]={}; } o[ks[ks.length-1]]=val; return out;
 }
 function setLocal(path,val){
   const ks=path.split("."); let o=S;
+  if(!ks.every(safeKey)) return;
   for(let i=0;i<ks.length-1;i++){ if(o[ks[i]]==null||typeof o[ks[i]]!=="object") o[ks[i]]={}; o=o[ks[i]]; }
   o[ks[ks.length-1]]=val;
 }
 function edit(path,val){
+  if(!String(path).split(".").every(safeKey)) return;  // never a write to a prototype
   const before = path.startsWith("metrics.") ? clone(S.metrics) : clone(get(path));
   setLocal(path,val);
   let patch;

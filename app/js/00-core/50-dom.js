@@ -12,7 +12,7 @@
    so they opt out, and out of the browser's form history too. A test sweeps the
    rendered DOM so a textarea added later is held to the same rule (#59). */
 const NO_BROWSER_ASSIST = 'spellcheck="false" autocomplete="off"';
-const get = (path)=> path.split(".").reduce((o,k)=>o==null?undefined:o[k], S);
+const get = (path)=> path.split(".").reduce((o,k)=>o==null||!safeKey(k)?undefined:o[k], S);
 function field(path,label,hint,long,opts,kind){
   const v=esc(get(path)||""); const id="f_"+path.replace(/\./g,"_");
   let input;

@@ -380,7 +380,14 @@ body.ro .ro-hide{display:none!important}
 const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const clone = o => o==null ? o : JSON.parse(JSON.stringify(o));
 const isObj = v => v && typeof v==="object" && !Array.isArray(v);
-function deepMerge(t,src){ for(const k in src){ if(isObj(src[k]) && isObj(t[k])) deepMerge(t[k],src[k]); else t[k]=clone(src[k]); } return t; }
+/* Keys that reach an object's prototype instead of a property of its own. JSON.parse
+   makes "__proto__" an ordinary own key, so a document that carries one would, on a
+   naive merge or path assignment, write into Object.prototype for every object on the
+   page (CodeQL js/prototype-pollution-utility, #124). Every helper that walks or
+   writes by key skips them. */
+const UNSAFE_KEYS = Object.freeze(new Set(["__proto__", "constructor", "prototype"]));
+const safeKey = k => !UNSAFE_KEYS.has(k);
+function deepMerge(t,src){ for(const k in src){ if(!Object.hasOwn(src,k) || !safeKey(k)) continue; if(isObj(src[k]) && isObj(t[k])) deepMerge(t[k],src[k]); else t[k]=clone(src[k]); } return t; }
 function pad(n){return String(n).padStart(2,"0");}
 function ymd(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 const TODAY = ()=> ymd(new Date());
@@ -1118,14 +1125,17 @@ async function flush(pid,attempt){
 }
 function patchFromPath(path,val){
   const ks=path.split("."); const out={}; let o=out;
+  if(!ks.every(safeKey)) return out;
   for(let i=0;i<ks.length-1;i++){ o=o[ks[i]]={}; } o[ks[ks.length-1]]=val; return out;
 }
 function setLocal(path,val){
   const ks=path.split("."); let o=S;
+  if(!ks.every(safeKey)) return;
   for(let i=0;i<ks.length-1;i++){ if(o[ks[i]]==null||typeof o[ks[i]]!=="object") o[ks[i]]={}; o=o[ks[i]]; }
   o[ks[ks.length-1]]=val;
 }
 function edit(path,val){
+  if(!String(path).split(".").every(safeKey)) return;  // never a write to a prototype
   const before = path.startsWith("metrics.") ? clone(S.metrics) : clone(get(path));
   setLocal(path,val);
   let patch;
@@ -1438,7 +1448,7 @@ function logWindowNote(){
    so they opt out, and out of the browser's form history too. A test sweeps the
    rendered DOM so a textarea added later is held to the same rule (#59). */
 const NO_BROWSER_ASSIST = 'spellcheck="false" autocomplete="off"';
-const get = (path)=> path.split(".").reduce((o,k)=>o==null?undefined:o[k], S);
+const get = (path)=> path.split(".").reduce((o,k)=>o==null||!safeKey(k)?undefined:o[k], S);
 function field(path,label,hint,long,opts,kind){
   const v=esc(get(path)||""); const id="f_"+path.replace(/\./g,"_");
   let input;
@@ -2859,7 +2869,9 @@ function exportPDF(){
 function exportMD(){
   const all=allItems(), ov=scoreOf(all), m=S.meta, L=[];
   const st=s=>s?STATUS[s]:"Unanswered";
-  const line=s=>String(s||"").replace(/\n+/g," ").replace(/\|/g,"\\|");
+  // Backslashes first: escaping only the pipe turned a value's own `\|` into `\\|`,
+  // an escaped backslash and a live pipe that ends the cell (#124).
+  const line=s=>String(s||"").replace(/\n+/g," ").replace(/\\/g,"\\\\").replace(/\|/g,"\\|");
   const nm=id=>displayName(id);
   L.push(`# ${m.solution||"Untitled AI solution"}: CHAI assurance review`,"");
   L.push(`- **Status:** ${statusOf(S).label}`,`- **Lifecycle phase:** ${phase(S).label}`,`- **Organization:** ${m.org||"–"}`,`- **Developer:** ${m.developer||"–"}`,`- **Sourcing:** ${m.sourcing||"–"}`,`- **Risk tier:** ${m.riskTier||"–"}`,`- **Clinical sponsor:** ${m.sponsor||"–"}`,`- **Next periodic review:** ${nextReview(S)||"–"}`,`- **Review team:** ${line(m.reviewers)||"–"}`,`- **Scope:** ${line(m.scope)||"–"}`,`- **Generated:** ${TODAY()}`,`- **Stored in:** ${storageNote().label}. ${storageNote().note}`,"");
@@ -2874,7 +2886,7 @@ function exportMD(){
   else L.push("None.");
   L.push("","## Applied model card","");
   CARD.forEach(sec=>{L.push(`### ${sec.sec}`,""); sec.fields.forEach(f=>L.push(`- **${f[1]}:** ${line(cardValOf(S,f[0]))||"_Not provided_"}`)); L.push("");
-    if(sec.sec==="Trust ingredients"){ L.push("### Key metrics",""); if(S.metrics.length){L.push("| Category | Metric | Value | 95% CI | Population |","|---|---|---|---|---|"); S.metrics.forEach(x=>L.push(`| ${x.cat} | ${line(x.name)} | ${line(x.value)} | ${line(x.ci)} | ${line(x.pop)} |`));} else L.push("_None entered_"); L.push("");}});
+    if(sec.sec==="Trust ingredients"){ L.push("### Key metrics",""); if(S.metrics.length){L.push("| Category | Metric | Value | 95% CI | Population |","|---|---|---|---|---|"); S.metrics.forEach(x=>L.push(`| ${line(x.cat)} | ${line(x.name)} | ${line(x.value)} | ${line(x.ci)} | ${line(x.pop)} |`));} else L.push("_None entered_"); L.push("");}});
   L.push("## Sign-off history",""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${(e.at||"").slice(0,10)}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push("None."); L.push("");
   L.push("## Appendix: full checklist","");
   STAGES.forEach(s=>{L.push(`### ${s.n}. ${s.title}`,""); s.items.forEach(it=>{const d=S.items[it.id]||{}; L.push(`- [${it.p}] ${it.text}: **${st(d.status)}**${d.evidence?` (${line(d.evidence)})`:""}`);}); L.push("");});

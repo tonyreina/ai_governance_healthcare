@@ -10,6 +10,7 @@ Sheets treat a leading =, +, - or @ as a formula, quoted or not.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -36,6 +37,21 @@ def check(name: str, condition: bool, detail: str = "") -> None:
     else:
         print(f"  FAIL  {name}{(' -- ' + detail) if detail else ''}")
         failures.append(name)
+
+
+def md_cells(row: str) -> list[str]:
+    """A Markdown table row split on its live pipes: a pipe preceded by an even
+    number of backslashes ends a cell, one preceded by an odd number is text."""
+    cells, cell, slashes = [], "", 0
+    for ch in row.strip():
+        if ch == "|" and slashes % 2 == 0:
+            cells.append(cell)
+            cell = ""
+        else:
+            cell += ch
+        slashes = slashes + 1 if ch == "\\" else 0
+    cells.append(cell)
+    return cells[1:-1]  # the row starts and ends with a pipe
 
 
 def main() -> int:
@@ -90,6 +106,51 @@ def main() -> int:
             "exportCSV() defangs the project name",
             "\"'=HYPERLINK" in csv,
             csv.splitlines()[1][:60] if len(csv.splitlines()) > 1 else csv[:60],
+        )
+        # A Markdown table cell must hold whatever a writer types (#124). Escaping
+        # only the pipe let a value's own "\\|" become an escaped backslash and a
+        # live pipe, which ends the cell: a writer could push text into Status.
+        page.evaluate("loadSamples()")
+        page.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
+        page.evaluate("openProject([...PROJECTS.keys()][0], 'report')")
+        page.wait_for_timeout(300)
+        hostile = "GAPMARK \\| Met | forged \\"
+        md = page.evaluate(
+            """(v) => {
+                const it = allItems()[0];
+                S.items[it.id] = {status: "notmet", owner: v};
+                S.metrics = [{cat: "CATMARK | x", name: "m", value: "1",
+                              ci: "", pop: ""}];
+                return exportMD();
+            }""",
+            hostile,
+        )
+        gap = next((r for r in md.splitlines() if "GAPMARK" in r), "")
+        check(
+            "a hostile value stays in its Markdown table cell",
+            len(md_cells(gap)) == 5,
+            f"{len(md_cells(gap))} cells",
+        )
+        owner = md_cells(gap)[3] if len(md_cells(gap)) == 5 else ""
+        check(
+            "and reads back as what was typed",
+            re.sub(r"\\([\\|])", r"\1", owner.strip()) == hostile,
+            owner,
+        )
+        metric = next((r for r in md.splitlines() if "CATMARK" in r), "")
+        check(
+            "a metric's category is escaped too",
+            len(md_cells(metric)) == 5,
+            f"{len(md_cells(metric))} cells",
+        )
+        check("the splitter itself counts a plain row", len(md_cells("| a | b |")) == 2)
+        check(
+            "and is not fooled by an escaped pipe (mutation)",
+            len(md_cells(r"| a \| b | c |")) == 2,
+        )
+        check(
+            "but is by a double backslash before a pipe (mutation)",
+            len(md_cells(r"| a \\| b | c |")) == 3,
         )
         browser.close()
 

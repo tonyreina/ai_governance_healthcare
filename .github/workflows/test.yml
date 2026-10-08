@@ -215,6 +215,11 @@ jobs:
       - name: proxy
         run: pixi run test-proxy
 
+      # `make verify-backup`: a real dump restored into a throwaway PostgreSQL, and
+      # `make restore` asking before it overwrites anything (#52).
+      - name: backups restore
+        run: pixi run test-verify-backup
+
       # What `docker build` uploads to the daemon: no .env, backups, .git or PDF.
       - name: build contexts
         run: pixi run test-dockerignore

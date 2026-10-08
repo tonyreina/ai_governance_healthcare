@@ -354,6 +354,27 @@ honest answer and is a gap worth closing; see R-19.
   investigator's query from the docs), `tests/test_export_beacon.py`, and
   `tests/test_stack.py` (rows in the real database through the proxy).
 
+### R-41 A backup is restored, not assumed
+
+- Status: Active
+- `make verify-backup` restores the newest dump (or `FILE=`) into a throwaway
+  PostgreSQL of the **same major version as production** (read from
+  `compose.yaml`), with no network, and exits non-zero unless it restored
+  cleanly with its tables, its rows and its **append-only triggers**. Each stage
+  of the pipeline (decrypt, gunzip, restore) is checked on its own; the
+  container is always removed; no backups at all is a failure, not a pass.
+- `make restore` overwrites the live database, so it asks the operator to type
+  `YES` (`CONFIRM=YES` for automation), as `make prune` does.
+- `make backup` is documented as a tool, not a plan: it needs a scheduler, a
+  copy outside the host and account, and a restore test, each a decision.
+- Not done: this repository schedules nothing and holds no backups; RPO and RTO
+  are the operator's to set, and the per-platform durability flags in
+  `docs/deploy.md` are from provider documentation and not exercised.
+- Source: #52; 45 CFR 164.308(a)(7); DECISIONS D-43.
+- Enforced by: `tests/test_verify_backup.py` (a real dump restored; the wrong
+  passphrase, a truncated dump, a dump that lost its triggers and a missing file
+  each fail and leave no container; the prompt).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

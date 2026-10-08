@@ -194,7 +194,7 @@ def check_restore_status_follows_the_whole_pipeline() -> None:
 
         def restore(passphrase: str) -> subprocess.CompletedProcess:
             return subprocess.run(
-                ["make", "restore", f"FILE={dump}", f"COMPOSE={sink}"],
+                ["make", "restore", f"FILE={dump}", f"COMPOSE={sink}", "CONFIRM=YES"],
                 capture_output=True,
                 text=True,
                 cwd=ROOT,
@@ -288,7 +288,7 @@ def main() -> int:
         f"exit {plain.returncode}: {plain.stdout[-200:]}",
     )
     needs = subprocess.run(
-        ["make", "restore", "FILE=backups/x.sql.gz.gpg"],
+        ["make", "restore", "FILE=backups/x.sql.gz.gpg", "CONFIRM=YES"],
         capture_output=True,
         text=True,
         cwd=ROOT,

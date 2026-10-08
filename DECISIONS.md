@@ -729,6 +729,28 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   must outlive the record it describes (D-10).
 - Source: #33; R-40.
 
+### D-43 Verify a backup by restoring it into a throwaway container
+
+- Status: Accepted
+- The check is "does this dump restore into the database I run, and does it keep
+  what it is for". So the throwaway is the production major version, read from
+  `compose.yaml` so the test cannot drift from what runs, and the checks are the
+  tables, the rows and the append-only triggers (a restore that drops them
+  silently loses the guarantee, so a clean `psql` exit is not enough).
+- Isolation: no network, data on tmpfs, a memory cap, a random name, removed in
+  a `finally`. Nothing touches the live database; it needs no running stack.
+- Each pipeline stage's exit status is read, because a pipeline's status is its
+  last command's and a failed decrypt used to look like a successful restore
+  (D-33).
+- It cannot tell that a dump is recent or that an off-host copy is the same
+  file: it checks the file it is given. The docs say so, and that the time it
+  takes is the restore time to record.
+- Rejected: restoring into the live stack's `db` service. A verification must
+  not be able to damage production.
+- Rejected: shipping a scheduler or an off-host uploader. Where backups run and
+  land is the operator's decision; the gap was that nothing said it was one.
+- Source: #52; R-41.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

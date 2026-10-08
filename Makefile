@@ -26,7 +26,7 @@ POSTGRES_DB   ?= chai
 HTTP_PORT     ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help env preflight doctor up dev down logs ps config build-app shell psql backup backup-plaintext restore prune check-isolation
+.PHONY: help env preflight doctor up dev down logs ps config build-app shell psql backup backup-plaintext restore verify-backup prune check-isolation
 
 help:  ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -136,13 +136,27 @@ backup-plaintext:  ## UNENCRYPTED pg_dump. Throwaway databases only.
 	@echo "UNENCRYPTED dump written. Do not do this with real records."
 
 # Handles both shapes, so an older plaintext dump still restores.
+#
+# It asks first, like `make prune`, because it overwrites the live database with a
+# dump (--clean drops what is there). CONFIRM=YES skips the question for automation;
+# it is a deliberate word, not a flag that is easy to pass by accident.
 restore:  ## Restore a dump: make restore FILE=backups/....sql.gz.gpg  (DESTRUCTIVE)
 	@test -n "$(FILE)" || { echo "usage: make restore FILE=backups/<file>.sql.gz.gpg"; exit 1; }
+	@if [ "$(CONFIRM)" != YES ]; then \
+	  printf 'This will OVERWRITE the live database with %s. Type YES to continue: ' "$(FILE)"; \
+	  read ans && [ "$$ans" = YES ] || { echo; echo aborted; exit 1; }; \
+	fi
 	@case "$(FILE)" in \
 	  *.gpg) test -n "$$BACKUP_PASSPHRASE" || { echo "BACKUP_PASSPHRASE is needed to read $(FILE)" >&2; exit 1; }; \
 	         scripts/backup_crypto.sh decrypt "$(FILE)" ;; \
 	  *)     cat "$(FILE)" ;; \
 	esac | gunzip -c | $(COMPOSE) exec -T $(DB_SERVICE) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+
+# A backup that has never been restored is a hypothesis (#52). This restores one into a
+# throwaway PostgreSQL (same major version as production, no network) and checks the
+# tables, the rows and the append-only triggers survived. Default: the newest dump.
+verify-backup:  ## Restore the newest backup (or FILE=...) into a throwaway database and check it
+	@BACKUP_DIR="$(BACKUP_DIR)" python3 scripts/verify_backup.py $(FILE)
 
 # The logic is scripts/check_isolation.py, so it can be tested and so it exits
 # non-zero on a failure. It used to be shell that printed what it found and ended

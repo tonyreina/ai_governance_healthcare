@@ -806,6 +806,14 @@ class ApiStore{
     }
     return out;
   }
+  /* Tell the server an export was produced (#33). Exports are built here from data
+     already fetched, so it cannot see one happen; this is the record of ordinary
+     use, not a control, because a client can omit it. id is null for the portfolio
+     CSV. */
+  recordExport(id,format){
+    const path = id ? `/projects/${encodeURIComponent(id)}/exports` : "/exports";
+    return this.req(path,{method:"POST",body:JSON.stringify({format})});
+  }
   showOlderLog(id){
     this.logDepth[id] = Math.min(500, (this.logDepth[id]||60) + 60);
     const pull = this.logPulls[id];
@@ -905,6 +913,11 @@ const MODE_LABEL = Object.freeze({
   [Mode.LOCAL]:    Object.freeze({text:"This browser only", cls:""}),
   [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
   [Mode.ARTIFACT]: Object.freeze({text:"Claude artifact",   cls:"artifact"}),
+});
+/* The export formats the dashboard can produce, as the server names them
+   (server/app/accessaudit.py ExportFormat). Reported to it when one is produced. */
+const ExportFormat = Object.freeze({
+  MD: "md", HTML: "html", PDF: "pdf", JSON: "json", CSV: "csv",
 });
 /* `data-act` values for buttons. The older actions are still bare strings in
    70-events.js (baselined in scripts/enum_baseline.json); a NEW action goes here,
@@ -2891,6 +2904,15 @@ function updateDlUI(){
     <label class="vh" for="fbmd">Markdown</label><textarea id="fbmd" readonly>${esc(exportMD())}</textarea>
     <label class="vh" for="fbjs">JSON</label><textarea id="fbjs" readonly style="margin-top:8px">${esc(JSON.stringify(projectJSON(S),null,2))}</textarea></details>`;
 }
+/* Report an export to the server, where there is one. A failure is said out loud: the
+   file was produced either way, but the user should not believe it was recorded when
+   it was not (the same reasoning as the audit queue, #45). */
+async function noteExport(format){
+  if(!STORE || typeof STORE.recordExport!=="function") return;
+  try{ await STORE.recordExport(format===ExportFormat.CSV ? null : CUR, format); }
+  catch(e){ toast("The export was produced, but could not be recorded in the access log."); }
+}
+
 async function download(filename,data){
   if(STANDALONE){
     const types={html:"text/html",md:"text/markdown",json:"application/json",csv:"text/csv"};
@@ -3414,7 +3436,7 @@ document.addEventListener("click",async e=>{
   }
   if(a==="legacy-dismiss"){ try{localStorage.setItem("chai-legacy-imported","1");}catch(e){} document.getElementById("legacyBanner")?.remove(); return; }
   if(a==="import"){ document.getElementById("importFile").click(); return; }
-  if(a==="dl-csv"){ download(`ai-governance-portfolio-${TODAY()}.csv`, exportCSV()); return; }
+  if(a==="dl-csv"){ download(`ai-governance-portfolio-${TODAY()}.csv`, exportCSV()); noteExport(ExportFormat.CSV); return; }
   if(!S) return;
   if(a===Act.LOG_OLDER){ if(STORE && STORE.showOlderLog) STORE.showOlderLog(CUR); return; }
   if(a==="claim"){
@@ -3437,11 +3459,11 @@ document.addEventListener("click",async e=>{
   else if(a==="archive"){ if(!canOwn(S)){ toast("Only an owner can archive this project"); return; } const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?"Project archived":"Project restored"); }
   else if(a==="delete"){ if(!canOwn(S)){ toast("Only an owner can delete this project"); return; } openDeleteDialog(); }
   else if(a==="newreview"){ const now=new Date().toISOString(); const patch={gates:{D:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); writeLog(CUR,`Checkpoint D: periodic review recorded (${S.gates.D.decision})`); renderRail(); renderMain(false); toast("Periodic review recorded"); }
-  else if(a==="dl-html") download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML());
-  else if(a==="dl-md") download(`${slug(S.meta.solution)}-chai-review.md`, exportMD());
-  else if(a==="dl-json") download(`${slug(S.meta.solution)}-chai-review.json`, JSON.stringify(projectJSON(S),null,2));
-  else if(a==="dl-pdf") exportPDF();
-  else if(a==="print") window.print();
+  else if(a==="dl-html"){ download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML()); noteExport(ExportFormat.HTML); }
+  else if(a==="dl-md"){ download(`${slug(S.meta.solution)}-chai-review.md`, exportMD()); noteExport(ExportFormat.MD); }
+  else if(a==="dl-json"){ download(`${slug(S.meta.solution)}-chai-review.json`, JSON.stringify(projectJSON(S),null,2)); noteExport(ExportFormat.JSON); }
+  else if(a==="dl-pdf"){ exportPDF(); noteExport(ExportFormat.PDF); }
+  else if(a==="print"){ window.print(); noteExport(ExportFormat.PDF); }
 });
 document.addEventListener("submit",async e=>{
   if(e.target.id!=="newform") return; e.preventDefault();

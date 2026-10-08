@@ -96,7 +96,7 @@ document.addEventListener("click",async e=>{
   }
   if(a==="legacy-dismiss"){ try{localStorage.setItem("chai-legacy-imported","1");}catch(e){} document.getElementById("legacyBanner")?.remove(); return; }
   if(a==="import"){ document.getElementById("importFile").click(); return; }
-  if(a==="dl-csv"){ download(`ai-governance-portfolio-${TODAY()}.csv`, exportCSV()); return; }
+  if(a==="dl-csv"){ download(`ai-governance-portfolio-${TODAY()}.csv`, exportCSV()); noteExport(ExportFormat.CSV); return; }
   if(!S) return;
   if(a===Act.LOG_OLDER){ if(STORE && STORE.showOlderLog) STORE.showOlderLog(CUR); return; }
   if(a==="claim"){
@@ -119,11 +119,11 @@ document.addEventListener("click",async e=>{
   else if(a==="archive"){ if(!canOwn(S)){ toast("Only an owner can archive this project"); return; } const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?"Project archived":"Project restored"); }
   else if(a==="delete"){ if(!canOwn(S)){ toast("Only an owner can delete this project"); return; } openDeleteDialog(); }
   else if(a==="newreview"){ const now=new Date().toISOString(); const patch={gates:{D:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); writeLog(CUR,`Checkpoint D: periodic review recorded (${S.gates.D.decision})`); renderRail(); renderMain(false); toast("Periodic review recorded"); }
-  else if(a==="dl-html") download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML());
-  else if(a==="dl-md") download(`${slug(S.meta.solution)}-chai-review.md`, exportMD());
-  else if(a==="dl-json") download(`${slug(S.meta.solution)}-chai-review.json`, JSON.stringify(projectJSON(S),null,2));
-  else if(a==="dl-pdf") exportPDF();
-  else if(a==="print") window.print();
+  else if(a==="dl-html"){ download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML()); noteExport(ExportFormat.HTML); }
+  else if(a==="dl-md"){ download(`${slug(S.meta.solution)}-chai-review.md`, exportMD()); noteExport(ExportFormat.MD); }
+  else if(a==="dl-json"){ download(`${slug(S.meta.solution)}-chai-review.json`, JSON.stringify(projectJSON(S),null,2)); noteExport(ExportFormat.JSON); }
+  else if(a==="dl-pdf"){ exportPDF(); noteExport(ExportFormat.PDF); }
+  else if(a==="print"){ window.print(); noteExport(ExportFormat.PDF); }
 });
 document.addEventListener("submit",async e=>{
   if(e.target.id!=="newform") return; e.preventDefault();

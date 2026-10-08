@@ -144,8 +144,8 @@ async def reset_database() -> None:
         # does not fire the row-level triggers that (correctly) refuse DELETE on
         # project_version.
         await conn.execute(
-            "TRUNCATE project_deletion, project_version, project_log, projects "
-            "RESTART IDENTITY CASCADE"
+            "TRUNCATE access_event, project_deletion, project_version, project_log, "
+            "projects RESTART IDENTITY CASCADE"
         )
     finally:
         await conn.close()

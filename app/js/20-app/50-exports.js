@@ -151,6 +151,15 @@ function updateDlUI(){
     <label class="vh" for="fbmd">Markdown</label><textarea id="fbmd" readonly>${esc(exportMD())}</textarea>
     <label class="vh" for="fbjs">JSON</label><textarea id="fbjs" readonly style="margin-top:8px">${esc(JSON.stringify(projectJSON(S),null,2))}</textarea></details>`;
 }
+/* Report an export to the server, where there is one. A failure is said out loud: the
+   file was produced either way, but the user should not believe it was recorded when
+   it was not (the same reasoning as the audit queue, #45). */
+async function noteExport(format){
+  if(!STORE || typeof STORE.recordExport!=="function") return;
+  try{ await STORE.recordExport(format===ExportFormat.CSV ? null : CUR, format); }
+  catch(e){ toast("The export was produced, but could not be recorded in the access log."); }
+}
+
 async function download(filename,data){
   if(STANDALONE){
     const types={html:"text/html",md:"text/markdown",json:"application/json",csv:"text/csv"};

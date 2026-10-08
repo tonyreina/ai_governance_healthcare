@@ -765,3 +765,24 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   retains and alerts on nothing: the sink, the filters and the retention are the
   operator's, and the per-cloud settings come from the providers' documentation and
   have not been run. The guide says so. #38
+
+### C-60 Every read of a record is recorded, and the trail cannot be edited
+
+- **Claim:** A list, a version read, a log read and a stream attach are each recorded
+  in the transaction of the read, in an append-only table that outlives the project,
+  so a read that cannot be recorded is not served.
+- **Asserted in:** `docs/deploy.md` — "A read that cannot be recorded is not served."
+- **Status:** partial
+- **Gap:** Exports are built in the browser and reported by a beacon a client can
+  omit: they are a record of ordinary use, bounded by the recorded reads that fetched
+  the data. The table is append-only against the application and the restricted role;
+  a database owner can still disable its trigger, which is why the same facts are also
+  security events. How long it is kept is undecided (#57). #33
+- **Enforced by:**
+  `server/tests/test_access_audit.py::test_each_read_route_records_what_it_returned`
+  `server/tests/test_access_audit.py::test_a_read_that_fails_leaves_no_row`
+  `server/tests/test_access_audit.py::test_the_trail_is_append_only`
+  `server/tests/test_access_audit.py::test_the_trail_outlives_the_project`
+  `server/tests/test_access_audit.py::test_the_check_constraint_and_the_enum_agree`
+  `tests/test_export_beacon.py::the PDF export is reported`
+  `tests/test_stack.py::each read was recorded in the real database`

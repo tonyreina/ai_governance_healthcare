@@ -22,6 +22,11 @@ const MODE_LABEL = Object.freeze({
   [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
   [Mode.ARTIFACT]: Object.freeze({text:"Claude artifact",   cls:"artifact"}),
 });
+/* The export formats the dashboard can produce, as the server names them
+   (server/app/accessaudit.py ExportFormat). Reported to it when one is produced. */
+const ExportFormat = Object.freeze({
+  MD: "md", HTML: "html", PDF: "pdf", JSON: "json", CSV: "csv",
+});
 /* `data-act` values for buttons. The older actions are still bare strings in
    70-events.js (baselined in scripts/enum_baseline.json); a NEW action goes here,
    so a typo is `Act.LOG_OLDR` -> undefined -> a failing test, not a comparison

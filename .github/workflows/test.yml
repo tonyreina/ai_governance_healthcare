@@ -167,6 +167,9 @@ jobs:
       - name: audit log writes
         if: ${{ !cancelled() }}
         run: pixi run test-audit
+      - name: exports are reported to the read trail
+        if: ${{ !cancelled() }}
+        run: pixi run test-export-beacon
       - name: session controls (idle lock, sign-out, lost stream)
         if: ${{ !cancelled() }}
         run: pixi run test-session-ui

@@ -457,6 +457,51 @@ def main() -> int:
             str(direct_api_status({**identity, "X-Proxy-Secret": secret})),
         )
 
+    print("The read trail (#33)")
+    probe = "trail-" + uuid.uuid4().hex[:8]
+    http(f"/api/projects/{probe}", "POST", {"meta": {"solution": "Trail"}})
+    http("/api/projects")
+    http(f"/api/projects/{probe}/versions")
+    http(f"/api/projects/{probe}/versions/1")
+    http(f"/api/projects/{probe}/log")
+    status_code, _ = http(f"/api/projects/{probe}/exports", "POST", {"format": "md"})
+    check(
+        "the export beacon is accepted through the proxy",
+        status_code == 204,
+        str(status_code),
+    )
+    rows = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "db",
+            "psql",
+            "-U",
+            "chai",
+            "-d",
+            "chai",
+            "-tAF",
+            "|",
+            "-c",
+            "SELECT action, count(*) FROM access_event "
+            f"WHERE project_id = '{probe}' OR (action = 'list') GROUP BY action",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    ).stdout
+    counts = dict(line.split("|") for line in rows.split() if "|" in line)
+    check(
+        "each read was recorded in the real database",
+        all(
+            int(counts.get(a, 0)) >= 1
+            for a in ("list", "read_versions", "read_version", "read_log", "export")
+        ),
+        rows,
+    )
+
     print("Security events (#38)")
     # The earlier checks created, purged and deleted projects through the real proxy.
     # What the API container wrote about that is what a log sink would receive.

@@ -53,6 +53,8 @@ GRANTS: Mapping[str, tuple[str, ...]] = {
     "project_log": ("SELECT", "INSERT", "UPDATE"),
     "project_version": ("SELECT", "INSERT", "UPDATE"),
     "project_deletion": ("SELECT", "INSERT"),
+    # The read trail (#33): append-only, and the API may only add to it and read it.
+    "access_event": ("SELECT", "INSERT"),
     # Updated in place as a person's name or email changes; never deleted by the API.
     "principals": ("SELECT", "INSERT", "UPDATE"),
 }
@@ -63,6 +65,7 @@ NO_ACCESS = ("schema_migrations",)
 # project_log.seq is a bigserial; inserting needs the sequence.
 SEQUENCE_GRANTS: Mapping[str, tuple[str, ...]] = {
     "project_log_seq_seq": ("USAGE", "SELECT"),
+    "access_event_id_seq": ("USAGE", "SELECT"),
 }
 
 _ROLE_NAME = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")

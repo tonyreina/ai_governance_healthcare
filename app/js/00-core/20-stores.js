@@ -151,6 +151,14 @@ class ApiStore{
     }
     return out;
   }
+  /* Tell the server an export was produced (#33). Exports are built here from data
+     already fetched, so it cannot see one happen; this is the record of ordinary
+     use, not a control, because a client can omit it. id is null for the portfolio
+     CSV. */
+  recordExport(id,format){
+    const path = id ? `/projects/${encodeURIComponent(id)}/exports` : "/exports";
+    return this.req(path,{method:"POST",body:JSON.stringify({format})});
+  }
   showOlderLog(id){
     this.logDepth[id] = Math.min(500, (this.logDepth[id]||60) + 60);
     const pull = this.logPulls[id];

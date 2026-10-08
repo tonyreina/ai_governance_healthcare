@@ -1033,7 +1033,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 
 ### D-59 Embedded catalogs, English warnings until reviewed, and a ratchet
 
-- Status: Accepted
+- Status: Accepted; its "exports stay English" and its rejection of translating
+  the framework content are superseded by D-60
 - Languages and defaults are the owner's (R-55): the six languages plus Russian,
   Simplified Chinese for Mandarin, a per-browser choice, machine-drafted
   translations, and safety-bearing text in English until reviewed.
@@ -1053,6 +1054,30 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Rejected: fetching catalogs at run time (breaks R-01); an i18n library (R-05,
   and size); translating the framework content now (third-party text with
   attribution terms, its own plan).
+- Source: the owner, on #80; R-55.
+
+### D-60 Reports follow the reader; framework content is translated, marked
+
+- Status: Accepted
+- The owner's decision, 2026-10-08, on both open parts of #80.
+- **Exports.** The HTML, PDF and Markdown reports are written in the reader's
+  language and name it (`<html lang>`, a "Language" line). The JSON and CSV
+  exports stay English: scripts and the Croissant exporter read their keys and
+  values. The provenance note and the report footers are safety-bearing, so
+  they stay English in a report until a reviewer is recorded, like on screen.
+- **Framework content.** The CHAI criteria, stages, checkpoints, model card
+  fields and metric categories, the OPTICA questions, and the CHAI metric names
+  are translated, machine-drafted, with a note on each translated framework
+  screen that the wording is an unofficial translation. The CHAI metric text is
+  CC BY 4.0, which permits translation with attribution and an indication of
+  changes, and the note says it was translated. Values a record stores (a
+  checkpoint decision, a metric category, a metric's name) stay English, so a
+  record does not change with the language of whoever filled it in.
+- Rejected: a per-export language choice (a second control for the same thing);
+  leaving framework content English (a translated interface around English
+  criteria is the hardest of both worlds to read).
+- Supersedes: D-59's "exports stay English" and its rejection of translating
+  the framework content.
 - Source: the owner, on #80; R-55.
 
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result

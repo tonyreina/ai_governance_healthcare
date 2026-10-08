@@ -11,8 +11,10 @@ body{margin:0;background:#fff;color:var(--ink);font:15px/1.55 var(--sans)}main{m
 ${css}`;
 };
 function exportHTML(){
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(S.meta.solution||"AI solution")} – CHAI assurance review</title>
+  // In the reader's language (R-55, D-60); the JSON and CSV exports stay English.
+  const prov = storageNoteShown();
+  return `<!DOCTYPE html><html lang="${esc(LOCALE)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(S.meta.solution||t("export.untitled"))} – ${esc(t("export.titleSuffix"))}</title>
 <!-- No webfont link. The exported report is the artifact that gets emailed
      around a hospital and opened on clinical workstations, and a stylesheet
      link meant every one of those opens contacted a third party, carrying the
@@ -20,7 +22,7 @@ function exportHTML(){
      assessments and clinical rationale. STANDALONE_CSS() goes to real trouble
      to inline everything else; this was the one hole left in it. The font
      stacks below end in system-ui. -->
-<style>${STANDALONE_CSS()}</style></head><body><main class="report">${withLocale(Locale.EN, () => reportBody(true))}<p class="disclaimer" data-provenance><strong>Stored in: ${esc(storageNote().label)}.</strong> ${esc(storageNote().note)}</p></main></body></html>`;
+<style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}<p class="disclaimer" data-provenance><strong>${esc(t("export.storedIn",{label:prov.label}))}</strong> ${esc(prov.note)}</p></main></body></html>`;
 }
 /* PDF, via the browser's own print-to-PDF.
 
@@ -63,30 +65,34 @@ function exportPDF(){
 }
 
 function exportMD(){
+  // The Markdown report reads in the reader's language (D-60), like the HTML one.
   const all=allItems(), ov=scoreOf(all), m=S.meta, L=[];
-  const st=s=>s?STATUS[s]:"Unanswered";
+  const st=s=>t(s?STATUS_KEY[s]:"report.unanswered");
   // Backslashes first: escaping only the pipe turned a value's own `\|` into `\\|`,
   // an escaped backslash and a live pipe that ends the cell (#124).
   const line=s=>String(s||"").replace(/\n+/g," ").replace(/\\/g,"\\\\").replace(/\|/g,"\\|");
   const nm=id=>displayName(id);
-  L.push(`# ${m.solution||t("project.untitled")}: CHAI assurance review`,"");
-  L.push(`- **Status:** ${statusOf(S).label}`,`- **Lifecycle phase:** ${phase(S).label}`,`- **Organization:** ${m.org||"–"}`,`- **Developer:** ${m.developer||"–"}`,`- **Sourcing:** ${m.sourcing||"–"}`,`- **Risk tier:** ${m.riskTier||"–"}`,`- **Clinical sponsor:** ${m.sponsor||"–"}`,`- **Next periodic review:** ${nextReview(S)||"–"}`,`- **Review team:** ${line(m.reviewers)||"–"}`,`- **Scope:** ${line(m.scope)||"–"}`,`- **Generated:** ${TODAY()}`,`- **Stored in:** ${storageNote().label}. ${storageNote().note}`,"");
-  const F=flags(S); L.push("## Compliance flags",""); if(F.length) F.forEach(f=>L.push(`- **${f.sev==="red"?"Out of compliance":"Needs update"}:** ${f.text}`)); else L.push("None."); L.push("");
-  L.push(`## Readiness`,"",`Overall: **${ov.pct}%** of applicable criteria met (${ov.answered}/${ov.total} answered).`,"","| Principle | Score |","|---|---|");
+  const fieldLine=(labelKey,value)=>t("md.fieldLine",{label:t(labelKey),value});
+  const shown=(map,v)=>v?(map[v]?t(map[v]):v):"–";
+  const prov=storageNoteShown();
+  L.push(`# ${m.solution||t("project.untitled")}: ${t("export.titleSuffix")}`,"");
+  L.push(fieldLine("report.status",statusLabel(statusOf(S))),fieldLine("report.phase",phaseLabel(phase(S))),fieldLine("report.org",m.org||"–"),fieldLine("report.developer",m.developer||"–"),fieldLine("report.sourcing",shown(SOURCING_KEY,m.sourcing)),fieldLine("report.riskTier",shown(RISK_KEY,m.riskTier)),fieldLine("report.sponsor",m.sponsor||"–"),fieldLine("report.nextReview",nextReview(S)||"–"),fieldLine("md.team",line(m.reviewers)||"–"),fieldLine("md.scope",line(m.scope)||"–"),fieldLine("md.generated",TODAY()),fieldLine("md.language",LOCALE),fieldLine("md.storedIn",`${prov.label}. ${prov.note}`),"");
+  const F=flags(S); L.push(`## ${t("report.flags")}`,""); if(F.length) F.forEach(f=>L.push(`- **${t(f.sev==="red"?"status.red":"status.amber")}:** ${flagText(f)}`)); else L.push(t("md.none")); L.push("");
+  L.push(`## ${t("report.readiness")}`,"",t("md.overall",{pct:ov.pct,answered:ov.answered,total:ov.total}),"",`| ${t("report.col.principle")} | ${t("report.col.score")} |`,"|---|---|");
   Object.entries(PRINCIPLES).forEach(([k,p])=>L.push(`| ${p.name} | ${scoreOf(all.filter(it=>it.p===k)).pct}% |`));
-  L.push("","## Checkpoint decisions","","| Checkpoint | Decision | Decided by | Date | Rationale |","|---|---|---|---|---|");
-  Object.entries(GATES).forEach(([k,G])=>{const g=S.gates[k]||{}; L.push(`| ${G.title}: ${G.q} | ${g.decision||"Not decided"} | ${line(g.by)}${g.signedBy?` (recorded by ${line(nm(g.signedBy))})`:""} | ${line(g.date)} | ${line(g.rationale)} |`);});
-  L.push("","## Open gaps","");
+  L.push("",`## ${t("report.checkpoints")}`,"",`| ${t("report.col.checkpoint")} | ${t("gate.decision")} | ${t("gate.by")} | ${t("report.col.date")} | ${t("md.rationale")} |`,"|---|---|---|---|---|");
+  Object.entries(GATES).forEach(([k,G])=>{const g=S.gates[k]||{}; L.push(`| ${G.title}: ${G.q} | ${g.decision||t("md.notDecided")} | ${line(g.by)}${g.signedBy?` (${t("report.recordedBy",{who:line(nm(g.signedBy))})})`:""} | ${line(g.date)} | ${line(g.rationale)} |`);});
+  L.push("",`## ${t("md.openGaps")}`,"");
   const gaps=all.filter(it=>{const s=(S.items[it.id]||{}).status; return !s||s==="notmet"||s==="partial";});
-  if(gaps.length){ L.push("| Stage | Criterion | Status | Owner | Due |","|---|---|---|---|---|"); gaps.forEach(it=>{const d=S.items[it.id]||{}; L.push(`| ${it.stage.n} | ${line(it.text)} | ${st(d.status)} | ${line(d.owner)} | ${line(d.due)} |`);}); }
-  else L.push("None.");
-  L.push("","## Applied model card","");
-  CARD.forEach(sec=>{L.push(`### ${sec.sec}`,""); sec.fields.forEach(f=>L.push(`- **${f[1]}:** ${line(cardValOf(S,f[0]))||"_Not provided_"}`)); L.push("");
-    if(sec.sec==="Trust ingredients"){ L.push("### Key metrics",""); if(S.metrics.length){L.push("| Category | Metric | Value | 95% CI | Population |","|---|---|---|---|---|"); S.metrics.forEach(x=>L.push(`| ${line(x.cat)} | ${line(x.name)} | ${line(x.value)} | ${line(x.ci)} | ${line(x.pop)} |`));} else L.push("_None entered_"); L.push("");}});
-  L.push("## Sign-off history",""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${(e.at||"").slice(0,10)}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push("None."); L.push("");
-  L.push("## Appendix: full checklist","");
+  if(gaps.length){ L.push(`| ${t("report.col.stage")} | ${t("report.col.criterion")} | ${t("report.status")} | ${t("ci.owner")} | ${t("ci.due")} |`,"|---|---|---|---|---|"); gaps.forEach(it=>{const d=S.items[it.id]||{}; L.push(`| ${it.stage.n} | ${line(it.text)} | ${st(d.status)} | ${line(d.owner)} | ${line(d.due)} |`);}); }
+  else L.push(t("md.none"));
+  L.push("",`## ${t("card.title")}`,"");
+  CARD.forEach(sec=>{L.push(`### ${sec.sec}`,""); sec.fields.forEach(f=>L.push(`- **${f[1]}:** ${line(cardValOf(S,f[0]))||`_${t("label.notProvided")}_`}`)); L.push("");
+    if(sec.sec==="Trust ingredients"){ L.push(`### ${t("metrics.title")}`,""); if(S.metrics.length){L.push(`| ${t("metrics.col.category")} | ${t("metrics.col.metric")} | ${t("metrics.col.value")} | ${t("metrics.col.ci")} | ${t("md.population")} |`,"|---|---|---|---|---|"); S.metrics.forEach(x=>L.push(`| ${line(x.cat)} | ${line(x.name)} | ${line(x.value)} | ${line(x.ci)} | ${line(x.pop)} |`));} else L.push(`_${t("md.noneEntered")}_`); L.push("");}});
+  L.push(`## ${t("report.history")}`,""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${(e.at||"").slice(0,10)}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push(t("md.none")); L.push("");
+  L.push(`## ${t("report.appendix")}`,"");
   STAGES.forEach(s=>{L.push(`### ${s.n}. ${s.title}`,""); s.items.forEach(it=>{const d=S.items[it.id]||{}; L.push(`- [${it.p}] ${it.text}: **${st(d.status)}**${d.evidence?` (${line(d.evidence)})`:""}`);}); L.push("");});
-  L.push("---","_Structured around the CHAI six-stage lifecycle and Applied Model Card. Checklist wording is paraphrased; this is an internal governance record, not a CHAI certification._");
+  L.push("---",`_${t("md.footer")}_`);
   return L.join("\n");
 }
 function projectJSON(p){

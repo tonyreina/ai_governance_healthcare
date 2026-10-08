@@ -228,16 +228,19 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-18 The audit log is append-only
 
-- **Claim:** No route changes or removes a log entry, and the database itself
-  refuses an UPDATE.
+- **Claim:** No route changes or removes a log entry, and the database refuses
+  any UPDATE except the redaction a purge performs, which it verifies
+  by comparing the result with a function. Deleting a project removes
+  its live log, and records that it did (C-45).
 - **Asserted in:** `README.md` — "Audit log | Yes, append-only"
-- **Status:** partial
+- **Status:** enforced
 - **Enforced by:**
   `server/tests/test_api.py::test_the_database_itself_refuses_to_update_a_log_entry`
   `server/tests/test_api.py::test_there_is_no_route_to_change_or_remove_a_log_entry`
   `server/tests/test_api.py::test_log_timestamp_is_the_server_clock`
-- **Gap:** Deleting a project cascades and removes its log, and nothing durable
-  records that the deletion happened. #36
+  `server/tests/test_disposal.py::TestTheDatabaseAllowsARedactionAndNothingElse::test_an_arbitrary_update_is_refused`
+  `server/tests/test_disposal.py::TestTheDatabaseAllowsARedactionAndNothingElse::test_a_partial_redaction_is_refused`
+  `server/tests/test_disposal.py::TestTheDatabaseAllowsARedactionAndNothingElse::test_changing_when_or_who_is_refused`
 
 ### C-19 Version history cannot be rewritten
 
@@ -272,15 +275,20 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_versions.py::TestPurge::test_an_owner_can_purge_and_the_tombstone_survives`
   `server/tests/test_versions.py::TestPurge::test_a_writer_cannot_purge`
 
-### C-22 Deleting a project deletes it and its log
+### C-22 Deleting a project does not erase its history, and the docs say so
 
-- **Claim:** The store contract says `remove` deletes a project and its log.
-- **Asserted in:** `docs/self-hosting.md` — "| `remove(id)` | Delete a project
-  and its log |"
-- **Status:** violated
-- **Gap:** Every revision's full document survives in `project_version`, and the
-  purge does not reach the same values in the audit log, so this is not
-  erasure. #36
+- **Claim:** Deleting removes the live project and its live audit log. The
+  version history is kept, and the guide says plainly that deletion
+  is not erasure. (It used to say it deleted "a project and its log",
+  which implied the opposite. #36)
+- **Asserted in:** `docs/self-hosting.md` — "**Deleting a project does not erase
+  its history.**"
+- **Asserted in:** `docs/self-hosting.md` — "The server keeps its version
+  history"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_versions.py::TestVersions::test_history_survives_deletion`
+  `server/tests/test_disposal.py::TestDeletionLeavesATombstone::test_the_log_still_goes_with_the_project`
 
 ### C-23 Backups are encrypted, and a plaintext dump is refused
 
@@ -496,3 +504,71 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_compose_isolation.py::db image '{image}' is noticed`
+
+### C-43 A purge destroys the content of the history and of the audit log
+
+- **Claim:** Every revision's document is emptied and every audit-log entry is
+  redacted, including its prose and any extra field the client added,
+  so a value pasted in by mistake is gone from both tables. A client
+  cannot exempt its own entry.
+- **Asserted in:** `docs/self-hosting.md` — "A purge destroys the content of
+  every revision **and of every audit-log entry**"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_disposal.py::TestAPurgeReachesTheAuditLog::test_the_value_is_gone_from_the_history_and_the_log`
+  `server/tests/test_disposal.py::TestAPurgeReachesTheAuditLog::test_the_prose_is_redacted_not_just_the_structured_values`
+  `server/tests/test_disposal.py::TestAPurgeReachesTheAuditLog::test_a_field_the_server_does_not_own_is_gone_too`
+  `server/tests/test_disposal.py::TestAPurgeReachesTheAuditLog::test_a_client_cannot_exempt_its_own_entry_from_redaction`
+
+### C-44 A purge leaves who, when and which field, and records itself
+
+- **Claim:** What survives is the author, the time, the field's path and the
+  fingerprint, so the history shows that something was written and
+  later destroyed, not a gap. The server writes its own record of the
+  purge into the log, and that record is never redacted.
+- **Asserted in:** `docs/self-hosting.md` — "What stays is who changed what,
+  when, which field, and the fingerprint"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_disposal.py::TestAPurgeReachesTheAuditLog::test_who_what_and_when_survive`
+  `server/tests/test_disposal.py::TestAPurgeReachesTheAuditLog::test_the_purge_itself_is_recorded_in_the_log`
+  `server/tests/test_disposal.py::TestAPurgeReachesTheAuditLog::test_the_record_of_a_purge_survives_the_next_purge`
+
+### C-45 Deletion leaves a permanent tombstone
+
+- **Claim:** A delete writes who deleted the project, when, and what its last
+  revision hashed to, in an append-only table that holds no content
+  and survives a purge. A refused or failed delete writes nothing.
+- **Asserted in:** `docs/self-hosting.md` — "It writes a permanent tombstone to
+  `project_deletion`: who deleted it, when,"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_disposal.py::TestDeletionLeavesATombstone::test_a_delete_records_who_when_and_what_it_hashed_to`
+  `server/tests/test_disposal.py::TestDeletionLeavesATombstone::test_it_survives_a_purge_of_the_history`
+  `server/tests/test_disposal.py::TestDeletionLeavesATombstone::test_it_cannot_be_changed_or_removed_by_hand`
+  `server/tests/test_disposal.py::TestDeletionLeavesATombstone::test_a_refused_delete_writes_nothing`
+
+### C-46 The delete dialog says what deleting does, and offers to destroy the history
+
+- **Claim:** In the server mode the dialog says the version history is kept,
+  offers destroying it as a separate unticked choice, does the
+  destroy step first, and does not delete the project if that step
+  fails. The modes with no history do not offer it.
+- **Asserted in:** `app/js/20-app/50-exports.js` — "Its version history is
+  kept."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_disposal_ui.py::it says the version history is KEPT`
+  `tests/test_disposal_ui.py::history first, then the project, in that order`
+  `tests/test_disposal_ui.py::the project is NOT deleted if its history could not be destroyed`
+
+### C-47 Backups made before a purge still hold the data
+
+- **Claim:** The guide states that a backup taken earlier keeps the destroyed
+  content and that `make restore` brings it back, so a restore must
+  be followed by another purge.
+- **Asserted in:** `docs/self-hosting.md` — "`make restore` puts it back"
+- **Status:** unenforced
+- **Gap:** A documented limitation, true by construction and not exercised by a
+  test: `make restore` is not tested, and nothing re-applies a purge
+  after a restore. See #57.

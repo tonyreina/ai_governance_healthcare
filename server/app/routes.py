@@ -338,10 +338,19 @@ async def delete_project(
     identity: Identity = Depends(get_identity),
     settings: Settings = Depends(get_settings),
 ) -> Response:
-    """Delete a project and its log.
+    """Delete the live project and its audit log. It does NOT erase the history.
 
     The log goes with it by ``ON DELETE CASCADE``. That is the only way log
     rows are ever removed -- there is no endpoint that deletes an entry.
+
+    Every revision's full document is KEPT in ``project_version``, on purpose: an
+    audit trail that vanishes with its subject is not one. So deleting is not
+    erasure. ``DELETE .../versions`` is the second, separate step that destroys
+    the history (#36).
+
+    What deletion leaves behind is written here, in the same transaction, to
+    ``project_deletion``: who deleted it, when, and what its last revision hashed
+    to. Before this the only record was a line on container stdout.
     """
     async with db.acquire() as conn, conn.transaction():
         current = await conn.fetchrow(
@@ -353,6 +362,24 @@ async def delete_project(
                 identity.id,
                 "own",
                 enforced=settings.require_identity,
+            )
+            # The tombstone is written AFTER the access check and BEFORE the
+            # delete, from the same row lock, so a refused or failed delete
+            # leaves nothing behind and a successful one cannot lose it.
+            await conn.execute(
+                """
+                INSERT INTO project_deletion
+                       (project_id, incarnation, deleted_by, last_rev, last_md5)
+                SELECT p.id, p.incarnation, $2, p.rev, v.content_md5
+                  FROM projects p
+                  LEFT JOIN project_version v
+                         ON v.project_id = p.id
+                        AND v.incarnation = p.incarnation
+                        AND v.rev = p.rev
+                 WHERE p.id = $1
+                """,
+                project_id,
+                identity.id,
             )
         row = await conn.fetchrow(
             "DELETE FROM projects WHERE id = $1 RETURNING id", project_id
@@ -616,6 +643,7 @@ async def read_version(
 async def purge_versions(
     project_id: str = ProjectId,
     db: Database = Depends(get_db),
+    broker: EventBroker = Depends(get_broker),
     settings: Settings = Depends(get_settings),
     identity: Identity = Depends(get_identity),
 ) -> Response:
@@ -633,11 +661,23 @@ async def purge_versions(
     vanished would be indistinguishable from a snapshot never taken. A trigger
     in 003_version_access.sql permits exactly this transition and nothing else.
 
+    It also redacts the project's AUDIT LOG, in the same transaction. The client
+    writes each entry's prose with the values in it ("Changed evidence: “old” ->
+    “new”") as well as ``change.from`` and ``change.to``, and may add any other
+    field it likes, so emptying the snapshots alone left the same identifier
+    readable in a second table (#36). The redaction is a whitelist defined once, in
+    SQL (``project_log_redacted``), and a trigger permits an UPDATE only if it
+    produces exactly that. The purge is then recorded in the log by the server.
+
     Works on a deleted project, whose access list comes from its last snapshot
     -- otherwise the one record most likely to need purging would be the one
-    record nobody could purge.
+    record nobody could purge. (A deleted project's log is already gone with it.)
     """
     async with db.acquire() as conn, conn.transaction():
+        # Serialize with a concurrent patch or delete of the live project, if any.
+        live = await conn.fetchval(
+            "SELECT id FROM projects WHERE id = $1 FOR UPDATE", project_id
+        )
         gate = await _version_gate(conn, project_id)
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
@@ -659,11 +699,61 @@ async def purge_versions(
             incarnation,
             identity.id,
         )
+        entries = 0
+        if live is not None:
+            entries = await conn.fetchval(
+                """
+                WITH redacted AS (
+                    UPDATE project_log
+                       SET entry = project_log_redacted(entry),
+                           purged_at = now(),
+                           purged_by = $2
+                     WHERE project_id = $1
+                       AND purged_at IS NULL
+                       AND NOT is_system
+                 RETURNING 1
+                )
+                SELECT count(*) FROM redacted
+                """,
+                project_id,
+                identity.id,
+            )
+            if purged or entries:
+                # The server records that it happened. is_system is a column the
+                # client cannot set, so this entry can be neither forged nor redacted.
+                now = datetime.now(UTC)
+                plural = "entry" if entries == 1 else "entries"
+                await conn.execute(
+                    """
+                    INSERT INTO project_log (project_id, at, by_id, entry, is_system)
+                    VALUES ($1, $2, $3, $4, true)
+                    """,
+                    project_id,
+                    now,
+                    identity.id,
+                    {
+                        "text": (
+                            f"Purged: the content of {purged or 0} revision(s) and "
+                            f"{entries} audit-log {plural} was destroyed."
+                        ),
+                        "at": now.isoformat(timespec="milliseconds"),
+                        "by": identity.id,
+                    },
+                )
+                await broker.publish(
+                    Event(
+                        LOG_APPENDED,
+                        project_id,
+                        audience=_audience(doc, settings),
+                    ),
+                    conn,
+                )
     log.warning(
-        "version history of %s purged by %s (%d revision(s))",
+        "version history of %s purged by %s (%d revision(s), %d log entries)",
         project_id,
         identity.id,
         purged or 0,
+        entries or 0,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -705,7 +795,7 @@ async def read_log(
             )
         rows = await conn.fetch(
             """
-            SELECT entry FROM project_log
+            SELECT entry, purged_at FROM project_log
              WHERE project_id = $1
              ORDER BY at DESC, seq DESC
              LIMIT $2
@@ -713,7 +803,13 @@ async def read_log(
             project_id,
             settings.log_page_size,
         )
-    return [LogEntryOut(**row["entry"]) for row in rows]
+    # `purged` comes from a column the client cannot set, never from the entry.
+    return [
+        LogEntryOut(
+            **{**row["entry"], **({"purged": True} if row["purged_at"] else {})}
+        )
+        for row in rows
+    ]
 
 
 @router.post(

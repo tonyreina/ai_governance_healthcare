@@ -180,6 +180,39 @@ def main() -> int:
         gate["signedAt"],
     )
 
+    # Disposal (#36), through the real proxy: a purge destroys the content and says
+    # so, a delete leaves the history, and neither is the same as the other.
+    secret = "MRN-" + uuid.uuid4().hex[:8]
+    did = "t-" + uuid.uuid4().hex[:8]
+    http(
+        f"/api/projects/{did}",
+        "POST",
+        {"meta": {"solution": "disposal test"}, "items": {"a": {"evidence": secret}}},
+    )
+    http(
+        f"/api/projects/{did}/log",
+        "POST",
+        {"text": f"Changed evidence: {secret}", "change": {"path": "a", "to": secret}},
+    )
+    check(
+        "a purge is accepted", http(f"/api/projects/{did}/versions", "DELETE")[0] == 204
+    )
+    _, rev = http(f"/api/projects/{did}/versions/1")
+    check(
+        "the revision's content is gone",
+        secret not in rev and json.loads(rev)["doc"] == {},
+    )
+    _, entries = http(f"/api/projects/{did}/log")
+    check(
+        "the audit log no longer holds the value", secret not in entries, entries[:200]
+    )
+    check("and says it was purged", "[content purged]" in entries)
+    check("a delete is accepted", http(f"/api/projects/{did}", "DELETE")[0] == 204)
+    check(
+        "deleting did not erase what was already purged, or restore it",
+        http(f"/api/projects/{did}/versions/1")[0] == 200,
+    )
+
     print("Browser")
     try:
         from playwright.sync_api import sync_playwright

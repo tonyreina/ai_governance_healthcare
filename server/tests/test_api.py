@@ -26,6 +26,32 @@ async def test_health_needs_no_identity(client: AsyncClient) -> None:
     assert body["version"] == "test"
 
 
+async def test_health_is_503_when_the_database_is_unreachable(
+    client: AsyncClient,
+) -> None:
+    """A probe keys on the status code, so a dead database must not answer 200 (#46).
+
+    It used to return 200 and ``"status": "ok"`` with ``"database": "down"``
+    beside it, which docker's HEALTHCHECK, the ALB target group and the Cloud
+    Run and Container Apps probes all read as healthy, and which made the
+    dashboard boot as a shared workspace that then failed on first use.
+
+    The pool is closed for real, so ``ping`` fails the way it does when the
+    database is gone, rather than faking the answer.
+    """
+    app = client.app  # type: ignore[attr-defined]  # set in conftest
+    await app.state.db.close()
+    app.state.db._ping_cache = None  # the cached "up" from earlier in the fixture
+
+    response = await client.get("/api/health")
+    assert response.status_code == 503
+    body = response.json()
+    assert body["database"] == "down"
+    assert body["status"] != "ok"
+    # Still no detail about where the database is.
+    assert "postgres" not in json.dumps(body).lower()
+
+
 async def test_health_leaks_nothing_about_the_deployment(client: AsyncClient) -> None:
     body = await client.get("/api/health")
     text = json.dumps(body.json())

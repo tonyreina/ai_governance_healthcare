@@ -67,6 +67,9 @@ test-claims = "python tests/test_check_claims.py"
 # The network isolation the security model rests on: no port on the api or db, the
 # db on an internal network, loopback by default, a named volume, a pinned image.
 test-compose = "python tests/test_compose_isolation.py"
+# `make check-isolation`, shown to fail: a published port, a reachable API and a
+# forwarded identity must each be noticed, and the exit code must say so (#56).
+test-isolation = "python tests/test_check_isolation.py"
 # The gate behind `make up`: placeholders, literal identities, plain HTTP on the network,
 # and reading .env the way compose does (empty means the default; " #" starts a comment).
 test-preflight = "python tests/test_preflight.py"

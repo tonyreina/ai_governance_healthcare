@@ -260,6 +260,23 @@ def main() -> int:
         http(f"/api/projects/{did}/versions/1")[0] == 200,
     )
 
+    print("Isolation (#56)")
+    # The same script `make check-isolation` runs, against this real stack: no
+    # published port on api or db, no direct way in, and a forged identity header
+    # that does not become the identity. Its exit code is the assertion.
+    isolation = subprocess.run(
+        [sys.executable, "scripts/check_isolation.py"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "HTTP_PORT": BASE.rsplit(":", 1)[1]},
+        timeout=60,
+    )
+    check(
+        "check_isolation.py finds the isolation model intact",
+        isolation.returncode == 0,
+        isolation.stdout[-400:],
+    )
+
     print("PROXY_SHARED_SECRET (#61)")
     # Everything above went through the proxy, so with the secret on it already
     # proves the proxy sends it: the API would have answered 403 to all of it.

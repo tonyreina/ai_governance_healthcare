@@ -94,8 +94,11 @@ honest answer and is a gap worth closing; see R-19.
   identity model is "trust a header", which is only safe if nothing else can
   reach the API. Adding a service to the `edge` network widens the boundary.
 - Source: `compose.yaml` header; `server/app/auth.py`.
-- Enforced by: `make check-isolation` (step 2 only; step 3 asserts nothing,
-  see #56).
+- Enforced by: `tests/test_compose_isolation.py` (the compose file), and
+  `scripts/check_isolation.py`, which `make check-isolation` runs against a live
+  stack: `tests/test_check_isolation.py` breaks each of its three steps and
+  demands it notice, and `tests/test_stack.py` runs it against the real stack.
+  (Step 3 used to assert nothing, #56.)
 
 ### R-08 Fail closed on identity
 

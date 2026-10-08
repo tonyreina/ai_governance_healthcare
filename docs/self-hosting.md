@@ -153,7 +153,9 @@ to verify a signed assertion itself — the IAP JWT, `x-amzn-oidc-data`,
 
     `make check-isolation` asserts all of this against a running stack. Run it
     after any change to the networking, and keep it in whatever runs after a
-    deploy.
+    deploy. It exits non-zero on a published port on `api` or `db`, on a direct
+    connection to the API that succeeds, or on a forged identity header that
+    comes back as the identity.
 
     `compose.dev.yaml` deliberately breaks this by publishing the API on
     `127.0.0.1:8000`. That is why it is a named override rather than

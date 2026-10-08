@@ -59,6 +59,10 @@ jobs:
       # The claims inventory: its checker is tested, and the network isolation the
       # security model rests on is asserted against the real compose.yaml.
       - run: pixi run test-claims
+
+      # `make check-isolation`'s checker, with a mutation test for each thing it
+      # must notice. The run against the real stack is in the stack job.
+      - run: pixi run test-isolation
       - run: pixi run test-compose
       - run: pixi run test-preflight
 

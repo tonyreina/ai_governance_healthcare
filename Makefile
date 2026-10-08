@@ -130,16 +130,11 @@ restore:  ## Restore a dump: make restore FILE=backups/....sql.gz.gpg  (DESTRUCT
 	  *)     cat "$(FILE)" ;; \
 	esac | gunzip -c | $(COMPOSE) exec -T $(DB_SERVICE) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
 
+# The logic is scripts/check_isolation.py, so it can be tested and so it exits
+# non-zero on a failure. It used to be shell that printed what it found and ended
+# step 3 with `|| true` (#56).
 check-isolation:  ## Prove the API is not reachable except through the proxy
-	@echo "1. no published port on api or db:"
-	@$(COMPOSE) ps --format '  {{.Service}}  ports=[{{.Publishers}}]'
-	@echo "2. direct connection to the API from the host (MUST fail):"
-	@! curl -sS --max-time 3 http://127.0.0.1:8000/api/health >/dev/null 2>&1 \
-	  && echo "  refused -- correct" \
-	  || { echo "  REACHABLE -- the identity header can be forged. Check for a ports: entry on api."; exit 1; }
-	@echo "3. forged identity through the proxy (MUST be stripped):"
-	@curl -sS --max-time 5 -H 'X-Auth-Request-User: attacker@evil.test' \
-	  http://127.0.0.1:$(HTTP_PORT)/api/me || true
+	@HTTP_PORT=$(HTTP_PORT) python3 scripts/check_isolation.py
 
 prune:  ## Remove containers AND the database volume. Destroys all data.
 	@printf 'This deletes the pgdata volume permanently. Type YES to continue: ' \

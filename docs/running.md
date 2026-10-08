@@ -92,7 +92,8 @@ Things that only work in this mode:
 
 ### Development mode
 
-Hot reload, and the API and database published on localhost for inspection:
+Hot reload, and the API published on localhost for inspection. The database is
+not published (it is on an internal network by design); reach it with `make psql`:
 
 ```bash
 docker compose -f compose.yaml -f compose.dev.yaml up -d
@@ -141,10 +142,14 @@ tests *is* the database's behavior — a row lock serializing two writers, a
 trigger refusing to rewrite history:
 
 ```bash
-docker compose up -d db
+docker run -d --name chai-test-db -p 55432:5432 \
+  -e POSTGRES_PASSWORD=test -e POSTGRES_DB=chai_test postgres:17-alpine
 cd server
-TEST_DATABASE_URL=postgresql://chai:<password>@localhost:5432/chai pytest
+TEST_DATABASE_URL=postgresql://postgres:test@localhost:55432/chai_test pytest
 ```
+
+The stack's own database is not reachable from the host, so the tests run against
+a throwaway one.
 
 This one is a URL you write yourself, so percent-encode the password if it
 contains `/`, `@`, `:`, `?` or `#`. The stack itself does that for you.

@@ -827,6 +827,21 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   needs the retention period decided first (#57).
 - Source: #54; R-44.
 
+### D-47 Leave the region to the reader and say it is their decision
+
+- Status: Accepted
+- Examples take the region from a variable the reader must fill in. A copied
+  command with `<your-region>` left in fails loudly, which is the point: a
+  default that works is a default that was never chosen.
+- The residency section lists example EU regions and names what else can move
+  data out of a region, and stops there. Whether a transfer mechanism is needed
+  is a legal question this project does not answer.
+- Rejected: swapping the US defaults for EU ones (it only moves the unmade
+  decision); a region per provider table of "compliant" regions (a legal claim
+  nobody here can back); a script that checks the region (the guide is prose
+  and the resources are in the reader's account).
+- Source: #58; R-45.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

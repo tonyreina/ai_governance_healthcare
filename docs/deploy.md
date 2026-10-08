@@ -139,6 +139,33 @@ is the usual answer, and what to confirm differs:
 The Compose stack's own `pgdata` volume is not covered by any of this. See
 [Self-hosting](self-hosting.md#encryption-at-rest).
 
+### Data residency
+
+Every example below takes the region from a variable (`REGION` on Google Cloud
+and AWS, `LOCATION` on Azure) and leaves it for you to fill in. That is on
+purpose: where the records are stored is a decision for your organization, not a
+default this guide should make. The database, its backups, the container
+registry and the logs each live in a region, and a deployment that never chose
+one stored its data wherever the first example happened to point.
+
+For a deployment that must keep data in the EU, these are the regions to look at
+first. The names are from each provider's documentation and are **unverified**
+here; confirm them, and that every service you use (the database, its backups and
+replicas, the registry, the log sink, the identity provider) is available there.
+
+| Provider | Example EU regions |
+|---|---|
+| Google Cloud | `europe-west1` (Belgium), `europe-west4` (Netherlands) |
+| AWS | `eu-central-1` (Frankfurt), `eu-west-1` (Ireland) |
+| Azure | `westeurope` (Netherlands), `germanywestcentral` (Frankfurt) |
+
+Choosing an EU region does not by itself settle the question of cross-border
+transfer. Support staff, the identity provider, an off-host backup copy and a log
+destination elsewhere can each move personal data out of the region. Whether any
+of that needs a transfer mechanism, and which, is a question for your data
+protection officer or counsel. This guide is not legal advice and does not say
+that any region meets a legal requirement.
+
 ### Backup and recovery
 
 45 CFR 164.308(a)(7) makes a data backup plan and a disaster recovery plan
@@ -746,12 +773,13 @@ permission, then grant that permission to the IAP service agent and to
 nobody else:
 
 ```bash
+REGION=<your-region>   # see "Data residency"
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" \
   --format='value(projectNumber)')
 IAP_SA="service-${PROJECT_NUMBER}@gcp-sa-iap.iam.gserviceaccount.com"
 
 gcloud run services add-iam-policy-binding chai-api \
-  --region=us-central1 \
+  --region="$REGION" \
   --member="serviceAccount:${IAP_SA}" \
   --role=roles/run.invoker
 ```
@@ -759,7 +787,7 @@ gcloud run services add-iam-policy-binding chai-api \
 Then confirm nothing else holds it:
 
 ```bash
-gcloud run services get-iam-policy chai-api --region=us-central1
+gcloud run services get-iam-policy chai-api --region="$REGION"
 ```
 
 !!! danger "`allUsers` with `roles/run.invoker` is the back door"
@@ -776,9 +804,9 @@ gcloud run services get-iam-policy chai-api --region=us-central1
 
     ```bash
     # WRONG on the IAP-direct path -- do not run these here.
-    gcloud run services update chai-api --region=us-central1 \
+    gcloud run services update chai-api --region="$REGION" \
       --ingress=internal-and-cloud-load-balancing
-    gcloud run services update chai-api --region=us-central1 --no-default-url
+    gcloud run services update chai-api --region="$REGION" --no-default-url
     ```
 
     With IAP enabled directly on the service, the default `run.app` URL **is**
@@ -800,9 +828,9 @@ both locks apply:
 
 ```bash
 # Only on the LOAD BALANCER path, where the LB is the front door.
-gcloud run services update chai-api --region=us-central1 \
+gcloud run services update chai-api --region="$REGION" \
   --ingress=internal-and-cloud-load-balancing
-gcloud run services update chai-api --region=us-central1 --no-default-url
+gcloud run services update chai-api --region="$REGION" --no-default-url
 ```
 
 ### Managed PostgreSQL
@@ -814,7 +842,7 @@ connector:
 ```bash
 gcloud sql instances create chai-db \
   --database-version=POSTGRES_16 \
-  --region=us-central1 \
+  --region="$REGION" \
   --tier=db-custom-2-7680 \
   --no-assign-ip \
   --network="projects/${PROJECT_ID}/global/networks/default" \
@@ -848,7 +876,7 @@ gcloud secrets add-iam-policy-binding chai-database-url \
 
 ```bash
 PROJECT_ID=my-project
-REGION=us-central1
+REGION=<your-region>   # a data residency decision: see "Data residency"
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" \
   --format='value(projectNumber)')
 IAP_SA="service-${PROJECT_NUMBER}@gcp-sa-iap.iam.gserviceaccount.com"
@@ -1062,7 +1090,7 @@ dump of a crash report:
   {
     "name": "DATABASE_URL",
     "valueFrom":
-      "arn:aws:secretsmanager:us-east-1:1234:secret:chai/db-url"
+      "arn:aws:secretsmanager:<region>:1234:secret:chai/db-url"
   }
 ]
 ```
@@ -1081,7 +1109,7 @@ dump of a crash report:
   { "name": "IDENTITY_MODE", "value": "alb" },
   { "name": "IDENTITY_AUDIENCE",
     "value":
-      "arn:aws:elasticloadbalancing:us-east-1:1234:loadbalancer/app/chai/a" },
+      "arn:aws:elasticloadbalancing:<region>:1234:loadbalancer/app/chai/a" },
   { "name": "TRUSTED_PROXY_CIDR", "value": "10.0.0.0/16" },
   { "name": "REQUIRE_IDENTITY", "value": "true" }
 ]
@@ -1105,7 +1133,7 @@ it is stored in the listener configuration itself, so restrict
 ### Step by step
 
 ```bash
-REGION=us-east-1
+REGION=<your-region>   # a data residency decision: see "Data residency"
 
 # 1. ALB in public subnets, with its own security group.
 ALB_ARN=$(aws elbv2 create-load-balancer \
@@ -1293,9 +1321,11 @@ For defense in depth, take the app off the public internet entirely and
 front it with Application Gateway or Front Door:
 
 ```bash
+LOCATION=<your-location>   # a data residency decision: see "Data residency"
+
 # Internal-only environment: ingress reachable only from the VNet.
 az containerapp env create \
-  --name chai-env --resource-group chai-rg --location eastus \
+  --name chai-env --resource-group chai-rg --location "$LOCATION" \
   --infrastructure-subnet-resource-id "$INFRA_SUBNET_ID" \
   --internal-only true \
   --enable-workload-profiles true
@@ -1314,8 +1344,10 @@ access — the two settings are mutually exclusive by design.
 ### Managed PostgreSQL
 
 ```bash
+LOCATION=<your-location>   # the same one as above
+
 az postgres flexible-server create \
-  --name chai-db --resource-group chai-rg --location eastus \
+  --name chai-db --resource-group chai-rg --location "$LOCATION" \
   --version 16 --tier GeneralPurpose --sku-name Standard_D2ds_v5 \
   --vnet chai-vnet --subnet db-subnet \
   --public-access None \
@@ -1358,7 +1390,7 @@ APP_ID=$(az ad app create \
 az ad app update --id "$APP_ID" --enable-id-token-issuance true
 
 az ad app update --id "$APP_ID" --web-redirect-uris \
-  "https://${APP}.<env>.eastus.azurecontainerapps.io/.auth/login/aad/callback"
+  "https://${APP}.<env>.<location>.azurecontainerapps.io/.auth/login/aad/callback"
 
 SECRET=$(az ad app credential reset --id "$APP_ID" \
   --display-name easyauth --query password -o tsv)
@@ -1446,7 +1478,7 @@ curl -i --max-time 5 http://10.0.2.17:8080/api/me \
   -H 'x-amzn-oidc-identity: ceo@hospital.org'
 
 # Azure: expect 401, and no identity echoed back.
-curl -i https://chai-api.<env>.eastus.azurecontainerapps.io/api/me \
+curl -i https://chai-api.<env>.<location>.azurecontainerapps.io/api/me \
   -H 'X-MS-CLIENT-PRINCIPAL-NAME: ceo@hospital.org'
 ```
 

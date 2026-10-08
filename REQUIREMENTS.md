@@ -444,6 +444,22 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `tests/test_doctor.py` (what is reported, and that an unreadable
   answer is skipped, not a crash).
 
+### R-45 The deployment guide does not choose where the data lives
+
+- Status: Active
+- No command example in `docs/deploy.md` names a concrete region. Each takes it
+  from a variable (`REGION`, `LOCATION`) the reader fills in, and a "Data
+  residency" section says the region is their decision, lists example EU regions
+  per provider (marked unverified), and raises the cross-border transfer
+  question for a data protection officer or counsel.
+- The guide gives no legal advice and never says a region is adequate or
+  compliant.
+- Why: every example named a US region, so a hospital that copied them stored
+  records in the US without deciding to (#58).
+- Source: #58; DECISIONS D-47.
+- Enforced by: `tests/test_deploy_residency.py` (run by CI as
+  `test-deploy-residency`, with mutation tests for each rule).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

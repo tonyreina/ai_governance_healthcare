@@ -220,6 +220,11 @@ jobs:
       - name: supply chain
         run: pixi run test-supply-chain
 
+      # The deployment guide names no region in its commands and has a data
+      # residency section (#58).
+      - name: deploy residency
+        run: pixi run test-deploy-residency
+
       # `make verify-backup`: a real dump restored into a throwaway PostgreSQL, and
       # `make restore` asking before it overwrites anything (#52).
       - name: backups restore

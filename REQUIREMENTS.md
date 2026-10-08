@@ -146,6 +146,22 @@ honest answer and is a gap worth closing; see R-19.
   passing), and `server/tests/test_identity_repair.py` (the documented repair,
   run against PostgreSQL).
 
+### R-31 A published export names no individual unless asked
+
+- Status: Active
+- The Croissant exporter's default `maintainer` is an organizational contact, not
+  the review team or clinical sponsor, and is omitted when no organization is
+  recorded. `--include-maintainer-names` publishes the names and prints a
+  warning that lists them, as `--include-cohort-detail` does for cohorts.
+- Why: a published record that names the people responsible for a clinical
+  system links identified individuals to it, its site and a time. That is
+  personal data under GDPR Art. 4(1).
+- History: names were emitted unconditionally while cohort detail was gated
+  (#60).
+- Source: #60.
+- Enforced by: `tests/test_croissant_export.py`, which also checks the output
+  still validates against `mlcroissant`.
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

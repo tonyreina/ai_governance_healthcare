@@ -3,12 +3,21 @@
    Form fields, focus preservation and small formatters. No
    knowledge of any framework.
    ============================================================ */
+/* Attributes for the multi-line fields people write evidence, rationale and
+   risk notes in. A textarea defaults to spellcheck on, and a cloud-backed
+   spellchecker (Chrome's "Enhanced spell check", some Safari and macOS settings)
+   sends what is typed to a third party as it is typed -- before it is saved,
+   and before any server-side control can apply. These fields are where a
+   patient identifier gets pasted by mistake (the purge path exists for that),
+   so they opt out, and out of the browser's form history too. A test sweeps the
+   rendered DOM so a textarea added later is held to the same rule (#59). */
+const NO_BROWSER_ASSIST = 'spellcheck="false" autocomplete="off"';
 const get = (path)=> path.split(".").reduce((o,k)=>o==null?undefined:o[k], S);
 function field(path,label,hint,long,opts,kind){
   const v=esc(get(path)||""); const id="f_"+path.replace(/\./g,"_");
   let input;
   if(opts) input=`<select id="${id}" data-bind="${path}"><option value="">Choose…</option>${opts.map(o=>`<option${get(path)===o?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
-  else if(long) input=`<textarea id="${id}" data-bind="${path}" rows="3">${v}</textarea>`;
+  else if(long) input=`<textarea id="${id}" data-bind="${path}" rows="3" ${NO_BROWSER_ASSIST}>${v}</textarea>`;
   // `date` gives the browser's own picker and its validation. Asking someone
   // to type YYYY-MM-DD invites 03/04/2026, which is two different dates
   // depending on where the reader is -- not a good property for the date a

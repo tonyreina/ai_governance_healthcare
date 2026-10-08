@@ -34,10 +34,10 @@ function opticaItemHTML(it) {
         `<button data-set="${esc(it.key)}" data-store="optica.answers" data-s="${k}" aria-pressed="${st === k}">${l}</button>`).join("")}</div>
     </div>
     <div class="ci-detail">
-      <div><label for="oev_${esc(it.key)}">Evidence or notes</label><textarea id="oev_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.evidence">${esc(d.evidence || "")}</textarea></div>
+      <div><label for="oev_${esc(it.key)}">Evidence or notes</label><textarea id="oev_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.evidence" ${NO_BROWSER_ASSIST}>${esc(d.evidence || "")}</textarea></div>
       <div><label for="oow_${esc(it.key)}">Owner</label><input type="text" id="oow_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.owner" value="${esc(d.owner || "")}"></div>
       <div><label for="odu_${esc(it.key)}">Due</label><input type="date" id="odu_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.due" value="${esc(d.due || "")}"></div>
-      ${st === "declined" ? `<div class="wide"><label for="odr_${esc(it.key)}">Why this was declined</label><textarea id="odr_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.declineReason">${esc(d.declineReason || "")}</textarea></div>` : ""}
+      ${st === "declined" ? `<div class="wide"><label for="odr_${esc(it.key)}">Why this was declined</label><textarea id="odr_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.declineReason" ${NO_BROWSER_ASSIST}>${esc(d.declineReason || "")}</textarea></div>` : ""}
     </div>
   </li>`;
 }

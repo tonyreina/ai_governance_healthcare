@@ -136,6 +136,9 @@ jobs:
       - name: changelog
         if: ${{ !cancelled() }}
         run: pixi run test-changelog
+      - name: delete dialog and destroying history
+        if: ${{ !cancelled() }}
+        run: pixi run test-disposal-ui
       - name: exports
         if: ${{ !cancelled() }}
         run: pixi run test-exports

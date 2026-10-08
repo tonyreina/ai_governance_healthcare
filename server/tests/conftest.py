@@ -94,7 +94,7 @@ async def client(settings: Settings) -> AsyncIterator[AsyncClient]:
             # tests. It also does not fire the row-level triggers that
             # (correctly) refuse DELETE on project_version.
             await conn.execute(
-                "TRUNCATE project_version, project_log, projects "
+                "TRUNCATE project_deletion, project_version, project_log, projects "
                 "RESTART IDENTITY CASCADE"
             )
         transport = ASGITransport(app=app)

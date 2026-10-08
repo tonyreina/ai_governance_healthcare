@@ -85,6 +85,12 @@ class ApiStore{
   create(id,data){ return this.req(`/projects/${encodeURIComponent(id)}`,{method:"POST",body:JSON.stringify(data)}); }
   update(id,patch){ return this.req(`/projects/${encodeURIComponent(id)}`,{method:"PATCH",body:JSON.stringify(patch)}); }
   remove(id){ return this.req(`/projects/${encodeURIComponent(id)}`,{method:"DELETE"}); }
+  /* Destroy the content of every retained revision AND of the audit log. Owner
+     only, irreversible, and a SEPARATE step from remove(): deleting a project keeps
+     its version history on purpose, so deletion alone is not erasure (#36). Only
+     this store has it, because only the server keeps a history; the dialog offers
+     the choice when, and only when, this method exists. */
+  purgeVersions(id){ return this.req(`/projects/${encodeURIComponent(id)}/versions`,{method:"DELETE"}); }
   log(id,e){ return this.req(`/projects/${encodeURIComponent(id)}/log`,{method:"POST",body:JSON.stringify(e)}); }
 
   subscribeLog(id,cb){

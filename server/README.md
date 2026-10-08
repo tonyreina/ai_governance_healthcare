@@ -14,7 +14,8 @@ For running this behind Google Cloud IAP, an AWS ALB or Azure Easy Auth, see
 | `subscribeAll(cb, err)` | `GET /api/projects` + `GET /api/events` |
 | `create(id, data)` | `POST /api/projects/{id}` — 409 if it exists |
 | `update(id, patch)` | `PATCH /api/projects/{id}` — deep merge |
-| `remove(id)` | `DELETE /api/projects/{id}` |
+| `remove(id)` | `DELETE /api/projects/{id}`: removes the project and its live log, keeps the version history, writes a tombstone |
+| `purgeVersions(id)` | `DELETE /api/projects/{id}/versions`: destroys the content of every revision **and** of the audit log. Owners only; irreversible. Server store only |
 | `log(id, entry)` | `POST /api/projects/{id}/log` |
 | `subscribeLog(id, cb)` | `GET /api/projects/{id}/log` + `GET /api/events` |
 
@@ -41,7 +42,10 @@ level, so `{"items": {"s4-2": {...}}}` would discard every other key under
 `items`.
 
 **The audit log is append-only.** No route updates or deletes an entry, and a
-trigger in `migrations/001_init.sql` refuses `UPDATE` on the table. `at` and
+trigger refuses `UPDATE` on the table (`migrations/001_init.sql`), with exactly
+one exception: the redaction a purge performs (`migrations/005_disposal.sql`),
+which the trigger verifies by comparing the result with `project_log_redacted()`.
+Deleting a project removes its live log by cascade. `at` and
 `by` are overwritten on write with the server clock and the proxy identity,
 even though the browser sends both — a log whose author is a field the client
 sets is not a log.

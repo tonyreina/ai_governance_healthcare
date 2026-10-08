@@ -145,7 +145,8 @@ honest answer and is a gap worth closing; see R-19.
   access.
 - Source: `002_versions.sql`, `003_version_access.sql`, `004_version_incarnation.sql`.
 - Enforced by: `server/tests/test_versions.py`.
-- Note: this is in tension with erasure. See R-18 and #36.
+- Note: this is in tension with erasure, which is why deleting a project is NOT
+  erasure and a separate, explicit purge exists (R-12, D-29).
 
 ### R-12 Disposal leaves a tombstone, not a gap
 
@@ -153,10 +154,26 @@ honest answer and is a gap worth closing; see R-19.
 - Purging a version empties its content and keeps its revision, author,
   timestamp and original `content_md5`, so "this existed and was purged by whom
   and when" stays answerable.
-- Known gap: the same values also sit in `project_log.entry`, which the purge
-  does not touch (#36).
+- A purge also redacts the project's audit log in the same transaction, by
+  whitelist, because the client writes the values into the entry's prose and may
+  add any field it likes (#36). The database permits that one transition and
+  refuses any other UPDATE.
 - Source: `003_version_access.sql`.
 - Enforced by: `server/tests/test_versions.py`.
+
+### R-27 Deletion is auditable, and erasure is a separate explicit step
+
+- Status: Active
+- Deleting a project writes a permanent, append-only tombstone (who, when, what
+  it last hashed to) and keeps the version history. Destroying the content of the
+  history and the audit log is a separate, owner-only, irreversible step, offered
+  in the delete dialog only where there is a history to destroy, and ordered so
+  that a failure never leaves the user believing data is gone.
+- The documentation says that deleting is not erasure, and what no step reaches:
+  earlier backups, and the identifiers of the people who made changes.
+- Source: #36; DECISIONS D-29.
+- Enforced by: `server/tests/test_disposal.py`, `tests/test_disposal_ui.py`, and
+  `tests/test_stack.py` through a real proxy.
 
 ### R-13 Backups are encrypted
 

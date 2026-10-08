@@ -181,16 +181,40 @@ async function download(filename,data){
    kind of thing from the wrong row. */
 function openDeleteDialog(){
   const name = S.meta.solution || "Untitled AI solution";
+  /* Only the server keeps a version history, so only it can offer to destroy one.
+     In the other modes deleting really does remove everything, and the plain
+     wording is accurate; offering a choice with nothing behind it would not be. */
+  const canPurge = typeof STORE.purgeVersions === "function";
+  const heading = canPurge ? "Delete this project?" : "Delete this project forever?";
+  const consequence = canPurge
+    ? `<p>This removes the review for <b>everyone</b>: the checklist, every
+      checkpoint decision and its sign-offs, the model card and the live audit
+      log, and it leaves the portfolio.</p>
+      <p><b>Its version history is kept.</b> Every earlier revision stays readable
+      by owners, so the record can still be audited. That is usually what you want.
+      To destroy that too, choose it below.</p>`
+    : `<p>This destroys the review for <b>everyone</b>: the checklist, every
+      checkpoint decision and its sign-offs, the model card and the audit log.
+      It cannot be undone.</p>`;
+  const purgeChoice = canPurge ? `
+      <label style="display:flex;gap:8px;align-items:flex-start;margin:12px 0 2px">
+        <input type="checkbox" id="delPurge" aria-describedby="delPurgeHint"
+               style="margin-top:4px">
+        <span><b>Also permanently destroy its version history and the content of its
+        audit log</b></span>
+      </label>
+      <p id="delPurgeHint" class="small" style="color:var(--muted);margin-top:0">
+        For something that should never have been recorded, such as a patient
+        identifier. It cannot be undone. Who changed what, and when, is kept; what
+        was written is not. Backups made earlier still hold it.</p>` : "";
   const host = document.createElement("div");
   host.className = "modal-backdrop";
   host.innerHTML = `
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delTitle">
-      <h2 id="delTitle" style="margin-top:0">Delete this project forever?</h2>
-      <p>This destroys the review for <b>everyone</b>: the checklist, every
-      checkpoint decision and its sign-offs, the model card and the audit log.
-      It cannot be undone.</p>
+      <h2 id="delTitle" style="margin-top:0">${heading}</h2>
+      ${consequence}
       <p><b>Archive it instead</b> if you only want it off the active portfolio.
-      Archiving keeps the whole record and can be reversed.</p>
+      Archiving keeps the whole record and can be reversed.</p>${purgeChoice}
       <label for="delName">Type <b>${esc(name)}</b> to confirm</label>
       <input type="text" id="delName" autocomplete="off" spellcheck="false"
              aria-describedby="delHint">
@@ -198,13 +222,17 @@ function openDeleteDialog(){
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
         <button class="btn" data-del-cancel>Cancel</button>
         <button class="btn" data-del-archive>Archive instead</button>
-        <button class="btn danger" data-del-go disabled>Delete forever</button>
+        <button class="btn danger" data-del-go disabled>${canPurge ? "Delete project" : "Delete forever"}</button>
       </div>
     </div>`;
   document.body.appendChild(host);
 
   const field = host.querySelector("#delName");
   const go = host.querySelector("[data-del-go]");
+  const purgeBox = host.querySelector("#delPurge");
+  if(purgeBox) purgeBox.addEventListener("change", () => {
+    go.textContent = purgeBox.checked ? "Delete and destroy history" : "Delete project";
+  });
   const close = () => { host.remove(); document.removeEventListener("keydown", onKey); };
   const onKey = e => { if(e.key === "Escape") close(); };
 
@@ -227,11 +255,25 @@ function openDeleteDialog(){
   go.onclick = async () => {
     if(field.value.trim() !== name) return;   // belt and braces
     const id = CUR;
+    const destroy = !!(purgeBox && purgeBox.checked);
     go.disabled = true; go.textContent = "Deleting…";
     close();
     delete pending[id]; clearTimeout(timers[id]);
-    try{ await STORE.remove(id); goHome(); toast("Project deleted"); }
-    catch(err){ toast("Couldn't delete the project"); }
+    /* History first, then the project. If destroying the history fails, the project
+       is NOT deleted, so nobody is left believing the data went when it did not.
+       The other order would delete the record and then leave its history behind. */
+    if(destroy){
+      try{ await STORE.purgeVersions(id); }
+      catch(err){ toast("Couldn't destroy the history, so the project was not deleted."); return; }
+    }
+    try{
+      await STORE.remove(id); goHome();
+      toast(destroy ? "Project deleted and its history destroyed" : "Project deleted");
+    }
+    catch(err){
+      toast(destroy ? "The history was destroyed, but the project could not be deleted. Try again."
+                    : "Couldn't delete the project");
+    }
   };
 
   setTimeout(() => field.focus(), 0);

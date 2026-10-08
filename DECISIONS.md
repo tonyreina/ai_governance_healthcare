@@ -397,6 +397,38 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   run first, before anything is up, on a machine that may have neither.
 - Source: #77; R-08.
 
+### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
+
+- Status: Accepted
+- `project_log_redacted(entry)` is the single definition of what a redacted
+  entry is: a **whitelist** of `at`, `by`, `hash`, the changed field's `path`,
+  and a fixed marker for the text. The trigger on `project_log` permits an
+  UPDATE only if the new entry **equals that function applied to the old one**,
+  so it checks what was done, not what the caller says it did. A partial
+  redaction, one that keeps `change.to`, a change to when or who, and un-purging
+  are all refused.
+- Why a whitelist: the log stores arbitrary fields the client sends, and the
+  client writes the values into the prose (`text`) as well as `change.from/to`.
+  The issue named only `from` and `to`; a blacklist of known fields would have
+  left the identifier readable in the prose.
+- "Already purged" and "written by the system" are **columns**, set only by the
+  server. Were they keys inside the entry, a client could send `{"purged":
+  true}` and make an entry carrying the value survive every purge.
+- Deletion writes `project_deletion` (append-only, no content, no foreign key,
+  so it outlives the row) inside the delete transaction. A refused or failed
+  delete writes nothing.
+- **Deleting is still not erasure,** by design (D-10): the history is kept so
+  the record can be audited. The dialog says so, and offers the destroy step as
+  a separate choice, run first so a failure does not delete the project.
+- Rejected: redacting only `change.from/to` (leaves the prose); blacklisting
+  known sensitive fields; making the purge delete the rows (a vanished row looks
+  like a snapshot never taken, D-11); letting deletion cascade-delete the
+  history (an audit trail that vanishes with its subject is not one).
+- Not done: removing the identifiers of the people who made changes
+  (`created_by`, `changed_by`, `by_id`), and reaching backups. Both are
+  documented, and the first is #57.
+- Source: #36; R-12, R-27.
+
 ## Proposed, not yet decided
 
 ### D-21 PHI detection runs in an opt-in sidecar, advisory only

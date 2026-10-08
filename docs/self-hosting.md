@@ -75,7 +75,7 @@ All persistence goes through two small classes in `app/js/00-core/20-stores.js`,
 | `subscribeAll(cb)` | Stream the project list; returns an unsubscribe function |
 | `create(id, data)` | Create a project |
 | `update(id, patch)` | Deep-merge a patch into a project |
-| `remove(id)` | Delete a project and its log |
+| `remove(id)` | Delete a project and its live audit log. The server keeps its version history |
 | `log(id, entry)` | Append an audit-log entry |
 | `subscribeLog(id, cb)` | Stream the most recent log entries for a project |
 
@@ -169,6 +169,50 @@ make backup                # pg_dump through the running server -> backups/
 
 Back up with `make backup`, not by copying the volume's files: a live cluster
 copied file-by-file gives a torn snapshot that may not restore.
+
+### Deleting and destroying data
+
+There are three different things, and they reach different amounts. **Deleting a
+project does not erase its history.** That is deliberate: an audit trail that
+vanishes with its subject is not one. But it means that deleting is not erasure,
+and nothing here should be described to anyone as if it were.
+
+| | Live document | Audit log | Version history |
+|---|---|---|---|
+| **Edit** a field | corrected | an entry is added | the old revision is kept |
+| **Delete** the project | removed | removed with it | **kept**, readable by owners |
+| **Destroy history** (a purge) | untouched | content destroyed | content destroyed |
+
+**Delete** (`DELETE /api/projects/{id}`) removes the project and its live audit
+log. It writes a permanent tombstone to `project_deletion`: who deleted it, when,
+and what its last revision hashed to. The tombstone holds no content.
+
+**Destroy history** (`DELETE /api/projects/{id}/versions`, owners only; in the
+app, a choice in the delete dialog) is the separate step that answers "this should
+never have been recorded", for example a patient identifier pasted into an
+evidence field. A purge destroys the content of every revision **and of every
+audit-log entry**, including the prose, which carries the values too. What stays
+is who changed what, when, which field, and the fingerprint, so the history shows
+that something was written and later destroyed, not a gap. The server records the
+purge in the log. It is irreversible.
+
+To remove a value that was entered by mistake: correct the live document, then
+destroy the history. To remove a whole record: destroy the history, then delete
+the project (the dialog does them in that order, so a failure does not leave you
+believing the data is gone). Then check:
+
+```sql
+select project_id, deleted_by, deleted_at, last_rev from project_deletion;
+select count(*) from project_version where doc::text like '%the-value%';
+select count(*) from project_log where entry::text like '%the-value%';
+```
+
+**What none of this reaches.** Backups made earlier still hold the data, and
+`make restore` puts it back, so a restore after a purge must be followed by
+another purge. The identifiers of the people who made changes (`created_by`,
+`updated_by`, `changed_by`, `by_id`) are not removed either; that is a separate
+question from erasing content, and it has a real tension with keeping an audit
+trail.
 
 ### Rotating the database password
 

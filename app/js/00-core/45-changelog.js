@@ -99,7 +99,10 @@ function logChange(pid, path, from, to, doc) {
     },
   };
   if (doc) entry.hash = contentHash(doc);
-  STORE.log(pid, entry).catch(() => {});
+  // The shared queue retries a transient failure and says so when one cannot be
+  // written (see enqueueLog). Not `.catch(() => {})`: that loses the entry and
+  // leaves a history that looks complete (#45).
+  enqueueLog(pid, entry);
 }
 
 /* Compare two whole documents and list what differs, for the version

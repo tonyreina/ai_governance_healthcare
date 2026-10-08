@@ -50,6 +50,10 @@ EXTRACT = """() => {
     }
   });
   for (const c of METRIC_CATS) out[`chai.metricCat.${c}`] = c;
+  for (const [k, u] of Object.entries(CHAI_TE)) {
+    out[`te.usecase.${k}`] = u.label;
+    for (const m of u.metrics) out[`te.metric.${m.name}`] = m.name;
+  }
   for (const c of OPTICA.chapters) {
     out[`optica.chapter.${c.n}.title`] = c.title;
     if (c.purpose) out[`optica.chapter.${c.n}.purpose`] = c.purpose;
@@ -138,6 +142,47 @@ def main() -> int:
             page.evaluate("S.gates.A.decision") == "Proceed with conditions",
         )
 
+        print("CHAI's suggested metrics")
+        errors: list[str] = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.evaluate(
+            "S.meta.chaiUseCase = 'sepsis-risk-prediction';"
+            " go(STAGES.find(s => s.metrics).id);"
+        )
+        page.wait_for_timeout(200)
+        english = "Risk Ratio"
+        button = page.locator(f'button[data-te="{english}"]')
+        check(
+            "a metric name reads German and keeps the English value",
+            button.inner_text().strip()
+            == tf_de(page, f"te.metric.{english}")
+            != english,
+            button.inner_text(),
+        )
+        check(
+            "and the use case does too",
+            tf_de(page, "te.usecase.sepsis-risk-prediction")
+            in page.inner_text("#teUse"),
+        )
+        check(
+            "the list says its names are translated from CHAI's English",
+            page.locator(".te-note").count() == 1,
+        )
+        button.click()
+        page.wait_for_timeout(200)
+        check(
+            "adding one records CHAI's English name",
+            english in page.evaluate("S.metrics.map(m => m.name)"),
+        )
+        check(
+            "and puts the cursor in its value, without an error",
+            not errors
+            and page.evaluate("document.activeElement.dataset.bind || ''").endswith(
+                ".value"
+            ),
+            "; ".join(errors),
+        )
+
         print("OPTICA's questions")
         page.evaluate("setOpticaEnabled(true); go('o1');")
         page.wait_for_timeout(200)
@@ -156,7 +201,10 @@ def main() -> int:
         print("In English, nothing changes and no note is shown")
         page.evaluate("setLocale('en'); relocalize(); go(STAGES[0].id);")
         page.wait_for_timeout(200)
-        check("no translation note in English", page.locator(".fw-note").count() == 0)
+        check(
+            "no translation note in English",
+            page.locator(".fw-note, .te-note").count() == 0,
+        )
         check(
             "the English criterion is the definition's",
             page.evaluate("STAGES[0].items[0].text") in page.inner_text("#main"),

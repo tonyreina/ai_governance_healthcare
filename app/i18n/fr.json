@@ -256,6 +256,7 @@
   "te.lede": "CHAI recommande de consulter le cadre de tests et d'évaluation du cas d'usage en remplissant la fiche du modèle. Sélectionner un indicateur ajoute son nom et sa catégorie ; la valeur et la population restent à mesurer par vous.",
   "te.useCase": "Cas d'usage",
   "te.select": "Sélectionnez un cas d'usage",
+  "te.note": "Ces noms de métriques sont une traduction non officielle, rédigée automatiquement, des noms anglais de CHAI ; l'original anglais fait foi. Les descriptions accessibles par le lien sont en anglais, et une métrique ajoutée conserve le nom anglais de CHAI.",
   "gate.gaps": {
     "one": "{count} élément des étapes 1–{n} est sans réponse ou non satisfait",
     "many": "{count} d'éléments des étapes 1–{n} sont sans réponse ou non satisfaits",

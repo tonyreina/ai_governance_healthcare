@@ -264,6 +264,7 @@
   "te.lede": "CHAI's guidance is to review the use-case Testing & Evaluation framework when completing the model card. Selecting a metric adds its name and category; the value and population stay yours to measure.",
   "te.useCase": "Use case",
   "te.select": "Select a use case",
+  "te.note": "These metric names are an unofficial, machine-drafted translation of CHAI's English names; the English original governs. The descriptions behind the link are in English, and a metric you add keeps CHAI's English name.",
   "gate.gaps": {
     "one": "{count} item in stages 1–{n} is unanswered or not met",
     "other": "{count} items in stages 1–{n} are unanswered or not met"

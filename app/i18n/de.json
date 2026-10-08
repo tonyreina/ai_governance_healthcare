@@ -252,6 +252,7 @@
   "te.lede": "CHAI empfiehlt, beim Ausfüllen der Modellkarte den Test- und Bewertungsrahmen des Anwendungsfalls heranzuziehen. Die Auswahl einer Kennzahl übernimmt ihren Namen und ihre Kategorie; Wert und Population messen Sie selbst.",
   "te.useCase": "Anwendungsfall",
   "te.select": "Anwendungsfall auswählen",
+  "te.note": "Diese Metriknamen sind eine inoffizielle, maschinell erstellte Übersetzung der englischen Namen von CHAI; maßgeblich ist das englische Original. Die Beschreibungen hinter dem Link sind auf Englisch, und eine hinzugefügte Metrik behält den englischen Namen von CHAI.",
   "gate.gaps": {
     "one": "{count} Punkt in den Phasen 1–{n} ist unbeantwortet oder nicht erfüllt",
     "other": "{count} Punkte in den Phasen 1–{n} sind unbeantwortet oder nicht erfüllt"

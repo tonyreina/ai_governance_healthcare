@@ -63,7 +63,7 @@ function teSuggestHTML(){
   const chosen = (S.meta||{}).chaiUseCase || "";
   const uc = CHAI_TE[chosen];
   const options = Object.entries(CHAI_TE)
-    .map(([k,v])=>`<option value="${esc(k)}"${k===chosen?" selected":""}>${esc(v.label)}</option>`)
+    .map(([k,v])=>`<option value="${esc(k)}"${k===chosen?" selected":""}>${esc(tf(`te.usecase.${k}`, v.label))}</option>`)
     .join("");
 
   let body;
@@ -81,12 +81,15 @@ function teSuggestHTML(){
           const note = [m.when, m.who].filter(Boolean).join(" \u00b7 ");
           return `<button class="btn ro-hide" data-te="${esc(m.name)}" data-te-cat="${esc(c)}"
             ${added?"disabled":""} style="font-size:12px;padding:4px 9px"
-            title="${esc(note||t("te.recommended"))}">${added?"\u2713 ":""}${esc(m.name)}</button>`;
+            title="${esc(note||t("te.recommended"))}">${added?"\u2713 ":""}${esc(tf(`te.metric.${m.name}`, m.name))}</button>`;
         }).join("")}
       </div>`).join("")
       // The attribution CC BY 4.0 requires: the source, the license and the copyright
       // line stay in every language (te.credit keeps {link} and the © line verbatim).
-      + `<p style="font-size:12px;color:var(--muted);margin:12px 0 0">${tHtml("te.credit",{count:uc.metrics.length},{link:`<a href="${esc(uc.url)}" target="_blank" rel="noopener">${esc(t("te.linkText",{label:uc.label}))}</a>`})}</p>`;
+      + `<p style="font-size:12px;color:var(--muted);margin:12px 0 0">${tHtml("te.credit",{count:uc.metrics.length},{link:`<a href="${esc(uc.url)}" target="_blank" rel="noopener">${esc(t("te.linkText",{label:tf(`te.usecase.${chosen}`, uc.label)}))}</a>`})}</p>`
+      // CC BY 4.0 also asks that changes be indicated: the names are translated,
+      // the descriptions behind the link are not, and the record keeps CHAI's English.
+      + (frameworkTranslated() ? `<p class="te-note small" role="note">${esc(t("te.note"))}</p>` : "");
   }
 
   return `<details class="fallback ro-hide" style="margin-top:16px"${chosen?" open":""}>

@@ -167,6 +167,9 @@ jobs:
       - name: untrusted keys cannot reach a prototype
         if: ${{ !cancelled() }}
         run: pixi run test-untrusted-keys
+      - name: search all text on the portfolio
+        if: ${{ !cancelled() }}
+        run: pixi run test-text-search
       - name: audit log writes
         if: ${{ !cancelled() }}
         run: pixi run test-audit

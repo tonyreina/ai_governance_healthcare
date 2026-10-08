@@ -75,6 +75,15 @@ row. It reports locations, not contents: your privacy office decides what is
 produced. A match inside a jsonb column is a place to look, not a finding,
 since an identifier that is a prefix of another matches both. It changes nothing.
 
+In the dashboard, anyone can do the same for the projects they can open: tick
+**Search all text** beside the portfolio search and type a name, an email or a
+phrase. Every project whose current text contains it is listed, archived ones
+included, with where it was found, and each result opens the project. A
+person's name also finds the ids they are stored under (access lists and
+sign-offs hold ids). It searches the current version only: earlier revisions
+and the audit log are not in the browser, which is what `make subject-access`
+is for.
+
 ## A restore brings purged content back
 
 A dump taken **before** a purge, restored **afterward**, reinstates every purged

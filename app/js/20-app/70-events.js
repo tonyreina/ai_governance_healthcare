@@ -133,7 +133,15 @@ document.addEventListener("submit",async e=>{
 });
 document.addEventListener("input",e=>{
   const el=e.target;
-  if(el.id==="q"){ UI.q=el.value; updateDashboard(); return; }
+  if(el.id===SearchField.QUERY){ UI.q=el.value; updateDashboard(); return; }
+  if(el.id===SearchField.ALL_TEXT){
+    UI.qAll=el.checked;
+    const q=document.getElementById(SearchField.QUERY);
+    if(q) q.placeholder = UI.qAll ? SEARCH_HINT.ALL_TEXT : SEARCH_HINT.NAMES;
+    // Names are what people search for, and the lists hold ids: learn the names first.
+    if(UI.qAll) warmNames([...PROJECTS.values()].flatMap(idsOfProject)).then(updateDashboard);
+    updateDashboard(); return;
+  }
   const p=el.dataset && el.dataset.bind; if(!p || RO || !S) return;
   // Mark this as live typing so the changelog waits for the field to be
   // finished rather than describing each keystroke.

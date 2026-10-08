@@ -934,6 +934,38 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   staff data still need it).
 - Source: #121; R-49, R-51.
 
+### D-53 Search the text the browser already holds; no search endpoint
+
+- Status: Accepted
+- The owner asked for a dashboard search that finds every project containing
+  some text and links to it (#57). It runs over the projects the browser has
+  already loaded, which are exactly the ones the viewer may open, so it adds no
+  read path, needs no new server route or read-trail action (R-40), and works
+  the same in all three storage modes.
+- A name also searches the ids it belongs to, because the lists that matter for
+  a subject access request (access, sign-offs, last changed by) hold ids.
+- The cost is coverage: only current versions. Earlier revisions and the audit
+  log are server-side and reachable with `make subject-access`; the UI says so
+  rather than implying the search is complete.
+- Rejected: a server-side full-text endpoint over history (a new read path over
+  every revision, with its own access rules and read-trail rows, for a need the
+  administrator command already meets).
+- Source: the owner, on #57; R-46.
+
+### D-54 Pseudonymizing staff identifiers is deferred
+
+- Status: Accepted
+- The owner's decision on #57's option 3, 2026-10-08. Storing opaque ids and
+  breaking the mapping on erasure would leave every existing revision and log
+  entry holding real ids, because they are append-only (R-10), unless history
+  were rewritten under an exception to it. Names typed into free-text fields
+  would survive either way. The issue's own condition for doing it, erasure
+  requests expected to be real, has not been met.
+- Erasure stays as `docs/privacy.md` states it: content can be purged, and the
+  fact of who did what is kept.
+- Revisit if erasure requests become real.
+- Source: the owner, on #57; R-10, R-46.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

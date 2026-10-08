@@ -473,11 +473,16 @@ honest answer and is a gap worth closing; see R-19.
   period is decided, what a purge destroys and what it cannot, that a restore
   brings purged content back, and carries a draft Art. 30 entry. It gives no legal
   advice and does not say the software complies with any law.
+- In the dashboard, **Search all text** lists every project the viewer can open
+  whose current text contains a phrase, archived ones included, with where it
+  was found and a link to each. A name also matches the ids it is stored under.
+  It says it does not search earlier versions or the audit log.
 - Why: a subject access request meant hand-written SQL over six columns, and there
   was no position a DPO could point at (#57).
 - Source: #57; DECISIONS D-48.
 - Enforced by: `tests/test_subject_access.py` (real PostgreSQL: every location,
-  hostile input, read-only, the schema-drift check, and the restore interaction).
+  hostile input, read-only, the schema-drift check, and the restore interaction)
+  and `tests/test_text_search.py` (the dashboard search, in a real browser).
 
 ### R-48 An export says which storage mode produced it
 

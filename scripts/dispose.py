@@ -8,11 +8,13 @@ The rules are in the database (server/migrations/008_retention.sql), so this onl
 it. `retention_due()` lists the projects past their period: a retired project whose
 last change or retirement date is longer ago than the policy's `record_years`, or the
 history of a deleted one. `read_trail_due()` counts the read-trail rows older than
-`read_trail_years`. A project under a litigation hold is listed and kept.
+`read_trail_years`, and `principals_due()` the people not seen for that long whom no
+retained record names. A project under a litigation hold is listed and kept.
 
 `--apply` calls `dispose_due()`, which in one transaction deletes each due project's
 live record (leaving a tombstone), purges its revisions (leaving who, when and the
-hash), deletes the due read-trail rows, and writes a `disposal_run` row naming NAME.
+hash), deletes the due read-trail rows and principals, and writes a `disposal_run` row
+naming NAME.
 It must run as the database owner; the API's role cannot.
 
 Prints names and dates, never content. It runs on the host's Python, so it keeps to
@@ -40,7 +42,8 @@ SELECT json_build_object(
                                       'changed_by', changed_by)
                FROM retention_policy),
   'projects', coalesce((SELECT json_agg(d) FROM retention_due() d), '[]'::json),
-  'read_trail', (SELECT row_to_json(r) FROM read_trail_due() r))::text;
+  'read_trail', (SELECT row_to_json(r) FROM read_trail_due() r),
+  'principals', (SELECT count(*) FROM principals_due()))::text;
 """
 
 APPLY_SQL = "SELECT row_to_json(r)::text FROM dispose_due({by}) r;"
@@ -85,6 +88,8 @@ def render(report: dict[str, Any]) -> str:
         "",
         f"Read trail: {trail['events']} row(s) older than "
         f"{day(trail['cutoff'])} are due; {trail['held']} more are kept under a hold.",
+        f"Staff names and emails: {report['principals']} person(s) not seen since "
+        f"{day(trail['cutoff'])} and named by no retained record are due.",
     ]
     return "\n".join(lines)
 
@@ -117,9 +122,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"dispose: {exc}", file=sys.stderr)
         return 1
     print(
-        f"\nDisposed of {run['projects']} project(s) ({run['revisions']} revision(s)) "
-        f"and {run['read_events']} read-trail row(s). Recorded as disposal run "
-        f"{run['id']}, by {run['run_by']}."
+        f"\nDisposed of {run['projects']} project(s) ({run['revisions']} revision(s)), "
+        f"{run['read_events']} read-trail row(s) and {run['principals']} person(s)' "
+        f"name and email. Recorded as disposal run {run['id']}, by {run['run_by']}."
     )
     return 0
 

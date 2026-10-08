@@ -613,13 +613,12 @@ honest answer and is a gap worth closing; see R-19.
   litigation hold suspends any period. `docs/privacy.md` states the periods and
   why, and its Art. 30 draft points to them.
 - Applied since R-56: `make dispose` reports what is past these periods and
-  disposes of it. The security log and backups are outside the database and
-  follow the organization's own policies; staff names and emails (`principals`)
-  are not disposed of yet.
+  disposes of it, staff names and emails included (D-64). The security log and
+  backups are outside the database and follow the organization's own policies.
 - Supersedes: R-47 (answered).
 - Source: the owner, on #57; DECISIONS D-56.
-- Enforced by: `server/tests/test_retention.py` for the record and read-trail
-  periods. Nothing applies the `principals` period.
+- Enforced by: `server/tests/test_retention.py` for the record, read-trail and
+  `principals` periods.
 
 ### R-55 The dashboard's languages, and what may be shown untranslated
 
@@ -664,7 +663,9 @@ honest answer and is a gap worth closing; see R-19.
   record (a deletion record is written, as for any delete) and the content of
   its revisions (the rows keep number, author, time and hash, R-12). A deleted
   project's history is purged the same way. Read-trail rows past their period
-  are deleted. Nothing else is removed.
+  are deleted. So is a person's name and email (`principals`) once they have not
+  signed in for the read-trail period and no retained record names them
+  (D-64). Nothing else is removed.
 - **An operator runs it.** `make dispose` reports and changes nothing;
   `make dispose APPLY=1 BY=<name>` disposes, in one transaction, and writes a
   `disposal_run` row with who ran it, the periods and what went. Only the

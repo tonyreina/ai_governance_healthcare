@@ -1113,7 +1113,7 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   `POST /api/projects/{id}/hold` with a reason. The reason stays with the hold
   and is shown only to owners; the project's history says only that a hold was
   placed or lifted, and the security log names who, not why.
-- Not built: disposal of `principals`.
+- Disposal of `principals` was added after, by D-64.
 - Rejected: deleting every row (leaves no evidence the record existed, against
   R-12); a timer in the server (a wrong date or setting deletes with nobody
   looking); one global hold switch (one dispute would freeze every project).
@@ -1146,6 +1146,29 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - The pseudo-locale probe skips `<bdi>`, since it holds data, not interface
   text; the counts it reported had been mostly data.
 - Source: the owner, on #80; R-55.
+
+### D-64 A person's name goes when nothing retained names them
+
+- Status: Accepted
+- Applies the owner's period for staff names and emails (R-54): "while active,
+  then as long as a retained record refers to them". There is no offboarding
+  signal, so "no longer active" is read as "not signed in for the read-trail
+  period", and "refers to them" as any mention of their id or email, matched as
+  a case-insensitive substring, in any column that records who did something or
+  inside any document, log entry, read detail or hold reason
+  (`principal_referenced()`, `009_principal_disposal.sql`).
+- Both readings err toward keeping: a prefix match keeps both people, and a
+  purge keeps a revision's author (R-12), so whoever changed a retained record
+  stays listed as long as it does.
+- It runs inside `dispose_due()`, after the read trail, so a person known only
+  from reads disposed of in the same run goes in that run, and the
+  `disposal_run` row counts them.
+- A test lists every column named like `*_by`, `by_id` or `actor` and fails if
+  `principal_referenced()` does not read it in that table's clause.
+- Rejected: deleting on last sign-in alone (would strip the name from records
+  that still show what the person did); keeping principals forever (against
+  the owner's period).
+- Source: R-54, #57.
 
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 

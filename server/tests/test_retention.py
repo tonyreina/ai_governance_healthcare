@@ -415,3 +415,110 @@ def test_the_rule_comparison_notices_a_difference() -> None:
     assert ("C", "Withdraw") in retiring_decisions_js(js)
     sql = MIGRATION.replace("OR g.d ->> 'decision' = 'Retire'", "")
     assert ("D", "Retire") not in retiring_decisions_sql(sql)
+
+
+# --- staff names and emails (principals) --------------------------------------
+# R-54: kept while the person is active, then as long as a retained record refers to
+# them. Disposal deletes a principal not seen for the read-trail period whom nothing
+# retained mentions, by id or by email.
+
+
+async def add_principal(conn: asyncpg.Connection, pid: str, seen_years: int) -> None:
+    await conn.execute(
+        "INSERT INTO principals (id, name, email, first_seen, last_seen)"
+        " VALUES ($1, 'Someone', $1, now() - make_interval(years => $2 + 1),"
+        " now() - make_interval(years => $2))",
+        pid,
+        seen_years,
+    )
+
+
+async def principals_left() -> set[str]:
+    async with owner_connection() as conn:
+        return {r["id"] for r in await conn.fetch("SELECT id FROM principals")}
+
+
+async def test_a_long_gone_unreferenced_person_is_disposed_of(
+    client: AsyncClient,
+) -> None:
+    async with owner_connection() as conn:
+        await add_principal(conn, "gone@x.org", 7)
+        await add_principal(conn, "recent@x.org", 1)
+        due = {r["id"] for r in await conn.fetch("SELECT id FROM principals_due()")}
+    assert due == {"gone@x.org"}
+    run = await dispose()
+    assert run["principals"] == 1
+    assert "gone@x.org" not in await principals_left()
+    assert "recent@x.org" in await principals_left()
+
+
+async def test_anyone_a_retained_record_names_is_kept(client: AsyncClient) -> None:
+    await make(client, "named", {"D": {"decision": "Continue"}})
+    async with owner_connection() as conn:
+        # An author of a revision: purging keeps the author (R-12), so they stay.
+        await conn.execute(
+            "INSERT INTO project_version (project_id, incarnation, rev, doc,"
+            " content_md5, changed_by) SELECT id, incarnation, 99, '{}', 'x',"
+            " 'author@x.org' FROM projects WHERE id = 'named'"
+        )
+        await conn.execute(
+            "UPDATE project_version SET doc = '{}'::jsonb, purged_at = now(),"
+            " purged_by = 'dpo@x.org' WHERE project_id = 'named'"
+        )
+        # Named only inside a document, by email (an access list, a sign-off).
+        await conn.execute(
+            "UPDATE projects SET doc = jsonb_set(doc, '{access}',"
+            " '{\"owners\": [\"Listed@X.org\"]}') WHERE id = 'named'"
+        )
+        for pid in ("author@x.org", "dpo@x.org", "listed@x.org"):
+            await add_principal(conn, pid, 9)
+    await dispose()
+    assert {"author@x.org", "dpo@x.org", "listed@x.org"} <= await principals_left()
+
+
+async def test_a_person_known_only_from_old_reads_goes_with_them(
+    client: AsyncClient,
+) -> None:
+    async with owner_connection() as conn:
+        await add_principal(conn, "reader@x.org", 7)
+        await conn.execute(
+            "INSERT INTO access_event (at, actor, action)"
+            " VALUES (now() - interval '7 years', 'reader@x.org', 'list')"
+        )
+    run = await dispose()
+    # The same run deletes the reads, then finds nothing left that names them.
+    assert (run["read_events"], run["principals"]) == (1, 1)
+
+
+async def test_every_column_that_names_a_person_is_checked() -> None:
+    async with owner_connection() as conn:
+        columns = [
+            r[0]
+            for r in await conn.fetch(
+                "SELECT table_name || '.' || column_name FROM information_schema.columns"
+                " WHERE table_schema = 'public' AND (column_name LIKE '%\\_by'"
+                " OR column_name IN ('by_id', 'actor'))"
+            )
+        ]
+        body = await conn.fetchval(
+            "SELECT pg_get_functiondef('principal_referenced(text)'::regprocedure)"
+        )
+
+    # Each EXISTS clause reads one table; the column must be in that table's clause.
+    def clauses(sql: str) -> dict[str, str]:
+        out = {}
+        for part in sql.split("EXISTS (")[1:]:
+            m = re.search(r"FROM (\w+) \w+, w", part)
+            if m:
+                out[m.group(1)] = part
+        return out
+
+    found = clauses(body)
+    missing = [
+        c for c in columns
+        if not re.search(rf"\.{c.split('.')[1]}\b", found.get(c.split(".")[0], ""))
+    ]  # fmt: skip
+    assert columns and not missing, missing
+    # Mutation: a clause that stopped reading purged_by is noticed.
+    weaker = clauses(body.replace(" OR lower(l.purged_by) = w.v", ""))
+    assert ".purged_by" not in weaker["project_log"]

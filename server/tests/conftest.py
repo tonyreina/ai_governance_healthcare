@@ -145,7 +145,8 @@ async def reset_database() -> None:
         # project_version.
         await conn.execute(
             "TRUNCATE access_event, project_deletion, project_version, project_log, "
-            "projects, retention_hold, disposal_run RESTART IDENTITY CASCADE"
+            "projects, retention_hold, disposal_run, principals "
+            "RESTART IDENTITY CASCADE"
         )
         await conn.execute(
             "UPDATE retention_policy SET record_years = 6, read_trail_years = 6"

@@ -17,6 +17,11 @@ const Mode = Object.freeze({
    Claude artifact mode was labeled "Shared workspace", identically to the
    self-hosted PostgreSQL server, which hid the difference between data inside
    a hospital's administrative boundary and data outside it (#64). */
+/* The header's label for each mode, as a catalog key (the text is translated; the
+   English text in MODE_LABEL below is what exports carry, so it stays stable). */
+const MODE_LABEL_KEY = Object.freeze({
+  [Mode.LOCAL]: "mode.local", [Mode.API]: "mode.api", [Mode.ARTIFACT]: "mode.artifact",
+});
 const MODE_LABEL = Object.freeze({
   [Mode.LOCAL]:    Object.freeze({text:"This browser only", cls:""}),
   [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
@@ -27,7 +32,7 @@ const MODE_LABEL = Object.freeze({
    patient's data to be in a governance record, and organizational policy forbids
    it. It is a policy, not a detector, so the wording is an instruction, never a
    claim that no such data is present. */
-const SCOPE_NOTICE = "Governance metadata only: never enter patient-identifiable information.";
+const SCOPE_NOTICE = I18N_CATALOGS[Locale.EN]["safety.scope"];   // English: exports and tests read it
 /* What an export says about where the record was kept, beside the header's label (#93).
    Keyed by Mode like MODE_LABEL, so a mode cannot ship without one and two modes cannot
    share one (R-04). It says where the record lived and what that means for sign-offs

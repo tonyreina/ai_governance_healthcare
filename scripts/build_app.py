@@ -19,9 +19,14 @@ Run via: pixi run build-app
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from check_i18n import Locale
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "app"
@@ -57,6 +62,26 @@ def ordered(directory: Path, suffix: str) -> list[Path]:
     return sorted((p for p in directory.rglob(f"*{suffix}")), key=key)
 
 
+def catalogs_js() -> str:
+    """The message catalogs, app/i18n/<locale>.json, as one frozen object (#80).
+
+    Embedded rather than fetched: the dashboard is one file that must work opened from
+    disk and as a Claude artifact (R-01), so nothing can be loaded at run time. English
+    first, then the rest by name, so the output is stable.
+    """
+    files = sorted(
+        (SRC / "i18n").glob("*.json"), key=lambda p: (p.stem != Locale.EN, p.stem)
+    )
+    catalogs = {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in files}
+    if Locale.EN not in catalogs:
+        raise SystemExit("error: app/i18n/en.json, the source catalog, is missing")
+    body = json.dumps(catalogs, ensure_ascii=False, separators=(",", ":"))
+    return (
+        "/* Generated from app/i18n/*.json by scripts/build_app.py. */\n"
+        f"const I18N_CATALOGS = Object.freeze({body});"
+    )
+
+
 def main() -> int:
     shell = (SRC / "index.html").read_text(encoding="utf-8")
     for mark in (CSS_MARK, JS_MARK):
@@ -73,7 +98,13 @@ def main() -> int:
     # Blank line between modules, matching how the sections were separated when
     # this was one file. Keeps the generated output stable and readable.
     css = "\n\n".join(p.read_text(encoding="utf-8").strip("\n") for p in css_files)
-    js = "\n\n".join(p.read_text(encoding="utf-8").strip("\n") for p in js_files) + "\n"
+    js = (
+        "\n\n".join(
+            [catalogs_js()]
+            + [p.read_text(encoding="utf-8").strip("\n") for p in js_files]
+        )
+        + "\n"
+    )
 
     html = shell.replace(CSS_MARK, css).replace(JS_MARK, js)
     if not html.startswith("<!--"):

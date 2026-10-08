@@ -928,7 +928,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** Every storage mode, the self-hosted server included, tells the user
   never to enter patient-identifiable information, and the docs say so first.
-- **Asserted in:** `app/js/00-core/30-state.js` — "Governance metadata only: never enter patient-identifiable information."
+- **Asserted in:** `app/i18n/en.json` — "Governance metadata only: never enter patient-identifiable information."
 - **Status:** partial
 - **Gap:** A statement of policy. Nothing inspects what is typed into the
   free-text fields, so the tests prove the instruction is shown, not that it is
@@ -975,3 +975,13 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_purge_ledger.py::the mistaken content is gone again`
   `tests/test_purge_ledger.py::work written after the restore is untouched`
   `tests/test_purge_ledger.py::capture, then the restore, then reapply`
+
+### C-76 A translated warning is shown only once someone has reviewed it
+
+- **Claim:** The patient-data notice and the storage-mode banners stay in English
+  in a language until a reviewer is recorded for them in that catalog.
+- **Asserted in:** `docs/self-hosting.md` — "are shown in English until someone fluent in the"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_i18n.py::the unreviewed safety warning stays in English`
+  `tests/test_i18n.py::once a reviewer is recorded, it shows in Spanish`

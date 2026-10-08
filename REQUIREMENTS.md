@@ -618,6 +618,27 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: Nothing yet. The periods are documentation, and no code applies
   them.
 
+### R-55 The dashboard's languages, and what may be shown untranslated
+
+- Status: Active
+- The owner chose, 2026-10-08: English, Spanish, French, German, Hindi, Russian
+  and Mandarin, written as Simplified Chinese (`zh-Hans`). The choice is per
+  browser, not stored with a project.
+- Every string a reader sees comes from `app/i18n/<tag>.json`, embedded in the
+  single file (R-01); English is the source. `check-i18n` fails on a missing or
+  extra key, a changed placeholder, a missing plural form, markup in a value, or
+  an unused key.
+- Translations are machine-drafted. A safety-bearing string (`"@meta".safety`)
+  shows in English in a language until a reviewer is recorded for it in that
+  catalog.
+- Dates and relative times use the chosen language. Exports, the JSON and CSV
+  keys, and server messages stay English for now.
+- Hard-coded text is a ratchet: the pseudo-locale count in
+  `tests/i18n_baseline.json` may only go down.
+- Source: the owner, on #80; DECISIONS D-59.
+- Enforced by: `tests/test_i18n.py` (real browser), `tests/test_check_i18n.py`
+  (every rule shown failing) and the `check-i18n` hook.
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

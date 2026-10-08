@@ -26,6 +26,10 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from check_i18n import Locale
+
 ROOT = Path(__file__).resolve().parent.parent
 ALLOWLIST = ROOT / ".spelling-allow"
 
@@ -219,15 +223,29 @@ PATTERN = re.compile(
 URLISH = re.compile(r"(https?://\S+|\b[\w.-]+/[\w./-]+)")
 
 
+def is_translation(rel: str) -> bool:
+    """A message catalog in another language (#80). American English is the source
+    language, app/i18n/en.json, which IS checked. "Organisation" is correct German and
+    "centre" correct French, so judging a translation by English spelling is wrong."""
+    parts = Path(rel).parts
+    return (
+        len(parts) == 3
+        and parts[:2] == ("app", "i18n")
+        and parts[2].endswith(".json")
+        and parts[2] != f"{Locale.EN}.json"
+    )
+
+
 def skip(path: Path) -> bool:
-    """This file (it IS the word list) and anything quoted verbatim."""
+    """This file (it IS the word list), anything quoted verbatim, and translations."""
     resolved = path.resolve()
     if resolved == SELF:
         return True
     try:
-        return str(resolved.relative_to(ROOT)) in QUOTED_VERBATIM
+        rel = str(resolved.relative_to(ROOT))
     except ValueError:
         return False
+    return rel in QUOTED_VERBATIM or is_translation(rel)
 
 
 def load_allowlist() -> list[str]:

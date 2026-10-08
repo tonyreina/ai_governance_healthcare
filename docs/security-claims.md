@@ -837,3 +837,28 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Gap:** Nothing here creates a managed database, so these come from the providers'
   documentation. The page says so and tells the operator to confirm the setting on
   the instance they have. #47
+
+### C-65 What runs is locked, pinned and watched
+
+- **Claim:** The API's dependencies are installed from a hash-pinned lock, the base
+  images and actions are pinned by digest or commit, Dependabot watches each
+  ecosystem, and a scan fails on a fixable HIGH or CRITICAL finding in our images.
+- **Asserted in:** `docs/deploy.md` — "What is running is what the repository says"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_supply_chain.py::every locked requirement is pinned and hashed`
+  `tests/test_supply_chain.py::the API image's bases are pinned`
+  `tests/test_supply_chain.py::the images compose pulls are pinned`
+  `tests/test_supply_chain.py::dependabot covers pip, both Dockerfiles, compose and the actions`
+  `tests/test_supply_chain.py::security.yml scans HIGH and CRITICAL, on a schedule`
+  `tests/test_supply_chain.py::pip is not in the runtime image`
+
+### C-66 Reports are handled within the stated targets
+
+- **Claim:** A reported vulnerability is acknowledged and fixed within the targets in
+  the security policy.
+- **Asserted in:** `SECURITY.md` — "These are **targets we will try to meet, not guarantees**."
+- **Status:** unenforced
+- **Gap:** A policy, not a mechanism: nothing here measures it, and the numbers are a
+  first draft for the owner to confirm. Private vulnerability reporting, which the
+  policy points to, is a repository setting that is currently off. #37

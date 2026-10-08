@@ -773,6 +773,41 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   two share one definition of loopback (`LOOPBACK_HOSTS`).
 - Source: #47; R-42.
 
+### D-45 Lock with hashes, pin by digest, scan what we build
+
+- Status: Accepted
+- The lock is `server/requirements.txt` (pip-compile, `--generate-hashes`,
+  resolved in the image's own Python) and the project itself is **not**
+  pip-installed: installing it would resolve build dependencies from PyPI, an
+  unpinned step in a pinned build, and the runtime already sets
+  `PYTHONPATH=/app`. The file is named `requirements.txt` so Dependabot's pip
+  ecosystem updates it directly.
+- Found by scanning rather than by reading: four HIGH findings in the API image
+  were not our dependencies. They were libraries **vendored inside pip**, which
+  shipped in the runtime venv where nothing uses it. Removing pip removed them.
+  The same scan found 22 in the official `postgres:17` image's `gosu`, which we
+  cannot patch.
+- So the scan gate covers what we build (`--ignore-unfixed`, fail), and the
+  official images are reported without failing: a CVE in someone else's image
+  must not turn every unrelated pull request red. It is not part of `tests
+  passed` for the same reason, but runs on every pull request so a finding is
+  visible.
+- Actions by SHA with the tag in a comment, which Dependabot understands. Trivy
+  via its action, so Dependabot maintains it, rather than a floating `docker
+  run`.
+- `chai-updates.yml` pushed straight to `main`, which has been protected since
+  D-23, so that step could no longer succeed. It now pushes a branch and opens a
+  pull request, and dispatches `test.yml` on it, because a pull request opened
+  with `GITHUB_TOKEN` does not start workflows and the required check would
+  otherwise never appear. This has not run in Actions yet: the next scheduled or
+  manual run is its first.
+- The SLA in `SECURITY.md` is a set of **targets** the owner should confirm;
+  they are a policy, and are mine only as a first draft.
+- Rejected: signing and attestation (the issue's own non-goal); a `docker run`
+  of Trivy by a floating tag; failing every pull request on third-party image
+  findings.
+- Source: #37; R-43.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

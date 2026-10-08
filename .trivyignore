@@ -1,0 +1,8 @@
+# Findings we have decided to accept, one per line, each with WHY and WHEN TO LOOK AGAIN.
+#
+#   CVE-YYYY-NNNNN   # reason it is not reachable or not fixable; revisit YYYY-MM-DD
+#
+# Empty on purpose. Our own images are scanned with --ignore-unfixed, so everything that
+# fails the build has a fix to apply. An entry here is a decision somebody owns, not a way
+# to get a red check green: do not add one without the reason and the date (CLAUDE.md,
+# "A skip is a failure").

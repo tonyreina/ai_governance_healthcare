@@ -26,7 +26,7 @@ POSTGRES_DB   ?= chai
 HTTP_PORT     ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help env preflight doctor up dev down logs ps config build-app shell psql backup backup-plaintext restore verify-backup prune check-isolation
+.PHONY: help env preflight doctor up dev down logs ps config build-app shell psql backup backup-plaintext restore verify-backup prune check-isolation lock
 
 help:  ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -151,6 +151,13 @@ restore:  ## Restore a dump: make restore FILE=backups/....sql.gz.gpg  (DESTRUCT
 	         scripts/backup_crypto.sh decrypt "$(FILE)" ;; \
 	  *)     cat "$(FILE)" ;; \
 	esac | gunzip -c | $(COMPOSE) exec -T $(DB_SERVICE) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+
+# What the API image installs is exactly this file, verified by hash (#37). Regenerated
+# in the SAME Python the image uses, so the pins are the ones that image will resolve.
+# Review the diff: a changed hash is a changed dependency.
+lock:  ## Regenerate server/requirements.txt (hash-pinned) from server/pyproject.toml
+	docker run --rm -v "$(CURDIR)/server:/work" -w /work python:3.12-slim sh -c \
+	  "pip install -q pip-tools==7.6.2 && pip-compile --quiet --generate-hashes --strip-extras --output-file=requirements.txt pyproject.toml && chown \$$(stat -c %u:%g pyproject.toml) requirements.txt"
 
 # A backup that has never been restored is a hypothesis (#52). This restores one into a
 # throwaway PostgreSQL (same major version as production, no network) and checks the

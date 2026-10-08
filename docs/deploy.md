@@ -252,6 +252,37 @@ recorded. `source_ip` is what the proxy reported, for correlation, and is not
 authentication. How long to keep the trail is not decided here (see the
 retention issue).
 
+### Updating
+
+What is running is what the repository says: the API's dependencies are locked
+with hashes (`server/requirements.txt`), and the base images, the database and
+the proxy are pinned by digest (`compose.yaml`, both Dockerfiles). A rebuild
+produces the same thing from the same source, and a new base image arrives as a
+reviewed pull request from Dependabot, not as whatever a tag points at that day.
+
+That has a consequence for the operator: **`docker compose up -d` does not pull
+a newer image.** It runs what is already on the host. So after you merge an
+update:
+
+```bash
+git pull
+docker compose pull db proxy proxy-perms  # database and proxy, at their new digests
+docker compose build --pull api           # the API image: new lock, new base image
+docker compose up -d                      # recreate only what changed
+```
+
+`make lock` regenerates `server/requirements.txt` inside the same Python the
+image uses; review its diff, because a changed hash is a changed dependency. For
+the cloud image, rebuild and push the proxy image from `proxy/Dockerfile` and
+deploy the new tag; the base image inside it is pinned by digest the same way.
+
+A scheduled scan (`.github/workflows/security.yml`) builds our images weekly and
+on every pull request, fails on a HIGH or CRITICAL finding that has a fix, and
+writes a software bill of materials as a build artifact. Findings in the
+official database and proxy images are reported but do not fail it, because they
+are not ours to patch. Report a vulnerability in this project as `SECURITY.md`
+describes.
+
 ### Security events: collecting, retaining and alerting
 
 The only record of a delete, a purge, a rejected request or a 401 used to be a

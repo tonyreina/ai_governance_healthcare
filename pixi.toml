@@ -90,6 +90,9 @@ test-export-beacon = "python tests/test_export_beacon.py"
 # `make verify-backup` restores a dump into a throwaway PostgreSQL and checks the
 # guarantees survived; `make restore` asks first (#52). Needs Docker and gpg.
 test-verify-backup = "python tests/test_verify_backup.py"
+# What is running and how we learn it is vulnerable: locked, hashed, digest-pinned,
+# watched, and a policy for reports (#37). The image build needs Docker.
+test-supply-chain = "python tests/test_supply_chain.py"
 # What a `docker build` sends to the daemon: no .env, backups, .git or licensed PDF (#63).
 test-dockerignore = "python tests/test_dockerignore.py"
 # The gate behind `make up`: placeholders, literal identities, plain HTTP on the network,

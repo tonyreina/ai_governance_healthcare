@@ -786,3 +786,29 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_access_audit.py::test_the_check_constraint_and_the_enum_agree`
   `tests/test_export_beacon.py::the PDF export is reported`
   `tests/test_stack.py::each read was recorded in the real database`
+
+### C-61 A backup can be verified by restoring it, and a restore asks first
+
+- **Claim:** `make verify-backup` restores a dump into a throwaway PostgreSQL and
+  fails unless the tables, rows and append-only triggers came back, and `make restore`
+  asks for `YES` before overwriting the live database.
+- **Asserted in:** `docs/self-hosting.md` — "`make verify-backup` restores the newest
+  dump"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_verify_backup.py::a good encrypted dump verifies`
+  `tests/test_verify_backup.py::a dump that restores without the append-only triggers fails`
+  `tests/test_verify_backup.py::the wrong passphrase fails`
+  `tests/test_verify_backup.py::a truncated dump fails`
+  `tests/test_verify_backup.py::with no answer it aborts and touches nothing`
+
+### C-62 The per-platform backup settings are listed correctly
+
+- **Claim:** The deployment guide names the flags that set backup retention,
+  point-in-time recovery, deletion protection and an off-account copy on each
+  managed database.
+- **Asserted in:** `docs/deploy.md` — "Two rules apply on every platform."
+- **Status:** unenforced
+- **Gap:** Nothing here creates a Cloud SQL, RDS or Azure database, so the flags come
+  from the providers' documentation and could be out of date. The page says so and
+  does not recommend a retention length. #52

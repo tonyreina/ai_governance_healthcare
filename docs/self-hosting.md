@@ -247,6 +247,48 @@ line, where any local account can read it. The dump is encrypted with GnuPG
 through a temporary file that only you can read, and a failed dump, or a
 restore with the wrong passphrase, exits non-zero.
 
+### Backups: `make backup` is a tool, not a backup strategy
+
+`make backup` writes an encrypted dump of a running database. On its own it is not
+a backup plan (45 CFR 164.308(a)(7) makes a data backup plan *required*), for
+three reasons, each of which is a decision you make.
+
+**1. Nothing schedules it.** Run it from the host's scheduler, for example daily
+at 02:30. `BACKUP_PASSPHRASE` must be in that job's environment, from a secret
+store, never typed on a command line:
+
+```cron
+30 2 * * *  /srv/chai/nightly-backup.sh
+```
+
+```sh
+#!/bin/sh
+# /srv/chai/nightly-backup.sh
+cd /srv/chai
+export BACKUP_PASSPHRASE="$(cat /etc/chai/backup.pass)"
+make backup BACKUP_RETAIN=30
+make verify-backup
+```
+
+**2. It writes to `backups/` on the same disk as the database.** A copy on the
+host it protects does not survive losing the host. Copy each file to storage in
+**another account or site**, and keep the passphrase somewhere else again. A
+backup in the same account as the thing it protects does not survive that account
+being compromised.
+
+**3. Nothing restores from it unless you do.** A backup that has never been
+restored is a hypothesis. `make verify-backup` restores the newest dump (or
+`FILE=...`) into a throwaway PostgreSQL of the same major version as production,
+with no network, and checks that the tables, the rows and the **append-only
+triggers** came back. A dump that restores without them has quietly lost the
+guarantee the history rests on. It exits non-zero otherwise, so run it after the
+backup, from the same scheduler. How long it takes is your real restore time,
+which is the number to write down.
+
+`make restore` overwrites the live database with a dump, so it asks you to type
+`YES` first (`CONFIRM=YES` skips the question for automation). Practice the
+restore somewhere that is not production before you need it.
+
 ### Deleting and destroying data
 
 There are three different things, and they reach different amounts. **Deleting a

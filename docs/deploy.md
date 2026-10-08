@@ -70,6 +70,45 @@ there is no `pgdata` volume here and no `db` service, so the
 does not apply. Prefer the platform's identity-based connection — Cloud SQL IAM
 auth, RDS IAM auth, Entra ID — over a password you have to rotate at all.
 
+### Backup and recovery
+
+45 CFR 164.308(a)(7) makes a data backup plan and a disaster recovery plan
+*required*, and testing them addressable. These records are the evidence that a
+clinical AI deployment was reviewed, and by whom: losing them is itself the
+compliance event, and re-entry cannot reconstruct sign-off dates or authorship.
+So the managed database's durability settings are not optional extras. Set them
+when you create the instance:
+
+| | Point-in-time recovery and backup retention | Deletion protection | Copy outside the account |
+|---|---|---|---|
+| Cloud SQL | `--backup-start-time=03:00 --enable-point-in-time-recovery --retained-backups-count=14 --retained-transaction-log-days=7` | `--deletion-protection` | `gcloud sql export sql` to a bucket in **another project** |
+| RDS | `--backup-retention-period 35` (the maximum; it also enables point-in-time recovery) | `--deletion-protection` | snapshots copied to **another account** (AWS Backup, or a shared, re-encrypted snapshot) |
+| Azure Database | `--backup-retention 35` | a resource lock on the server | `--geo-redundant-backup Enabled`, which can only be set when the server is created |
+
+!!! warning "Not exercised against any real managed database"
+
+    The flags above are from the providers' documentation. None has been run
+    here: check each against the current documentation before you rely on it,
+    and do not read the retention numbers as recommendations. They are what the
+    mechanism allows.
+
+Decide, and write down, two numbers this repository cannot choose for you:
+
+- **RPO**, how much recent work you can afford to lose. Point-in-time recovery
+  gives minutes; a daily dump gives up to a day.
+- **RTO**, how long you can be without it. Measure it: restore into a scratch
+  instance and time it. For the Compose stack, `make verify-backup` does exactly
+  that against a real dump.
+
+Two rules apply on every platform. **A backup lives somewhere an attacker with
+your production credentials cannot delete**: another account, project or
+subscription, with its own credentials. And **a backup nobody has restored is a
+hypothesis**: schedule the restore test, and record the date of the last one.
+
+For the Compose stack the same plan is `make backup` on a schedule, a copy to
+off-host storage, and `make verify-backup`; see
+[Self-hosting](self-hosting.md#backups-make-backup-is-a-tool-not-a-backup-strategy).
+
 ### Two database roles
 
 The audit log and the version history are append-only because of database

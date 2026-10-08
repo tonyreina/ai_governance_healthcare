@@ -206,6 +206,27 @@ to verify a signed assertion itself — the IAP JWT, `x-amzn-oidc-data`,
     `127.0.0.1:8000`. That is why it is a named override rather than
     `compose.override.yaml`, which `docker compose up` would pick up silently.
 
+### How the containers are locked down
+
+The proxy is the only service reachable from outside, so it gets the strictest
+treatment: it runs as an unprivileged user (uid 65532), drops every Linux
+capability except the one the Caddy binary asks for, and has a read-only root
+filesystem. The API drops all capabilities and is read-only too, on top of the
+unprivileged user its image already uses. All three services set
+`no-new-privileges` and have memory, CPU and process limits (see the resource
+limits in `.env.example`).
+
+A small one-shot service, `proxy-perms`, hands the proxy's two named volumes to
+that user before it starts, because Docker creates them root-owned and a
+non-root Caddy could not otherwise write its certificates. It has no network
+and only the two capabilities `chown` needs, and it also covers an upgrade: the
+volumes an earlier, root-run proxy populated are fixed on the next `up`.
+
+`docker compose ps` hides it once it has exited; `docker compose ps -a` shows
+it with exit code 0. The cloud image (`proxy/Dockerfile`) is unprivileged the
+same way. In a cloud, set memory and CPU limits and drop capabilities in the
+task or service definition, which is where the platform applies them.
+
 ### The data survives `docker compose down`
 
 Postgres writes to the named volume `pgdata`.

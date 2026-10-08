@@ -19,6 +19,13 @@ COPY proxy/Caddyfile /etc/caddy/Caddyfile
 # The single self-contained index.html produced by scripts/build_app.py.
 COPY docs/app/ /srv/app/
 
+# Unprivileged, like the compose stack's proxy (#50). /data and /config are where
+# Caddy keeps certificates and config, so they are handed to this user here; in
+# the image there is no root-owned volume to fix afterwards. The listener is on
+# 8080, which needs no privilege.
+RUN chown -R 65532:65532 /data /config
+USER 65532:65532
+
 # Cloud Run hands the port in $PORT (8080 by default) and routes only to the
 # ingress container; sidecars are reachable on localhost and nowhere else.
 # ECS awsvpc and Container Apps give the same localhost-only arrangement.

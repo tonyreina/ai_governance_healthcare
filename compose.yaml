@@ -42,6 +42,17 @@ services:
     image: postgres:17
     restart: unless-stopped
 
+    # Container baseline (#50). The cluster's entrypoint starts as root and drops
+    # to the postgres user, so capabilities cannot be dropped wholesale here;
+    # no-new-privileges still stops a process from gaining any, and the limits
+    # stop one service from taking the host. Override with DB_MEM_LIMIT for a
+    # larger deployment.
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${DB_MEM_LIMIT:-1g}
+    cpus: ${DB_CPUS:-2}
+    pids_limit: 512
+
     # Deliberately NO `ports:`. Postgres is not published to the host in this
     # file. compose.dev.yaml publishes it on 127.0.0.1 for psql and GUI tools;
     # that override is for laptops only.
@@ -99,6 +110,21 @@ services:
     build:
       context: ./server
     restart: unless-stopped
+
+    # Container baseline (#50). The image already runs as uid 10001 with no shell;
+    # this takes away what that user could still use. It writes nothing outside
+    # /tmp, so the root filesystem is read-only, and it binds an unprivileged
+    # port, so it needs no capability at all.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: ${API_MEM_LIMIT:-512m}
+    cpus: ${API_CPUS:-2}
+    pids_limit: 256
 
     # Deliberately NO `ports:`. THIS IS THE SECURITY PROPERTY. Publishing a
     # port here -- even 127.0.0.1:8000 -- lets anything on the host bypass the
@@ -183,6 +209,29 @@ services:
     image: caddy:2
     restart: unless-stopped
 
+    # Container baseline (#50). This is the one service reachable from outside, and
+    # it ran as root with every default capability. It now runs as an unprivileged
+    # user, drops every capability but the one the binary asks for, and has a
+    # read-only root filesystem; /data and /config are the named volumes below.
+    #
+    # NET_BIND_SERVICE is not for port 80 (Docker lets any user bind it, and the
+    # host mapping is the published port): the stock caddy binary carries that
+    # file capability, and with `cap_drop: ALL` the kernel refuses to exec it
+    # ("operation not permitted") unless it is in the bounding set.
+    user: "65532:65532"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: ${PROXY_MEM_LIMIT:-256m}
+    cpus: ${PROXY_CPUS:-1}
+    pids_limit: 256
+
     ports:
       # The one way in, and bound to LOOPBACK by default. This stack speaks
       # plain HTTP (SITE_ADDRESS=http://:80), so a default of 0.0.0.0 would
@@ -237,6 +286,43 @@ services:
         # "cannot reach the server" state) while the API is starting or broken.
         # Caddy retries the upstream on every request anyway.
         condition: service_started
+      proxy-perms:
+        condition: service_completed_successfully
+
+  # ---------------------------------------------------------------------------
+  # Hands the proxy's two volumes to the unprivileged user it now runs as.
+  #
+  # Named volumes are created root-owned, and a non-root Caddy then cannot write
+  # its certificates or its config ("permission denied" on /data/caddy/...), which
+  # for an automatic-HTTPS deployment means re-issuing from Let's Encrypt on every
+  # restart until the rate limit bites. It also covers an UPGRADE: volumes an
+  # earlier, root-run proxy populated are root-owned and are fixed here.
+  #
+  # One-shot, no network at all, and only the two capabilities chown -R needs
+  # (CHOWN to change owner; DAC_READ_SEARCH to descend into directories the proxy
+  # created mode 0700 on an earlier run). It is not on `edge`, so it cannot
+  # reach the API.
+  # ---------------------------------------------------------------------------
+  proxy-perms:
+    image: caddy:2
+    user: "0:0"
+    network_mode: none
+    restart: "no"
+    command: ["chown", "-R", "65532:65532", "/data", "/config"]
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_READ_SEARCH
+    read_only: true
+    mem_limit: 64m
+    cpus: 0.5
+    pids_limit: 32
 
 # -----------------------------------------------------------------------------
 # PERSISTENCE

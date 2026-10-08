@@ -162,6 +162,26 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `tests/test_croissant_export.py`, which also checks the output
   still validates against `mlcroissant`.
 
+### R-32 The containers run with the least privilege they work with
+
+- Status: Active
+- The proxy (the only service reachable from outside) runs as a non-root user,
+  drops every capability but `NET_BIND_SERVICE`, and has a read-only root
+  filesystem. The API drops every capability and is read-only. Every service
+  sets `no-new-privileges` and a memory, CPU and process limit. The ownership
+  fixer `proxy-perms` has no network and only `CHOWN` and `DAC_READ_SEARCH`. The
+  cloud image `proxy/Dockerfile` is unprivileged to match.
+- `db` cannot drop all capabilities: the Postgres entrypoint starts as root and
+  drops to the postgres user.
+- A change that adds a service, a capability, a network or a root user to this
+  set needs a decision, not a drive-by edit.
+- History: the proxy ran as root with default capabilities, and no service had
+  a limit (#50).
+- Source: #50; DECISIONS D-35.
+- Enforced by: `tests/test_compose_isolation.py` (the rule, with a mutation test
+  for each part, and the cloud Dockerfile) and `tests/test_stack.py`, which
+  `docker inspect`s the running containers.
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

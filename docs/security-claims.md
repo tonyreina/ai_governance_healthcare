@@ -630,3 +630,17 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_preflight.py::a Google identity source with no strip prefix is refused`
   `tests/test_preflight.py::uncommenting the template's Google block, in place, passes preflight`
   `server/tests/test_auth.py::TestThePrefixIsStrippedOnEveryPath::test_the_same_person_gets_the_same_id_by_either_path`
+
+### C-51 The proxy runs unprivileged, with a read-only filesystem and no extra capabilities
+
+- **Claim:** The only internet-facing service runs as a non-root user, drops every
+  capability but one, and cannot write its own filesystem, so a compromise starts
+  with far less than root.
+- **Asserted in:** `docs/self-hosting.md` — "it runs as an unprivileged user
+  (uid 65532), drops every Linux"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_compose_isolation.py::the proxy running as root`
+  `tests/test_compose_isolation.py::the cloud proxy image: dropping USER is noticed`
+  `tests/test_stack.py::the proxy runs as an unprivileged user`
+  `tests/test_stack.py::the proxy and the api have a read-only root filesystem`

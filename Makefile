@@ -7,6 +7,13 @@
 # otherwise be a paragraph in a README nobody reads at 2am.
 # =============================================================================
 
+# pipefail: `backup` and `restore` are pipelines (pg_dump | gzip | gpg, and
+# gpg | gunzip | psql). Without it a pipeline exits with its LAST command's status,
+# so a failed pg_dump left an "encrypted" empty file and a success, and a restore
+# with the wrong passphrase exited 0 having restored nothing.
+SHELL       := bash
+.SHELLFLAGS := -o pipefail -c
+
 COMPOSE     := docker compose
 DEV         := $(COMPOSE) -f compose.yaml -f compose.dev.yaml
 DB_SERVICE  := db
@@ -88,8 +95,14 @@ psql:  ## Interactive psql inside the database container
 #
 # Uses gpg --symmetric, which is present on far more machines than age. Set
 # BACKUP_RETAIN to prune older dumps (default: keep everything).
+#
+# The passphrase is read from the ENVIRONMENT as $$BACKUP_PASSPHRASE, never
+# expanded as $(BACKUP_PASSPHRASE): make pastes an expanded variable into the
+# recipe text, which is then the argv of `sh -c`, readable by every local
+# account. scripts/backup_crypto.sh hands it to gpg through a mode-600 file.
+# Export it; do not write `make backup BACKUP_PASSPHRASE=...` (that is make's argv).
 backup:  ## Encrypted pg_dump to backups/<timestamp>.sql.gz.gpg
-	@test -n "$(BACKUP_PASSPHRASE)" || { \
+	@test -n "$$BACKUP_PASSPHRASE" || { \
 	  echo "BACKUP_PASSPHRASE is not set."; \
 	  echo; \
 	  echo "  The dump contains every record, audit entry and retained"; \
@@ -104,9 +117,9 @@ backup:  ## Encrypted pg_dump to backups/<timestamp>.sql.gz.gpg
 	@OUT=$(BACKUP_DIR)/$$(date -u +%Y%m%dT%H%M%SZ).sql.gz.gpg; \
 	 $(COMPOSE) exec -T $(DB_SERVICE) pg_dump -U $(POSTGRES_USER) -d $(POSTGRES_DB) --clean --if-exists \
 	   | gzip \
-	   | gpg --batch --symmetric --cipher-algo AES256 \
-	         --passphrase "$(BACKUP_PASSPHRASE)" --output "$$OUT"; \
-	 chmod 600 "$$OUT"; ls -lh "$$OUT"
+	   | scripts/backup_crypto.sh encrypt "$$OUT" \
+	 && chmod 600 "$$OUT" && ls -lh "$$OUT" \
+	 || { rm -f "$$OUT"; echo "backup FAILED: no file was kept" >&2; exit 1; }
 	@if [ -n "$(BACKUP_RETAIN)" ]; then \
 	  ls -1t $(BACKUP_DIR)/*.sql.gz.gpg 2>/dev/null | tail -n +$$(($(BACKUP_RETAIN)+1)) \
 	    | xargs -r rm -v; \
@@ -125,8 +138,8 @@ backup-plaintext:  ## UNENCRYPTED pg_dump. Throwaway databases only.
 restore:  ## Restore a dump: make restore FILE=backups/....sql.gz.gpg  (DESTRUCTIVE)
 	@test -n "$(FILE)" || { echo "usage: make restore FILE=backups/<file>.sql.gz.gpg"; exit 1; }
 	@case "$(FILE)" in \
-	  *.gpg) test -n "$(BACKUP_PASSPHRASE)" || { echo "BACKUP_PASSPHRASE is needed to read $(FILE)"; exit 1; }; \
-	         gpg --batch --quiet --decrypt --passphrase "$(BACKUP_PASSPHRASE)" "$(FILE)" ;; \
+	  *.gpg) test -n "$$BACKUP_PASSPHRASE" || { echo "BACKUP_PASSPHRASE is needed to read $(FILE)" >&2; exit 1; }; \
+	         scripts/backup_crypto.sh decrypt "$(FILE)" ;; \
 	  *)     cat "$(FILE)" ;; \
 	esac | gunzip -c | $(COMPOSE) exec -T $(DB_SERVICE) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
 

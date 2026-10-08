@@ -23,6 +23,7 @@ This needs the stack up, so it is ``make doctor`` rather than a gate on
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -37,8 +38,12 @@ VOLUME = "chai-governance_pgdata"
 OK, WARN, BAD = "ok", "warn", "FAIL"
 
 
-def run(args: list[str], stdin: str | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(args, capture_output=True, text=True, input=stdin, timeout=60)
+def run(
+    args: list[str], stdin: str | None = None, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        args, capture_output=True, text=True, input=stdin, timeout=60, env=env
+    )
 
 
 def say(level: str, title: str, *lines: str) -> None:
@@ -149,8 +154,11 @@ class Doctor:
                 *COMPOSE,
                 "exec",
                 "-T",
+                # The NAME only: docker takes the value from this process's
+                # environment, so the password is not in `docker`'s argv, where
+                # any local account could read it.
                 "-e",
-                f"PGPASSWORD={password}",
+                "PGPASSWORD",
                 "db",
                 "psql",
                 "-h",
@@ -161,7 +169,8 @@ class Doctor:
                 database,
                 "-tAc",
                 "select 1",
-            ]
+            ],
+            env={**os.environ, "PGPASSWORD": password},
         )
         if result.returncode == 0 and result.stdout.strip() == "1":
             say(OK, "the database accepts the password in .env")

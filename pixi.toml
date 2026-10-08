@@ -72,6 +72,9 @@ test-compose = "python tests/test_compose_isolation.py"
 # `make check-isolation`, shown to fail: a published port, a reachable API and a
 # forwarded identity must each be noticed, and the exit code must say so (#56).
 test-isolation = "python tests/test_check_isolation.py"
+# The backup passphrase is never in a process's argv, and a failed dump or a wrong
+# passphrase fails the command (#41). Needs gpg and make.
+test-backup-crypto = "python tests/test_backup_crypto.py"
 # What a `docker build` sends to the daemon: no .env, backups, .git or licensed PDF (#63).
 test-dockerignore = "python tests/test_dockerignore.py"
 # The gate behind `make up`: placeholders, literal identities, plain HTTP on the network,

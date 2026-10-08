@@ -297,9 +297,13 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** `make backup` requires a passphrase and writes only an encrypted
   dump.
 - **Asserted in:** `Makefile` — "BACKUP_PASSPHRASE is required"
-- **Status:** unenforced
-- **Gap:** The guard is a Makefile conditional with no test, and the passphrase
-  is passed on gpg's command line, readable by any local account. #41
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_backup_crypto.py::make backup with no passphrase is refused`
+  `tests/test_backup_crypto.py::a plaintext dump needs PLAINTEXT=1 and is refused without it`
+  `tests/test_backup_crypto.py::the passphrase is in no process's argv while encrypting`
+  `tests/test_backup_crypto.py::the dump is not plaintext`
+  `tests/test_backup_crypto.py::a backup whose pg_dump fails exits non-zero`
 
 ### C-24 `make up` refuses to start on unsafe settings
 

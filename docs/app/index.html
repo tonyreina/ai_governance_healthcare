@@ -780,6 +780,21 @@ class ApiStore{
     this.cbs.push(onChange);
     return ()=>{ stop=true; delete this.logPulls[id]; this.cbs = this.cbs.filter(f=>f!==onChange); };
   }
+  /* Names for identity ids, in the shape the Claude runtime's profiles() answers
+     so resolveNames needs no second path: {id: {name, email, isMe}}. The server
+     answers only for people the caller can already see on a project they can read,
+     and omits the rest, so an absent id is "unknown", not an error. Batches are
+     capped by the server (100). (#39) */
+  async profiles(ids){
+    const out={};
+    const unique=[...new Set((ids||[]).filter(Boolean))];
+    for(let i=0;i<unique.length;i+=100){
+      const chunk=unique.slice(i,i+100);
+      const rows=await this.req(`/principals?ids=${encodeURIComponent(chunk.join(","))}`);
+      (Array.isArray(rows)?rows:[]).forEach(p=>{ out[p.id]={name:p.name||"", email:p.email||"", isMe:p.id===ME.id}; });
+    }
+    return out;
+  }
   showOlderLog(id){
     this.logDepth[id] = Math.min(500, (this.logDepth[id]||60) + 60);
     const pull = this.logPulls[id];
@@ -910,18 +925,67 @@ function saveUI(){ try{ localStorage.setItem("chai-ui-v2",JSON.stringify({view:U
 
 /* names */
 const NAMES={};
+/* Ids a lookup could not name, so a render does not ask again for the same ghost. */
+const UNNAMED=new Set();
+
+/* What to show for a person: their name if known, "you" for the viewer, and
+   otherwise what each mode can honestly say. The server-backed mode shows the id
+   (ugly, but it is what a reviewer can match to a directory, and "someone" tells
+   them nothing); the Claude artifact and browser-only modes keep "someone", since
+   an id there is not something a person can use or should be shown (#39). */
+function displayName(id){
+  if(!id) return "someone";
+  if(NAMES[id]) return NAMES[id];
+  if(id===ME.id) return "you";
+  return MODE===Mode.API ? id : "someone";
+}
+
+/* Where names come from: the Claude runtime's profiles(), or the server store's. */
+function nameSource(){
+  if(USER && USER.profiles) return USER;
+  if(STORE && typeof STORE.profiles==="function") return STORE;
+  return null;
+}
+
+/* Ask for the names of any ids not yet asked about, and remember the answers. */
+async function primeNames(ids){
+  const src = nameSource();
+  const need=[...new Set((ids||[]).filter(i=>i && !(i in NAMES) && !UNNAMED.has(i)))];
+  if(!need.length || !src) return;
+  need.forEach(i=>UNNAMED.add(i));   // claimed up front, so concurrent renders do not repeat it
+  try{
+    const ps=await src.profiles(need);
+    need.forEach(i=>{
+      const p=ps[i];
+      if(p){ UNNAMED.delete(i); NAMES[i]= p.isMe ? "you" : (p.name||p.email||""); if(!NAMES[i]) delete NAMES[i]; }
+    });
+  }catch(e){ /* a name is a convenience; the ids still show */ }
+}
+
+/* Every person a project document names: its access lists, who signed off and who
+   last edited. The same set the server will agree to name (principals.ids_in_doc). */
+function idsOfProject(p){
+  const found=new Set(); if(!p) return [];
+  const a=p.access||{};
+  ["owners","writers","readers"].forEach(k=>(Array.isArray(a[k])?a[k]:[]).forEach(i=>found.add(i)));
+  Object.values(p.gates||{}).forEach(g=>{ if(g && g.signedBy) found.add(g.signedBy); });
+  ["updatedBy","cardUpdatedBy"].forEach(k=>{ if(p[k]) found.add(p[k]); });
+  return [...found].filter(Boolean);
+}
+/* Fetch names for these ids, then refresh whatever is already on screen. */
+function warmNames(ids){
+  return primeNames(ids).then(()=>{ if(document.getElementById("main")) resolveNames(document); });
+}
+
 async function resolveNames(root){
   root=root||document;
   const els=[...root.querySelectorAll("[data-uid]")];
   const ids=[...new Set(els.map(e=>e.dataset.uid).filter(Boolean))];
   els.forEach(e=>{ if(!e.dataset.uid) e.textContent = MODE===Mode.LOCAL?"you (this browser)":"someone"; });
-  const need=ids.filter(i=>!(i in NAMES));
-  if(need.length && USER && USER.profiles){
-    try{ const ps=await USER.profiles(need); need.forEach(i=>{ const p=ps[i]; NAMES[i]= p ? (p.isMe ? "you" : (p.name||"someone")) : "someone"; }); }catch(e){ need.forEach(i=>NAMES[i]="someone"); }
-  }
-  els.forEach(e=>{ const i=e.dataset.uid; if(i) e.textContent = NAMES[i] || (i===ME.id?"you":"someone"); });
+  await primeNames(ids);
+  els.forEach(e=>{ const i=e.dataset.uid; if(i) e.textContent = displayName(i); });
 }
-const who = id => `<span data-uid="${esc(id||"")}">${id&&NAMES[id]?esc(NAMES[id]):"someone"}</span>`;
+const who = id => `<span data-uid="${esc(id||"")}">${esc(displayName(id))}</span>`;
 
 /* ============================================================
    Writes
@@ -2015,7 +2079,7 @@ function historyHTML(){
   return `<ul class="history">${LOG.slice(0,25).map(e=>`<li><time>${esc(fmtDay((e.at||"").slice(0,10)))}</time><span>${esc(e.text)} <span style="color:var(--muted)">by ${who(e.by)}</span></span></li>`).join("")}</ul>`;
 }
 function reportBody(names){
-  const nm = id => names ? esc(id?(NAMES[id]||"someone"):"someone") : who(id);
+  const nm = id => names ? esc(displayName(id)) : who(id);
   const all=allItems(); const ov=scoreOf(all);
   const unanswered=all.filter(it=>!(S.items[it.id]||{}).status).length;
   const gaps=all.filter(it=>{const st=(S.items[it.id]||{}).status; return !st||st==="notmet"||st==="partial";});
@@ -2538,7 +2602,8 @@ function openProject(id,view){
   document.body.classList.toggle("ro", RO);
   CAN_DELETE = !WORKSPACE_RO && canOwn(S);
   UI.view=view||"setup"; saveUI();
-  unsubLog=STORE.subscribeLog(id,(l,meta)=>{ LOG=l||[]; LOG_TOTAL=(meta && Number.isFinite(meta.total)) ? meta.total : null; if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
+  warmNames(idsOfProject(S));
+  unsubLog=STORE.subscribeLog(id,(l,meta)=>{ LOG=l||[]; LOG_TOTAL=(meta && Number.isFinite(meta.total)) ? meta.total : null; warmNames(LOG.map(e=>e.by)); if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
   renderProject(true);
 }
 function go(view){ flushAllChanges(); UI.view=view; saveUI(); renderRail(); renderMain(true); document.getElementById("panel").classList.remove("open"); }
@@ -2717,7 +2782,7 @@ function exportMD(){
   const all=allItems(), ov=scoreOf(all), m=S.meta, L=[];
   const st=s=>s?STATUS[s]:"Unanswered";
   const line=s=>String(s||"").replace(/\n+/g," ").replace(/\|/g,"\\|");
-  const nm=id=>id?(NAMES[id]||"someone"):"someone";
+  const nm=id=>displayName(id);
   L.push(`# ${m.solution||"Untitled AI solution"}: CHAI assurance review`,"");
   L.push(`- **Status:** ${statusOf(S).label}`,`- **Lifecycle phase:** ${phase(S).label}`,`- **Organization:** ${m.org||"–"}`,`- **Developer:** ${m.developer||"–"}`,`- **Sourcing:** ${m.sourcing||"–"}`,`- **Risk tier:** ${m.riskTier||"–"}`,`- **Clinical sponsor:** ${m.sponsor||"–"}`,`- **Next periodic review:** ${nextReview(S)||"–"}`,`- **Review team:** ${line(m.reviewers)||"–"}`,`- **Scope:** ${line(m.scope)||"–"}`,`- **Generated:** ${TODAY()}`,"");
   const F=flags(S); L.push("## Compliance flags",""); if(F.length) F.forEach(f=>L.push(`- **${f.sev==="red"?"Out of compliance":"Needs update"}:** ${f.text}`)); else L.push("None."); L.push("");

@@ -241,6 +241,24 @@ honest answer and is a gap worth closing; see R-19.
   cannot disable a trigger with the credential it holds), `tests/test_preflight.py`
   and `tests/test_doctor.py`.
 
+### R-36 An identity id can be turned into a person, without opening a directory
+
+- Status: Active
+- The name and email the proxy asserts are recorded against the id as people sign
+  in (`principals`), and `GET /api/principals?ids=` returns them for the caller
+  themself and for people named on a project the caller can read, and for no one
+  else. The dashboard shows a person where it used to show "someone" (the
+  server-backed mode shows the id when it cannot name someone; the artifact and
+  browser-only modes keep "someone"). Exports carry the names.
+- This creates personal data about staff (name, email, first and last seen),
+  documented in `docs/deploy.md` for a record of processing. It is not erased by
+  a project purge (#57).
+- Source: #39; DECISIONS D-38.
+- Enforced by: `server/tests/test_principals.py` (recording, the visibility rule,
+  the bounds, that a failure never fails a request), `tests/test_people.py` (the
+  real `ApiStore` and name resolution in the DOM and in the exports) and
+  `tests/test_stack.py` (through a real proxy).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

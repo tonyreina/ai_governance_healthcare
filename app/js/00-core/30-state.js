@@ -52,15 +52,64 @@ function saveUI(){ try{ localStorage.setItem("chai-ui-v2",JSON.stringify({view:U
 
 /* names */
 const NAMES={};
+/* Ids a lookup could not name, so a render does not ask again for the same ghost. */
+const UNNAMED=new Set();
+
+/* What to show for a person: their name if known, "you" for the viewer, and
+   otherwise what each mode can honestly say. The server-backed mode shows the id
+   (ugly, but it is what a reviewer can match to a directory, and "someone" tells
+   them nothing); the Claude artifact and browser-only modes keep "someone", since
+   an id there is not something a person can use or should be shown (#39). */
+function displayName(id){
+  if(!id) return "someone";
+  if(NAMES[id]) return NAMES[id];
+  if(id===ME.id) return "you";
+  return MODE===Mode.API ? id : "someone";
+}
+
+/* Where names come from: the Claude runtime's profiles(), or the server store's. */
+function nameSource(){
+  if(USER && USER.profiles) return USER;
+  if(STORE && typeof STORE.profiles==="function") return STORE;
+  return null;
+}
+
+/* Ask for the names of any ids not yet asked about, and remember the answers. */
+async function primeNames(ids){
+  const src = nameSource();
+  const need=[...new Set((ids||[]).filter(i=>i && !(i in NAMES) && !UNNAMED.has(i)))];
+  if(!need.length || !src) return;
+  need.forEach(i=>UNNAMED.add(i));   // claimed up front, so concurrent renders do not repeat it
+  try{
+    const ps=await src.profiles(need);
+    need.forEach(i=>{
+      const p=ps[i];
+      if(p){ UNNAMED.delete(i); NAMES[i]= p.isMe ? "you" : (p.name||p.email||""); if(!NAMES[i]) delete NAMES[i]; }
+    });
+  }catch(e){ /* a name is a convenience; the ids still show */ }
+}
+
+/* Every person a project document names: its access lists, who signed off and who
+   last edited. The same set the server will agree to name (principals.ids_in_doc). */
+function idsOfProject(p){
+  const found=new Set(); if(!p) return [];
+  const a=p.access||{};
+  ["owners","writers","readers"].forEach(k=>(Array.isArray(a[k])?a[k]:[]).forEach(i=>found.add(i)));
+  Object.values(p.gates||{}).forEach(g=>{ if(g && g.signedBy) found.add(g.signedBy); });
+  ["updatedBy","cardUpdatedBy"].forEach(k=>{ if(p[k]) found.add(p[k]); });
+  return [...found].filter(Boolean);
+}
+/* Fetch names for these ids, then refresh whatever is already on screen. */
+function warmNames(ids){
+  return primeNames(ids).then(()=>{ if(document.getElementById("main")) resolveNames(document); });
+}
+
 async function resolveNames(root){
   root=root||document;
   const els=[...root.querySelectorAll("[data-uid]")];
   const ids=[...new Set(els.map(e=>e.dataset.uid).filter(Boolean))];
   els.forEach(e=>{ if(!e.dataset.uid) e.textContent = MODE===Mode.LOCAL?"you (this browser)":"someone"; });
-  const need=ids.filter(i=>!(i in NAMES));
-  if(need.length && USER && USER.profiles){
-    try{ const ps=await USER.profiles(need); need.forEach(i=>{ const p=ps[i]; NAMES[i]= p ? (p.isMe ? "you" : (p.name||"someone")) : "someone"; }); }catch(e){ need.forEach(i=>NAMES[i]="someone"); }
-  }
-  els.forEach(e=>{ const i=e.dataset.uid; if(i) e.textContent = NAMES[i] || (i===ME.id?"you":"someone"); });
+  await primeNames(ids);
+  els.forEach(e=>{ const i=e.dataset.uid; if(i) e.textContent = displayName(i); });
 }
-const who = id => `<span data-uid="${esc(id||"")}">${id&&NAMES[id]?esc(NAMES[id]):"someone"}</span>`;
+const who = id => `<span data-uid="${esc(id||"")}">${esc(displayName(id))}</span>`;

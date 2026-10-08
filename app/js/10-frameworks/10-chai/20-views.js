@@ -188,7 +188,7 @@ function historyHTML(){
   return `<ul class="history">${LOG.slice(0,25).map(e=>`<li><time>${esc(fmtDay((e.at||"").slice(0,10)))}</time><span>${esc(e.text)} <span style="color:var(--muted)">by ${who(e.by)}</span></span></li>`).join("")}</ul>`;
 }
 function reportBody(names){
-  const nm = id => names ? esc(id?(NAMES[id]||"someone"):"someone") : who(id);
+  const nm = id => names ? esc(displayName(id)) : who(id);
   const all=allItems(); const ov=scoreOf(all);
   const unanswered=all.filter(it=>!(S.items[it.id]||{}).status).length;
   const gaps=all.filter(it=>{const st=(S.items[it.id]||{}).status; return !st||st==="notmet"||st==="partial";});

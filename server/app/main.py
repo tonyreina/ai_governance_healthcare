@@ -41,6 +41,7 @@ from .auth import log_auth_posture
 from .config import Settings
 from .db import Database
 from .events import EventBroker
+from .principals import PrincipalRecorder
 from .roles import DbRole
 from .routes import router
 
@@ -302,6 +303,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await broker.start()
 
     app.state.db = db
+    app.state.principals = PrincipalRecorder(db)
     app.state.db_role = db_role
     app.state.broker = broker
     log.info("ready")

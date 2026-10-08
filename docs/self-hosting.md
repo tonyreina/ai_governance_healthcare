@@ -95,8 +95,9 @@ fields) is translated too, in `app/i18n/framework/<language>.json`, and each
 screen showing it says the wording is an unofficial translation. The English in
 the framework definitions stays the source: `tests/test_framework_i18n.py` fails
 if a criterion changes without its catalogs. A record still stores the English
-value, such as a checkpoint decision. Not translated yet: the OPTICA questions,
-the CHAI metric names and the server's messages.
+value, such as a checkpoint decision. OPTICA's chapters and questions are
+translated the same way. Not translated yet: the CHAI metric names and the
+server's messages.
 `tests/test_i18n.py` counts the hard-coded text left on screen in a pseudo-locale,
 and that count may only go down.
 

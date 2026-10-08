@@ -50,6 +50,11 @@ EXTRACT = """() => {
     }
   });
   for (const c of METRIC_CATS) out[`chai.metricCat.${c}`] = c;
+  for (const c of OPTICA.chapters) {
+    out[`optica.chapter.${c.n}.title`] = c.title;
+    if (c.purpose) out[`optica.chapter.${c.n}.purpose`] = c.purpose;
+    for (const it of c.items) out[`optica.item.${it.key}`] = it.text;
+  }
   return out;
 }"""
 
@@ -131,6 +136,21 @@ def main() -> int:
         check(
             "choosing one records the English decision",
             page.evaluate("S.gates.A.decision") == "Proceed with conditions",
+        )
+
+        print("OPTICA's questions")
+        page.evaluate("setOpticaEnabled(true); go('o1');")
+        page.wait_for_timeout(200)
+        text = page.inner_text("#main")
+        check(
+            "an OPTICA question reads German, with the note",
+            tf_de(page, "optica.item.1-1") in text
+            and page.locator(".fw-note").count() == 1,
+            text[:120],
+        )
+        check(
+            "and so does the chapter title in the rail",
+            tf_de(page, "optica.chapter.1.title") in page.inner_text("#rail"),
         )
 
         print("In English, nothing changes and no note is shown")

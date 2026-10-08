@@ -4,6 +4,12 @@ This page describes how to run the dashboard and its API as a managed
 container service on Google Cloud, AWS or Azure, with the sign-in handled
 by the cloud's own front door rather than by the application.
 
+**Governance metadata only.** Never enter patient-identifiable information, in
+any storage mode, the self-hosted server included. The controls on this page
+(access control, audit, backups, encryption at rest) protect the integrity of
+the review record and the staff personal data in it. They are not a basis for
+storing patient data, and nothing here makes the deployment suitable for it.
+
 The application does not authenticate anybody. It reads an identity
 header that a reverse proxy puts on every request and uses it for
 `GET /api/me`, for audit-log attribution, and for checkpoint sign-offs.

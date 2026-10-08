@@ -492,6 +492,29 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `tests/test_export_provenance.py`, per mode and per format, in a
   real browser, plus the Croissant record.
 
+### R-49 Governance metadata only, never patient-identifiable data, in any mode
+
+- Status: Active
+- The owner's decision on #34 (option 1), 2026-10-08: the tool holds governance
+  metadata only. Patient-identifiable information must never be entered, in any
+  storage mode, the self-hosted server included. A governance review has no need
+  for it, and organizational policy prohibits it.
+- Stated at the top of `README.md`, `docs/index.md` and `docs/deploy.md`, as a
+  row in the `docs/running.md` comparison, and in the app in all three modes
+  (`SCOPE_NOTICE`, one definition). No doc may call any mode suitable or
+  approved for patient data.
+- It is a policy, not a technical control, so the wording is an instruction and
+  never a claim that no such data is present. The purge path stays as the way to
+  correct a mistake.
+- Staff identifiers are still personal data wherever GDPR (or a similar law)
+  applies to the deploying organization; that is the deployer's to determine
+  (`docs/privacy.md`). The controls exist for the integrity of the record and
+  for that staff data.
+- Supersedes: R-21 (answered).
+- Source: the owner, on #34; DECISIONS D-50.
+- Enforced by: `tests/test_data_scope.py` (docs, with mutation tests) and
+  `tests/test_boot_storage.py` (the notice in each mode, in a real browser).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active
@@ -726,7 +749,7 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-21 What data classification does the server-backed mode carry?
 
-- Status: **Open** (#34)
+- Status: **Answered by R-49** (2026-10-08, the owner's decision on #34)
 - "Do not put patient-identifiable information in it" is stated only for the
   browser-only mode. The server mode, which a hospital deploys, states nothing,
   and its own migration comments anticipate a patient identifier pasted into an
@@ -737,6 +760,10 @@ honest answer and is a gap worth closing; see R-19.
 ### R-22 Is PHI detection in scope, and where does it run?
 
 - Status: **Open** (#65, #66)
+- Context since R-49: the scope is now governance metadata only, so a detector
+  would be a check on a policy, not the basis for holding patient data. The owner
+  has said they expect a name detector to flag the investigator and approver
+  names and dates a governance record is made of; that is input, not a decision.
 - Proposed, not decided: an opt-in sidecar behind `POST /api/phi-check`, plus an
   offline `make phi-scan`. The model cannot live in the browser (R-01).
   Whatever is built must not say "no PHI detected"; it states what was scanned

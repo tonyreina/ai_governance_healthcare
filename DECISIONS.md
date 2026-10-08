@@ -876,6 +876,25 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   stating that a mode is "approved" or "safe" (R-21 is open, and it is a legal call).
 - Source: #93; R-48.
 
+### D-50 State the scope in every mode; do not build a detector to back it, yet
+
+- Status: Accepted
+- The owner chose option 1 on #34 over option 3 (state the policy and build a
+  detector as the safeguard). The scope is the same in every mode, so one
+  constant (`SCOPE_NOTICE`) is rendered by each mode's notice, and the server
+  mode, which had none, gets one.
+- The wording is an instruction ("never enter"), not an assurance ("contains no
+  patient data"), because nothing checks the free-text fields. A mistake is
+  corrected by an owner's purge, which the server notice names.
+- The HIPAA Security Rule citations in `docs/deploy.md` (encryption at rest,
+  backups, emergency access) were written while the scope was open. With no
+  ePHI in scope they describe good practice the controls follow, not a legal
+  requirement on this system; rewording them is a follow-up, not part of this.
+- Rejected: option 2 (PHI in scope; a BAA and required standards) and option 3
+  (a detector as the safeguard), by the owner's decision. PHI detection (R-22)
+  stays open.
+- Source: the owner, on #34; R-49.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

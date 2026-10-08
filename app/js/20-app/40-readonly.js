@@ -63,9 +63,27 @@ function showArtifactNotice(){
   el.innerHTML = `<b>Stored in this Claude artifact.</b>
     <span class="sw-detail">Records are kept in the artifact's database, not on a
     server your organization runs. Access control is only partly enforced and there
-    are no version snapshots. Do not enter patient-identifiable information.
+    are no version snapshots. ${SCOPE_NOTICE}
     For the audited, access-controlled workspace, deploy the server &mdash; see the
     deployment guide.</span>`;
+  const header = document.querySelector("header.top");
+  if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
+}
+
+/* The server mode's statement of the same scope. It used to carry none, so the
+   mode that scores best on access control and audit read as the one fit for
+   patient data (#34). The scope is the same in every mode (R-49): it is a policy,
+   and a mistake is corrected by the purge path, which is what it was built for. */
+function showScopeNotice(){
+  if(document.getElementById("scopeNotice")) return;
+  const el = document.createElement("div");
+  el.id = "scopeNotice";
+  el.className = "storage-warning";
+  el.setAttribute("role", "note");
+  el.innerHTML = `<b>${SCOPE_NOTICE}</b>
+    <span class="sw-detail">This workspace is for review records, not clinical data.
+    If patient information is entered by mistake, a project owner can purge it from
+    the history; report it as your organization's policy requires.</span>`;
   const header = document.querySelector("header.top");
   if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
 }
@@ -79,7 +97,7 @@ function showStorageWarning(){
   el.innerHTML = `<b>Saved in this browser only.</b>
     <span class="sw-detail">Nothing is sent to a server: colleagues cannot see these
     records, there is no audit log, no access control, and clearing site data
-    deletes them. Do not enter patient-identifiable information.
+    deletes them. ${SCOPE_NOTICE}
     For a shared workspace, deploy the server &mdash; see the deployment guide.</span>`;
   const header = document.querySelector("header.top");
   if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);

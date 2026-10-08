@@ -13,6 +13,7 @@ what you need, not by what is easiest to open.
 | Signed-in identity | **None** | Yes | Yes, from your SSO |
 | Access control enforced | **No** | Partly | **Yes, server-side** |
 | Checkpoint sign-off means something | **No, self-asserted** | Yes | Yes |
+| Patient-identifiable information | **Never** | **Never** | **Never** |
 | Version snapshots | No | No | **Yes** |
 | Live updates between people | No | Yes | Yes |
 | Both checklists, model card, metrics | Yes | Yes | Yes |

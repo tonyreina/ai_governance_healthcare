@@ -141,6 +141,24 @@ def main() -> int:
             "healthy API -> no local-storage warning",
             page.locator("#storageWarning").count() == 0,
         )
+        # The data scope is stated in every mode, not only the browser-only one (#34).
+        scope = page.evaluate("typeof SCOPE_NOTICE === 'undefined' ? '' : SCOPE_NOTICE")
+        server_notice = page.evaluate(
+            "(document.getElementById('scopeNotice') || {}).textContent || ''"
+        )
+        check(
+            "healthy API -> the data scope is stated in the layout",
+            bool(scope) and scope in " ".join(server_notice.split()),
+            repr(server_notice[:160]),
+        )
+        check(
+            "healthy API -> and it says never to enter patient-identifiable data",
+            "patient-identifiable" in server_notice.lower(),
+        )
+        check(
+            "healthy API -> and how a mistake is corrected",
+            "purge" in server_notice.lower(),
+        )
         check(
             "healthy API -> origin is remembered",
             page.evaluate("localStorage.getItem('chai-api-origin-seen')")
@@ -220,6 +238,11 @@ def main() -> int:
             "static host -> warning names the risk",
             "patient-identifiable" in warning.lower(),
             warning[:120],
+        )
+        check(
+            "static host -> the warning states the same data scope",
+            bool(scope) and scope in " ".join(warning.split()),
+            warning[:160],
         )
         check(
             "static host -> dashboard is usable",
@@ -315,6 +338,14 @@ def main() -> int:
             "patient-identifiable" in notice,
             repr(notice),
         )
+        artifact_scope = page.evaluate(
+            "typeof SCOPE_NOTICE === 'undefined' ? '' : SCOPE_NOTICE"
+        ).lower()
+        check(
+            "and states the same data scope",
+            bool(artifact_scope) and artifact_scope in " ".join(notice.split()),
+            repr(notice[:160]),
+        )
         check(
             "artifact mode does not show the browser-only warning",
             page.locator("#storageWarning").count() == 0,
@@ -332,6 +363,11 @@ def main() -> int:
 
         page = browser.new_page()
         boot(page, base, (200, HEALTH_OK))
+        check(
+            "server mode shows no browser-only warning beside its scope notice",
+            page.locator("#storageWarning").count() == 0
+            and page.locator("#scopeNotice").count() == 1,
+        )
         check(
             "server mode shows no artifact notice",
             page.locator("#artifactNotice").count() == 0,

@@ -914,11 +914,17 @@ const MODE_LABEL = Object.freeze({
   [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
   [Mode.ARTIFACT]: Object.freeze({text:"Claude artifact",   cls:"artifact"}),
 });
+/* The data scope, stated in every storage mode (#34, R-49). The owner decided this
+   tool holds governance metadata only, in any mode: there is no reason for a
+   patient's data to be in a governance record, and organizational policy forbids
+   it. It is a policy, not a detector, so the wording is an instruction, never a
+   claim that no such data is present. */
+const SCOPE_NOTICE = "Governance metadata only: never enter patient-identifiable information.";
 /* What an export says about where the record was kept, beside the header's label (#93).
    Keyed by Mode like MODE_LABEL, so a mode cannot ship without one and two modes cannot
    share one (R-04). It says where the record lived and what that means for sign-offs
-   and audit; it does not say whether that place is approved for any class of data
-   (R-21 is open). */
+   and audit. The data scope is the same in every mode (SCOPE_NOTICE, R-49), so
+   nothing here implies one mode is fit for data another is not. */
 const MODE_PROVENANCE = Object.freeze({
   [Mode.LOCAL]:    "Kept in one browser on one computer. Sign-offs here are self-asserted: nothing verifies who made them, and there is no server-side audit log or version history.",
   [Mode.API]:      "Kept on the self-hosted governance server, with server-side access control, a version history and an audit log. Sign-offs are recorded against the signed-in identity.",
@@ -2746,9 +2752,27 @@ function showArtifactNotice(){
   el.innerHTML = `<b>Stored in this Claude artifact.</b>
     <span class="sw-detail">Records are kept in the artifact's database, not on a
     server your organization runs. Access control is only partly enforced and there
-    are no version snapshots. Do not enter patient-identifiable information.
+    are no version snapshots. ${SCOPE_NOTICE}
     For the audited, access-controlled workspace, deploy the server &mdash; see the
     deployment guide.</span>`;
+  const header = document.querySelector("header.top");
+  if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
+}
+
+/* The server mode's statement of the same scope. It used to carry none, so the
+   mode that scores best on access control and audit read as the one fit for
+   patient data (#34). The scope is the same in every mode (R-49): it is a policy,
+   and a mistake is corrected by the purge path, which is what it was built for. */
+function showScopeNotice(){
+  if(document.getElementById("scopeNotice")) return;
+  const el = document.createElement("div");
+  el.id = "scopeNotice";
+  el.className = "storage-warning";
+  el.setAttribute("role", "note");
+  el.innerHTML = `<b>${SCOPE_NOTICE}</b>
+    <span class="sw-detail">This workspace is for review records, not clinical data.
+    If patient information is entered by mistake, a project owner can purge it from
+    the history; report it as your organization's policy requires.</span>`;
   const header = document.querySelector("header.top");
   if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
 }
@@ -2762,7 +2786,7 @@ function showStorageWarning(){
   el.innerHTML = `<b>Saved in this browser only.</b>
     <span class="sw-detail">Nothing is sent to a server: colleagues cannot see these
     records, there is no audit log, no access control, and clearing site data
-    deletes them. Do not enter patient-identifiable information.
+    deletes them. ${SCOPE_NOTICE}
     For a shared workspace, deploy the server &mdash; see the deployment guide.</span>`;
   const header = document.querySelector("header.top");
   if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
@@ -3580,6 +3604,7 @@ renderDashboardShell();
       rememberApiHere();
       STORE=new ApiStore("/api"); MODE=Mode.API; CAN_DELETE=true;
       setModeFor(MODE);
+      showScopeNotice();
       startSession(api.health);   // sign-out link and idle lock, as the server configured
       // Identity is established by the proxy, so the browser cannot choose it.
       try{

@@ -22,7 +22,7 @@ registerFramework({
 
   views(p) {
     const out = [{
-      id: "optica", kind: "overview", label: "OPTICA adoption review",
+      id: "optica", kind: "overview", label: t("optica.rail"),
       glyph: "◇", sep: "before",
       meta: () => { const s = opticaScore(OPTICA_ITEMS, p); return `${s.answered}/${s.total}`; },
       metaCls: () => { const s = opticaScore(OPTICA_ITEMS, p); return s.answered === s.total ? "done" : ""; },

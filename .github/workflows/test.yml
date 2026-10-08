@@ -225,6 +225,11 @@ jobs:
       - name: deploy residency
         run: pixi run test-deploy-residency
 
+      # Subject access: find one person's identifier everywhere, against a real
+      # PostgreSQL (#57).
+      - name: subject access
+        run: pixi run test-subject-access
+
       # `make verify-backup`: a real dump restored into a throwaway PostgreSQL, and
       # `make restore` asking before it overwrites anything (#52).
       - name: backups restore

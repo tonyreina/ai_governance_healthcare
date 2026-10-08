@@ -460,6 +460,22 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `tests/test_deploy_residency.py` (run by CI as
   `test-deploy-residency`, with mutation tests for each rule).
 
+### R-46 One person's data can be found, and what is erasable is written down
+
+- Status: Active
+- `make subject-access WHO=<identifier>` reports every table and column that
+  holds the identifier, with row counts and projects, and changes nothing. A new
+  column that records who did something must be searched by it, or a test fails.
+- `docs/privacy.md` states what personal data the server keeps, that no retention
+  period is decided, what a purge destroys and what it cannot, that a restore
+  brings purged content back, and carries a draft Art. 30 entry. It gives no legal
+  advice and does not say the software complies with any law.
+- Why: a subject access request meant hand-written SQL over six columns, and there
+  was no position a DPO could point at (#57).
+- Source: #57; DECISIONS D-48.
+- Enforced by: `tests/test_subject_access.py` (real PostgreSQL: every location,
+  hostile input, read-only, the schema-drift check, and the restore interaction).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active
@@ -709,3 +725,17 @@ honest answer and is a gap worth closing; see R-19.
   offline `make phi-scan`. The model cannot live in the browser (R-01).
   Whatever is built must not say "no PHI detected"; it states what was scanned
   and that a clean result is not a guarantee.
+
+### R-47 How long is each kind of record kept?
+
+- Status: **Open** (#57)
+- Nothing expires: the audit log, revisions, deletion record and read trail are
+  append-only, and no period is stated anywhere. The owner has to decide a period
+  for each, reconciling a documented retention floor for governance records
+  (45 CFR 164.316(b)(2)(i), six years where HIPAA applies) with storage
+  limitation (GDPR Art. 5(1)(e)), and whether the fact of an action is kept after
+  its content is erased (Art. 17(3)(b)). That is a legal and organizational call.
+- Until answered: do not write a retention period into docs, UI copy or code, and
+  do not add a job that deletes on a schedule. `docs/privacy.md` says it is
+  undecided and its Art. 30 draft leaves the field to be filled in.
+- Source: #57.

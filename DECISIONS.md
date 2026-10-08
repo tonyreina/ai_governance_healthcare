@@ -265,9 +265,20 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   Content-Security-Policy shipped, because `wait_for_function` evaluates a string
   and the policy forbids `unsafe-eval`. It is fixed with a polling helper, which
   keeps the app under the policy it ships with rather than bypassing it.
-- Not done: branch protection on `main` requiring `tests passed`. That is a
-  repository setting and the owner's call. Actions are pinned by tag, matching the
-  existing workflows; pinning by commit SHA is #37.
+- Branch protection is on. The owner enabled the `protect-main` ruleset, which
+  requires a pull request and the `tests passed` check (pinned to the GitHub
+  Actions app, so nothing else can satisfy it by posting a status of the same
+  name) and blocks force-pushes and deletion. It has **no bypass actors**, so it
+  applies to administrators too. Verified by trying to merge a throwaway PR
+  twice, once with the check pending and once with it red; both were refused.
+  The first attempt found that the ruleset had been saved with an EMPTY
+  required-checks list, which enforced nothing, so verify it rather than
+  trusting that it is on.
+- It is a repository setting, not a file, so nothing in the repo can detect it
+  being switched off (C-48). To check it: `gh api
+  repos/OWNER/REPO/rules/branches/main`.
+- Actions are pinned by tag, matching the existing workflows; pinning by commit
+  SHA is #37.
 - Source: #32; R-23, R-24.
 
 ### D-24 The server decides who signed a checkpoint, and when

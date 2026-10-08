@@ -161,6 +161,9 @@ service container, the dashboard suites in Chromium, the proxy against a real
 Caddy, and the whole Compose stack end to end. One job, **tests passed**, fails
 if any of them failed, was canceled, or was skipped.
 
+`main` requires that job: a pull request cannot be merged while it is pending or
+red, and there is no administrator bypass.
+
 `pixi run test-workflows` checks the CI configuration itself: it fails if a
 `test-*` task is not run by CI, or a test file has no task, so a test cannot be
 added and quietly left out.

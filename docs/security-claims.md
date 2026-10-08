@@ -572,3 +572,14 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Gap:** A documented limitation, true by construction and not exercised by a
   test: `make restore` is not tested, and nothing re-applies a purge
   after a restore. See #57.
+
+### C-48 A change cannot be merged to main unless CI passes
+
+- **Claim:** `main` requires the `tests passed` check, pinned to GitHub Actions,
+  with no administrator bypass, so a pending or red run blocks the merge.
+- **Asserted in:** `docs/running.md` — "a pull request cannot be merged while it is pending or red"
+- **Status:** unenforced
+- **Gap:** A repository setting, not a file, so no test in the repository can
+  detect it being switched off. It was verified by hand, by trying to merge a
+  throwaway PR with the check pending and then red; both were refused. Re-check it
+  with `gh api repos/OWNER/REPO/rules/branches/main`.

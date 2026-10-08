@@ -429,6 +429,26 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   `header_up` to a Caddyfile you edit). That is the configuration nobody tested.
 - Source: #61; R-07, D-04.
 
+### D-31 `check-isolation` is a script with an exit code, not shell that prints
+
+- Status: Accepted
+- `make check-isolation` runs `scripts/check_isolation.py`. It asserts three things
+  and exits non-zero on any failure: no host port on `api` or `db`, a refused
+  direct connection to the API, and a forged `X-Auth-Request-*` that does not
+  come back as the identity. The third tests for the forged value's absence,
+  because the legitimate identity varies by deployment. Not running the stack
+  is a failure, not a pass.
+- Why: the shell version printed what it found and ended step 3 with `|| true`,
+  so it exited 0 whatever it saw (#56). The docs told operators to put it in
+  post-deploy automation, where the exit code is the only thing read.
+- Why a script: so each decision is a function a test can break
+  (`tests/test_check_isolation.py`), and so CI can run it against the real
+  stack (`tests/test_stack.py`). A Makefile target is not evidence CI counts
+  (R-19).
+- Rejected: fixing the shell in place. It would be correct once and untestable
+  after.
+- Source: #56; R-07, R-19.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

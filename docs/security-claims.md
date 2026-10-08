@@ -125,11 +125,13 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   that a forged identity is stripped.
 - **Asserted in:** `docs/self-hosting.md` — "`make check-isolation` asserts all
   of this against a running stack."
-- **Status:** violated
-- **Gap:** Step 3, the forged-identity request, ends in `|| true` and asserts
-  nothing, and step 1 prints rather than asserts. The compose and proxy
-  tests now enforce the same properties in CI, but the sentence is
-  still untrue. #56
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_check_isolation.py::a published port on`
+  `tests/test_check_isolation.py::a listening port is noticed`
+  `tests/test_check_isolation.py::a proxy that forwards the header is noticed`
+  `tests/test_check_isolation.py::with nothing running it exits non-zero, not 0`
+  `tests/test_stack.py::check_isolation.py finds the isolation model intact`
 
 ### C-10 Access control is enforced on the server
 

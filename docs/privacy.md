@@ -56,7 +56,10 @@ every older backup until it expires.
 - a retired project (a checkpoint decided "Stop" or "Retire") whose retirement date
   and last change are both older than the record period;
 - the history of a deleted project, counted from its deletion;
-- the read-trail rows older than the read-trail period.
+- the read-trail rows older than the read-trail period;
+- the name and email (`principals`) of anyone who has not signed in for the
+  read-trail period and whom no retained record names. Whoever changed a
+  retained record stays listed as long as that record is kept.
 
 `make dispose APPLY=1 BY=<your name>` disposes of them, in one transaction.
 Disposal is a purge, not a disappearance: the live record is deleted and a

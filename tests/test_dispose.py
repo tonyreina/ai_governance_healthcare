@@ -76,6 +76,7 @@ def unit() -> None:
              "held": True},
         ],
         "read_trail": {"cutoff": "2020-10-08T00:00:00", "events": 4, "held": 1},
+        "principals": 2,
     }  # fmt: skip
     text = ds.render(report)
     check(
@@ -85,6 +86,9 @@ def unit() -> None:
         text,
     )
     check("and counts the read trail", "4 row(s) older than 2020-10-08" in text, text)
+    check(
+        "and the staff directory", "Staff names and emails: 2 person(s)" in text, text
+    )
 
 
 SEED = f"""
@@ -103,6 +107,9 @@ VALUES
 INSERT INTO access_event (at, actor, action, project_id) VALUES
   (now() - interval '7 years', 'r', 'read_log', 'old'),
   (now() - interval '1 year', 'r', 'read_log', 'old');
+INSERT INTO principals (id, name, email, last_seen) VALUES
+  ('left@h.org', 'Left Long Ago', 'left@h.org', now() - interval '8 years'),
+  ('here@h.org', 'Still Here', 'here@h.org', now());
 """
 
 
@@ -137,7 +144,8 @@ def integration() -> None:
         check("--apply runs", code == 0, out)
         check(
             "and says what it did",
-            "Disposed of 1 project(s) (1 revision(s)) and 1 read-trail row(s)" in out,
+            "Disposed of 1 project(s) (1 revision(s)), 1 read-trail row(s) and 1 person"
+            in out,
             out,
         )
         left = tpl.psql(name, "SELECT string_agg(id, ',') FROM projects")
@@ -154,6 +162,8 @@ def integration() -> None:
             run_row["run_by"] == "ops@hospital.example" and run_row["projects"] == 1,
             str(run_row),
         )
+        people = tpl.psql(name, "SELECT string_agg(id, ',') FROM principals")
+        check("someone still signing in is kept", people == "here@h.org", people)
         code, out = run("--psql", prefix)
         check(
             "a second report finds nothing due",

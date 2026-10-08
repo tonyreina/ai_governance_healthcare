@@ -15,6 +15,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # pydantic requires one exact pydantic-core, so the core alone cannot be bumped:
+    # the API would fail to import (PR #112). It moves when pydantic does.
+    ignore:
+      - dependency-name: pydantic-core
 
   - package-ecosystem: docker
     directory: /server

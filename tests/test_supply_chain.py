@@ -125,6 +125,16 @@ def dependabot_problems(config: dict) -> list[str]:
         for eco, where, _ in want
         if (eco, where) not in have
     ]
+    # pydantic pins pydantic-core to one exact version, so a bump of the core alone
+    # makes the API fail to import (PR #112). It moves only with pydantic itself.
+    updates = config.get("updates", [])
+    pip = [u for u in updates if u.get("package-ecosystem") == "pip"]
+    for update in pip:
+        ignored = {i.get("dependency-name") for i in update.get("ignore", [])}
+        if "pydantic-core" not in ignored:
+            problems.append(
+                "pip does not ignore pydantic-core, which moves with pydantic"
+            )
     for update in config.get("updates", []):
         if not update.get("schedule", {}).get("interval"):
             problems.append(f"{update.get('package-ecosystem')} has no schedule")
@@ -274,6 +284,13 @@ def main() -> int:
         "dependabot covers pip, both Dockerfiles, compose and the actions",
         not dependabot_problems(dep),
         str(dependabot_problems(dep)),
+    )
+    no_ignore = yaml.safe_load(yaml.safe_dump(dep))
+    for u in no_ignore["updates"]:
+        u.pop("ignore", None)
+    check(
+        "dropping the pydantic-core ignore is noticed",
+        any("pydantic-core" in p for p in dependabot_problems(no_ignore)),
     )
     check(
         "a missing ecosystem is noticed",

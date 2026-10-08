@@ -197,6 +197,13 @@ async def list_projects(
     ]
 
 
+def _listed_ids(value: Any) -> list[str]:
+    """A client-supplied access list as unique strings, order kept."""
+    if not isinstance(value, list):
+        return []
+    return list(dict.fromkeys(str(v) for v in value))
+
+
 @router.post(
     "/projects/{project_id}",
     response_model=ProjectOut,
@@ -228,13 +235,19 @@ async def create_project(
         enforced=settings.require_identity,
     )
     access = doc.get("access") if isinstance(doc.get("access"), dict) else {}
-    # Whoever creates a project owns it. A project created with no owner would
-    # be "unclaimed", which means unrestricted -- an open record from birth.
-    if settings.require_identity and identity.id and not access.get("owners"):
+    # Whoever creates a project owns it, whatever the body says. Two things used
+    # to be possible when the client's `owners` was kept verbatim (#44): naming
+    # only a colleague, which attributes a record to someone who never made it
+    # and leaves its creator with no access; and mistyping an address, which
+    # orphans the record at birth. The creator is always listed, first, and any
+    # other owner the client named is kept, so "create and share" still works.
+    # (A project with no owner at all would be "unclaimed", i.e. unrestricted.)
+    if settings.require_identity and identity.id:
+        named = _listed_ids(access.get("owners"))
         doc["access"] = {
-            "owners": [identity.id],
-            "writers": list(access.get("writers") or []),
-            "readers": list(access.get("readers") or []),
+            "owners": [identity.id, *(o for o in named if o != identity.id)],
+            "writers": _listed_ids(access.get("writers")),
+            "readers": _listed_ids(access.get("readers")),
         }
     async with db.acquire() as conn, conn.transaction():
         row = await conn.fetchrow(

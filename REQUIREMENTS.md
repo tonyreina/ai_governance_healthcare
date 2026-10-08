@@ -128,6 +128,21 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `server/tests/test_signoff.py` (the rules, and the exploit against
   the real API); `tests/test_stack.py` (the same exploit through a real Caddy).
 
+### R-28 A project's creator is always one of its owners
+
+- Status: Active
+- Creating a project lists the caller first among its owners, whatever the body
+  says, and keeps any other owner the body names (so "create and share" works).
+  The client's `owners` list can neither attribute a record to someone who did
+  not make it nor leave it with no reachable owner.
+- Applies when identity is enforced (`REQUIRE_IDENTITY`); with it off nothing
+  is attributed.
+- History: the client's `owners` was kept verbatim (#44).
+- Source: #44.
+- Enforced by: `server/tests/test_access.py`
+  (`test_creator_stays_an_owner_when_naming_someone_else` and the tests beside
+  it), against a real PostgreSQL.
+
 ## Audit and data
 
 ### R-10 The audit log and version history are append-only

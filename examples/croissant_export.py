@@ -29,6 +29,17 @@ design. A small-cell cohort description attributed to a named organization can b
 re-identifying, and Croissant files exist to be published and indexed. Cohort
 detail is therefore **withheld by default**; pass ``--include-cohort-detail`` to
 emit it, and read the warning that produces.
+
+PEOPLE
+------
+The review team and clinical sponsor are personal data (GDPR Art. 4(1)), and a
+published record that names them links identified individuals to a named
+clinical system, a site and a time. That is the detail that supports targeted
+social engineering against whoever has authority over a deployment. The default
+``maintainer`` is therefore an organizational contact ("AI Governance Committee,
+<organization>"), or is omitted when no organization is recorded. Pass
+``--include-maintainer-names`` to publish the names, and read the warning that
+lists them.
 """
 
 from __future__ import annotations
@@ -122,6 +133,11 @@ def nonempty(*values: str | None) -> str:
     return ""
 
 
+def named_maintainers(meta: dict[str, Any]) -> str:
+    """The people the record names as responsible: the review team, else the sponsor."""
+    return nonempty(meta.get("reviewers"), meta.get("sponsor"))
+
+
 def join_parts(*parts: str | None) -> str:
     return "\n\n".join(p.strip() for p in parts if p and p.strip())
 
@@ -132,6 +148,7 @@ def build(
     include_cohort: bool,
     base_url: str,
     bio_draft: bool = False,
+    include_maintainer_names: bool = False,
 ) -> dict[str, Any]:
     meta = export.get("meta") or {}
     card = export.get("model_card") or {}
@@ -182,7 +199,16 @@ def build(
         doc["creator"] = creator
     if meta.get("org"):
         doc["publisher"] = {"@type": "sc:Organization", "name": meta["org"]}
-    maintainer = nonempty(meta.get("reviewers"), meta.get("sponsor"))
+    # Named individuals are gated the way cohort detail is (#60). Without the flag
+    # the maintainer is the organization's governance body, never a person, and
+    # when no organization is recorded there is nothing honest to name, so it is
+    # left out rather than invented.
+    if include_maintainer_names:
+        maintainer = named_maintainers(meta)
+    elif meta.get("org") and meta["org"].strip():
+        maintainer = f"AI Governance Committee, {meta['org'].strip()}"
+    else:
+        maintainer = ""
     if maintainer:
         doc["maintainer"] = {"@type": "sc:Organization", "name": maintainer}
 
@@ -331,6 +357,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     ap.add_argument(
+        "--include-maintainer-names",
+        action="store_true",
+        help=(
+            "publish the review team or clinical sponsor by name as the "
+            "maintainer (personal data; the default is an organizational contact)"
+        ),
+    )
+    ap.add_argument(
         "--profile",
         choices=["croissant", "biocroissant-draft"],
         default="croissant",
@@ -367,6 +401,7 @@ def main(argv: list[str] | None = None) -> int:
         include_cohort=args.include_cohort_detail,
         base_url=args.base_url,
         bio_draft=bio_draft,
+        include_maintainer_names=args.include_maintainer_names,
     )
     text = json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
 
@@ -381,6 +416,16 @@ def main(argv: list[str] | None = None) -> int:
             "NOTE: biocroissant-draft profile. The bio: context IRI does not "
             "resolve yet, so these terms are provisional and may change when "
             "MLCommons publishes BioCroissant.",
+            file=sys.stderr,
+        )
+    if args.include_maintainer_names:
+        named = named_maintainers(export.get("meta") or {})
+        print(
+            "WARNING: personal data included: the maintainer names "
+            f"{named!r}. A published record that names the people responsible "
+            "for a clinical system links identified individuals to that system, "
+            "its site and a time. Confirm they agree to be named before "
+            "publishing.",
             file=sys.stderr,
         )
     if args.include_cohort_detail:

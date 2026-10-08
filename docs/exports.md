@@ -88,6 +88,18 @@ governance body's decision to expose patients to a model.
 
     Pass `--include-cohort-detail` to emit it. Check for small cells first.
 
+!!! warning "People are not named by default"
+
+    The review team and clinical sponsor are personal data, and a published
+    record that names them links identified individuals to a named clinical
+    system, a site and a time. By default `maintainer` is an organizational
+    contact (*AI Governance Committee, <your organization>*), or is left out when
+    no organization is recorded.
+
+    Pass `--include-maintainer-names` to publish the review team (or, if there is
+    none, the sponsor) by name. The exporter then prints a warning that lists
+    exactly what it published.
+
 ### No fabricated structure
 
 The exporter emits no `distribution` and no `recordSet`. A governance record

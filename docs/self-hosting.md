@@ -174,6 +174,13 @@ make backup                # pg_dump through the running server -> backups/
 Back up with `make backup`, not by copying the volume's files: a live cluster
 copied file-by-file gives a torn snapshot that may not restore.
 
+`make backup` and `make restore` read the passphrase from the `BACKUP_PASSPHRASE`
+environment variable, so `export` it (or have your secret store set it). Do not
+write `make backup BACKUP_PASSPHRASE=...`: that puts it in `make`'s own command
+line, where any local account can read it. The dump is encrypted with GnuPG
+through a temporary file that only you can read, and a failed dump, or a
+restore with the wrong passphrase, exits non-zero.
+
 ### Deleting and destroying data
 
 There are three different things, and they reach different amounts. **Deleting a

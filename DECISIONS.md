@@ -474,6 +474,28 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   never the problem; the context is, and that is what is tested.
 - Source: #63; R-29.
 
+### D-33 The backup passphrase goes through the environment and a mode-600 file
+
+- Status: Accepted
+- `scripts/backup_crypto.sh` takes `BACKUP_PASSPHRASE` from the environment,
+  writes it with the shell builtin `printf` to a `mktemp` file created under
+  `umask 077`, passes gpg `--passphrase-file`, and removes the file in a trap.
+- Why: argv is world-readable on Linux, so `gpg --passphrase "$PW"` showed every
+  local account the key to every record for as long as the dump ran (#41). Make
+  made it worse: `$(VAR)` is pasted into the recipe text, which is the argv of
+  `sh -c`, so even a line that never mentions gpg leaked it.
+- Rejected: `--passphrase-fd 0` (stdin is already the dump stream in both
+  directions); `--passphrase-fd 3` with a here-string (bash only, and the
+  Makefile's recipes should not need to be); a gpg-agent or keyring (right for
+  interactive use, awkward for a scripted restore).
+- The Makefile runs under bash with `pipefail`, and `backup` chains with `&&`.
+  Found while testing this: a failed `pg_dump` left an empty "encrypted" file and
+  exited 0, and a restore with the wrong passphrase exited 0 having restored
+  nothing, because a pipeline's status is its last command's.
+- `scripts/doctor.py` gives docker `-e PGPASSWORD` (the name) and passes the value
+  in the environment, for the same reason.
+- Source: #41; R-13.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

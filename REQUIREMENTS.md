@@ -216,9 +216,19 @@ honest answer and is a gap worth closing; see R-19.
 - `make backup` refuses to run without a passphrase and writes only encrypted
   dumps. A plaintext dump requires an explicit `PLAINTEXT=1` and is for
   throwaway databases.
-- Known gap: the passphrase is passed on gpg's command line (#41).
-- Source: `Makefile`, `backup` target comment.
-- Enforced by: the Makefile guard.
+- The passphrase is never in a process's argv: it comes from the environment and
+  reaches gpg through a mode-600 file (`scripts/backup_crypto.sh`), and the
+  Makefile never expands it as `$(BACKUP_PASSPHRASE)` (make pastes that into the
+  `sh -c` text). A failed dump or decrypt fails the command and keeps no file.
+- History: the passphrase was on gpg's command line (#41), and a failed
+  `pg_dump` or a wrong passphrase on restore exited 0.
+- Still open: `make backup BACKUP_PASSPHRASE=...` puts it in make's own argv, so
+  the docs say to export it. Where the passphrase is kept long term is the
+  operator's key-management question.
+- Source: `Makefile`, `backup` target comment; #41; DECISIONS D-33.
+- Enforced by: `tests/test_backup_crypto.py` (the guards, the recipe text, the
+  process table while gpg runs, the exit status of a restore and of a failed
+  backup).
 
 ## Security posture
 

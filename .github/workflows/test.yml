@@ -60,6 +60,9 @@ jobs:
       # security model rests on is asserted against the real compose.yaml.
       - run: pixi run test-claims
 
+      # Backups: the passphrase is never in argv (gpg and make are on the runner).
+      - run: pixi run test-backup-crypto
+
       # `make check-isolation`'s checker, with a mutation test for each thing it
       # must notice. The run against the real stack is in the stack job.
       - run: pixi run test-isolation

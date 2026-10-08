@@ -425,9 +425,9 @@ honest answer and is a gap worth closing; see R-19.
   goes to a branch and a pull request.
 - Not done: signing or attesting images (the issue's own non-goal). Pixi, which
   locks the docs and test tooling, is not watched by Dependabot.
-- Needs the owner: private vulnerability reporting and Dependabot security
-  updates are **repository settings** and are off; `SECURITY.md` works around
-  the first but is better with it on.
+- Private vulnerability reporting, Dependabot alerts and Dependabot security
+  updates are **repository settings**, turned on by the owner on 2026-10-08.
+  Nothing in CI checks that they stay on.
 - Source: #37; DECISIONS D-45.
 - Enforced by: `tests/test_supply_chain.py` (every rule, with a mutation test,
   and the real image built from the lock, importing, with no pip and the locked
@@ -639,7 +639,10 @@ honest answer and is a gap worth closing; see R-19.
   catalog.
 - Reviewed so far: Simplified Chinese, approved by Cody Chen (the owner's
   report, 2026-10-08), recorded for every safety-bearing string in
-  `zh-Hans.json`, which therefore shows its warnings in Chinese.
+  `zh-Hans.json`, which therefore shows its warnings in Chinese. Its framework
+  and metric-name notes cite that review instead of calling the wording
+  machine-drafted (the owner's instruction, 2026-10-08); they still call it
+  unofficial, because it is not CHAI's.
 - Dates and relative times use the chosen language. Since D-60, the HTML, PDF
   and Markdown exports are written in the reader's language and name it; the
   JSON and CSV exports stay English (a machine contract), as do server messages.

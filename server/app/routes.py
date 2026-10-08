@@ -39,6 +39,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from .access import (
     access_of,
@@ -47,6 +48,7 @@ from .access import (
     guard_owner_only_fields,
     require,
 )
+from .accessaudit import AccessAction, ExportFormat, record_access
 from .auth import Identity, identity_from_request
 from .config import Settings
 from .db import Database
@@ -242,6 +244,7 @@ async def me(identity: Identity = Depends(get_identity)) -> MeOut:
 
 @router.get("/projects", response_model=list[ProjectOut], tags=["projects"])
 async def list_projects(
+    request: Request,
     db: Database = Depends(get_db),
     identity: Identity = Depends(get_identity),
     emergency: EmergencyAudit = Depends(get_emergency),
@@ -253,21 +256,33 @@ async def list_projects(
     is the whole portfolio and ``subscribeAll`` means all. A governance
     portfolio is tens of projects, not millions.
     """
-    async with db.acquire() as conn:
+    enforced = settings.require_identity
+    # One transaction with its record (#33): there is no list without a row saying
+    # who was given which projects, and a list that cannot be recorded is not served.
+    async with db.acquire() as conn, conn.transaction():
         rows = await conn.fetch(
             "SELECT id, doc FROM projects ORDER BY updated_at DESC, id ASC"
         )
-    enforced = settings.require_identity
-    visible = [
-        row
-        for row in rows
-        if can_read(
-            row["doc"] or {},
-            identity.id,
-            enforced=enforced,
-            emergency=identity.emergency,
+        visible = [
+            row
+            for row in rows
+            if can_read(
+                row["doc"] or {},
+                identity.id,
+                enforced=enforced,
+                emergency=identity.emergency,
+            )
+        ]
+        await record_access(
+            conn,
+            identity,
+            AccessAction.LIST,
+            request,
+            detail={
+                "count": len(visible),
+                "projects": [row["id"] for row in visible],
+            },
         )
-    ]
     if identity.emergency:
         # The projects this list shows only because of emergency access, counted
         # against what the project's own access lists would have shown.
@@ -687,6 +702,7 @@ async def _version_gate(
 
 @router.get("/projects/{project_id}/versions", tags=["versions"])
 async def list_versions(
+    request: Request,
     project_id: str = ProjectId,
     db: Database = Depends(get_db),
     settings: Settings = Depends(get_settings),
@@ -706,7 +722,7 @@ async def list_versions(
     is what it said" is the audit answer for the people who could read it, not
     for everybody with an account.
     """
-    async with db.acquire() as conn:
+    async with db.acquire() as conn, conn.transaction():
         gate = await _version_gate(conn, project_id)
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
@@ -722,6 +738,13 @@ async def list_versions(
             await emergency.record(
                 conn, identity, project_id, "read this project's history", Use.READ
             )
+        await record_access(
+            conn,
+            identity,
+            AccessAction.READ_VERSIONS,
+            request,
+            project_id=project_id,
+        )
         rows = await conn.fetch(
             """
             SELECT rev, content_md5, changed_by, changed_at, purged_at, purged_by
@@ -754,6 +777,7 @@ async def list_versions(
 
 @router.get("/projects/{project_id}/versions/{rev}", tags=["versions"])
 async def read_version(
+    request: Request,
     project_id: str = ProjectId,
     rev: int = 0,
     db: Database = Depends(get_db),
@@ -767,7 +791,7 @@ async def read_version(
     ``md5`` is the fingerprint of the ORIGINAL content, which is what makes the
     tombstone evidence rather than a gap.
     """
-    async with db.acquire() as conn:
+    async with db.acquire() as conn, conn.transaction():
         gate = await _version_gate(conn, project_id)
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
@@ -793,9 +817,18 @@ async def read_version(
             incarnation,
             rev,
         )
-    if row is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND, f"No revision {rev} of {project_id!r}."
+        if row is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, f"No revision {rev} of {project_id!r}."
+            )
+        # Only a revision that exists and is returned is a read of it.
+        await record_access(
+            conn,
+            identity,
+            AccessAction.READ_VERSION,
+            request,
+            project_id=project_id,
+            revision=row["rev"],
         )
     out: dict[str, Any] = {
         "rev": row["rev"],
@@ -994,6 +1027,7 @@ def _parse_log_cursor(raw: str | None) -> tuple[datetime | None, int | None]:
 )
 async def read_log(
     response: Response,
+    request: Request,
     project_id: str = ProjectId,
     limit: int | None = Query(
         default=None,
@@ -1033,23 +1067,32 @@ async def read_log(
     """
     page = min(limit or settings.log_page_size, LOG_MAX_PAGE)
     cursor_at, cursor_seq = _parse_log_cursor(before)
-    async with db.acquire() as conn:
+    async with db.acquire() as conn, conn.transaction():
         # The log is the project's history; seeing it is seeing the project.
         # A missing project still returns an empty list rather than 404 -- see
         # the docstring -- so an absent row is not an access failure.
         owner_row = await conn.fetchrow(
             "SELECT doc FROM projects WHERE id = $1", project_id
         )
-        if owner_row is not None and require(
-            owner_row["doc"] or {},
-            identity.id,
-            "read",
-            enforced=settings.require_identity,
-            project_id=project_id,
-            emergency=identity.emergency,
-        ):
-            await emergency.record(
-                conn, identity, project_id, "read this project's log", Use.READ
+        if owner_row is not None:
+            if require(
+                owner_row["doc"] or {},
+                identity.id,
+                "read",
+                enforced=settings.require_identity,
+                project_id=project_id,
+                emergency=identity.emergency,
+            ):
+                await emergency.record(
+                    conn, identity, project_id, "read this project's log", Use.READ
+                )
+            # A missing project discloses nothing, so there is nothing to record.
+            await record_access(
+                conn,
+                identity,
+                AccessAction.READ_LOG,
+                request,
+                project_id=project_id,
             )
         rows = await conn.fetch(
             """
@@ -1153,12 +1196,116 @@ async def append_log(
     return LogEntryOut(**entry)
 
 
+# --- exports ----------------------------------------------------------------
+
+
+class ExportBeacon(BaseModel):
+    """What the dashboard reports when it produces a download."""
+
+    format: ExportFormat
+
+
+@router.post(
+    "/projects/{project_id}/exports",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["audit log"],
+)
+async def record_export(
+    body: ExportBeacon,
+    request: Request,
+    project_id: str = ProjectId,
+    db: Database = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    identity: Identity = Depends(get_identity),
+    emergency: EmergencyAudit = Depends(get_emergency),
+) -> Response:
+    """The dashboard reports that it produced an export of this project.
+
+    Exports are built in the browser from data it already fetched, so the server never
+    sees one happen. This is the record of ordinary use: it is NOT a control, because a
+    client can omit it. What bounds what any export could contain is the reads that
+    fetched the data, which are recorded. A caller needs read access to the project,
+    so it cannot be used to probe for projects or to write entries about ones you
+    cannot see.
+    """
+    if body.format is ExportFormat.CSV:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "csv is a portfolio export; POST /api/exports",
+        )
+    async with db.acquire() as conn, conn.transaction():
+        row = await conn.fetchrow("SELECT doc FROM projects WHERE id = $1", project_id)
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
+        if require(
+            row["doc"] or {},
+            identity.id,
+            "read",
+            enforced=settings.require_identity,
+            project_id=project_id,
+            emergency=identity.emergency,
+        ):
+            await emergency.record(
+                conn, identity, project_id, "export this project", Use.READ
+            )
+        await record_access(
+            conn,
+            identity,
+            AccessAction.EXPORT,
+            request,
+            project_id=project_id,
+            detail={"format": body.format.value},
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/exports", status_code=status.HTTP_204_NO_CONTENT, tags=["audit log"])
+async def record_portfolio_export(
+    body: ExportBeacon,
+    request: Request,
+    db: Database = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    identity: Identity = Depends(get_identity),
+) -> Response:
+    """The dashboard reports a whole-portfolio export (the CSV)."""
+    if body.format is not ExportFormat.CSV:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "only csv is a portfolio export; POST /api/projects/{id}/exports",
+        )
+    async with db.acquire() as conn, conn.transaction():
+        rows = await conn.fetch("SELECT id, doc FROM projects ORDER BY id")
+        readable = [
+            row["id"]
+            for row in rows
+            if can_read(
+                row["doc"] or {},
+                identity.id,
+                enforced=settings.require_identity,
+                emergency=identity.emergency,
+            )
+        ]
+        await record_access(
+            conn,
+            identity,
+            AccessAction.EXPORT,
+            request,
+            detail={
+                "format": body.format.value,
+                "scope": "portfolio",
+                "projects": readable,
+            },
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # --- change stream ----------------------------------------------------------
 
 
 @router.get("/events", tags=["events"])
 async def events(
     request: Request,
+    db: Database = Depends(get_db),
     broker: EventBroker = Depends(get_broker),
     settings: Settings = Depends(get_settings),
     identity: Identity = Depends(get_identity),
@@ -1182,6 +1329,10 @@ async def events(
     # Registered BEFORE the StreamingResponse is built. FastAPI constructs the
     # response eagerly and runs the generator afterwards, so refusing inside
     # the generator would mean sending 200 and then an error body.
+    # Who attached is part of the read trail: the stream delivers change
+    # notifications (#33). A stream that cannot be recorded is not opened.
+    async with db.acquire() as conn:
+        await record_access(conn, identity, AccessAction.STREAM_ATTACH, request)
     try:
         subscriber = broker.attach(identity.id)
     except TooManyStreams as exc:

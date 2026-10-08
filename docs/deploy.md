@@ -147,6 +147,50 @@ things break it on managed platforms:
   browser subscribed on replica B. Use PostgreSQL `LISTEN`/`NOTIFY` as
   the fan-out bus, or pin the service to a single replica until you do.
 
+### The read trail
+
+Every read of a governance record is recorded, so the question a breach asks has
+an answer: *account X was compromised on the 3rd and closed on the 9th; which
+records did it open, and did it export any?* 45 CFR 164.312(b), audit controls,
+is a required standard.
+
+`access_event` holds one row per access, **in the same transaction as the read
+it describes**: a list, a project's revision list, one revision, a project's
+audit log, an event-stream attach, and an export. A read that cannot be recorded
+is not served. It is append-only (a trigger refuses `UPDATE` and `DELETE`), has
+no foreign key so it outlives the project it names, and holds ids and facts,
+never content: a list records the ids of the projects it returned, an export its
+format. The same fact is also emitted as a `record.read`, `record.exported` or
+`stream.attached` security event, which is the copy a database administrator
+cannot alter.
+
+```sql
+-- every record this account opened or exported in a period
+SELECT at, action, project_id, revision, source_ip, detail
+  FROM access_event
+ WHERE actor = 'person@hospital.org'
+   AND at >= '2026-01-01' AND at < '2026-02-01'
+ ORDER BY at;
+
+-- who opened this record
+SELECT at, actor, action, revision, source_ip
+  FROM access_event
+ WHERE project_id = 'sepsis-2026'
+ ORDER BY at DESC;
+```
+
+A *list* is a read of every project it returned, so look inside `detail ->
+'projects'` for those; a list the account made after it lost access to a project
+does not contain it.
+
+**What this does not cover.** Exports are built in the browser from data it
+already fetched, so the server never sees one happen. The export beacon records
+ordinary use; it is **not** a control, because a client can omit it. What bounds
+what any export could contain is the reads that fetched the data, and those are
+recorded. `source_ip` is what the proxy reported, for correlation, and is not
+authentication. How long to keep the trail is not decided here (see the
+retention issue).
+
 ### Security events: collecting, retaining and alerting
 
 The only record of a delete, a purge, a rejected request or a 401 used to be a
@@ -177,6 +221,9 @@ recording that a project was deleted.
 | `versions.purged` | warning | `actor`, `project`, `revisions`, `log_entries` | A version history and its audit log were destroyed. Review every one. |
 | `ratelimit.tripped` | warning | `key`, `limit`, `window_seconds` | A client hit the rate limit. Once per client per window. |
 | `stream.refused` | warning | `actor` | Too many open event streams for one user. |
+| `stream.attached` | info | `actor`, `action`, `source_ip` | An event stream was opened. The read trail records it too. |
+| `record.read` | info | `actor`, `action`, `project`, `revision`, `source_ip` | A list or a read of versions or a log. One per row of the read trail. |
+| `record.exported` | info | `actor`, `action`, `project`, `format`, `source_ip` | The dashboard reported an export. |
 
 The names are an interface: an alert is written against them, so a test fails if
 this table and the code ever disagree.

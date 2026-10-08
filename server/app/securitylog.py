@@ -64,6 +64,9 @@ class SecurityEvent(StrEnum):
     VERSIONS_PURGED = "versions.purged"
     RATELIMIT_TRIPPED = "ratelimit.tripped"
     STREAM_REFUSED = "stream.refused"
+    STREAM_ATTACHED = "stream.attached"
+    RECORD_READ = "record.read"
+    RECORD_EXPORTED = "record.exported"
 
 
 _log = logging.getLogger(SECURITY_LOGGER)

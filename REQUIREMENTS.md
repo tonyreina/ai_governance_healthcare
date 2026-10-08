@@ -329,6 +329,31 @@ honest answer and is a gap worth closing; see R-19.
   `tests/test_compose_isolation.py` (the caps), and `tests/test_stack.py` (the
   running API's own log).
 
+### R-40 Every read of a record is recorded, in the transaction of the read
+
+- Status: Active
+- A list, a project's revision list, one revision, a project's audit log, an
+  event stream attach and an export each write one row to `access_event` (actor,
+  action, project, revision, the address the proxy reported) in the same
+  transaction as the read, and emit the same fact as a security event. A read
+  that cannot be recorded is not served. A refused request is an `access.denied`
+  event instead, because nothing was disclosed.
+- `access_event` is append-only, has no foreign key (it outlives the project it
+  names) and holds ids and facts, never content. The restricted role may only
+  `SELECT` and `INSERT` it.
+- **Exports are the limit.** They are built in the browser from data it already
+  fetched, so the dashboard reports each one with a beacon. That is a record of
+  ordinary use, not a control: a client can omit it. The reads that fetched the
+  data are recorded and bound what any export could hold.
+- Not decided: how long to keep the trail (#57).
+- Why: "which records did a compromised account open, and did it export any?"
+  had no answer anywhere, and 45 CFR 164.312(b) is required (#33).
+- Source: #33; DECISIONS D-42.
+- Enforced by: `server/tests/test_access_audit.py` (each route, the transaction,
+  the refusal case, append-only, the constraint matching the enum, the
+  investigator's query from the docs), `tests/test_export_beacon.py`, and
+  `tests/test_stack.py` (rows in the real database through the proxy).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

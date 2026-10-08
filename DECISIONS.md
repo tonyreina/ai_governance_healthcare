@@ -703,6 +703,32 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   database is the tamper-evident copy. Both are in #33.
 - Source: #38; R-39.
 
+### D-42 A table and the security stream, in the transaction of the read
+
+- Status: Accepted
+- Both of the issue's recorded options: an append-only `access_event` table,
+  written in the same transaction as the read (option 1), and the same fact as a
+  named security event (option 2), which is the copy outside the database that
+  an administrator cannot alter. Option 3.
+- A list is one row carrying the ids it returned, not one row per project: the
+  dashboard refetches the list on every change event, and a row per project
+  would multiply that. The ids are in `detail`, so "did account X open project
+  P" is still answerable.
+- Fail closed: the insert is part of the transaction, so a read that cannot be
+  recorded is a 500. An availability cost, taken on purpose: an audit control
+  that silently stops recording is the failure this exists to prevent.
+- Nothing is recorded for a refused request or a missing project. Nothing was
+  disclosed; the refusal is `access.denied`.
+- `source_ip` is `X-Real-IP` (the proxy's `{remote_host}`), else the peer. It is
+  for correlation and the docs say so; nothing authorizes on it (D-05).
+- Exports cannot be controlled, only recorded, because they happen in the
+  browser. Rejected: moving export generation to the server. It would make the
+  beacon a real control, and break the single-file, no-server dashboard (R-01)
+  for every other mode.
+- Rejected: an `UPDATE`-able table, or a foreign key to `projects`: the trail
+  must outlive the record it describes (D-10).
+- Source: #33; R-40.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

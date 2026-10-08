@@ -87,7 +87,8 @@ into the single dashboard file by the build. English (`en.json`) is the source.
 invents a `{placeholder}`, misses a plural form the language needs, or holds
 markup.
 
-The translations are **machine-drafted and unreviewed**. Safety-bearing
+The translations are **machine-drafted**. The Simplified Chinese one has been
+reviewed and approved by a fluent reader; the others have not. Safety-bearing
 warnings (the patient-data notice and the storage-mode banners, listed under
 `"@meta".safety` in `en.json`) are shown in English until someone fluent in the
 language reviews them. A wrong translation of a warning is worse than an English

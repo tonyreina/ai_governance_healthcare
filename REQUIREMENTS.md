@@ -638,6 +638,9 @@ honest answer and is a gap worth closing; see R-19.
 - Translations are machine-drafted. A safety-bearing string (`"@meta".safety`)
   shows in English in a language until a reviewer is recorded for it in that
   catalog.
+- Reviewed so far: Simplified Chinese, approved by Cody Chen (the owner's
+  report, 2026-10-08), recorded for every safety-bearing string in
+  `zh-Hans.json`, which therefore shows its warnings in Chinese.
 - Dates and relative times use the chosen language. Since D-60, the HTML, PDF
   and Markdown exports are written in the reader's language and name it; the
   JSON and CSV exports stay English (a machine contract), as do server messages.

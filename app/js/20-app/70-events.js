@@ -73,7 +73,7 @@ document.addEventListener("click",async e=>{
     // Put the cursor where the user now has to type.
     const rows=[...document.querySelectorAll('.mtable input[data-bind$=".name"]')];
     const row=rows.find(i=>i.value===name);
-    if(row) row.closest("tr").querySelector('input[aria-label="Value"]').focus();
+    if(row) row.closest("tr").querySelector('input[data-bind$=".value"]').focus();
     return;
   }
   if(btn.dataset.delmetric!=null && !RO){ S.metrics.splice(+btn.dataset.delmetric,1); saveMetrics(); renderMain(false); renderLabel(); return; }

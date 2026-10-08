@@ -60,12 +60,13 @@ honest answer and is a gap worth closing; see R-19.
 - Storage mode is the most consequential fact about a deployment and the least
   visible. Each mode must label itself truthfully, and the label for one mode
   must not be reused for another.
-- Known violation: #64 (the Claude artifact mode is labeled "Shared workspace",
-  as the server mode is). #55 (the server mode reported "Saved in this browser")
-  is fixed.
+- History: #55 (the server mode reported "Saved in this browser") and #64 (the
+  Claude artifact mode was labeled "Shared workspace", as the server mode is)
+  are both fixed. Each mode now has its own header label, saved label and, for
+  the artifact and browser-only modes, a standing notice in the layout.
 - Source: `app/js/20-app/40-readonly.js`, `showStorageWarning` comment.
-- Enforced by: `tests/test_boot_storage.py` for the saved label only. The header
-  label is not yet tested.
+- Enforced by: `tests/test_boot_storage.py`: the saved label and the header
+  label for every mode (each present, no two alike), and the artifact notice.
 
 ### R-05 The dashboard and its exports contact no third party
 

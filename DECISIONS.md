@@ -232,6 +232,15 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   the test asserts it.
 - The artifact mode's value changed from `"shared"` to `"artifact"`. Nothing
   outside the app read it.
+- The header is the same shape: `MODE_LABEL`, keyed by `Mode`, with a text and a
+  CSS class per mode, and a test that every mode has one and no two share a
+  text. The artifact mode was labeled "Shared workspace", as the server was
+  (#64), and now says "Claude artifact", saves to "this Claude artifact", and
+  shows a standing notice. The notice states where the data lives and what the
+  comparison in `docs/running.md` says it lacks, and says not to enter
+  patient-identifiable information, as the browser-only banner does. That is
+  about the artifact mode only: it says nothing about the server mode, whose
+  classification is still open (R-21).
 - Source: closed issue #55; R-04.
 
 ### D-20 Pre-commit is the only CI gate

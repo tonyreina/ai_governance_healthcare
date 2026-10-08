@@ -12,6 +12,16 @@ const Mode = Object.freeze({
   API: "api",                // the self-hosted server (PostgreSQL)
   ARTIFACT: "artifact",      // a Claude artifact's database
 });
+/* What the header says about each mode. Keyed by Mode, like SAVED_LABEL, so a
+   new mode cannot ship without a label, and no two modes share one: the
+   Claude artifact mode was labeled "Shared workspace", identically to the
+   self-hosted PostgreSQL server, which hid the difference between data inside
+   a hospital's administrative boundary and data outside it (#64). */
+const MODE_LABEL = Object.freeze({
+  [Mode.LOCAL]:    Object.freeze({text:"This browser only", cls:""}),
+  [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
+  [Mode.ARTIFACT]: Object.freeze({text:"Claude artifact",   cls:"artifact"}),
+});
 let STORE=null, MODE=Mode.CONNECTING, RO=false, CAN_DELETE=true, USER=null;
 // Set when the whole workspace is view-only (an artifact shared read-only).
 // Outranks any per-project role: it is a property of how you got here.

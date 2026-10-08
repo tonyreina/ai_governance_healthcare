@@ -9,7 +9,7 @@ function setSaved(t){ document.getElementById("saved").textContent=t; }
 const SAVED_LABEL = Object.freeze({
   [Mode.LOCAL]: "Saved in this browser",
   [Mode.API]: "Saved to shared workspace",
-  [Mode.ARTIFACT]: "Saved to shared workspace",
+  [Mode.ARTIFACT]: "Saved to this Claude artifact",
 });
 function savedLabel(mode){ return SAVED_LABEL[mode] || "Saved"; }
 function stamp(extra){ return Object.assign({updatedAt:new Date().toISOString(), updatedBy:ME.id||null}, extra||{}); }

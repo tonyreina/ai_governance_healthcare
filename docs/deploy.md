@@ -126,9 +126,11 @@ leave room to act:
     here. Check them before you rely on them.
 
 How long each of these is kept is decided (see [Privacy and
-retention](privacy.md), R-54), but nothing ages them out yet: disposal at the end
-of a period is a manual purge and delete. Until it is automated, the only way to
-reclaim space is more disk.
+retention](privacy.md), R-54), and `make dispose` applies it: an operator runs it
+after the records officer approves a schedule. It empties the content of retired
+projects' revisions, which is most of the volume (the rows stay, because that is
+what makes them tombstones), and deletes read-trail rows past their period. Until
+the first disposal run, the only way to make room is more disk.
 
 ### Encryption at rest
 
@@ -297,9 +299,10 @@ used the system, and no one from a directory the system cannot see. It is **not*
 open: `GET /api/principals?ids=` answers only for the caller themself and for
 people named on a project the caller can already read (its access lists, its
 sign-offs, its log authors). Anyone else is omitted, so a signed-in user cannot
-walk the table. Rows are updated in place when a name changes, are never deleted
-by the application, and are not reached by a project purge; removing one person
-from `principals` is a database operation today (see the erasure issue, #57).
+walk the table. Rows are updated in place when a name changes and are not reached
+by a project purge. The application never deletes one; `make dispose` removes a
+person who has not signed in for the read-trail period and whom no retained record
+names.
 
 The id alone is what the access lists and the audit trail depend on. If the name
 and email are unwanted, the proxy can simply not assert them: the API then records
@@ -328,8 +331,11 @@ Rule's audit controls standard (45 CFR 164.312(b)).
 `access_event` holds one row per access, **in the same transaction as the read
 it describes**: a list, a project's revision list, one revision, a project's
 audit log, an event-stream attach, and an export. A read that cannot be recorded
-is not served. It is append-only (a trigger refuses `UPDATE` and `DELETE`), has
-no foreign key so it outlives the project it names, and holds ids and facts,
+is not served. It is append-only: a trigger refuses any `UPDATE`, and refuses a
+`DELETE` of a row younger than the read-trail period or belonging to a project
+under a litigation hold, so old rows go only when an operator disposes of them
+(`make dispose`). It has no
+foreign key, so it outlives the project it names, and holds ids and facts,
 never content: a list records the ids of the projects it returned, an export its
 format. The same fact is also emitted as a `record.read`, `record.exported` or
 `stream.attached` security event, which is the copy a database administrator

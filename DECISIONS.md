@@ -1170,6 +1170,33 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   the owner's period).
 - Source: R-54, #57.
 
+### D-65 Documentation by audience, with the executive case made honestly
+
+- Status: Accepted
+- The owner asked for the docs to explain why the project exists and what gap it
+  fills, for a hospital CEO, and for the rest to be rewritten from the current
+  code (R-57).
+- **By audience.** `docs/index.md` is the executive case, `docs/adopting.md` the
+  decision (cost, people, infrastructure, risks, how to try it), `docs/guide.md`
+  the committee's walkthrough, `docs/self-hosting.md` and `docs/deploy.md` the
+  operator's, `docs/privacy.md` the privacy officer's and `docs/developing.md` the
+  developer's. Operator and developer material that shared a page were split so
+  each reader finds theirs.
+- **The pitch states its limits.** The project is open source with one
+  maintainer, no support contract and no hosted service, and the repository holds
+  no commercial offer. So the executive pages make the case for adopting and
+  running it, and say what that costs and what it does not give, rather than
+  inventing a price, a support term or a customer.
+- **What was kept.** The cloud recipes in `docs/deploy.md` stay as they were
+  apart from sentences the code had made false (disposal, the staff directory and
+  the read trail): their provider settings are unverified and rewriting them
+  would invent confidence. The crosswalk, the framework pages and the generated
+  checklists are research and generated content, not descriptions of the code.
+- Rejected: one long README for every reader (the executive case and the
+  `make` commands do not belong in the same scroll); a pricing or services page
+  (nothing in the repository supports one); translating the docs (D-61).
+- Source: the owner, this session; R-57.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

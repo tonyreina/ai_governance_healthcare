@@ -10,6 +10,18 @@ Whether it does is for your organization and counsel.
 It applies only to the server-backed deployment. The static dashboard keeps
 everything in the visitor's browser and sends nothing anywhere.
 
+## In short
+
+| Question | Answer |
+|---|---|
+| Whose personal data is in it? | The staff who sign in. Patient data is out of scope in every mode. |
+| What is recorded about them? | Their identifier, name and email as the proxy asserted them, when they acted and what they did, and what they read. |
+| How long is it kept? | A project's record for the life of the AI solution plus 6 years after it is retired, and the read trail for 6 years, by default. Your records schedule takes precedence. |
+| Who disposes of it, and when? | An operator, with `make dispose`, on a schedule your records officer approves. It reports first and changes nothing until told to. |
+| Can it be stopped? | Yes. A project's owner can place a litigation hold, with a reason, and the project and its read trail are kept until it is lifted. |
+| Can one person's data be found? | Yes: `make subject-access`, and **Search all text** in the dashboard for the projects you can open. |
+| Can it be erased? | The *content* can be destroyed. The *fact* that someone acted cannot, because that is what an audit trail is. The details are below. |
+
 ## What personal data the server holds
 
 The data subjects are the people who sign in: their identifier (the identity the

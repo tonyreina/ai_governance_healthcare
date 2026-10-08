@@ -6,7 +6,7 @@ browser app uses (``subscribeAll``, ``create``, ``update``, ``remove``,
 PostgreSQL.
 
 Identity comes from a reverse proxy in front of the service. See
-``app/auth.py`` and ``docs/deploying.md`` in the repository root.
+``app/auth.py`` and ``docs/deploy.md`` in the repository root.
 """
 
 __version__ = "0.1.0"

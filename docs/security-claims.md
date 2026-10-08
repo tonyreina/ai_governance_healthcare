@@ -73,6 +73,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   author is overwritten with the proxy identity.
 - **Asserted in:** `README.md` — "the API reads identity from the proxy and
   nowhere else"
+- **Asserted in:** `docs/adopting.md` — "the application reads identity from the proxy in front of it and nowhere else"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_auth.py::test_identity_comes_from_the_configured_header`
@@ -85,6 +86,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Asserted in:** `docs/self-hosting.md` — "the API publishes no host port"
 - **Asserted in:** `README.md` — "so it must be unreachable except through the
   proxy."
+- **Asserted in:** `docs/self-hosting.md` — "The front door, and the only service reachable from outside."
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_compose_isolation.py::publishing a port on the api is noticed`
@@ -95,6 +97,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** Postgres sits on an `internal: true` network and publishes no port.
 - **Asserted in:** `docs/self-hosting.md` — "on an `internal: true` network with
   no route off the host at all"
+- **Asserted in:** `docs/self-hosting.md` — "PostgreSQL 17, on a network with no route off the host"
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_compose_isolation.py::an internal network made routable is noticed`
@@ -139,6 +142,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   404, not 403, so existence is not confirmed.
 - **Asserted in:** `docs/running.md` — "| Access control enforced | **No** |
   Partly | **Yes, server-side** |"
+- **Asserted in:** `docs/guide.md` — "On the server these are enforced by the API, not just by the buttons the page shows."
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_access.py::TestEnforcement::test_reader_may_not_patch`
@@ -166,6 +170,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   something.**"
 - **Asserted in:** `docs/running.md` — "| Checkpoint sign-off means something |
   **No, self-asserted** | Yes | Yes |"
+- **Asserted in:** `docs/index.md` — "On the shared server a sign-off carries the name of the person signed in through your hospital's own single sign-on"
+- **Asserted in:** `docs/guide.md` — "On the shared server that identity comes from your hospital's single sign-on and cannot be set from the browser."
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_signoff.py::TestTheForgeryFromTheIssue::test_a_writer_cannot_sign_off_as_the_cmo`
@@ -235,6 +241,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   by comparing the result with a function. Deleting a project removes
   its live log, and records that it did (C-45).
 - **Asserted in:** `README.md` — "Audit log | Yes, append-only"
+- **Asserted in:** `docs/index.md` — "The database itself refuses to alter the audit log or the revision history"
+- **Asserted in:** `docs/adopting.md` — "The audit trail is enforced by the database, not only by the application."
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_api.py::test_the_database_itself_refuses_to_update_a_log_entry`
@@ -285,7 +293,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   which implied the opposite. #36)
 - **Asserted in:** `docs/self-hosting.md` — "**Deleting a project does not erase
   its history.**"
-- **Asserted in:** `docs/self-hosting.md` — "The server keeps its version
+- **Asserted in:** `docs/developing.md` — "The server keeps its version
   history"
 - **Status:** enforced
 - **Enforced by:**
@@ -312,6 +320,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   way compose reads it, so a blank value or a trailing comment cannot get past
   the gate.
 - **Asserted in:** `README.md` — "refuses to start on unsafe settings"
+- **Asserted in:** `docs/adopting.md` — "`make up` refuses to start on unsafe settings and says why."
+- **Asserted in:** `docs/self-hosting.md` — "`make up` refuses to start on unsafe settings: an empty or placeholder password"
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_preflight.py::an empty password is refused`
@@ -341,6 +351,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   with no access control or audit log, and names the risk.
 - **Asserted in:** `README.md` — "The app says so in a standing banner when it
   is in this mode."
+- **Asserted in:** `docs/adopting.md` — "and it says so in a standing banner"
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_boot_storage.py::static host -> standing warning is shown`
@@ -351,6 +362,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** If a server was expected and cannot be reached, or refuses the
   user, the app stops and says so.
 - **Asserted in:** `README.md` — "never silently falls back"
+- **Asserted in:** `docs/running.md` — "The app never silently falls back from one to another."
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_boot_storage.py::no store was created`
@@ -397,7 +409,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** A hook rebuilds docs/app/index.html on any change under app/ and
   fails the run if the file differs.
-- **Asserted in:** `docs/self-hosting.md` — "so the generated file can never go
+- **Asserted in:** `docs/developing.md` — "so the generated file can never go
   stale"
 - **Status:** enforced
 - **Enforced by:**
@@ -407,7 +419,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-32 A test cannot be added and quietly left out of CI
 
 - **Claim:** CI fails if a `test-*` task is not run, or a test file has no task.
-- **Asserted in:** `docs/running.md` — "so a test cannot be added and quietly
+- **Asserted in:** `docs/developing.md` — "so a test cannot be added and quietly
   left out."
 - **Status:** enforced
 - **Enforced by:**
@@ -418,7 +430,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** `REQUIRE_TESTS=1` turns a skip into a failure, because a skip exits
   0 and reads as a pass.
-- **Asserted in:** `docs/running.md` — "to turn every skip into a failure; CI
+- **Asserted in:** `docs/developing.md` — "to turn every skip into a failure; CI
   always does."
 - **Status:** enforced
 - **Enforced by:**
@@ -560,6 +572,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   and survives a purge. A refused or failed delete writes nothing.
 - **Asserted in:** `docs/self-hosting.md` — "It writes a permanent tombstone to
   `project_deletion`: who deleted it, when,"
+- **Asserted in:** `docs/guide.md` — "writes a permanent record of who deleted it and when"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_disposal.py::TestDeletionLeavesATombstone::test_a_delete_records_who_when_and_what_it_hashed_to`
@@ -596,7 +609,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** `main` requires the `tests passed` check, pinned to GitHub Actions,
   with no administrator bypass, so a pending or red run blocks the merge.
-- **Asserted in:** `docs/running.md` — "a pull request cannot be merged while it is pending or red"
+- **Asserted in:** `docs/developing.md` — "a pull request cannot be merged while it is pending or red"
+- **Asserted in:** `docs/adopting.md` — "A change cannot merge unless the whole test suite passes"
 - **Status:** unenforced
 - **Gap:** A repository setting, not a file, so no test in the repository can
   detect it being switched off. It was verified by hand, by trying to merge a
@@ -666,6 +680,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   against its bugs.
 - **Asserted in:** `docs/self-hosting.md` — "it **cannot** disable or drop a
   trigger, truncate, alter a table or create one"
+- **Asserted in:** `docs/index.md` — "the shipped stack runs the service as a database role that cannot switch that protection off"
 - **Status:** partial
 - **Gap:** A PostgreSQL superuser bypasses it, and the owner's password is still
   in `.env` on the host and in the `migrate` job. A deployment that does not set
@@ -772,6 +787,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   in the transaction of the read, in an append-only table that outlives the project,
   so a read that cannot be recorded is not served.
 - **Asserted in:** `docs/deploy.md` — "A read that cannot be recorded is not served."
+- **Asserted in:** `docs/index.md` — "Who *read* a record is recorded too."
+- **Asserted in:** `docs/running.md` — "| Who read what is recorded | No | No | **Yes** |"
 - **Status:** partial
 - **Gap:** Exports are built in the browser and reported by a beacon a client can
   omit: they are a record of ordinary use, bounded by the recorded reads that fetched
@@ -981,7 +998,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** The patient-data notice and the storage-mode banners stay in English
   in a language until a reviewer is recorded for them in that catalog.
-- **Asserted in:** `docs/self-hosting.md` — "are shown in English until someone fluent in the"
+- **Asserted in:** `docs/developing.md` — "are shown in English until someone fluent in the"
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_i18n.py::the unreviewed safety warning stays in English`
@@ -1003,6 +1020,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** A project under a litigation hold, and its read trail, are not
   disposed of until the hold is lifted.
 - **Asserted in:** `docs/privacy.md` — "A project under a hold is listed in the"
+- **Asserted in:** `docs/privacy.md` — "A project's owner can place a litigation hold, with a reason, and the project and its read trail are kept until it is lifted."
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_retention.py::test_a_held_project_is_reported_and_kept_until_the_hold_is_lifted`
@@ -1017,3 +1035,21 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Enforced by:**
   `server/tests/test_holds.py::test_only_an_owner_may_see_or_change_a_hold`
   `tests/test_holds_ui.py::sees no hold section`
+
+### C-80 The dashboard and its exports contact no outside service
+
+- **Claim:** Loading the dashboard makes no request to another host, and the
+  standalone report it produces links no outside stylesheet, script or font, so
+  opening one announces nothing to a third party (R-05).
+- **Asserted in:** `docs/index.md` — "The dashboard and its exports contact no
+  outside service."
+- **Asserted in:** `docs/adopting.md` — "The dashboard and its exports contact no
+  outside service."
+- **Status:** partial
+- **Gap:** The test loads the page and checks the HTML report. It does not drive
+  every screen, and it does not read the PDF, Markdown or JSON exports, which carry
+  no resources a viewer would fetch. A link the reader chooses to click, such as the
+  attribution link to CHAI's published page, is not a request the page makes. #149
+- **Enforced by:**
+  `tests/test_no_third_party.py::loading the dashboard makes no external request`
+  `tests/test_no_third_party.py::the HTML export has no http(s) resource URLs at all`

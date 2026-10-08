@@ -1,57 +1,140 @@
-# Working with exports in Python
+# Exports
 
-Each project exports as JSON, validated by
-[`schema/project.schema.json`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/schema/project.schema.json).
+A review leaves the dashboard in four ways, each for a different reader.
 
-## Reading an export
+| Export | For | Format | Language |
+|---|---|---|---|
+| **Report** | A board, an auditor, a regulator, an insurer | Standalone HTML, PDF, or Markdown | The reader's, and it says which |
+| **Project data** | A script, another copy of the tool, or an analyst | JSON, one file per project | English |
+| **Portfolio** | A spreadsheet | CSV, one row per project | English |
+| **Dataset metadata** | A repository that indexes datasets | Croissant JSON-LD, made by a Python script | English |
 
-```bash
-python examples/load_export.py my-project-chai-review.json
-```
+The report buttons are on the *Report* step: **Download report (HTML)**,
+**Download PDF**, **Download Markdown** and **Download project data (JSON)**.
+The portfolio CSV is on the home page.
 
-## Feeding evaluation metrics back in
+## What every export says about where it came from
 
-`examples/fairlearn_to_metrics.py` takes a Fairlearn `MetricFrame` and appends
-its subgroup results to an export's key metrics, so evaluation output flows
-straight into the model card:
+A copy that has left the tool is easy to mistake for the record. So each export
+says which storage mode produced it, in the header's own words: *This browser
+only*, *Claude artifact* or *Shared workspace*, with a sentence on what that mode
+does and does not guarantee. In the report it is a note at the end. In the JSON
+it is a `storage` object with the mode, the label and the note. In the CSV it is
+a **Stored in** column.
 
-```bash
-python examples/fairlearn_to_metrics.py my-project-chai-review.json
-```
+That storage note is safety-bearing: in a language whose translation has not been
+reviewed, it stays in English in the report (see
+[Developing it](developing.md#languages)).
 
-Re-import the resulting file from the dashboard with **Import project JSON**.
+A report is also tied to the record it came from by the **record
+fingerprint**, a short hash of the project's contents that you can quote beside
+it. It shows whether two copies are the same version. It does not prove nobody
+altered the record, and the tool says so wherever it shows one.
 
-!!! note "Import creates a new project"
+On the shared server, the dashboard reports each export it produces, so it
+appears in the read trail beside the reads that fetched the data
+([Cloud deployment](deploy.md#the-read-trail)). That is a record of ordinary
+use, not a control: a modified client could omit it.
 
-    Importing does not merge into the project the file came from — it creates a
-    separate one. Retire or delete the original if you meant to replace it.
+## The report
 
-## PDF
+The report has the status and its flags, readiness by stage and by principle, the
+checkpoint decisions and who recorded them, the open gaps with their owners and
+due dates, the applied model card, the sign-off history and, in an appendix, the
+whole checklist. It closes with a disclaimer: it is an internal governance record,
+not a certification, legal opinion or regulatory determination.
 
-The report screen has a **Download PDF** button. It opens your browser's print
-dialog on the standalone report; choose *Save as PDF*.
+### PDF
+
+**Download PDF** opens your browser's print dialog on the standalone report;
+choose *Save as PDF*.
 
 !!! note "Why the print dialog rather than a one-click download"
 
     No PDF library is bundled. Every option weighs hundreds of kilobytes, and
     the dashboard has to stay one self-contained file small enough to publish
-    as an artifact — a PDF writer would be larger than the whole application.
+    as an artifact: a PDF writer would be larger than the whole application.
 
     Browsers already render HTML to PDF well, with real fonts, selectable text
     and working links. A canvas-based library gives you an image of a document
     instead.
 
 What gets printed is exactly the standalone HTML export, rendered in an
-offscreen frame — not the page you are looking at. So the PDF and the HTML
+offscreen frame, not the page you are looking at. So the PDF and the HTML
 download are the same document, and the app's own navigation never appears in
-it.
-
-This is also the one export that keeps working where file downloads are
+it. It is also the one export that keeps working where file downloads are
 unavailable, since it goes through the print dialog rather than a download API.
+
+## Project data (JSON)
+
+Each project exports as JSON, validated by
+[`schema/project.schema.json`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/schema/project.schema.json)
+(`chai-review/2`). The file holds the status, phase, next review date and flags
+as computed at export time; the project's `meta`, checkpoint decisions and metrics;
+the model card; the whole checklist with each criterion's status, evidence, owner
+and due date; the scores; and `_state`, the project as the tool stores it.
+
+Only `_state` is read back. Everything else is derived for the reader's
+convenience. **Import project JSON** on the home page reads `_state` and creates
+a **new** project.
+
+!!! note "Import creates a new project"
+
+    Importing does not merge into the project the file came from: it creates a
+    separate one. Retire or delete the original if you meant to replace it.
+
+## Portfolio (CSV)
+
+**Export portfolio (CSV)** writes one row per project, as the dashboard shows
+it: project, developer, clinical sponsor, risk tier, lifecycle phase, status,
+readiness, next review, flags, whether it is archived, when it was last updated,
+and where it is stored.
+
+## Reading an export in Python
+
+Four scripts in `examples/` work on exports. Run them from the repository root.
+
+```bash
+python examples/load_export.py my-project-chai-review.json
+```
+
+prints a summary of the project and, if pandas is installed, its open gaps.
+
+### Feeding evaluation metrics back in
+
+`fairlearn_to_metrics.py` and `error_cohorts_to_metrics.py` are libraries, not
+commands. They append your evaluation results to an export's key metrics, so they
+flow into the model card:
+
+```python
+from fairlearn.metrics import MetricFrame
+from sklearn.metrics import recall_score
+from fairlearn_to_metrics import load, add_metrics, metricframe_to_rows, save
+
+mf = MetricFrame(
+    metrics={"Sensitivity": recall_score},
+    y_true=y_test,
+    y_pred=y_pred,
+    sensitive_features=X_test[["age_band", "sex"]],
+)
+export = load("deterioration-index-chai-review.json")
+add_metrics(export, metricframe_to_rows(mf))
+save(export, "deterioration-index-with-fairness.json")
+```
+
+`error_cohorts_to_metrics.py` goes looking for subgroups nobody pre-specified. It
+fits a shallow decision tree to the model's *errors*, so the leaves describe where
+the model goes wrong, and writes the cohorts that fare materially worse than the
+whole as metric rows with their size. A cohort found this way is a lead to
+investigate, not a finding: it does not show a disparity is unfair or causal, and
+small cohorts are noisy. Both scripts need `pandas`; the first needs `fairlearn`
+and the second `scikit-learn`.
+
+Re-import the resulting file from the dashboard with **Import project JSON**.
 
 ## Croissant
 
-`examples/croissant_export.py` converts a project export into
+`croissant_export.py` converts a project export into
 [Croissant](https://docs.mlcommons.org/croissant/) 1.0 metadata with the
 [Responsible AI extension](https://github.com/mlcommons/croissant/blob/main/docs/croissant-rai-spec.md),
 so a governance record can be published as machine-readable dataset metadata.
@@ -77,7 +160,7 @@ blurring it:
 
 The checklist, the checkpoint decisions and the readiness scores are **not**
 exported. Croissant has no vocabulary for assurance attestations, and
-`sc:creativeWorkStatus` describes the editorial status of a work — not a
+`sc:creativeWorkStatus` describes the editorial status of a work, not a
 governance body's decision to expose patients to a model.
 
 !!! warning "Cohort detail is withheld by default"
@@ -107,14 +190,14 @@ contains no file hashes, no content URLs and no column names, and synthesizing
 them to satisfy a validator would manufacture provenance for clinical data the
 tool has never seen. Croissant 1.0 accepts a metadata-only record.
 
-For the same reason it asserts no `license` for the data — only `sdLicense` for
+For the same reason it asserts no `license` for the data, only `sdLicense` for
 the metadata record. `mlcroissant` warns that `license` is recommended; that
 warning is correct, and a human should answer it.
 
 ### BioCroissant
 
 [BioCroissant](https://github.com/mlcommons/BioCroissant) is the biomedical
-extension of Croissant. As of this writing its repository is a **skeleton** —
+extension of Croissant. As of this writing its repository is a **skeleton**:
 its own READMEs state "no schema files yet" and "no implementation yet".
 
 A draft `bio:` vocabulary exists in the prototype its READMEs point to,

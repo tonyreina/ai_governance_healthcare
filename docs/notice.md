@@ -22,6 +22,13 @@ endorsed by, or certified by the Coalition for Health AI (CHAI).
   **CC BY 4.0**, which permits reproduction with attribution. Their metric
   names, benchmarks and descriptions ARE reproduced in this tool and on
   [CHAI metrics](frameworks/chai-metrics.md), attributed to CHAI.
+- The dashboard shows CHAI-derived wording, and the names of CHAI's suggested
+  metrics, in languages other than English. Those are machine-drafted,
+  unofficial translations of this project's English text (Simplified Chinese has
+  been reviewed and approved by a fluent reader), and each screen that shows one
+  says so. A record always stores the English. The metric names are CHAI's, so
+  the translated screens also say that the names were translated, which is the
+  indication of changes CC BY 4.0 asks for.
 - The model card uses the section and field names of the CHAI Applied Model Card
   template (Draft Nov 2024, v0.1). CHAI distributes that template under
   **CC BY-ND 4.0** (Attribution, No Derivatives).

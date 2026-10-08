@@ -1,175 +1,81 @@
 # Self-hosting
 
-## How the app is built
+This page is for the people who run the shared workspace: IT, security and
+operations. It covers the Docker Compose stack on one host. For a managed
+container service on Google Cloud, AWS or Azure, read
+[Cloud deployment](deploy.md) as well. The settings that matter most there are
+the same ones explained here.
 
-`docs/app/index.html` is **generated**. Do not edit it.
+**Governance metadata only.** Never enter patient-identifiable information, in
+any storage mode. See [Privacy and retention](privacy.md) for what the server
+does hold: personal data about the staff who use it.
 
-The dashboard has to ship as one self-contained file: it runs as a Claude
-artifact, it is opened straight off disk with no server, and it is published to
-GitHub Pages. But a single 1,400-line file holding the CSS, two governance
-frameworks and all the rendering is not maintainable. So the source is split
-under `app/` and concatenated by `scripts/build_app.py`:
+## What you run
 
-```text
-app/
-  index.html                   shell, with CSS and JS insertion markers
-  css/app.css
-  js/
-    00-core/                   framework-agnostic: util, model, stores,
-                               state, writes, DOM helpers
-    10-frameworks/
-      00-registry.js           the framework contract
-      05-project/              project setup (not owned by any framework)
-      10-chai/                 definition, rules, views, registration
-      20-optica/               the same four files, independently
-    20-app/                    shell, dashboard, exports, events, boot
-```
+| Service | What it does |
+|---|---|
+| `proxy` | The front door, and the only service reachable from outside. It serves the dashboard, forwards `/api`, and owns the identity header |
+| `api` | The FastAPI service. It never authenticates anyone: it reads identity from the header the proxy sets |
+| `db` | PostgreSQL 17, on a network with no route off the host |
+| `migrate` | A one-shot job that applies the schema and creates the restricted database role the API serves as |
+
+What you provide: a host, a sign-in in front of the proxy (single sign-on, or an
+authenticating proxy of your own), TLS in front of that, secrets, and backups.
+
+## A first deployment
 
 ```bash
-pixi run build-app     # app/ -> docs/app/index.html
-pixi run check-app     # syntax + duplicate-declaration checks
-pixi run test-app      # end-to-end browser tests
+make env          # creates .env from the template
+$EDITOR .env      # see below
+make up           # runs the preflight, then starts the stack
+make doctor       # asks the running stack whether it is healthy
+make check-isolation   # proves the API cannot be reached except through the proxy
 ```
 
-A prek hook rebuilds on any change under `app/`, so the generated file can never
-go stale.
+`.env` ships deliberately incomplete, and `make up` will say exactly what is
+missing and why it matters. Set at least:
 
-## Adding a framework
-
-A framework is a directory under `app/js/10-frameworks/` whose last file calls
-`registerFramework()` with:
-
-| Field | Purpose |
+| Variable | What to put |
 |---|---|
-| `id`, `label` | identity, used in data keys and the UI |
-| `enabled(p)` | is it switched on for this project? |
-| `views(p)` | rail entries, in order |
-| `render(view, p)` | markup for one view |
-| `blank()` | extra keys for a new project |
-| `normalize(p)` | repair shape on load; must be idempotent |
+| `POSTGRES_PASSWORD` | The database owner's password: `openssl rand -base64 32`. Any characters work |
+| `APP_POSTGRES_PASSWORD` | The restricted role's password: a **different** value, generated the same way |
+| `IDENTITY_ID_SOURCE` | Which header your sign-in sets: Google IAP, an AWS load balancer or Azure Easy Auth. See [Identity comes from the proxy](#identity-comes-from-the-proxy) |
+| `HTTP_BIND` | `127.0.0.1` unless something in front of the proxy needs to reach it |
+| `STORAGE_ENCRYPTION_CONFIRMED` | `1`, once you have encrypted the disk under the data volume (see [Encryption at rest](#encryption-at-rest)). Required when the stack is reachable beyond this machine |
 
-Nothing else in the app names a framework. The rail, the router and the pager
-read only the registry.
+The stack binds to loopback by default, because it speaks plain HTTP and expects
+TLS to be terminated in front of it. `make up` refuses to start on unsafe
+settings: an empty or placeholder password, a literal identity such as
+`dev@localhost`, plain HTTP on a network, or an encryption decision nobody made.
 
-!!! warning "One framework owns the status"
+## The commands you will use
 
-    CHAI is always enabled and owns the compliance status, the readiness scores
-    and the dashboard. That is deliberate: the dashboard needs **one** status,
-    and averaging two frameworks' judgements would produce a number that means
-    nothing.
-
-    Optional frameworks never propagate status in either direction. An OPTICA
-    answer cannot move a CHAI score, and vice versa. The frameworks ask
-    different parties for different evidence at different moments, and no OPTICA
-    item fully discharges a CHAI criterion — see the [crosswalk](crosswalk.md).
-    Evidence can be cited in both; a judgment in one is never a judgment in
-    the other.
-
-## Languages
-
-The dashboard speaks English, Spanish, French, German, Hindi, Russian,
-Simplified Chinese and Hebrew. It picks the reader's saved choice, then the
-browser's languages, then English, and the picker in the header switches it. The
-choice is per browser: two people can read the same project in different
-languages.
-
-Hebrew reads right to left, and the whole layout mirrors: the step rail moves to
-the right, accents sit on the reading edge, tables run right to left. Text a
-person typed keeps its own direction, so an English vendor name in a Hebrew page
-keeps its punctuation, and so does English shown because a warning is not yet
-reviewed. The stylesheet uses logical properties (`margin-inline-start`,
-`text-align:start`), and `check-i18n` fails on a left or right that would not
-mirror.
-
-Every string comes from a message catalog, `app/i18n/<language>.json`, embedded
-into the single dashboard file by the build. English (`en.json`) is the source.
-`pixi run check-i18n` fails if a catalog lacks a key, has an extra one, drops or
-invents a `{placeholder}`, misses a plural form the language needs, or holds
-markup.
-
-The translations are **machine-drafted**. The Simplified Chinese one has been
-reviewed and approved by a fluent reader; the others have not. Safety-bearing
-warnings (the patient-data notice and the storage-mode banners, listed under
-`"@meta".safety` in `en.json`) are shown in English until someone fluent in the
-language reviews them. A wrong translation of a warning is worse than an English
-one. To record a review, add the key and who reviewed it, with the date, to
-that catalog's `"@meta".reviewers`, for example
-`"safety.scope": "A. Reviewer, 2026-10-08"`.
-
-Reports follow the reader: the HTML, PDF and Markdown exports are written in the
-chosen language and say which. The JSON and CSV exports stay English, because
-scripts and the Croissant exporter read them.
-
-The framework content (CHAI's stages, criteria, checkpoints and model card
-fields) is translated too, in `app/i18n/framework/<language>.json`, and each
-screen showing it says the wording is an unofficial translation. The English in
-the framework definitions stays the source: `tests/test_framework_i18n.py` fails
-if a criterion changes without its catalogs. A record still stores the English
-value, such as a checkpoint decision. OPTICA's chapters and questions are
-translated the same way, and so are the names of CHAI's suggested metrics (a
-metric you add keeps CHAI's English name). The server's error messages are
-English, but the dashboard never shows them: it shows its own translated text
-for each error code.
-
-`tests/test_i18n.py` counts the hard-coded text left on screen in a pseudo-locale,
-and that count may only go down.
-
-To add a language: copy `en.json` to `app/i18n/<tag>.json` and
-`framework/en.json` to `app/i18n/framework/<tag>.json`, translate the values,
-set `"@meta"`, add the tag to `Locale` and `LOCALE_CHOICES` in
-`app/js/00-core/02-i18n.js` and its plural categories to
-`scripts/check_i18n.py`, and run `pixi run build-app`.
-
-## Storage
-
-All persistence goes through two small classes in `app/js/00-core/20-stores.js`,
-`DbStore` and `LocalStore`, which implement one interface:
-
-| Method | Purpose |
+| Command | What it does |
 |---|---|
-| `subscribeAll(cb)` | Stream the project list; returns an unsubscribe function |
-| `create(id, data)` | Create a project |
-| `update(id, patch)` | Deep-merge a patch into a project |
-| `remove(id)` | Delete a project and its live audit log. The server keeps its version history |
-| `log(id, entry)` | Append an audit-log entry |
-| `subscribeLog(id, cb)` | Stream the most recent log entries for a project |
-
-Three implementations ship: `DbStore` (Claude artifact database), `LocalStore`
-(browser `localStorage`), and `ApiStore` (a self-hosted FastAPI + PostgreSQL
-backend). `ApiStore` is selected automatically when `/api/health` answers, so
-one build serves both the GitHub Pages copy and the Docker stack.
-
-To back the tool with something else — Firestore, Supabase, your own service —
-add a fourth class implementing those six methods and select it at boot. See
-[Deploying with Docker and SSO](deploy.md).
-
-!!! warning "Sign-off needs real identity"
-
-    `LocalStore` has no concept of a user, so checkpoint sign-offs it records
-    are self-asserted. If sign-offs need to carry weight for audit, your backend
-    must supply an authenticated identity, as the artifact database does.
+| `make up`, `make down`, `make ps`, `make logs` | Start, stop and watch the stack. `down` keeps the data |
+| `make doctor` | Diagnoses a stack that is up but not working: passwords, the restricted role, table growth, what sits under the volume |
+| `make check-isolation` | Asserts the network isolation the security model rests on |
+| `make backup`, `make verify-backup`, `make restore` | Encrypted dumps, a restore test into a throwaway database, and a guarded restore. See [Backups](#backups-make-backup-is-a-tool-not-a-backup-strategy) |
+| `make reapply-purges` | Re-applies erasures after a restore ([Privacy and retention](privacy.md#a-restore-brings-purged-content-back)) |
+| `make dispose` | Reports records past their retention period; `APPLY=1 BY=<name>` disposes of them ([Privacy and retention](privacy.md#disposal-at-the-end-of-the-period)) |
+| `make subject-access WHO=<id>` | Finds every place one person's identifier is stored |
+| `make phi-scan` | Looks for pasted patient identifiers, without ever printing them |
+| `make psql`, `make shell` | A database prompt, and a shell in the API container |
+| `make prune` | Removes the containers **and the database volume**. Destroys all data |
 
 ## The Docker Compose stack
 
 `compose.yaml` in the repository root runs the whole thing on one host: the
-proxy, the API that implements the six methods above, and Postgres.
-
-```bash
-cp .env.example .env     # or: make env
-pixi run build-app       # regenerates docs/app/index.html from app/
-docker compose up -d     # or: make up
-```
-
-Then open `http://localhost:8080/`.
+proxy, the API, a one-shot migration job and PostgreSQL.
 
 | File | What it is |
 |---|---|
 | `compose.yaml` | The stack. Production-shaped: no port on the API, none on the database. |
-| `compose.dev.yaml` | Opt-in override: fixed dev identity, hot reload, ports on `127.0.0.1`. |
+| `compose.dev.yaml` | Opt-in override: fixed dev identity, hot reload, the API on `127.0.0.1`. |
 | `proxy/Caddyfile` | Serves the dashboard, proxies `/api`, owns the identity header. |
 | `proxy/Dockerfile` | Bakes the Caddyfile and the built dashboard into an image for the clouds. |
 | `.env.example` | Every variable, commented. Copy to `.env`; it is git-ignored. |
-| `Makefile` | `make dev`, `make backup`, `make check-isolation`. |
+| `Makefile` | The commands above. |
 
 ### Identity comes from the proxy
 
@@ -434,9 +340,15 @@ no patient information is present.
 restore` re-applies the live database's purges after it restores, and says so
 when it cannot; see [Privacy and retention](privacy.md) for rebuilding the purges
 from the security log. The identifiers of the people who made changes (`created_by`,
-`updated_by`, `changed_by`, `by_id`) are not removed either; that is a separate
-question from erasing content, and it has a real tension with keeping an audit
-trail.
+`updated_by`, `changed_by`, `by_id`) are not removed either, for as long as the
+records they appear in are kept; that is a separate question from erasing content,
+and it has a real tension with keeping an audit trail.
+
+**At the end of the retention period** an operator runs the purge on a schedule:
+`make dispose` reports what is past its period, and `APPLY=1` purges it, deletes
+the oldest read-trail rows and removes staff names that no retained record
+mentions. A litigation hold on a project stops it. See
+[Privacy and retention](privacy.md#disposal-at-the-end-of-the-period).
 
 ### Two database roles
 
@@ -529,64 +441,3 @@ make prune       # deletes the volume: records, audit log, every version
 Managed PostgreSQL has none of this problem, because there is no volume and no
 `db` service — rotate with the provider and update `DATABASE_URL`. See
 [Deploying with SSO](deploy.md).
-
-## Deploying this site
-
-The GitHub Actions workflow at `.github/workflows/pages.yml` builds the
-documentation with [Zensical](https://zensical.org) and publishes it on every
-push to `main`. The built site includes the dashboard at `/app/`.
-
-Enable it once under **Settings → Pages → Build and deployment → Source: GitHub
-Actions**.
-
-To build locally:
-
-```bash
-pixi run docs-serve    # live preview at http://localhost:8000
-pixi run docs-build    # writes ./site
-```
-
-## Staying in step with CHAI
-
-This project paraphrases CHAI's lifecycle, mirrors the Applied Model Card's
-field names, and crosswalks both against OPTICA. None of that updates itself.
-
-`.github/workflows/chai-updates.yml` runs weekly, compares
-[CHAI's content repository](https://github.com/coalition-for-health-ai/responsible-ai-content)
-against the snapshot in `data/chai-upstream.json`, and on any difference opens
-a single issue — updated in place, not reopened weekly — assigned to the
-repository owner, listing what moved and which files here derive from it.
-
-```bash
-pixi run check-chai         # compare now; exits 1 if upstream moved
-pixi run check-chai-write   # accept the current upstream as the baseline
-```
-
-!!! warning "Two CHAI documents are not watched"
-
-    The Assurance Standards Guide and the Applied Model Card template are PDFs
-    with no machine-readable version feed. The check cannot see them, and says
-    so in the issue it opens rather than implying full coverage. Check those by
-    hand when the alert fires.
-
-## Linting and git hooks
-
-Markdown is linted with [rumdl](https://rumdl.dev), configured in `.rumdl.toml`.
-The `mkdocs` flavor is set there deliberately: Zensical shares Material for
-MkDocs' Markdown dialect, and under the `standard` flavor an admonition block is
-misread as an indented code block and reported as `MD046`.
-
-Git hooks are managed with [prek](https://prek.j178.dev), a drop-in replacement
-for pre-commit:
-
-```bash
-pixi run hooks-install   # install the git hook shims, once per clone
-pixi run check           # run every hook over all files
-pixi run lint-fix        # rumdl, fixing what it can in place
-```
-
-!!! note "`--strict` does not validate the nav"
-
-    The `zensical build --strict` hook fails on broken internal links, but a
-    `nav` entry in `zensical.toml` pointing at a page that does not exist still
-    builds cleanly. After changing the nav, check the rendered site.

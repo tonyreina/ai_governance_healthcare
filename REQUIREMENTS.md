@@ -476,6 +476,22 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `tests/test_subject_access.py` (real PostgreSQL: every location,
   hostile input, read-only, the schema-drift check, and the restore interaction).
 
+### R-48 An export says which storage mode produced it
+
+- Status: Active
+- The printable HTML (and so the PDF), the Markdown report, the JSON export and
+  the portfolio CSV each state the storage mode that produced them, in the
+  header's own `MODE_LABEL` words, with a sentence on what that means for
+  sign-offs and audit (`MODE_PROVENANCE`). JSON carries it as `storage` with a
+  stable machine `mode`, and the Croissant exporter repeats it in the
+  description. Browser-only exports say sign-offs are self-asserted.
+- The text says where the record was kept, never whether that place is approved
+  for any class of data (R-21 is open). One mode's wording is never another's
+  (R-04).
+- Source: #93 (split from #64); DECISIONS D-49.
+- Enforced by: `tests/test_export_provenance.py`, per mode and per format, in a
+  real browser, plus the Croissant record.
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

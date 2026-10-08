@@ -862,6 +862,20 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   list of purges that survives a restore, #116).
 - Source: #57; R-46, R-47.
 
+### D-49 Provenance comes from the same table as the header
+
+- Status: Accepted
+- The export text is built from `MODE_LABEL` and a sibling `MODE_PROVENANCE`, both
+  keyed by `Mode`, so a new mode cannot ship without wording and the export cannot
+  drift from what the header says. The JSON gets a `storage` object with the enum
+  value, so a script reads the mode and never parses prose.
+- The portfolio CSV gets a trailing "Stored in" column, not a comment row, so a
+  spreadsheet's sort and filter still work. An empty portfolio exports no row to
+  carry it; that is the one case it is silent.
+- Rejected: a watermark on the PDF only (the HTML and Markdown are filed too);
+  stating that a mode is "approved" or "safe" (R-21 is open, and it is a legal call).
+- Source: #93; R-48.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

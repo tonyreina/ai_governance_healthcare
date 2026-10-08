@@ -914,6 +914,23 @@ const MODE_LABEL = Object.freeze({
   [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
   [Mode.ARTIFACT]: Object.freeze({text:"Claude artifact",   cls:"artifact"}),
 });
+/* What an export says about where the record was kept, beside the header's label (#93).
+   Keyed by Mode like MODE_LABEL, so a mode cannot ship without one and two modes cannot
+   share one (R-04). It says where the record lived and what that means for sign-offs
+   and audit; it does not say whether that place is approved for any class of data
+   (R-21 is open). */
+const MODE_PROVENANCE = Object.freeze({
+  [Mode.LOCAL]:    "Kept in one browser on one computer. Sign-offs here are self-asserted: nothing verifies who made them, and there is no server-side audit log or version history.",
+  [Mode.API]:      "Kept on the self-hosted governance server, with server-side access control, a version history and an audit log. Sign-offs are recorded against the signed-in identity.",
+  [Mode.ARTIFACT]: "Kept in a Claude artifact's own database, not on a server your organization runs. Access control is only partly enforced, and there is no version history.",
+});
+/* The storage mode, as an export records it: the header's own label, a stable machine
+   value, and the sentence above. */
+function storageNote(){
+  const l = MODE_LABEL[MODE];
+  return { mode: MODE, label: l ? l.text : "Unknown",
+           note: MODE_PROVENANCE[MODE] || "The storage mode was not known when this was produced." };
+}
 /* The export formats the dashboard can produce, as the server names them
    (server/app/accessaudit.py ExportFormat). Reported to it when one is produced. */
 const ExportFormat = Object.freeze({
@@ -2773,7 +2790,7 @@ function exportHTML(){
      assessments and clinical rationale. STANDALONE_CSS() goes to real trouble
      to inline everything else; this was the one hole left in it. The font
      stacks below end in system-ui. -->
-<style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}</main></body></html>`;
+<style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}<p class="disclaimer" data-provenance><strong>Stored in: ${esc(storageNote().label)}.</strong> ${esc(storageNote().note)}</p></main></body></html>`;
 }
 /* PDF, via the browser's own print-to-PDF.
 
@@ -2821,7 +2838,7 @@ function exportMD(){
   const line=s=>String(s||"").replace(/\n+/g," ").replace(/\|/g,"\\|");
   const nm=id=>displayName(id);
   L.push(`# ${m.solution||"Untitled AI solution"}: CHAI assurance review`,"");
-  L.push(`- **Status:** ${statusOf(S).label}`,`- **Lifecycle phase:** ${phase(S).label}`,`- **Organization:** ${m.org||"–"}`,`- **Developer:** ${m.developer||"–"}`,`- **Sourcing:** ${m.sourcing||"–"}`,`- **Risk tier:** ${m.riskTier||"–"}`,`- **Clinical sponsor:** ${m.sponsor||"–"}`,`- **Next periodic review:** ${nextReview(S)||"–"}`,`- **Review team:** ${line(m.reviewers)||"–"}`,`- **Scope:** ${line(m.scope)||"–"}`,`- **Generated:** ${TODAY()}`,"");
+  L.push(`- **Status:** ${statusOf(S).label}`,`- **Lifecycle phase:** ${phase(S).label}`,`- **Organization:** ${m.org||"–"}`,`- **Developer:** ${m.developer||"–"}`,`- **Sourcing:** ${m.sourcing||"–"}`,`- **Risk tier:** ${m.riskTier||"–"}`,`- **Clinical sponsor:** ${m.sponsor||"–"}`,`- **Next periodic review:** ${nextReview(S)||"–"}`,`- **Review team:** ${line(m.reviewers)||"–"}`,`- **Scope:** ${line(m.scope)||"–"}`,`- **Generated:** ${TODAY()}`,`- **Stored in:** ${storageNote().label}. ${storageNote().note}`,"");
   const F=flags(S); L.push("## Compliance flags",""); if(F.length) F.forEach(f=>L.push(`- **${f.sev==="red"?"Out of compliance":"Needs update"}:** ${f.text}`)); else L.push("None."); L.push("");
   L.push(`## Readiness`,"",`Overall: **${ov.pct}%** of applicable criteria met (${ov.answered}/${ov.total} answered).`,"","| Principle | Score |","|---|---|");
   Object.entries(PRINCIPLES).forEach(([k,p])=>L.push(`| ${p.name} | ${scoreOf(all.filter(it=>it.p===k)).pct}% |`));
@@ -2844,7 +2861,7 @@ function projectJSON(p){
   const all=allItems();
   const state=clone(p); delete state.id;
   return {
-    schema:"chai-review/2", generated:new Date().toISOString(),
+    schema:"chai-review/2", generated:new Date().toISOString(), storage:storageNote(),
     status:statusOf(p).label, phase:phase(p).label, next_review:nextReview(p), flags:flags(p),
     meta:p.meta, gates:p.gates, metrics:p.metrics,
     model_card:Object.fromEntries(CARD_FIELDS.map(k=>[k,cardValOf(p,k)])),
@@ -2880,8 +2897,8 @@ function csvField(value){
 
 function exportCSV(){
   const q=csvField;
-  const head=["Project","Developer","Clinical sponsor","Risk tier","Lifecycle phase","Status","Readiness %","Next review","Flags","Archived","Last updated"];
-  const rows=dashData().map(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.riskTier,phase(r.p).label,r.st.label,r.score,r.nr||"",r.f.map(f=>f.text).join("; "),r.p.archived?"yes":"",(r.p.updatedAt||"").slice(0,10)]);
+  const head=["Project","Developer","Clinical sponsor","Risk tier","Lifecycle phase","Status","Readiness %","Next review","Flags","Archived","Last updated","Stored in"];
+  const rows=dashData().map(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.riskTier,phase(r.p).label,r.st.label,r.score,r.nr||"",r.f.map(f=>f.text).join("; "),r.p.archived?"yes":"",(r.p.updatedAt||"").slice(0,10),storageNote().label]);
   return [head,...rows].map(r=>r.map(q).join(",")).join("\r\n");
 }
 const slug = s=> (s||"ai-solution").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,60) || "ai-solution";

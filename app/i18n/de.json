@@ -443,6 +443,7 @@
   "export.untitled": "KI-Lösung",
   "export.titleSuffix": "CHAI-Prüfung",
   "export.storedIn": "Gespeichert: {label}.",
+  "export.fingerprint": "Fingerabdruck des Datensatzes (SHA-256): {sha256}. MD5: {md5}. Er kennzeichnet genau diese Version des Datensatzes.",
   "md.fieldLine": "- **{label}:** {value}",
   "md.team": "Prüfungsteam",
   "md.scope": "Umfang",

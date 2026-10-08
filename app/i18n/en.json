@@ -455,6 +455,7 @@
   "export.untitled": "AI solution",
   "export.titleSuffix": "CHAI assurance review",
   "export.storedIn": "Stored in: {label}.",
+  "export.fingerprint": "Record fingerprint (SHA-256): {sha256}. MD5: {md5}. It identifies this exact version of the record.",
   "md.fieldLine": "- **{label}:** {value}",
   "md.team": "Review team",
   "md.scope": "Scope",

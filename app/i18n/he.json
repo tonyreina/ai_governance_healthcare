@@ -451,6 +451,7 @@
   "export.untitled": "פתרון בינה מלאכותית",
   "export.titleSuffix": "סקירת הבטחת איכות של CHAI",
   "export.storedIn": "מקום האחסון: {label}.",
+  "export.fingerprint": "טביעת אצבע של הרשומה (SHA-256): {sha256}. MD5: {md5}. היא מזהה את הגרסה המדויקת הזו של הרשומה.",
   "md.fieldLine": "- **{label}:** {value}",
   "md.team": "צוות הסקירה",
   "md.scope": "היקף",

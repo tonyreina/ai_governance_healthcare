@@ -197,10 +197,11 @@ case, and every use of one is recorded in the project's own audit log
 - **Version history** (shared server only). Every save keeps a complete copy of
   the project. Anyone who can open the project can read its earlier revisions
   through the API.
-- **Record fingerprint.** A short hash of the record's contents, which you can
-  quote beside an exported report to tie it to the exact state it came from. It
-  shows whether two copies are the same version. It does not prove nobody altered
-  the record, and the page says so.
+- **Record fingerprint.** A hash of the record's contents. The setup page shows
+  it, and every export carries a SHA-256 and an MD5 of the record, so you can quote
+  one beside an exported report to tie it to the exact state it came from. It shows
+  whether two copies are the same version. It does not prove nobody altered the
+  record, and the page says so.
 - **Who read what** (shared server only). Every list, read and export is recorded
   separately, for investigating an account that may have been compromised.
 

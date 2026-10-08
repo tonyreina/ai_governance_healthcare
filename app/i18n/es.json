@@ -451,6 +451,7 @@
   "export.untitled": "Solución de IA",
   "export.titleSuffix": "Revisión de garantía de CHAI",
   "export.storedIn": "Almacenado en: {label}.",
+  "export.fingerprint": "Huella del registro (SHA-256): {sha256}. MD5: {md5}. Identifica esta versión exacta del registro.",
   "md.fieldLine": "- **{label}:** {value}",
   "md.team": "Equipo de revisión",
   "md.scope": "Alcance",

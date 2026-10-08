@@ -194,6 +194,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: pixi run test-export-provenance
 
+      # Every export carries a SHA-256 and MD5 of its record, recomputed in Python from
+      # the file alone (#150).
+      - name: fingerprint
+        if: ${{ !cancelled() }}
+        run: pixi run test-fingerprint
+
       # Governance metadata only, never patient data, in any mode, stated where a
       # deployer reads first (#34). The in-app notice is in test-boot.
       - name: data scope

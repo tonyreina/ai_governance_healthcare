@@ -18,6 +18,20 @@
       "type": "string",
       "format": "date-time"
     },
+    "project_id": {
+      "type": ["string", "null"],
+      "description": "The id of the project this was exported from. Part of what the fingerprint covers, so a reader can recompute it. Import ignores it and creates a new project."
+    },
+    "fingerprint": {
+      "type": "object",
+      "description": "Identifies this exact version of the record, so a report or a filed copy can be tied to it. MD5 is a version fingerprint only; SHA-256 is the digest to quote if a hash is ever offered as evidence that a record was not altered. Recompute with examples/load_export.py (verify_fingerprint). Absent in older exports (#150).",
+      "required": ["md5", "sha256", "of"],
+      "properties": {
+        "md5": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "of": {"type": "string", "description": "What was hashed, in words."}
+      }
+    },
     "storage": {
       "type": "object",
       "description": "Where the record was kept when this was exported, so a filed copy carries its own provenance (#93). Absent in older exports.",

@@ -1053,3 +1053,15 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Enforced by:**
   `tests/test_no_third_party.py::loading the dashboard makes no external request`
   `tests/test_no_third_party.py::the HTML export has no http(s) resource URLs at all`
+
+### C-81 A SHA-256 of the record travels in the JSON export
+
+- **Claim:** The JSON export, and the HTML and Markdown reports, carry a SHA-256 and
+  an MD5 of the record, and the digests can be recomputed from the JSON file alone.
+- **Asserted in:** `app/i18n/en.json` — "A SHA-256 travels in the JSON export for anyone who needs the stronger property."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_fingerprint.py::a second implementation recomputes both from the file alone`
+  `tests/test_fingerprint.py::an edited record fails to verify`
+  `tests/test_fingerprint.py::the HTML report (which the PDF prints) has both digests`
+  `tests/test_fingerprint.py::the notice says a SHA-256 travels in the JSON export, and now it does`

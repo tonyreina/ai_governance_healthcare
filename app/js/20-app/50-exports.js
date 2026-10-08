@@ -22,7 +22,7 @@ function exportHTML(){
      assessments and clinical rationale. STANDALONE_CSS() goes to real trouble
      to inline everything else; this was the one hole left in it. The font
      stacks below end in system-ui. -->
-<style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}<p class="disclaimer" data-provenance><strong>${esc(t("export.storedIn",{label:prov.label}))}</strong> ${esc(prov.note)}</p></main></body></html>`;
+<style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}<p class="disclaimer" data-provenance><strong>${esc(t("export.storedIn",{label:prov.label}))}</strong> ${esc(prov.note)}</p><p class="disclaimer" data-fingerprint>${esc(t("export.fingerprint",contentHashes(S)))}</p></main></body></html>`;
 }
 /* PDF, via the browser's own print-to-PDF.
 
@@ -93,14 +93,18 @@ function exportMD(){
   L.push(`## ${t("report.history")}`,""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${(e.at||"").slice(0,10)}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push(t("md.none")); L.push("");
   L.push(`## ${t("report.appendix")}`,"");
   STAGES.forEach(s=>{L.push(`### ${s.n}. ${stageTitle(s)}`,""); s.items.forEach(it=>{const d=S.items[it.id]||{}; L.push(`- [${it.p}] ${itemText(it)}: **${st(d.status)}**${d.evidence?` (${line(d.evidence)})`:""}`);}); L.push("");});
-  L.push("---",`_${t("md.footer")}_`);
+  L.push("---",`_${t("md.footer")}_`,"",t("export.fingerprint",contentHashes(S)));
   return L.join("\n");
 }
+/* What the fingerprint is computed over, so a reader can recompute it from the file
+   (examples/load_export.py does). */
+const FINGERPRINT_OF = "The project record, including its id, as canonical JSON in UTF-8: keys sorted at every level, with updatedAt, updatedBy, cardUpdatedAt, _state, contentHash and generated left out.";
 function projectJSON(p){
   const all=allItems();
   const state=clone(p); delete state.id;
   return {
     schema:"chai-review/2", generated:new Date().toISOString(), storage:storageNote(),
+    project_id:p.id||null, fingerprint:{...contentHashes(p), of:FINGERPRINT_OF},
     status:statusOf(p).label, phase:phase(p).label, next_review:nextReview(p), flags:flags(p),
     meta:p.meta, gates:p.gates, metrics:p.metrics,
     model_card:Object.fromEntries(CARD_FIELDS.map(k=>[k,cardValOf(p,k)])),

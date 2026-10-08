@@ -459,6 +459,7 @@
   "export.untitled": "ИИ-решение",
   "export.titleSuffix": "проверка CHAI",
   "export.storedIn": "Место хранения: {label}.",
+  "export.fingerprint": "Отпечаток записи (SHA-256): {sha256}. MD5: {md5}. Он идентифицирует именно эту версию записи.",
   "md.fieldLine": "- **{label}:** {value}",
   "md.team": "Группа проверки",
   "md.scope": "Охват",

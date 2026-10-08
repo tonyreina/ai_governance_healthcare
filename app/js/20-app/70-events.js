@@ -97,6 +97,7 @@ document.addEventListener("click",async e=>{
   if(a==="import"){ document.getElementById("importFile").click(); return; }
   if(a==="dl-csv"){ download(`ai-governance-portfolio-${TODAY()}.csv`, exportCSV()); return; }
   if(!S) return;
+  if(a===Act.LOG_OLDER){ if(STORE && STORE.showOlderLog) STORE.showOlderLog(CUR); return; }
   if(a==="claim"){
     if(!ME.id){ toast("No signed-in user to claim ownership"); return; }
     S.access=accessPatch(S,ME.id,"owner"); queuePatch(CUR,Object.assign({access:S.access},stamp()));

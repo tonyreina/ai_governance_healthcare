@@ -165,10 +165,22 @@ function changelogHTML(){
 
   return `<p class="eyebrow">Audit trail</p><h1>Changelog</h1>
   <p class="lede">Every change to this record, with who made it and when.
-  ${LOG.length>=60?"The newest 60 are shown; older entries stay in the store.":""}</p>
+  ${logWindowNote()?`<br><strong>${esc(logWindowNote())}</strong>`:""}</p>
+  ${olderLogControl()}
   ${rows}
   ${fingerprintHTML(now)}
   ${pager()}`;
+}
+
+/* Older entries, where the store can fetch them. Past the server's page cap the
+   rest is reached through the API, and this says so rather than going quiet. */
+function olderLogControl(){
+  if(LOG_TOTAL===null || LOG_TOTAL<=LOG.length) return "";
+  if(STORE && typeof STORE.showOlderLog==="function" && LOG.length<500)
+    return `<p><button class="btn" data-act="${Act.LOG_OLDER}">Show older entries</button></p>`;
+  if(STORE && typeof STORE.showOlderLog==="function")
+    return `<p class="small" style="color:var(--muted)">This view shows at most 500 entries. The full history is available from the API: <code>GET /api/projects/{id}/log?before=&lt;X-Log-Next&gt;</code>.</p>`;
+  return "";
 }
 
 /* The record's current fingerprint, with the caveat attached. A hash

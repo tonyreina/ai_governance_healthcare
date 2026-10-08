@@ -195,6 +195,25 @@ honest answer and is a gap worth closing; see R-19.
 - Source: #53; 45 CFR 164.308(a)(1)(ii)(D).
 - Enforced by: `server/tests/test_denial_log.py`, against a real PostgreSQL.
 
+### R-34 The audit history is reachable in full, and a window says it is one
+
+- Status: Active
+- `GET /api/projects/{id}/log` pages with a cursor (`X-Log-Next`, `?before=`) and
+  reports the total (`X-Log-Total`), so every entry is reachable through the API.
+  The dashboard's changelog and every export (markdown, printable report) say
+  "Showing the newest N of M entries" whenever they show less than all. A window
+  must never pass for the whole history. Browser-only mode keeps every entry and
+  says when its storage is full.
+- Why: entry 61 onward was unreachable through the API, exports carried the window
+  silently, and browser-only mode deleted entry 101 (#40). 45 CFR
+  164.316(b)(2)(i) and 164.312(b).
+- Not done: a streaming full-history export route. The cursor and the 500 cap
+  reach it, and `server/README.md` shows how.
+- Source: #40; DECISIONS D-36.
+- Enforced by: `server/tests/test_log_paging.py` (a real PostgreSQL: every entry
+  exactly once, in order) and `tests/test_log_window.py` (the disclosure in each
+  export, the deeper page, the cap, `LocalStore`).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

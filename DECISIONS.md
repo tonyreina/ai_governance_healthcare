@@ -545,6 +545,28 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   documents.
 - Source: #50; R-32.
 
+### D-36 Paging by header cursor, over the existing index, with a fixed cap
+
+- Status: Accepted
+- The response stays a bare JSON array, so the browser's `ApiStore` and any
+  existing caller keep working. The total and the next cursor travel in headers
+  (`X-Log-Total`, `X-Log-Next`).
+- The cursor is `(at, seq)` as `<microseconds>.<seq>`. `project_log_project_at_idx
+  (project_id, at DESC, seq DESC)` already serves `(at, seq) < ($2, $3)` exactly,
+  and `seq` breaks ties so nothing repeats or vanishes.
+- It is not an ISO timestamp. That first version carried `+` and `:`, a query
+  string turns `+` into a space, and a client that forgot to encode it failed in
+  a way that looked like corruption. Found by the test.
+- `limit` is capped at 500 so no request makes the server build an unbounded
+  list. The dashboard's *Show older entries* deepens one request (`?limit=120`,
+  `180`, ...) rather than holding a cursor, because every change event refetches
+  the newest page and would otherwise discard older pages already loaded.
+- Rejected: changing the body to `{entries, total, next}`. Cleaner, and breaks
+  every caller for no gain over headers.
+- Rejected: `OFFSET`. It re-reads and discards all earlier rows on every page, and
+  entries written between pages shift it.
+- Source: #40; R-34.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

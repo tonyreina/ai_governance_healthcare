@@ -14,14 +14,26 @@ class DbStore{
 class LocalStore{
   constructor(){ this.k="chai-portfolio-local-v1"; this.d=this.load(); this.subs=[]; this.logSubs={}; }
   load(){ try{ return JSON.parse(localStorage.getItem(this.k)) || {projects:{},logs:{}}; }catch(e){ return {projects:{},logs:{}}; } }
-  persist(){ try{ localStorage.setItem(this.k,JSON.stringify(this.d)); }catch(e){} }
+  persist(){
+    try{ localStorage.setItem(this.k,JSON.stringify(this.d)); return true; }
+    catch(e){
+      // A full or blocked browser store used to fail here without a word, so the
+      // user kept working in a session that was not saving (#40). Say so.
+      if(typeof toast==="function") toast("Browser storage is full: this change could not be saved. Export your records.");
+      return false;
+    }
+  }
   emit(){ const list=Object.entries(this.d.projects).map(([id,v])=>({id,...clone(v)})); this.subs.forEach(f=>setTimeout(()=>f(list))); }
   subscribeAll(cb){ this.subs.push(cb); this.emit(); return ()=>{ this.subs=this.subs.filter(x=>x!==cb); }; }
   async create(id,data){ this.d.projects[id]=clone(data); this.persist(); this.emit(); }
   async update(id,patch){ if(!this.d.projects[id]) throw {code:"invalid_argument"}; deepMerge(this.d.projects[id],patch); this.persist(); this.emit(); }
   async remove(id){ delete this.d.projects[id]; delete this.d.logs[id]; this.persist(); this.emit(); }
-  async log(id,e){ const l=(this.d.logs[id]||(this.d.logs[id]=[])); l.unshift(e); this.d.logs[id]=l.slice(0,100); this.persist(); (this.logSubs[id]||[]).forEach(f=>setTimeout(()=>f(clone(this.d.logs[id])))); }
-  subscribeLog(id,cb){ (this.logSubs[id]||(this.logSubs[id]=[])).push(cb); setTimeout(()=>cb(clone(this.d.logs[id]||[]))); return ()=>{ this.logSubs[id]=(this.logSubs[id]||[]).filter(x=>x!==cb); }; }
+  /* Keeps every entry. It used to keep 100 and DELETE the rest, so in browser-only
+     mode entry 101 was not hidden from a view, it was gone (#40). The browser's
+     own quota is the limit, and persist() says when it is reached. */
+  async log(id,e){ const l=(this.d.logs[id]||(this.d.logs[id]=[])); l.unshift(e); this.persist(); this.emitLog(id); }
+  emitLog(id){ (this.logSubs[id]||[]).forEach(f=>setTimeout(()=>{ const l=clone(this.d.logs[id]||[]); f(l,{total:l.length}); })); }
+  subscribeLog(id,cb){ (this.logSubs[id]||(this.logSubs[id]=[])).push(cb); setTimeout(()=>{ const l=clone(this.d.logs[id]||[]); cb(l,{total:l.length}); }); return ()=>{ this.logSubs[id]=(this.logSubs[id]||[]).filter(x=>x!==cb); }; }
 }
 
 /* ApiStore: a self-hosted backend over REST + Server-Sent Events.
@@ -37,7 +49,7 @@ class LocalStore{
    the list. For a governance tool with tens of projects that is cheaper than
    reconciling partial state, and it cannot drift. */
 class ApiStore{
-  constructor(base){ this.base=base||"/api"; this.es=null; this.cbs=[]; this.cache=[]; }
+  constructor(base){ this.base=base||"/api"; this.es=null; this.cbs=[]; this.cache=[]; this.logDepth={}; this.logPulls={}; }
 
   async req(path,opts){
     const r = await fetch(this.base+path, Object.assign({
@@ -93,16 +105,35 @@ class ApiStore{
   purgeVersions(id){ return this.req(`/projects/${encodeURIComponent(id)}/versions`,{method:"DELETE"}); }
   log(id,e){ return this.req(`/projects/${encodeURIComponent(id)}/log`,{method:"POST",body:JSON.stringify(e)}); }
 
+  /* The log arrives as a WINDOW: the newest page, with the project's total in
+     X-Log-Total so a view or an export can say "newest 60 of 412". showOlderLog
+     asks for a deeper page, up to the server's cap (500); older than that is
+     reached through the API's `before` cursor, not through this view (#40). */
   subscribeLog(id,cb){
     let stop=false;
-    const pull = ()=> this.req(`/projects/${encodeURIComponent(id)}/log`)
-      .then(rows=>{ if(!stop && Array.isArray(rows)) cb(rows); }).catch(()=>{});
+    const pull = async ()=>{
+      try{
+        const depth = this.logDepth[id];
+        const r = await fetch(this.base+`/projects/${encodeURIComponent(id)}/log`+(depth?`?limit=${depth}`:""),
+          {headers:{"Content-Type":"application/json"}, credentials:"same-origin"});
+        if(!r.ok) return;
+        const rows = await r.json();
+        const total = parseInt(r.headers.get("X-Log-Total"),10);
+        if(!stop && Array.isArray(rows)) cb(rows,{total:Number.isFinite(total)?total:null});
+      }catch(e){}
+    };
+    this.logPulls[id] = pull;
     pull();
     // The log is append-only and low-traffic, so it rides the same change
     // signal as the project list rather than opening a second stream.
     const onChange = ()=> pull();
     this.cbs.push(onChange);
-    return ()=>{ stop=true; this.cbs = this.cbs.filter(f=>f!==onChange); };
+    return ()=>{ stop=true; delete this.logPulls[id]; this.cbs = this.cbs.filter(f=>f!==onChange); };
+  }
+  showOlderLog(id){
+    this.logDepth[id] = Math.min(500, (this.logDepth[id]||60) + 60);
+    const pull = this.logPulls[id];
+    return pull ? pull() : Promise.resolve();
   }
 }
 

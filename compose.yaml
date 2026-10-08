@@ -153,6 +153,9 @@ services:
       APP_POSTGRES_USER: ${APP_POSTGRES_USER:-chai_app}
       APP_POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:-}
       APP_DATABASE_URL: ${APP_DATABASE_URL:-}
+      # Identities with owner rights on every project, each use recorded in that
+      # project's audit log (#42). Empty by default.
+      EMERGENCY_ACCESS_IDS: ${EMERGENCY_ACCESS_IDS:-}
       # A restricted role cannot create tables; `migrate` does it, first.
       RUN_MIGRATIONS: "false"
       API_PORT: "8000"

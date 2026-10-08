@@ -620,6 +620,32 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   supported operation (#57).
 - Source: #39; R-36.
 
+### D-39 Break-glass is an identity flag, with an unmissable record of each use
+
+- Status: Accepted
+- `Identity.emergency` is set from configuration and the proxy's asserted id
+  alone. `access.require()` returns True when a request was allowed only because
+  of it, and the route then records the use. The access lists are unchanged: the
+  break-glass identity does not appear in them and cannot be removed from a
+  project by one.
+- Why record in the project's own log, as a system entry: the people who need to
+  know are the project's owners, and the log is where they look; a system entry
+  (`is_system`) is never redacted by a purge, so the evidence survives the very
+  operation an emergency user might run. A separately-named event
+  (`access.breakglass`) and a dedicated logger make it alertable.
+- Why reads are throttled and writes are not: a dashboard refetches the log and
+  versions on every change event, so an unthrottled read entry would write hundreds
+  of rows per hour for one open tab. One per person per project per ten minutes
+  still says it happened and who. Every use, throttled or not, is a warning on
+  `chai.emergency`. Revisit if a stricter reading of "every use" is wanted.
+- Known limit: a delete's log entry goes with the project (by design, D-10/R-11).
+  The warning and the tombstone remain. SSE streams are not widened: a break-glass
+  identity is not in a project's audience, so it fetches rather than being pushed.
+- Rejected: a role hierarchy or organization admin (the issue's own non-goal).
+- Rejected: an `UPDATE` run by hand against the database. That is the privileged
+  path the role model exists to avoid, and it leaves no record in the application.
+- Source: #42; R-37.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

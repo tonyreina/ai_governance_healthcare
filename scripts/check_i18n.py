@@ -175,7 +175,7 @@ def usage_problems(source: dict, texts: dict[str, str]) -> list[str]:
 # ratchet in tests/test_i18n.py only sees what a screen shows when it opens, so these
 # would slip past it: a toast, a label swapped by a handler, a tooltip set by code.
 RUNTIME_LITERAL = re.compile(
-    r"""\b(?:toast|fatalError)\(\s*["'`][A-Za-z]"""
+    r"""\b(?:toast|fatalError|setMode)\(\s*["'`][A-Za-z]"""
     r"""|\.(?:textContent|innerText|title|placeholder)\s*=[^;]*?["'`][A-Z][a-z]+\s"""
     r"""|setAttribute\(\s*["'](?:title|aria-label|placeholder|alt)["']\s*,\s*["'`][A-Za-z]"""
 )

@@ -25,6 +25,8 @@
   "mode.viewOnly": "Solo lectura",
   "mode.notConnected": "Sin conexión",
   "mode.noAccess": "Sin acceso",
+  "mode.accessEnded": "Acceso finalizado",
+  "mode.disconnected": "Desconectado: recargue para volver a conectar",
   "safety.scope": "Solo metadatos de gobernanza: nunca introduzca información que identifique a pacientes.",
   "safety.local.title": "Guardado solo en este navegador.",
   "safety.local.detail": "No se envía nada a un servidor: sus colegas no pueden ver estos registros, no hay registro de auditoría ni control de acceso, y borrar los datos del sitio los elimina. Para un espacio de trabajo compartido, despliegue el servidor (consulte la guía de despliegue).",

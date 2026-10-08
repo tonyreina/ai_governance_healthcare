@@ -25,6 +25,8 @@
   "mode.viewOnly": "Lecture seule",
   "mode.notConnected": "Non connecté",
   "mode.noAccess": "Aucun accès",
+  "mode.accessEnded": "Accès terminé",
+  "mode.disconnected": "Déconnecté : rechargez pour vous reconnecter",
   "safety.scope": "Métadonnées de gouvernance uniquement : ne saisissez jamais d'informations permettant d'identifier un patient.",
   "safety.local.title": "Enregistré dans ce navigateur uniquement.",
   "safety.local.detail": "Rien n'est envoyé à un serveur : vos collègues ne peuvent pas voir ces dossiers, il n'y a ni journal d'audit ni contrôle d'accès, et effacer les données du site les supprime. Pour un espace de travail partagé, déployez le serveur (voir le guide de déploiement).",

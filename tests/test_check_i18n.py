@@ -155,6 +155,7 @@ def main() -> int:
             'frame.setAttribute("title", "Report for printing");',
         ),
         ("an error screen", 'fatalError("Cannot load", detail);'),
+        ("the mode indicator", 'setMode("Access ended","ro");'),
     ]:
         check(f"{label} is noticed (mutation)", bool(rl({"a.js": js})))
     check(

@@ -29,7 +29,7 @@ function opticaItemHTML(it) {
   return `<li class="ci${open ? " open" : ""}" data-item="${esc(it.key)}">
     <div class="ci-row">
       ${chai}
-      <div class="ci-text">${esc(it.text)}<button class="more" data-toggle="${esc(it.key)}" aria-expanded="${open}">${esc(t(open ? "ci.hide" : "ci.more"))}</button>${notes}</div>
+      <div class="ci-text">${esc(opticaItemText(it))}<button class="more" data-toggle="${esc(it.key)}" aria-expanded="${open}">${esc(t(open ? "ci.hide" : "ci.more"))}</button>${notes}</div>
       <div class="seg" role="group" aria-label="${esc(t("ci.statusGroup"))}">${Object.keys(OPTICA_STATUS).map(k =>
         `<button data-set="${esc(it.key)}" data-store="optica.answers" data-s="${k}" aria-pressed="${st === k}">${esc(t(OPTICA_STATUS_KEY[k]))}</button>`).join("")}</div>
     </div>
@@ -47,8 +47,9 @@ function renderOpticaChapter(n) {
   const s = opticaScore(c.items, S);
   const vendor = c.items.filter(i => i.who === "developer").length;
   return `<p class="eyebrow">${esc(t("optica.chapterEyebrow", {n: c.n, domain: c.domain}))}</p>
-  <h1>${esc(c.title)}</h1>
-  ${c.purpose ? `<p class="lede">${esc(c.purpose)}</p>` : ""}
+  <h1>${esc(opticaChapterTitle(c))}</h1>
+  ${c.purpose ? `<p class="lede">${esc(tf(`optica.chapter.${c.n}.purpose`, c.purpose))}</p>` : ""}
+  ${fwNoteHTML()}
   <div class="legend">
     <span>${esc(t("optica.paraphrase"))}</span>
   </div>

@@ -20,6 +20,11 @@ const OPTICA_STATUS = { met: "Answered", partial: "Partial", notmet: "Outstandin
 const OPTICA_STATUS_KEY = Object.freeze({ met: "optica.status.met", partial: "status.partial", notmet: "optica.status.notmet", declined: "optica.status.declined", na: "status.na" });
 const OPTICA_VAL = { met: 1, partial: 0.5, notmet: 0, declined: 0 };
 
+/* OPTICA's content as the reader sees it (D-60); this project's paraphrase is the
+   English source, and records keep their keys, never the wording. */
+const opticaItemText = it => tf(`optica.item.${it.key}`, it.text);
+const opticaChapterTitle = c => tf(`optica.chapter.${c.n}.title`, c.title);
+
 const opticaOn = p => !!((p || S).optica || {}).enabled;
 const opticaAnswers = p => ((p || S).optica || {}).answers || {};
 const opticaAnswer = (p, key) => opticaAnswers(p)[key] || {};

@@ -30,7 +30,7 @@ registerFramework({
     }];
     OPTICA.chapters.forEach(c => {
       out.push({
-        id: "o" + c.n, kind: "chapter", chapter: c.n, label: c.title, num: c.n,
+        id: "o" + c.n, kind: "chapter", chapter: c.n, label: opticaChapterTitle(c), num: c.n,
         short: `OPTICA ${c.n}`,
         meta: () => { const s = opticaScore(c.items, p); return `${s.answered}/${s.total}`; },
         metaCls: () => { const s = opticaScore(c.items, p); return s.answered === s.total ? "done" : ""; },

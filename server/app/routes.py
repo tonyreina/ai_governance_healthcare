@@ -319,9 +319,13 @@ async def patch_project(
             )
         before = row["doc"] or {}
         enforced = settings.require_identity
-        require(before, identity.id, "write", enforced=enforced)
-        guard_access_change(before, patch, identity.id, enforced=enforced)
-        guard_owner_only_fields(before, patch, identity.id, enforced=enforced)
+        require(before, identity.id, "write", enforced=enforced, project_id=project_id)
+        guard_access_change(
+            before, patch, identity.id, enforced=enforced, project_id=project_id
+        )
+        guard_owner_only_fields(
+            before, patch, identity.id, enforced=enforced, project_id=project_id
+        )
         # Who signed, and when, is the server's to say (#31). After the guards,
         # so an unauthorized caller is refused before anything is rewritten.
         patch = attribute_signoffs(
@@ -392,6 +396,7 @@ async def delete_project(
                 identity.id,
                 "own",
                 enforced=settings.require_identity,
+                project_id=project_id,
             )
             # The tombstone is written AFTER the access check and BEFORE the
             # delete, from the same row lock, so a refused or failed delete
@@ -586,7 +591,13 @@ async def list_versions(
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
         doc, incarnation = gate
-        require(doc, identity.id, "read", enforced=settings.require_identity)
+        require(
+            doc,
+            identity.id,
+            "read",
+            enforced=settings.require_identity,
+            project_id=project_id,
+        )
         rows = await conn.fetch(
             """
             SELECT rev, content_md5, changed_by, changed_at, purged_at, purged_by
@@ -636,7 +647,13 @@ async def read_version(
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
         doc, incarnation = gate
-        require(doc, identity.id, "read", enforced=settings.require_identity)
+        require(
+            doc,
+            identity.id,
+            "read",
+            enforced=settings.require_identity,
+            project_id=project_id,
+        )
         row = await conn.fetchrow(
             """
             SELECT rev, doc, content_md5, changed_by, changed_at, purged_at, purged_by
@@ -712,7 +729,13 @@ async def purge_versions(
         if gate is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
         doc, incarnation = gate
-        require(doc, identity.id, "own", enforced=settings.require_identity)
+        require(
+            doc,
+            identity.id,
+            "own",
+            enforced=settings.require_identity,
+            project_id=project_id,
+        )
         purged = await conn.fetchval(
             """
             WITH redacted AS (
@@ -822,6 +845,7 @@ async def read_log(
                 identity.id,
                 "read",
                 enforced=settings.require_identity,
+                project_id=project_id,
             )
         rows = await conn.fetch(
             """
@@ -879,6 +903,7 @@ async def append_log(
                 identity.id,
                 "write",
                 enforced=settings.require_identity,
+                project_id=project_id,
             )
         try:
             await conn.execute(

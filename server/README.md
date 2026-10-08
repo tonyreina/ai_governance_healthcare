@@ -117,6 +117,26 @@ and require the `signer` to be your load balancer's ARN. `IDENTITY_AUDIENCE` cat
 a token minted for a different service in the same account; without a signature
 check it stops misconfiguration, not a determined forger.
 
+## Denied access is logged
+
+A request from an authenticated user that is refused on a project they have no
+right to produces one warning on the `chai.access` logger, with a stable name
+so an alert can match it without parsing prose:
+
+```text
+(one line; wrapped here)
+access.denied actor='ann@hospital.org' project='sepsis-2026'
+    need=write held=reader status=403
+```
+
+`need` is what the route required (`read`, `write` or `own`), `held` is the role
+the user actually has (`none` if they have none), and `status` is what the caller
+was told: **404** when they could not even read the project (so its existence is
+not confirmed to them) and **403** when they could read it but not do this. The
+line carries the project id and never the document. A request for a project that
+does not exist is not a denial and is not logged. A burst of these from one actor
+is worth an alert; the per-cloud alert policy is where that lives.
+
 ## Dev mode
 
 `DEV_INSECURE_AUTH=1` authenticates every request as one fixed fake user and

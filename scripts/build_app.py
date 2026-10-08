@@ -76,9 +76,18 @@ def catalogs_js() -> str:
     if Locale.EN not in catalogs:
         raise SystemExit("error: app/i18n/en.json, the source catalog, is missing")
     body = json.dumps(catalogs, ensure_ascii=False, separators=(",", ":"))
+    # Framework content translations (D-60). English is the definitions themselves,
+    # so only the other languages are embedded.
+    framework = {
+        p.stem: json.loads(p.read_text(encoding="utf-8"))
+        for p in sorted((SRC / "i18n" / "framework").glob("*.json"))
+        if p.stem != Locale.EN
+    }
+    fw = json.dumps(framework, ensure_ascii=False, separators=(",", ":"))
     return (
         "/* Generated from app/i18n/*.json by scripts/build_app.py. */\n"
-        f"const I18N_CATALOGS = Object.freeze({body});"
+        f"const I18N_CATALOGS = Object.freeze({body});\n"
+        f"const FRAMEWORK_I18N = Object.freeze({fw});"
     )
 
 

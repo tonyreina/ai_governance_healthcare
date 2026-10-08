@@ -145,6 +145,23 @@ def main() -> int:
         ),
     )
 
+    print("Framework catalogs (D-60)")
+    fw_en = {"chai.item.a": "Criterion", "chai.item.b": "Another"}
+    full = {str(loc): dict(fw_en) for loc in ci.Locale}
+    check("a complete set passes", not ci.framework_problems(fw_en, full))
+    gap = {**full, "fr": {"chai.item.a": "Critère"}}
+    check("a missing framework key", bool(ci.framework_problems(fw_en, gap)))
+    extra = {**full, "fr": {**fw_en, "chai.item.z": "x"}}
+    check("an extra framework key", bool(ci.framework_problems(fw_en, extra)))
+    empty = {**full, "fr": {**fw_en, "chai.item.a": " "}}
+    check("an empty translation", bool(ci.framework_problems(fw_en, empty)))
+    markup = {**full, "fr": {**fw_en, "chai.item.a": "<b>x</b>"}}
+    check("markup in a translation", bool(ci.framework_problems(fw_en, markup)))
+    lacking = {k: v for k, v in full.items() if k != "ru"}
+    check(
+        "a language with no framework file", bool(ci.framework_problems(fw_en, lacking))
+    )
+
     print("The spelling check leaves translations alone, and only them")
     spec2 = importlib.util.spec_from_file_location(
         "check_spelling", ROOT / "scripts" / "check_spelling.py"
@@ -154,6 +171,14 @@ def main() -> int:
     check("a French catalog is skipped", cs.skip(ROOT / "app" / "i18n" / "fr.json"))
     check(
         "the English source is checked", not cs.skip(ROOT / "app" / "i18n" / "en.json")
+    )
+    check(
+        "a framework translation is skipped",
+        cs.skip(ROOT / "app" / "i18n" / "framework" / "fr.json"),
+    )
+    check(
+        "the framework's English source is checked",
+        not cs.skip(ROOT / "app" / "i18n" / "framework" / "en.json"),
     )
     check(
         "a JSON file elsewhere is checked",

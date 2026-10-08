@@ -88,17 +88,23 @@ that catalog's `"@meta".reviewers`, for example
 
 Reports follow the reader: the HTML, PDF and Markdown exports are written in the
 chosen language and say which. The JSON and CSV exports stay English, because
-scripts and the Croissant exporter read them. Not translated yet: the framework
-content (CHAI criteria, OPTICA questions, the CHAI metrics), which is being
-translated with a note on each screen that it is an unofficial translation, and
-the server's messages.
+scripts and the Croissant exporter read them.
+
+The framework content (CHAI's stages, criteria, checkpoints and model card
+fields) is translated too, in `app/i18n/framework/<language>.json`, and each
+screen showing it says the wording is an unofficial translation. The English in
+the framework definitions stays the source: `tests/test_framework_i18n.py` fails
+if a criterion changes without its catalogs. A record still stores the English
+value, such as a checkpoint decision. Not translated yet: the OPTICA questions,
+the CHAI metric names and the server's messages.
 `tests/test_i18n.py` counts the hard-coded text left on screen in a pseudo-locale,
 and that count may only go down.
 
-To add a language: copy `en.json` to `app/i18n/<tag>.json`, translate the
-values, set `"@meta"`, add the tag to `Locale` and `LOCALE_CHOICES` in
-`app/js/00-core/02-i18n.js` and its plural categories to `scripts/check_i18n.py`,
-and run `pixi run build-app`.
+To add a language: copy `en.json` to `app/i18n/<tag>.json` and
+`framework/en.json` to `app/i18n/framework/<tag>.json`, translate the values,
+set `"@meta"`, add the tag to `Locale` and `LOCALE_CHOICES` in
+`app/js/00-core/02-i18n.js` and its plural categories to
+`scripts/check_i18n.py`, and run `pixi run build-app`.
 
 ## Storage
 

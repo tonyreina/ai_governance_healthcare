@@ -228,6 +228,9 @@ def is_translation(rel: str) -> bool:
     language, app/i18n/en.json, which IS checked. "Organisation" is correct German and
     "centre" correct French, so judging a translation by English spelling is wrong."""
     parts = Path(rel).parts
+    # app/i18n/<tag>.json, or the framework content's app/i18n/framework/<tag>.json.
+    if parts[:3] == ("app", "i18n", "framework"):
+        parts = ("app", "i18n", *parts[3:])
     return (
         len(parts) == 3
         and parts[:2] == ("app", "i18n")

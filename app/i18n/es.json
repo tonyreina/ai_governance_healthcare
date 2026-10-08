@@ -461,5 +461,13 @@
   "md.openGaps": "Carencias abiertas",
   "md.population": "Población",
   "md.noneEntered": "Ninguna introducida",
-  "md.footer": "Estructurado en torno al ciclo de vida de seis etapas de CHAI y la ficha del modelo aplicada. La redacción de la lista es una paráfrasis; es un registro interno de gobernanza, no una certificación de CHAI."
+  "md.footer": "Estructurado en torno al ciclo de vida de seis etapas de CHAI y la ficha del modelo aplicada. La redacción de la lista es una paráfrasis; es un registro interno de gobernanza, no una certificación de CHAI.",
+  "label.releaseStage": "Fase de lanzamiento",
+  "label.releaseDate": "Fecha de lanzamiento",
+  "label.version": "Versión",
+  "label.availability": "Disponibilidad",
+  "label.regulatory": "Aprobación regulatoria",
+  "label.keywords": "Palabras clave:",
+  "label.summary": "Resumen",
+  "fw.note": "El texto del marco en esta página es una traducción no oficial, redactada automáticamente, del texto en inglés de este proyecto; prevalece el original en inglés."
 }

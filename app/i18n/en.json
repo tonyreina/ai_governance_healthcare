@@ -465,5 +465,13 @@
   "md.openGaps": "Open gaps",
   "md.population": "Population",
   "md.noneEntered": "None entered",
-  "md.footer": "Structured around the CHAI six-stage lifecycle and Applied Model Card. Checklist wording is paraphrased; this is an internal governance record, not a CHAI certification."
+  "md.footer": "Structured around the CHAI six-stage lifecycle and Applied Model Card. Checklist wording is paraphrased; this is an internal governance record, not a CHAI certification.",
+  "label.releaseStage": "Release stage",
+  "label.releaseDate": "Release date",
+  "label.version": "Version",
+  "label.availability": "Availability",
+  "label.regulatory": "Regulatory approval",
+  "label.keywords": "Keywords:",
+  "label.summary": "Summary",
+  "fw.note": "The framework wording on this page is an unofficial, machine-drafted translation of this project's English text; the English original governs."
 }

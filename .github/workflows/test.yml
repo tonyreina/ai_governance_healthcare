@@ -174,6 +174,9 @@ jobs:
       - name: languages
         if: ${{ !cancelled() }}
         run: pixi run test-i18n
+      - name: framework content in other languages
+        if: ${{ !cancelled() }}
+        run: pixi run test-framework-i18n
       - name: audit log writes
         if: ${{ !cancelled() }}
         run: pixi run test-audit

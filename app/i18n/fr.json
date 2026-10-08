@@ -461,5 +461,13 @@
   "md.openGaps": "Écarts ouverts",
   "md.population": "Population",
   "md.noneEntered": "Aucun saisi",
-  "md.footer": "Structuré autour du cycle de vie en six étapes de CHAI et de la fiche du modèle appliquée. La formulation de la liste est une paraphrase ; il s'agit d'un dossier interne de gouvernance, et non d'une certification CHAI."
+  "md.footer": "Structuré autour du cycle de vie en six étapes de CHAI et de la fiche du modèle appliquée. La formulation de la liste est une paraphrase ; il s'agit d'un dossier interne de gouvernance, et non d'une certification CHAI.",
+  "label.releaseStage": "Stade de diffusion",
+  "label.releaseDate": "Date de diffusion",
+  "label.version": "Version",
+  "label.availability": "Disponibilité",
+  "label.regulatory": "Autorisation réglementaire",
+  "label.keywords": "Mots-clés :",
+  "label.summary": "Résumé",
+  "fw.note": "Le texte du référentiel sur cette page est une traduction non officielle, rédigée automatiquement, du texte anglais de ce projet ; l'original anglais fait foi."
 }

@@ -22,10 +22,22 @@ class HealthStatus(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class EventDelivery(StrEnum):
+    LIVE = "live"
+    LOCAL_ONLY = "local-only"
+
+
 class HealthOut(BaseModel):
     """``GET /api/health`` -- unauthenticated, for load balancer probes."""
 
     status: HealthStatus = HealthStatus.OK
+    events: EventDelivery = Field(
+        default=EventDelivery.LIVE,
+        description=(
+            "'local-only' when LISTEN is not established, so changes written by "
+            "another replica do not reach this one's streams. Degraded, not down."
+        ),
+    )
     version: str
     database: str = Field(description="'up' or 'down'")
     auth_mode: str = Field(

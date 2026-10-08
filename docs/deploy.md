@@ -44,6 +44,13 @@ cannot be reached it answers **503** with `"status":"unavailable"`, so a probe
 that reads only the status code takes the replica out of rotation instead of
 reporting it healthy.
 
+The body also carries `"events":"live"`. It reads `"local-only"` while the API
+has no `LISTEN` session to PostgreSQL, so a change written on another replica
+does not reach this one's open dashboards. That is degraded, not down, so the
+status stays 200; the API keeps retrying, backing off to a minute. If it stays
+`local-only` behind a transaction-pooling proxy such as PgBouncer, which cannot
+hold a `LISTEN`, point the API at the database directly or run one replica.
+
 ### The database
 
 All three clouds offer managed PostgreSQL, and all three should be

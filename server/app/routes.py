@@ -42,6 +42,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from .access import (
+    Level,
     access_of,
     can_read,
     guard_access_change,
@@ -68,6 +69,9 @@ from .models import (
     EventDelivery,
     HealthOut,
     HealthStatus,
+    HoldEntryOut,
+    HoldIn,
+    HoldOut,
     LogEntryIn,
     LogEntryOut,
     MeOut,
@@ -78,6 +82,7 @@ from .models import (
 )
 from .principals import MAX_ID_LENGTH, MAX_LOOKUP
 from .principals import resolve as resolve_principals
+from .retention import HoldAction
 from .securitylog import SecurityEvent, emit
 from .signoff import attribute_signoffs
 
@@ -424,7 +429,7 @@ async def patch_project(
         used_emergency = require(
             before,
             identity.id,
-            "write",
+            Level.WRITE,
             enforced=enforced,
             project_id=project_id,
             emergency=identity.emergency,
@@ -518,7 +523,7 @@ async def delete_project(
             if require(
                 current["doc"] or {},
                 identity.id,
-                "own",
+                Level.OWN,
                 enforced=settings.require_identity,
                 project_id=project_id,
                 emergency=identity.emergency,
@@ -730,7 +735,7 @@ async def list_versions(
         if require(
             doc,
             identity.id,
-            "read",
+            Level.READ,
             enforced=settings.require_identity,
             project_id=project_id,
             emergency=identity.emergency,
@@ -799,7 +804,7 @@ async def read_version(
         if require(
             doc,
             identity.id,
-            "read",
+            Level.READ,
             enforced=settings.require_identity,
             project_id=project_id,
             emergency=identity.emergency,
@@ -895,7 +900,7 @@ async def purge_versions(
         if require(
             doc,
             identity.id,
-            "own",
+            Level.OWN,
             enforced=settings.require_identity,
             project_id=project_id,
             emergency=identity.emergency,
@@ -995,6 +1000,174 @@ async def purge_versions(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+# --- litigation holds ---------------------------------------------------------
+
+HOLD_LOG_TEXT = {
+    HoldAction.PLACE: "Litigation hold placed: this record will not be disposed of "
+    "until the hold is lifted.",
+    HoldAction.LIFT: "Litigation hold lifted.",
+}
+HOLD_EVENT = {
+    HoldAction.PLACE: SecurityEvent.HOLD_PLACED,
+    HoldAction.LIFT: SecurityEvent.HOLD_LIFTED,
+}
+
+
+async def _hold_gate(
+    conn: Any,
+    project_id: str,
+    identity: Identity,
+    settings: Settings,
+    emergency: EmergencyAudit,
+    purpose: str,
+    use: Use,
+) -> None:
+    """Owner only, on the live project or, once deleted, its history (as for a
+    purge: a deleted project's history is what disposal would destroy)."""
+    gate = await _version_gate(conn, project_id)
+    if gate is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
+    if require(
+        gate[0],
+        identity.id,
+        Level.OWN,
+        enforced=settings.require_identity,
+        project_id=project_id,
+        emergency=identity.emergency,
+    ):
+        await emergency.record(conn, identity, project_id, purpose, use)
+
+
+async def _hold_state(conn: Any, project_id: str) -> HoldOut:
+    rows = await conn.fetch(
+        """
+        SELECT at, by_id, action, reason FROM retention_hold
+         WHERE project_id = $1 ORDER BY id DESC
+        """,
+        project_id,
+    )
+    history = [
+        HoldEntryOut(
+            at=r["at"].isoformat(),
+            by=r["by_id"],
+            action=HoldAction(r["action"]),
+            reason=r["reason"],
+        )
+        for r in rows
+    ]
+    return HoldOut(
+        held=bool(history) and history[0].action is HoldAction.PLACE, history=history
+    )
+
+
+@router.get("/projects/{project_id}/hold", response_model=HoldOut, tags=["retention"])
+async def get_hold(
+    project_id: str = ProjectId,
+    db: Database = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    identity: Identity = Depends(get_identity),
+    emergency: EmergencyAudit = Depends(get_emergency),
+) -> HoldOut:
+    """Whether a litigation hold stops this project's disposal, and its history.
+
+    Owner only: a hold's reason is often a matter's name, which readers of the
+    record have no need to see.
+    """
+    async with db.acquire() as conn, conn.transaction():
+        await _hold_gate(
+            conn, project_id, identity, settings, emergency, "read its hold", Use.READ
+        )
+        return await _hold_state(conn, project_id)
+
+
+@router.post("/projects/{project_id}/hold", response_model=HoldOut, tags=["retention"])
+async def set_hold(
+    body: HoldIn,
+    project_id: str = ProjectId,
+    db: Database = Depends(get_db),
+    broker: EventBroker = Depends(get_broker),
+    settings: Settings = Depends(get_settings),
+    identity: Identity = Depends(get_identity),
+    emergency: EmergencyAudit = Depends(get_emergency),
+) -> HoldOut:
+    """Place or lift a litigation hold (#57, R-56). Owner only.
+
+    A held project is reported by ``make dispose`` and kept, with its read trail,
+    until the hold is lifted. Placing a hold that is in place, or lifting one that
+    is not, is a 409: either would be a row that changes nothing and reads as if
+    it did.
+    """
+    async with db.acquire() as conn, conn.transaction():
+        # Serialize holds on one project, so two owners cannot both place one.
+        await conn.execute(
+            "SELECT pg_advisory_xact_lock(hashtext('retention_hold:' || $1))",
+            project_id,
+        )
+        await _hold_gate(
+            conn,
+            project_id,
+            identity,
+            settings,
+            emergency,
+            "change its litigation hold",
+            Use.WRITE,
+        )
+        held = await conn.fetchval("SELECT retention_held($1)", project_id)
+        placing = body.action is HoldAction.PLACE
+        if held == placing:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "This project is already held."
+                if held
+                else "This project is not held.",
+            )
+        now = datetime.now(UTC)
+        await conn.execute(
+            """
+            INSERT INTO retention_hold (project_id, at, by_id, action, reason)
+            VALUES ($1, $2, $3, $4, $5)
+            """,
+            project_id,
+            now,
+            identity.id,
+            body.action,
+            body.reason,
+        )
+        live = await conn.fetchrow("SELECT doc FROM projects WHERE id = $1", project_id)
+        if live is not None:
+            await conn.execute(
+                """
+                INSERT INTO project_log (project_id, at, by_id, entry, is_system)
+                VALUES ($1, $2, $3, $4, true)
+                """,
+                project_id,
+                now,
+                identity.id,
+                {
+                    "text": HOLD_LOG_TEXT[body.action],
+                    "at": now.isoformat(timespec="milliseconds"),
+                    "by": identity.id,
+                },
+            )
+            await broker.publish(
+                Event(
+                    LOG_APPENDED,
+                    project_id,
+                    audience=_audience(live["doc"] or {}, settings),
+                ),
+                conn,
+            )
+        state = await _hold_state(conn, project_id)
+    # The reason is not logged: it can name a legal matter. It is in the database.
+    emit(
+        HOLD_EVENT[body.action],
+        f"litigation hold {body.action} on {project_id} by {identity.id}",
+        actor=identity.id,
+        project=project_id,
+    )
+    return state
+
+
 # --- audit log --------------------------------------------------------------
 
 
@@ -1089,7 +1262,7 @@ async def read_log(
             if require(
                 owner_row["doc"] or {},
                 identity.id,
-                "read",
+                Level.READ,
                 enforced=settings.require_identity,
                 project_id=project_id,
                 emergency=identity.emergency,
@@ -1170,7 +1343,7 @@ async def append_log(
         if target is not None and require(
             target["doc"] or {},
             identity.id,
-            "write",
+            Level.WRITE,
             enforced=settings.require_identity,
             project_id=project_id,
             emergency=identity.emergency,
@@ -1251,7 +1424,7 @@ async def record_export(
         if require(
             row["doc"] or {},
             identity.id,
-            "read",
+            Level.READ,
             enforced=settings.require_identity,
             project_id=project_id,
             emergency=identity.emergency,

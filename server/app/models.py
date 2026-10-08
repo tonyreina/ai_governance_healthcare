@@ -16,6 +16,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
 
+from .retention import HoldAction
 from .roles import DbRole
 
 
@@ -148,3 +149,39 @@ class PrincipalOut(BaseModel):
 
 class ErrorOut(BaseModel):
     detail: str
+
+
+class HoldIn(BaseModel):
+    """``POST /api/projects/{id}/hold``: place or lift a litigation hold (#57).
+
+    The reason is required, because a hold that nobody can explain later is one
+    nobody dares lift. It stays with the hold; the project's log says only that a
+    hold changed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: HoldAction
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_has_words(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("a hold needs a reason")
+        return value
+
+
+class HoldEntryOut(BaseModel):
+    at: str
+    by: str
+    action: HoldAction
+    reason: str
+
+
+class HoldOut(BaseModel):
+    """Whether the project is held now, and every placing and lifting, newest first."""
+
+    held: bool
+    history: list[HoldEntryOut]

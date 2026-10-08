@@ -162,6 +162,11 @@ jobs:
       - name: delete dialog and destroying history
         if: ${{ !cancelled() }}
         run: pixi run test-disposal-ui
+
+      # The litigation hold on the setup page: owner only, needs a reason, and sends
+      # what the owner chose (#57).
+      - name: hold UI
+        run: pixi run test-holds-ui
       - name: exports
         if: ${{ !cancelled() }}
         run: pixi run test-exports

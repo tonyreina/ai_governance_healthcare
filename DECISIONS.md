@@ -1109,8 +1109,11 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   change is stamped with who and when.
 - The clock is the later of the retirement date and the last change, so a
   typo'd or future date, or a later edit, keeps a record longer, never shorter.
-- Not built: a way to place a hold from the dashboard or the API (today it is an
-  INSERT as the owner), and disposal of `principals`.
+- An owner of a project places and lifts a hold on its setup page, or through
+  `POST /api/projects/{id}/hold` with a reason. The reason stays with the hold
+  and is shown only to owners; the project's history says only that a hold was
+  placed or lifted, and the security log names who, not why.
+- Not built: disposal of `principals`.
 - Rejected: deleting every row (leaves no evidence the record existed, against
   R-12); a timer in the server (a wrong date or setting deletes with nobody
   looking); one global hold switch (one dispute would freeze every project).

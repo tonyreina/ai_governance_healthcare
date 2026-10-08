@@ -48,6 +48,9 @@ class LocalStore{
    is small and never races a larger body. Each event triggers one refetch of
    the list. For a governance tool with tens of projects that is cheaper than
    reconciling partial state, and it cannot drift. */
+/* A row of a project's litigation-hold history (server/app/retention.py HoldAction). */
+const HoldAction = Object.freeze({ PLACE: "place", LIFT: "lift" });
+
 class ApiStore{
   constructor(base){ this.base=base||"/api"; this.es=null; this.cbs=[]; this.cache=[]; this.logDepth={}; this.logPulls={}; }
 
@@ -110,6 +113,11 @@ class ApiStore{
      the choice when, and only when, this method exists. */
   purgeVersions(id){ return this.req(`/projects/${encodeURIComponent(id)}/versions`,{method:"DELETE"}); }
   log(id,e){ return this.req(`/projects/${encodeURIComponent(id)}/log`,{method:"POST",body:JSON.stringify(e)}); }
+  /* Litigation holds (#57, R-56): whether disposal at the end of the retention
+     period is stopped for this project. Owner only, and only here, because only
+     the server ever disposes of anything. */
+  getHold(id){ return this.req(`/projects/${encodeURIComponent(id)}/hold`); }
+  setHold(id,action,reason){ return this.req(`/projects/${encodeURIComponent(id)}/hold`,{method:"POST",body:JSON.stringify({action,reason})}); }
 
   /* The log arrives as a WINDOW: the newest page, with the project's total in
      X-Log-Total so a view or an export can say "newest 60 of 412". showOlderLog

@@ -60,6 +60,7 @@ function renderSetup(){
   <h2>${esc(t("setup.history"))}</h2>
   ${historyHTML()}
   ${accessHTML()}
+  ${holdHTML()}
 
   <h2>${esc(t("setup.manage"))}</h2>
   <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -85,6 +86,72 @@ registerFramework({
   render: v => v.kind === "changelog" ? changelogHTML() : renderSetup(),
 });
 
+
+/* The litigation hold (#57, R-56): a placeholder the page fills once the server
+   answers (fillHold, after each render). Only an owner sees it, and only with a
+   server, which is the only place anything is disposed of. */
+function holdHTML(){
+  if(typeof STORE.getHold !== "function" || !identityKnown() || !canOwn(S)) return "";
+  return `<section id="holdHost" aria-live="polite"><h2>${esc(t("hold.title"))}</h2>
+    <p class="small" style="color:var(--muted)">${esc(t("hold.lede"))}</p>
+    <div data-hold-body><p class="small">${esc(t("hold.loading"))}</p></div></section>`;
+}
+const HOLD_ENTRY_KEY = Object.freeze({ [HoldAction.PLACE]: "hold.entry.place", [HoldAction.LIFT]: "hold.entry.lift" });
+
+async function fillHold(){
+  const host = document.querySelector("#holdHost [data-hold-body]");
+  if(!host) return;
+  const id = CUR;
+  let state;
+  try{ state = await STORE.getHold(id); }
+  catch(e){ host.innerHTML = `<p class="small">${esc(t("hold.unavailable"))}</p>`; return; }
+  if(CUR !== id || !host.isConnected) return;
+  const next = state.held ? HoldAction.LIFT : HoldAction.PLACE;
+  host.innerHTML = `<div class="note${state.held ? "" : " ok"}"><p><b>${esc(t(state.held ? "hold.on" : "hold.off"))}</b></p></div>
+    ${state.history.length ? `<ul class="history">${state.history.slice(0, 6).map(h => `<li><time>${esc(fmtDay(h.at.slice(0,10)))}</time><span>${tHtml(HOLD_ENTRY_KEY[h.action], {}, {who: who(h.by), reason: bdi(h.reason)})}</span></li>`).join("")}</ul>` : ""}
+    <button class="btn${state.held ? "" : " danger"}" data-hold-action="${esc(next)}">${esc(t(state.held ? "hold.lift" : "hold.place"))}</button>`;
+  resolveNames(host);
+}
+
+function openHoldDialog(action){
+  const placing = action === HoldAction.PLACE;
+  const host = document.createElement("div");
+  host.className = "modal-backdrop";
+  host.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="holdTitle">
+      <h2 id="holdTitle" style="margin-top:0">${esc(t(placing ? "hold.dialogPlace" : "hold.dialogLift"))}</h2>
+      <p>${esc(t(placing ? "hold.explainPlace" : "hold.explainLift"))}</p>
+      <label for="holdReason">${esc(t("hold.reason"))}</label>
+      <input type="text" id="holdReason" maxlength="1000" autocomplete="off" aria-describedby="holdHint">
+      <p id="holdHint" class="small" style="color:var(--muted)">${esc(t("hold.reasonHint"))}</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn" data-hold-cancel>${esc(t("dash.cancel"))}</button>
+        <button class="btn primary" data-hold-go disabled>${esc(t(placing ? "hold.confirmPlace" : "hold.confirmLift"))}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(host);
+  const field = host.querySelector("#holdReason");
+  const go = host.querySelector("[data-hold-go]");
+  const close = () => { host.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if(e.key === "Escape") close(); };  // enum-ok: DOM KeyboardEvent.key value
+  field.addEventListener("input", () => { go.disabled = !field.value.trim(); });
+  field.addEventListener("keydown", e => { if(e.key === "Enter" && !go.disabled) go.click(); });  // enum-ok: DOM KeyboardEvent.key value
+  host.querySelector("[data-hold-cancel]").onclick = close;
+  host.addEventListener("click", e => { if(e.target === host) close(); });
+  document.addEventListener("keydown", onKey);
+  go.onclick = async () => {
+    const reason = field.value.trim();
+    if(!reason) return;
+    go.disabled = true;
+    close();
+    try{
+      await STORE.setHold(CUR, action, reason);
+      toast(t(placing ? "toast.holdPlaced" : "toast.holdLifted"));
+    }catch(e){ toast(t("toast.holdFailed")); }
+    fillHold();
+  };
+  setTimeout(() => field.focus(), 0);
+}
 
 /* Who holds what on this project. Owner-only to change, because
    granting access is itself a privilege. */

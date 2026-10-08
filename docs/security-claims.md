@@ -1007,3 +1007,13 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Enforced by:**
   `server/tests/test_retention.py::test_a_held_project_is_reported_and_kept_until_the_hold_is_lifted`
   `server/tests/test_retention.py::test_the_read_trail_loses_only_rows_past_the_period_and_not_held`
+
+### C-79 Only a project's owners see or change its litigation hold
+
+- **Claim:** A hold, and the reason given for it, can be seen, placed and lifted
+  only by an owner of the project.
+- **Asserted in:** `app/i18n/en.json` — "until it is lifted. Only owners see this."
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_holds.py::test_only_an_owner_may_see_or_change_a_hold`
+  `tests/test_holds_ui.py::sees no hold section`

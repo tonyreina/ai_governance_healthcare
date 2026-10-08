@@ -174,7 +174,6 @@
       "sepsis-risk-prediction": 1
     },
     "server/app/access.py": {
-      "own": 1,
       "owner": 2,
       "writer": 1
     },

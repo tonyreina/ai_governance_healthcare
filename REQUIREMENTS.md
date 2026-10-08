@@ -672,7 +672,7 @@ honest answer and is a gap worth closing; see R-19.
   `access_event`.
 - **A litigation hold stops it.** A project whose latest `retention_hold` row is
   a placement is kept, with its read trail. Holds are append-only and need a
-  reason.
+  reason. Only an owner of the project may place, lift or see one.
 - Retired means checkpoint A, B or C decided "Stop" or D decided "Retire", the
   dashboard's own rule. The clock starts at the later of that decision's date
   and the record's last change.
@@ -680,7 +680,8 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `server/tests/test_retention.py` (real PostgreSQL: what is due,
   what disposal leaves, holds, the trigger, the API role refused, the retired
   rule kept equal to the dashboard's), `tests/test_dispose.py` (the script,
-  against real migrations).
+  against real migrations), `server/tests/test_holds.py` (the hold API) and
+  `tests/test_holds_ui.py` (the setup page).
 
 ### R-28 A project's creator is always one of its owners
 

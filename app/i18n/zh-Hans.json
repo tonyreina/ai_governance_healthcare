@@ -3,7 +3,20 @@
     "locale": "zh-Hans",
     "name": "中文（简体）",
     "machineDrafted": true,
-    "reviewers": {}
+    "reviewers": {
+      "safety.scope": "Cody Chen, 2026-10-08",
+      "safety.local.title": "Cody Chen, 2026-10-08",
+      "safety.local.detail": "Cody Chen, 2026-10-08",
+      "safety.artifact.title": "Cody Chen, 2026-10-08",
+      "safety.artifact.detail": "Cody Chen, 2026-10-08",
+      "safety.server.detail": "Cody Chen, 2026-10-08",
+      "report.disclaimer": "Cody Chen, 2026-10-08",
+      "label.foot": "Cody Chen, 2026-10-08",
+      "provenance.local": "Cody Chen, 2026-10-08",
+      "provenance.api": "Cody Chen, 2026-10-08",
+      "provenance.artifact": "Cody Chen, 2026-10-08",
+      "md.footer": "Cody Chen, 2026-10-08"
+    }
   },
   "lang.label": "语言",
   "header.brand": "医疗 AI 保障审查",

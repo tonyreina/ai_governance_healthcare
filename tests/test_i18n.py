@@ -153,6 +153,25 @@ def main() -> int:
             str(options),
         )  # fmt: skip
 
+        print("A reviewed language shows its warnings translated")
+        ctx_zh, zh = open_app(browser, "zh-CN")
+        reviewers = zh.evaluate("I18N_CATALOGS['zh-Hans']['@meta'].reviewers")
+        safety = zh.evaluate("I18N_CATALOGS.en['@meta'].safety")
+        check(
+            "every safety-bearing string has a recorded Chinese reviewer",
+            sorted(reviewers) == sorted(safety)
+            and all("Cody Chen" in reviewers[k] for k in safety),
+            str(reviewers),
+        )
+        warning = zh.inner_text("#storageWarning")
+        check(
+            "so the storage warning is shown in Chinese, not English",
+            zh.evaluate("I18N_CATALOGS['zh-Hans']['safety.local.title']") in warning
+            and "Saved in this browser" not in warning,
+            warning[:120],
+        )
+        ctx_zh.close()
+
         print("Hebrew reads right to left")
         ctx_he, he = open_app(browser, "he-IL")
         he.set_viewport_size({"width": 1400, "height": 900})

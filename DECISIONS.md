@@ -842,6 +842,26 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   and the resources are in the reader's account).
 - Source: #58; R-45.
 
+### D-48 State the position and ship the finder; do not invent a retention period
+
+- Status: Accepted
+- The floor the issue named is writing the position down and a way to find one
+  person's data. Both are done. The retention period is not: it is an owner
+  decision with legal weight (R-47, Open), so the page says it is undecided
+  rather than inventing six years or any other number.
+- The finder is SQL run through `psql` in the database container, like `doctor`,
+  with the subject passed as a psql variable so it is quoted, never spliced. It
+  reports locations and counts, not contents, so the tool does not itself produce
+  a copy of staff data that someone must then protect.
+- A test asks the database for every column named `*_by`, `by_id` or `actor` and
+  fails if the query does not mention it. It already caught one the first draft
+  missed (`project_log.purged_by`).
+- Rejected: pseudonymizing staff identifiers (a significant redesign, worth it
+  only if erasure requests are real); a DSR workflow in the app (the issue's own
+  non-goal); a post-restore step that re-applies purges (needs a place for the
+  list of purges that survives a restore, #116).
+- Source: #57; R-46, R-47.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

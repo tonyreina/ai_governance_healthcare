@@ -889,3 +889,25 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Enforced by:**
   `tests/test_deploy_residency.py::no command example names a concrete region`
   `tests/test_deploy_residency.py::the Data residency section is complete`
+
+### C-69 A restore brings purged content back, and the docs say so
+
+- **Claim:** A dump restored after a purge reinstates the purged content, so a
+  purge for an erasure request is undone by an ordinary recovery unless it is
+  re-applied.
+- **Asserted in:** `docs/privacy.md` — "A restore brings purged content back"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_subject_access.py::a restore of a dump from before a purge brings the purged content back`
+
+### C-70 Subject access finds every place an identifier is stored
+
+- **Claim:** `make subject-access` reports every table and column that records who
+  did something, and changes nothing.
+- **Asserted in:** `docs/privacy.md` — "It changes nothing."
+- **Status:** partial
+- **Gap:** Columns named `*_by`, `by_id` or `actor` are checked against the query;
+  an identifier stored under another name, or only inside new jsonb, is not. #57
+- **Enforced by:**
+  `tests/test_subject_access.py::every column that records who did something is searched`
+  `tests/test_subject_access.py::it changed nothing`

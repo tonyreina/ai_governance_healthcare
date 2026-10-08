@@ -27,6 +27,7 @@ nav = [
   { "Python exports" = "exports.md" },
   { "Self-hosting" = "self-hosting.md" },
   { "Cloud deployment" = "deploy.md" },
+  { "Privacy and retention" = "privacy.md" },
   { "Security claims" = "security-claims.md" },
   { "Notice & license" = "notice.md" },
   { "chai: namespace" = "ns/index.md" },

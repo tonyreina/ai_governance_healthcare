@@ -26,7 +26,7 @@ POSTGRES_DB   ?= chai
 HTTP_PORT     ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help env preflight doctor up dev down logs ps config build-app shell psql backup backup-plaintext restore verify-backup prune check-isolation lock
+.PHONY: help env preflight doctor up dev down logs ps config build-app shell psql backup backup-plaintext restore verify-backup subject-access prune check-isolation lock
 
 help:  ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -151,6 +151,11 @@ restore:  ## Restore a dump: make restore FILE=backups/....sql.gz.gpg  (DESTRUCT
 	         scripts/backup_crypto.sh decrypt "$(FILE)" ;; \
 	  *)     cat "$(FILE)" ;; \
 	esac | gunzip -c | $(COMPOSE) exec -T $(DB_SERVICE) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+
+# Where one person's identifier is stored, for a subject access request (#57).
+subject-access:  ## Find where one person's identifier is stored: make subject-access WHO=a@b.org
+	@test -n "$(WHO)" || { echo "usage: make subject-access WHO=<identifier>"; exit 1; }
+	@python3 scripts/subject_access.py "$(WHO)"
 
 # What the API image installs is exactly this file, verified by hash (#37). Regenerated
 # in the SAME Python the image uses, so the pins are the ones that image will resolve.

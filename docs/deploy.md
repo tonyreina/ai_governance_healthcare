@@ -114,8 +114,8 @@ leave room to act:
 
 There is no retention policy yet: how long each of these may be kept, and when a
 revision may be purged to a tombstone, is a decision that has not been made (see
-the retention issue, #57). Until it is, the only way to reclaim space is more
-disk.
+[Privacy and retention](privacy.md), R-47). Until it is, the only way to reclaim
+space is more disk.
 
 ### Encryption at rest
 
@@ -323,8 +323,8 @@ already fetched, so the server never sees one happen. The export beacon records
 ordinary use; it is **not** a control, because a client can omit it. What bounds
 what any export could contain is the reads that fetched the data, and those are
 recorded. `source_ip` is what the proxy reported, for correlation, and is not
-authentication. How long to keep the trail is not decided here (see the
-retention issue).
+authentication. How long to keep the trail is not decided here (see
+[Privacy and retention](privacy.md)).
 
 ### Updating
 

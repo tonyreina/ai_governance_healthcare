@@ -369,11 +369,13 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** The header names the mode, so a user can tell the audited server
   from the other modes.
-- **Asserted in:** `app/js/20-app/80-boot.js` — "setMode(RO?"View only":"Shared
-  workspace""
-- **Status:** violated
-- **Gap:** The Claude artifact mode shows the same "Shared workspace" label as
-  the self-hosted server. #64
+- **Asserted in:** `app/js/00-core/30-state.js` — "and no two modes share one"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_boot_storage.py::artifact mode is not labeled like the self-hosted server`
+  `tests/test_boot_storage.py::no two modes share a header label`
+  `tests/test_boot_storage.py::every Mode has a header label`
+  `tests/test_boot_storage.py::artifact mode says, in the layout, where the data lives`
 
 ### C-30 Live updates reach other users, and only those who may see the project
 

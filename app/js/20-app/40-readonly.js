@@ -2,6 +2,7 @@
    Read-only handling, mode badge
    ============================================================ */
 function setMode(text,cls){ const el=document.getElementById("mode"); el.textContent=text; el.className="mode "+(cls||""); }
+function setModeFor(mode){ const l=MODE_LABEL[mode]; if(l) setMode(l.text,l.cls); }
 function setReadOnly(v){ RO=v; document.body.classList.toggle("ro",v); if(v) setMode("View only","ro"); if(CUR) renderMain(false); else if(document.getElementById("plistHost")) renderDashboardShell(); }
 function applyRO(root){
   if(!RO) return;
@@ -50,6 +51,25 @@ function fatalError(title, detail, opts){
    record is on a shared, access-controlled, audited server or in localStorage
    on one laptop. A user cannot be expected to infer "do not type a patient
    identifier here" from a two-word label in the header. */
+/* The same, for the Claude artifact mode: where the records live, and that it is
+   not the audited server. Facts from the comparison in docs/running.md; it does
+   not say whether any data classification is approved. */
+function showArtifactNotice(){
+  if(document.getElementById("artifactNotice")) return;
+  const el = document.createElement("div");
+  el.id = "artifactNotice";
+  el.className = "storage-warning";
+  el.setAttribute("role", "note");
+  el.innerHTML = `<b>Stored in this Claude artifact.</b>
+    <span class="sw-detail">Records are kept in the artifact's database, not on a
+    server your organization runs. Access control is only partly enforced and there
+    are no version snapshots. Do not enter patient-identifiable information.
+    For the audited, access-controlled workspace, deploy the server &mdash; see the
+    deployment guide.</span>`;
+  const header = document.querySelector("header.top");
+  if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
+}
+
 function showStorageWarning(){
   if(document.getElementById("storageWarning")) return;
   const el = document.createElement("div");

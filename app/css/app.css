@@ -227,6 +227,7 @@ aside.panel{position:sticky;top:calc(env(safe-area-inset-top,0px) + 58px);align-
 .brand-btn:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
 .mode{font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
 .mode.shared{background:var(--teal-soft);color:var(--teal)}
+.mode.artifact{background:var(--sunk);color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber)}
 .mode.ro{background:var(--amber-soft);color:var(--amber)}
 body.home .shell{grid-template-columns:minmax(0,1fr)}
 body.home nav.rail, body.home aside.panel, body.home .proj-only{display:none!important}

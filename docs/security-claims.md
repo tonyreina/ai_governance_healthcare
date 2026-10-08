@@ -584,13 +584,13 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-47 Backups made before a purge still hold the data
 
 - **Claim:** The guide states that a backup taken earlier keeps the destroyed
-  content and that `make restore` brings it back, so a restore must
-  be followed by another purge.
-- **Asserted in:** `docs/self-hosting.md` — "`make restore` puts it back"
-- **Status:** unenforced
-- **Gap:** A documented limitation, true by construction and not exercised by a
-  test: `make restore` is not tested, and nothing re-applies a purge
-  after a restore. See #57.
+  content. `make restore` no longer brings it back unnoticed: it re-applies the
+  live database's purges, and says so when it cannot (C-75).
+- **Asserted in:** `docs/self-hosting.md` — "Backups made earlier still hold the data."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_purge_ledger.py::restoring a dump from before the purge brings the content back`
+  `tests/test_purge_ledger.py::the mistaken content is gone again`
 
 ### C-48 A change cannot be merged to main unless CI passes
 
@@ -960,3 +960,17 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Enforced by:**
   `tests/test_phi_scan.py::the history is scanned, and the revisions are named`
   `tests/test_phi_scan.py::the audit log is scanned`
+
+### C-75 A restore puts purges back
+
+- **Claim:** `make restore` re-applies every purge the live database holds after it
+  restores an older dump, and says so when it cannot.
+- **Asserted in:** `docs/privacy.md` — "`make restore` puts the purges back."
+- **Status:** partial
+- **Gap:** When the live database cannot be read, the purges come back only if
+  someone rebuilds the ledger from the security log; purge events from before
+  this change lack the fields and must be re-applied by hand. #116
+- **Enforced by:**
+  `tests/test_purge_ledger.py::the mistaken content is gone again`
+  `tests/test_purge_ledger.py::work written after the restore is untouched`
+  `tests/test_purge_ledger.py::capture, then the restore, then reapply`

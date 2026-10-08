@@ -574,6 +574,26 @@ honest answer and is a gap worth closing; see R-19.
   with a probe shown to catch a naive merge). It failed on four checks against
   the build before the fix.
 
+### R-53 A restore does not undo a purge
+
+- Status: Active
+- `make restore` reads every purge in the live database into a ledger before it
+  overwrites anything, and re-applies the ledger after, with the original time
+  and person and a system entry in each project's audit log. A row written after
+  a purge is never part of it, whatever its number.
+- When the live database cannot be read, the restore says that purges will not
+  be re-applied and carries on. Every `versions.purged` security event carries
+  what a re-apply needs (`incarnation`, `purged_at`, `through_rev`,
+  `through_seq`), so the ledger can be rebuilt from the security log.
+- Why: a dump taken before a purge still holds the content, so an ordinary
+  recovery undid an erasure without anyone noticing (#57, #116).
+- Source: #116, #57 (option 4); DECISIONS D-55.
+- Enforced by: `tests/test_purge_ledger.py` (a real dump, purge, restore and
+  re-apply on PostgreSQL, with a mutation test for the time guard, and the
+  Makefile's order), `server/tests/test_security_events.py` (the event's fields
+  match the rows the purge changed) and `tests/test_verify_backup.py` (the
+  restore reads the purges before it overwrites).
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

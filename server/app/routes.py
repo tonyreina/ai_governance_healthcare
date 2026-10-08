@@ -907,45 +907,50 @@ async def purge_versions(
                 "destroy this project's history",
                 Use.WRITE,
             )
-        purged = await conn.fetchval(
+        # One timestamp for the whole purge, so the rows it touches, its log entry
+        # and its security event all name the same moment, and a restore can find
+        # and re-apply it (scripts/purge_ledger.py, #116).
+        now = datetime.now(UTC)
+        purged, through_rev = await conn.fetchrow(
             """
             WITH redacted AS (
                 UPDATE project_version
-                   SET doc = '{}'::jsonb, purged_at = now(), purged_by = $3
+                   SET doc = '{}'::jsonb, purged_at = $4, purged_by = $3
                  WHERE project_id = $1
                    AND incarnation = $2
                    AND purged_at IS NULL
-             RETURNING 1
+             RETURNING rev
             )
-            SELECT count(*) FROM redacted
+            SELECT count(*), max(rev) FROM redacted
             """,
             project_id,
             incarnation,
             identity.id,
+            now,
         )
-        entries = 0
+        entries, through_seq = 0, None
         if live is not None:
-            entries = await conn.fetchval(
+            entries, through_seq = await conn.fetchrow(
                 """
                 WITH redacted AS (
                     UPDATE project_log
                        SET entry = project_log_redacted(entry),
-                           purged_at = now(),
+                           purged_at = $3,
                            purged_by = $2
                      WHERE project_id = $1
                        AND purged_at IS NULL
                        AND NOT is_system
-                 RETURNING 1
+                 RETURNING seq
                 )
-                SELECT count(*) FROM redacted
+                SELECT count(*), max(seq) FROM redacted
                 """,
                 project_id,
                 identity.id,
+                now,
             )
             if purged or entries:
                 # The server records that it happened. is_system is a column the
                 # client cannot set, so this entry can be neither forged nor redacted.
-                now = datetime.now(UTC)
                 plural = "entry" if entries == 1 else "entries"
                 await conn.execute(
                     """
@@ -980,6 +985,12 @@ async def purge_versions(
         project=project_id,
         revisions=purged or 0,
         log_entries=entries or 0,
+        # Enough to re-apply this purge to a database restored from an older dump,
+        # from the security log alone, when the live database is gone (#116).
+        incarnation=str(incarnation),
+        purged_at=now.isoformat(),
+        through_rev=through_rev,
+        through_seq=through_seq,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

@@ -285,7 +285,7 @@ def main() -> int:
 
     print("make restore asks before overwriting a live database")
     sink = Path(tempfile.mkdtemp(prefix="chai-sink-")) / "sink.sh"
-    sink.write_text('#!/bin/sh\ncat > /dev/null\necho CALLED >> "$SINK_LOG"\n')
+    sink.write_text('#!/bin/sh\ncat > /dev/null\necho "CALLED $*" >> "$SINK_LOG"\n')
     sink.chmod(0o755)
     log = sink.parent / "calls.log"
     plain = sink.parent / "d.sql.gz"
@@ -296,10 +296,13 @@ def main() -> int:
     def restore(stdin: str = "", *extra: str):
         log.write_text("")
         done = subprocess.run(
-            ["make", "restore", f"FILE={plain}", f"COMPOSE={sink}", *extra],
+            ["make", "restore", f"FILE={plain}", f"COMPOSE={sink}",
+             f"BACKUP_DIR={sink.parent}", *extra],
             input=stdin, capture_output=True, text=True, cwd=ROOT,
             env={**os.environ, "SINK_LOG": str(log)},
         )  # fmt: skip
+        # A restore reads the live database's purges first (#116), then restores: two
+        # calls. The ledger it read is empty, so there is nothing to re-apply.
         return done, log.read_text().count("CALLED")
 
     done, calls = restore("")
@@ -317,13 +320,19 @@ def main() -> int:
     done, calls = restore("YES\n")
     check(
         "typing YES proceeds",
-        done.returncode == 0 and calls == 1,
+        done.returncode == 0 and calls == 2,
         f"exit {done.returncode}, calls {calls}: {done.stderr[-200:]}",
+    )
+    first = (log.read_text().splitlines() or [""])[0]
+    check(
+        "and reads the purges before it overwrites anything",
+        "-A" in first.split() and "-t" in first.split(),
+        first,
     )
     done, calls = restore("", "CONFIRM=YES")
     check(
         "CONFIRM=YES proceeds for automation, without a prompt",
-        done.returncode == 0 and calls == 1,
+        done.returncode == 0 and calls == 2,
     )
     shutil.rmtree(sink.parent, ignore_errors=True)
 

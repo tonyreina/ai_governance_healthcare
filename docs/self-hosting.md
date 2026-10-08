@@ -123,14 +123,16 @@ The API does not authenticate anybody. The proxy deletes any
 from a source you configure in `.env`:
 
 ```bash
-# local development: a literal string
-IDENTITY_ID_SOURCE=dev@localhost
-
-# behind a cloud SSO front door: the header it sets
-# IDENTITY_ID_SOURCE={http.request.header.X-Goog-Authenticated-User-Id}
+# behind an SSO front door: the header it sets. Pick one.
+IDENTITY_ID_SOURCE={http.request.header.X-Goog-Authenticated-User-Id}
 # IDENTITY_ID_SOURCE={http.request.header.X-Amzn-Oidc-Identity}
 # IDENTITY_ID_SOURCE={http.request.header.X-Ms-Client-Principal-Id}
 ```
+
+Never put a literal such as `dev@localhost` here. It makes every visitor the
+same person, so `make up` refuses to start on it. For local development, run
+`make dev`: it supplies a fixed developer identity through `compose.dev.yaml`,
+the one place a literal belongs.
 
 Headers the proxy does not own pass through untouched, so an API that prefers
 to verify a signed assertion itself — the IAP JWT, `x-amzn-oidc-data`,

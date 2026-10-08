@@ -148,6 +148,22 @@ def override_file_is_named() -> list[str]:
     ]
 
 
+def shared_secret_reaches_both_ends(compose: dict) -> list[str]:
+    """The API checks PROXY_SHARED_SECRET and only the proxy can send it (#61).
+
+    It was documented while no shipped config sent it, so setting it on the API
+    made every request 403. Both services must be handed the same variable, or
+    the control either never turns on or breaks the stack.
+    """
+    want = "${PROXY_SHARED_SECRET:-}"
+    return [
+        f"{name} does not receive PROXY_SHARED_SECRET as {want}"
+        for name in (API, PROXY)
+        if service(compose, name).get("environment", {}).get("PROXY_SHARED_SECRET")
+        != want
+    ]
+
+
 def every_rule(compose: dict) -> list[str]:
     return [
         *api_ports(compose),
@@ -158,6 +174,7 @@ def every_rule(compose: dict) -> list[str]:
         *database_persists(compose),
         *database_image_pinned(compose),
         *override_file_is_named(),
+        *shared_secret_reaches_both_ends(compose),
     ]
 
 
@@ -223,6 +240,14 @@ def main() -> int:
         broken = copy.deepcopy(compose)
         broken["services"][DB]["image"] = image
         check(f"db image '{image}' is noticed", bool(database_image_pinned(broken)))
+
+    for side in (API, PROXY):
+        broken = copy.deepcopy(compose)
+        del broken["services"][side]["environment"]["PROXY_SHARED_SECRET"]
+        check(
+            f"PROXY_SHARED_SECRET missing from {side} is noticed",
+            bool(shared_secret_reaches_both_ends(broken)),
+        )
 
     stray = ROOT / "compose.override.yaml"
     stray.write_text("services: {}\n", encoding="utf-8")

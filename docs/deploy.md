@@ -149,12 +149,19 @@ Run one in front; do not move authentication into the application. Put
 The application is unchanged, and the credential handling stays in
 software built for it.
 
+#### A second lock between the proxy and the API
+
+`PROXY_SHARED_SECRET` is a second lock between the proxy and the API, not a way
+for a caller to sign in. Set it once in `.env` and Compose gives the same value
+to both: the proxy sends it as `X-Proxy-Secret`, and the API answers 403 to any
+request that arrives without it. Generate one with `openssl rand -hex 32`. It is
+defense in depth beside closing the network, not a substitute for it.
+
 #### If you need non-interactive access
 
 Scripts, scheduled jobs and CI are not users and should not have user
 passwords. Authenticate them at the proxy — a service account in the
-cloud front door, or `PROXY_SHARED_SECRET` for a caller inside the
-network — and leave the browser path alone. The exporters under
+cloud front door — and leave the browser path alone. The exporters under
 `examples/` read exported JSON and need no API access at all.
 
 ### Plain headers versus signed assertions

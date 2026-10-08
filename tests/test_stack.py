@@ -73,6 +73,53 @@ def wait_until(page, expression: str, timeout: float = 20.0) -> None:
     raise TimeoutError(f"still false after {timeout}s: {expression}")
 
 
+def compose_exec(service: str, *command: str) -> str:
+    result = subprocess.run(
+        ["docker", "compose", "exec", "-T", service, *command],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
+def direct_api_status(headers: dict[str, str]) -> int:
+    """GET /api/me straight at the API, from inside the proxy's network namespace.
+
+    The API publishes no port, so the only way to reach it without Caddy is from
+    a container on its network. Sharing the proxy's namespace gives the request
+    the proxy's address, which TRUSTED_PROXY_CIDR accepts, so a 403 can only be
+    the shared-secret check.
+    """
+
+    def out(*argv: str) -> str:
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+        return done.stdout.strip()
+
+    proxy = out("docker", "compose", "ps", "-q", "proxy")
+    image = out(
+        "docker",
+        "inspect",
+        "-f",
+        "{{.Config.Image}}",
+        out("docker", "compose", "ps", "-q", "api"),
+    )
+    script = (
+        "import json, sys, urllib.error, urllib.request\n"
+        "req = urllib.request.Request('http://api:8000/api/me',"
+        " headers=json.loads(sys.argv[1]))\n"
+        "try:\n"
+        "    print(urllib.request.urlopen(req, timeout=10).status)\n"
+        "except urllib.error.HTTPError as e:\n"
+        "    print(e.code)\n"
+    )
+    code = out(
+        "docker", "run", "--rm", "--network", f"container:{proxy}",
+        "--entrypoint", "python", image, "-c", script, json.dumps(headers),
+    )  # fmt: skip
+    return int(code) if code.isdigit() else -1
+
+
 def main() -> int:
     if not stack_up():
         print("stack not running at " + BASE + " - skipping")
@@ -212,6 +259,32 @@ def main() -> int:
         "deleting did not erase what was already purged, or restore it",
         http(f"/api/projects/{did}/versions/1")[0] == 200,
     )
+
+    print("PROXY_SHARED_SECRET (#61)")
+    # Everything above went through the proxy, so with the secret on it already
+    # proves the proxy sends it: the API would have answered 403 to all of it.
+    # What it cannot show is that the API enforces it. For that, ask the API
+    # from the proxy's own network address (so TRUSTED_PROXY_CIDR is satisfied)
+    # without going through Caddy, once without the header and once with it.
+    secret = compose_exec("api", "printenv", "PROXY_SHARED_SECRET").strip()
+    if not secret:
+        check(
+            "the stack was started with PROXY_SHARED_SECRET set",
+            False,
+            "set it in .env; CI does, and this check is the only e2e of the control",
+        )
+    else:
+        identity = {"X-Auth-Request-User": "u@x", "X-Auth-Request-Email": "u@x"}
+        check(
+            "the API refuses a request that skipped the proxy's secret",
+            direct_api_status(identity) == 403,
+            str(direct_api_status(identity)),
+        )
+        check(
+            "and accepts the same request carrying it",
+            direct_api_status({**identity, "X-Proxy-Secret": secret}) == 200,
+            str(direct_api_status({**identity, "X-Proxy-Secret": secret})),
+        )
 
     print("Browser")
     try:

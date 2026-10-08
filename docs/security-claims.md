@@ -49,7 +49,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** The IAP, ALB, Azure and oauth2-proxy settings each produce the
   canonical identity headers. (This was broken for months, #23.)
-- **Asserted in:** `docs/self-hosting.md` — "behind a cloud SSO front door: the
+- **Asserted in:** `docs/self-hosting.md` — "behind an SSO front door: the
   header it sets"
 - **Status:** enforced
 - **Enforced by:**
@@ -428,23 +428,30 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-35 `PROXY_SHARED_SECRET` is a working control
 
-- **Claim:** The deployment guide offers it to authenticate a caller inside the
-  network.
-- **Asserted in:** `docs/deploy.md` — "or `PROXY_SHARED_SECRET` for a caller
-  inside the network"
-- **Status:** violated
-- **Gap:** No shipped proxy configuration sends the header, so enabling it makes
-  every request 403. #61
+- **Claim:** Set once in `.env`, the proxy sends the secret and the API refuses a
+  request without it. It authenticates the proxy to the API, not a caller to the
+  proxy.
+- **Asserted in:** `docs/deploy.md` — "Set it once in `.env` and Compose gives
+  the same value to both"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_proxy_identity.py::the proxy sends X-Proxy-Secret to the API`
+  `tests/test_proxy_identity.py::a client-supplied X-Proxy-Secret is replaced, not forwarded`
+  `tests/test_compose_isolation.py::PROXY_SHARED_SECRET missing from`
+  `tests/test_stack.py::the API refuses a request that skipped the proxy's secret`
+  `tests/test_stack.py::and accepts the same request carrying it`
+  `server/tests/test_auth.py::test_shared_secret_blocks_a_request_that_skipped_the_proxy`
 
 ### C-36 The self-hosting identity example is the safe one
 
-- **Claim:** The first example shown for `IDENTITY_ID_SOURCE` is for local
-  development.
-- **Asserted in:** `docs/self-hosting.md` — "# local development: a literal
-  string"
-- **Status:** violated
-- **Gap:** The literal it shows is exactly the value `preflight.py` refuses to
-  start on, and it is the uncommented line. #62
+- **Claim:** The identity example the self-hosting guide shows uncommented is a
+  placeholder, never a literal, and local development is sent to `make dev`.
+- **Asserted in:** `docs/self-hosting.md` — "Never put a literal such as
+  `dev@localhost` here."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_preflight.py::passes preflight`
+  `tests/test_preflight.py::the scan found the examples it is meant to check`
 
 ### C-37 The AWS audience setting matches what the load balancer signs
 

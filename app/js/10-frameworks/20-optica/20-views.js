@@ -9,11 +9,11 @@
    tool. The state path differs -- optica.answers.<key> rather than
    items.<id> -- which is what keeps the data cleanly separable.
    ============================================================ */
-const OPTICA_PRODUCER_LABEL = {
-  adopter: "Your organization",
-  developer: "The solution's developer",
-  either: "Either party",
-};
+const OPTICA_PRODUCER_KEY = Object.freeze({
+  adopter: "optica.who.adopter",
+  developer: "optica.who.developer",
+  either: "optica.who.either",
+});
 
 function opticaItemHTML(it) {
   const d = opticaAnswer(S, it.key);
@@ -21,23 +21,23 @@ function opticaItemHTML(it) {
   const open = openItems.has(it.key);
   const late = d.due && parseDay(d.due) < parseDay(TODAY()) && st !== "met" && st !== "na";
   const notes = (d.evidence || d.owner || d.due || d.declineReason) && !open
-    ? `<span class="has-notes">${late ? `<b style="color:var(--red)">overdue ${esc(fmtDay(d.due))}</b>` : "notes added"}</span>` : "";
+    ? `<span class="has-notes">${late ? `<b style="color:var(--red)">${esc(t("ci.overdue", {date: fmtDay(d.due)}))}</b>` : esc(t("ci.notes"))}</span>` : "";
   const chai = it.chai && it.chai.length
-    ? `<span class="pchip" title="Partially covered by CHAI ${esc(it.chai.join(", "))}">${esc(it.chai[0])}</span>`
-    : `<span class="pchip" title="No CHAI criterion covers this">—</span>`;
+    ? `<span class="pchip" title="${esc(t("optica.coveredBy", {ids: it.chai.join(", ")}))}">${esc(it.chai[0])}</span>`
+    : `<span class="pchip" title="${esc(t("optica.notCovered"))}">—</span>`;
 
   return `<li class="ci${open ? " open" : ""}" data-item="${esc(it.key)}">
     <div class="ci-row">
       ${chai}
-      <div class="ci-text">${esc(it.text)}<button class="more" data-toggle="${esc(it.key)}" aria-expanded="${open}">${open ? "Hide details" : "Evidence & owner"}</button>${notes}</div>
-      <div class="seg" role="group" aria-label="Status">${Object.entries(OPTICA_STATUS).map(([k, l]) =>
-        `<button data-set="${esc(it.key)}" data-store="optica.answers" data-s="${k}" aria-pressed="${st === k}">${l}</button>`).join("")}</div>
+      <div class="ci-text">${esc(it.text)}<button class="more" data-toggle="${esc(it.key)}" aria-expanded="${open}">${esc(t(open ? "ci.hide" : "ci.more"))}</button>${notes}</div>
+      <div class="seg" role="group" aria-label="${esc(t("ci.statusGroup"))}">${Object.keys(OPTICA_STATUS).map(k =>
+        `<button data-set="${esc(it.key)}" data-store="optica.answers" data-s="${k}" aria-pressed="${st === k}">${esc(t(OPTICA_STATUS_KEY[k]))}</button>`).join("")}</div>
     </div>
     <div class="ci-detail">
-      <div><label for="oev_${esc(it.key)}">Evidence or notes</label><textarea id="oev_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.evidence" ${NO_BROWSER_ASSIST}>${esc(d.evidence || "")}</textarea></div>
-      <div><label for="oow_${esc(it.key)}">Owner</label><input type="text" id="oow_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.owner" value="${esc(d.owner || "")}"></div>
-      <div><label for="odu_${esc(it.key)}">Due</label><input type="date" id="odu_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.due" value="${esc(d.due || "")}"></div>
-      ${st === "declined" ? `<div class="wide"><label for="odr_${esc(it.key)}">Why this was declined</label><textarea id="odr_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.declineReason" ${NO_BROWSER_ASSIST}>${esc(d.declineReason || "")}</textarea></div>` : ""}
+      <div><label for="oev_${esc(it.key)}">${esc(t("ci.evidence"))}</label><textarea id="oev_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.evidence" ${NO_BROWSER_ASSIST}>${esc(d.evidence || "")}</textarea></div>
+      <div><label for="oow_${esc(it.key)}">${esc(t("ci.owner"))}</label><input type="text" id="oow_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.owner" value="${esc(d.owner || "")}"></div>
+      <div><label for="odu_${esc(it.key)}">${esc(t("ci.due"))}</label><input type="date" id="odu_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.due" value="${esc(d.due || "")}"></div>
+      ${st === "declined" ? `<div class="wide"><label for="odr_${esc(it.key)}">${esc(t("optica.whyDeclined"))}</label><textarea id="odr_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.declineReason" ${NO_BROWSER_ASSIST}>${esc(d.declineReason || "")}</textarea></div>` : ""}
     </div>
   </li>`;
 }
@@ -46,15 +46,15 @@ function renderOpticaChapter(n) {
   const c = OPTICA.chapters.find(x => x.n === n);
   const s = opticaScore(c.items, S);
   const vendor = c.items.filter(i => i.who === "developer").length;
-  return `<p class="eyebrow">OPTICA chapter ${c.n} of 13 · domain ${c.domain}</p>
+  return `<p class="eyebrow">${esc(t("optica.chapterEyebrow", {n: c.n, domain: c.domain}))}</p>
   <h1>${esc(c.title)}</h1>
   ${c.purpose ? `<p class="lede">${esc(c.purpose)}</p>` : ""}
   <div class="legend">
-    <span>Questions are this project's paraphrase of OPTICA, not its published wording.</span>
+    <span>${esc(t("optica.paraphrase"))}</span>
   </div>
-  ${vendor ? `<p style="font-size:13px;color:var(--muted)">${vendor} of ${c.items.length} item${vendor === 1 ? "" : "s"} here can only be answered by the solution's developer.</p>` : ""}
+  ${vendor ? `<p style="font-size:13px;color:var(--muted)">${esc(t("optica.vendorOnly", {count: vendor, total: c.items.length}))}</p>` : ""}
   <ol class="checklist">${c.items.map(opticaItemHTML).join("")}</ol>
-  <p style="font-size:13px;color:var(--muted);margin-top:10px">${s.answered} of ${s.total} answered${s.declined ? `, ${s.declined} declined` : ""}. The chip on each row names the CHAI criterion that partially covers it, or a dash where none does.</p>
+  <p style="font-size:13px;color:var(--muted);margin-top:10px">${esc(t("optica.answered", {answered: s.answered, total: s.total}))}${s.declined ? esc(t("optica.declinedCount", {count: s.declined})) : ""}. ${esc(t("optica.chipNote"))}</p>
   ${pager()}`;
 }
 
@@ -62,33 +62,33 @@ function renderOpticaOverview() {
   const all = opticaScore(OPTICA_ITEMS, S);
   const byWho = opticaByProducer(S);
   const rows = byWho.map(b => `<tr>
-      <td>${esc(OPTICA_PRODUCER_LABEL[b.who] || b.who)}</td>
+      <td>${esc(OPTICA_PRODUCER_KEY[b.who] ? t(OPTICA_PRODUCER_KEY[b.who]) : b.who)}</td>
       <td>${b.answered}/${b.total}</td>
-      <td>${b.outstanding.length ? esc(b.outstanding.slice(0, 6).map(i => i.num).join(", ")) + (b.outstanding.length > 6 ? ` +${b.outstanding.length - 6} more` : "") : "—"}</td>
+      <td>${b.outstanding.length ? esc(b.outstanding.slice(0, 6).map(i => i.num).join(", ")) + (b.outstanding.length > 6 ? ` ${t("dash.andMore", {count: b.outstanding.length - 6})}` : "") : "—"}</td>
     </tr>`).join("");
 
   return `<p class="eyebrow">OPTICA</p>
-  <h1>Adoption review</h1>
-  <p class="lede">77 items in 13 chapters, answered by five stakeholders in sequence. OPTICA asks whether <em>this</em> organization should adopt <em>this</em> solution; it runs alongside the CHAI lifecycle and never changes it.</p>
+  <h1>${esc(t("optica.title"))}</h1>
+  <p class="lede">${esc(t("optica.lede"))}</p>
 
   <div class="cards">
-    <div class="card"><h3>Answered</h3><p class="big">${all.answered}/${all.total}</p></div>
-    <div class="card"><h3>Progress</h3><p class="big">${all.pct}%</p></div>
-    <div class="card"><h3>Declined</h3><p class="big">${all.declined}</p></div>
+    <div class="card"><h3>${esc(t("optica.card.answered"))}</h3><p class="big">${all.answered}/${all.total}</p></div>
+    <div class="card"><h3>${esc(t("optica.card.progress"))}</h3><p class="big">${all.pct}%</p></div>
+    <div class="card"><h3>${esc(t("optica.card.declined"))}</h3><p class="big">${all.declined}</p></div>
   </div>
 
-  <h2>Who owes the next answers</h2>
-  <p style="font-size:13px;color:var(--muted)">OPTICA is a relay: each stage is completed by one stakeholder before the next begins. Outstanding items are listed by the party that can answer them.</p>
-  <table class="tbl"><thead><tr><th>Stakeholder</th><th>Answered</th><th>Outstanding</th></tr></thead><tbody>${rows}</tbody></table>
+  <h2>${esc(t("optica.whoOwes"))}</h2>
+  <p style="font-size:13px;color:var(--muted)">${esc(t("optica.relay"))}</p>
+  <table class="tbl"><thead><tr><th>${esc(t("optica.col.stakeholder"))}</th><th>${esc(t("optica.card.answered"))}</th><th>${esc(t("optica.col.outstanding"))}</th></tr></thead><tbody>${rows}</tbody></table>
 
   <div class="note">
-    <p><b>OPTICA answers never change CHAI status.</b> The two checklists ask different parties for different evidence at different moments, and no OPTICA item fully discharges a CHAI criterion. Evidence can be cited in both; a judgment in one is not a judgment in the other.</p>
+    <p><b>${esc(t("optica.neverTitle"))}</b> ${esc(t("optica.neverDetail"))}</p>
   </div>
   ${pager()}`;
 }
 
 function renderOpticaOff() {
-  return `<p class="eyebrow">OPTICA</p><h1>Adoption review</h1>
-  <p class="lede">OPTICA is not switched on for this project.</p>
-  <p>Turn it on in <button class="btn" data-go="setup">Project setup</button> to add its 77 adoption questions alongside the CHAI lifecycle.</p>`;
+  return `<p class="eyebrow">OPTICA</p><h1>${esc(t("optica.title"))}</h1>
+  <p class="lede">${esc(t("optica.off"))}</p>
+  <p>${tHtml("optica.turnOn", {}, {setup: `<button class="btn" data-go="setup">${esc(t("rail.setup"))}</button>`})}</p>`;
 }

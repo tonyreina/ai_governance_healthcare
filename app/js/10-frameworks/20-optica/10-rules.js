@@ -16,7 +16,8 @@
       is tracked separately and never folded into the percentage as
       though it were met.
    ============================================================ */
-const OPTICA_STATUS = { met: "Answered", partial: "Partial", notmet: "Outstanding", declined: "Declined", na: "N/A" };
+const OPTICA_STATUS = { met: "Answered", partial: "Partial", notmet: "Outstanding", declined: "Declined", na: "N/A" };   // English: exports
+const OPTICA_STATUS_KEY = Object.freeze({ met: "optica.status.met", partial: "status.partial", notmet: "optica.status.notmet", declined: "optica.status.declined", na: "status.na" });
 const OPTICA_VAL = { met: 1, partial: 0.5, notmet: 0, declined: 0 };
 
 const opticaOn = p => !!((p || S).optica || {}).enabled;

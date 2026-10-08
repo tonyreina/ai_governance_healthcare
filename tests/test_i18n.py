@@ -246,6 +246,24 @@ def main() -> int:
         page.keyboard.press("Escape")
         page.evaluate("goHome()")
 
+        print("OPTICA")
+        page.evaluate(
+            "openProject([...PROJECTS.keys()][0], 'setup');"
+            " setOpticaEnabled(true); go('o1');"
+        )
+        page.wait_for_timeout(200)
+        segs = page.eval_on_selector_all(
+            ".ci .seg button", "bs => [...new Set(bs.map(b => b.textContent))]"
+        )
+        check("OPTICA status buttons are German", "Beantwortet" in segs, str(segs))
+        page.evaluate("go('optica')")
+        page.wait_for_timeout(200)
+        check(
+            "the OPTICA overview is German",
+            "Einführungsprüfung" in page.inner_text("h1"),
+        )
+        page.evaluate("goHome()")
+
         print("Plural flags pick the language's form")
         page.evaluate("setLocale('ru')")
         forms = page.evaluate(
@@ -362,6 +380,9 @@ def main() -> int:
         page.evaluate("go('report')")
         page.wait_for_timeout(200)
         counts["report"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
+        page.evaluate("setOpticaEnabled(true); go('o1');")
+        page.wait_for_timeout(200)
+        counts["optica"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
         ctx.close()
         browser.close()
 

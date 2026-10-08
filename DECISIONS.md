@@ -516,6 +516,35 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   that already did this; the check is a follow-up.
 - Source: #35; R-30.
 
+### D-35 The proxy runs as uid 65532, with a one-shot job to own its volumes
+
+- Status: Accepted
+- `user: 65532:65532`, `cap_drop: ALL` plus `NET_BIND_SERVICE`, `read_only`, a
+  tmpfs `/tmp`, and a `proxy-perms` service that `chown -R`s `/data` and `/config`
+  before the proxy starts.
+- Found by running it, not by reading: the stock `caddy` binary has a file
+  capability, so under `cap_drop: ALL` the kernel refuses to exec it ("operation
+  not permitted") until `NET_BIND_SERVICE` is back in the bounding set, even
+  though Docker lets any user bind port 80. Named volumes are root-owned, so a
+  non-root Caddy logged `permission denied` on its autosave, instance id and
+  locks, and an automatic-HTTPS deployment would have re-issued certificates on
+  every restart.
+- The upgrade case is the reason the fixer is recursive and has
+  `DAC_READ_SEARCH`: volumes an earlier root-run proxy populated hold `0700`
+  directories and `0600` keys. Tested with Caddy's local CA: the non-root proxy
+  took over such a volume, served HTTPS, logged no permission error and reused
+  the certificate.
+- Rejected: leaving the proxy root with fewer capabilities. It works, and is
+  the smaller change, but a container escape from the one internet-facing
+  process would start as root, which is the finding.
+- Rejected: `tmpfs` for `/data`. It runs, and loses the certificates.
+- Rejected: baking a `chown` into a compose-built image. Compose bind-mounts the
+  Caddyfile and dashboard so an edit needs no rebuild (D-15), and only the cloud
+  image is built; there the `chown` is in `proxy/Dockerfile`.
+- Limits are defaults, overridable through `.env`, sized for kilobytes of
+  documents.
+- Source: #50; R-32.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

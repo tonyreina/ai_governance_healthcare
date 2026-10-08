@@ -83,6 +83,44 @@ def compose_exec(service: str, *command: str) -> str:
     return result.stdout if result.returncode == 0 else ""
 
 
+def container_facts() -> dict[str, dict]:
+    """What the running containers were actually started with, by service.
+
+    Read with `docker inspect`, so it is what the daemon applied, not what the
+    compose file said it wanted.
+    """
+    out = subprocess.run(
+        ["docker", "compose", "ps", "-a", "-q"], capture_output=True, text=True
+    ).stdout.split()
+    facts: dict[str, dict] = {}
+    for cid in out:
+        raw = subprocess.run(
+            ["docker", "inspect", cid], capture_output=True, text=True
+        ).stdout
+        info = json.loads(raw)[0]
+        host = info["HostConfig"]
+        service = info["Config"]["Labels"].get("com.docker.compose.service", cid)
+        facts[service] = {
+            "user": info["Config"].get("User"),
+            "cap_drop": host.get("CapDrop"),
+            "cap_add": host.get("CapAdd"),
+            "read_only": host.get("ReadonlyRootfs"),
+            "security_opt": host.get("SecurityOpt"),
+            "memory": host.get("Memory"),
+            "exit": info["State"].get("ExitCode"),
+        }
+    return facts
+
+
+def proxy_log() -> str:
+    done = subprocess.run(
+        ["docker", "compose", "logs", "--no-color", "proxy"],
+        capture_output=True,
+        text=True,
+    )
+    return (done.stdout + done.stderr).lower()
+
+
 def direct_api_status(headers: dict[str, str]) -> int:
     """GET /api/me straight at the API, from inside the proxy's network namespace.
 
@@ -275,6 +313,44 @@ def main() -> int:
         "check_isolation.py finds the isolation model intact",
         isolation.returncode == 0,
         isolation.stdout[-400:],
+    )
+
+    print("Container hardening (#50)")
+    facts = container_facts()
+
+    def fact(service: str, key: str):
+        return (facts.get(service) or {}).get(key)
+
+    check(
+        "the proxy runs as an unprivileged user",
+        str(fact("proxy", "user")).split(":")[0] not in ("", "0", "root", "None"),
+        str(fact("proxy", "user")),
+    )
+    check(
+        "the proxy and the api have no capability but the proxy's one",
+        fact("api", "cap_drop") == ["ALL"]
+        and fact("proxy", "cap_drop") == ["ALL"]
+        and fact("proxy", "cap_add") == ["CAP_NET_BIND_SERVICE"]
+        and not fact("api", "cap_add"),
+        f"{facts}",
+    )
+    check(
+        "the proxy and the api have a read-only root filesystem",
+        fact("proxy", "read_only") is True and fact("api", "read_only") is True,
+    )
+    check(
+        "every service has no-new-privileges and a memory limit",
+        all(
+            "no-new-privileges:true" in (fact(s, "security_opt") or [])
+            and (fact(s, "memory") or 0) > 0
+            for s in ("db", "api", "proxy")
+        ),
+        f"{facts}",
+    )
+    check(
+        "the proxy's volumes were handed to it, and it did not fail to write them",
+        fact("proxy-perms", "exit") == 0 and "permission denied" not in proxy_log(),
+        f"exit={fact('proxy-perms', 'exit')}",
     )
 
     print("PROXY_SHARED_SECRET (#61)")

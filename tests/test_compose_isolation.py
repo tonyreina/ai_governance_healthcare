@@ -164,6 +164,93 @@ def shared_secret_reaches_both_ends(compose: dict) -> list[str]:
     ]
 
 
+PROXY_INIT = "proxy-perms"
+NON_ROOT = {"0", "root", ""}
+
+
+def _security_opts(svc: dict) -> list[str]:
+    return [str(o) for o in svc.get("security_opt", [])]
+
+
+def container_hardening(compose: dict) -> list[str]:
+    """The baseline a hospital's container standard asks for (#50).
+
+    The proxy is the only service reachable from outside and it ran as root with
+    every default capability; the API's image already drops to uid 10001. No
+    service had a memory limit, so any one could take the host's memory. The
+    rate limiter's own docstring says the hard protections are elsewhere, and a
+    memory limit is one of the elsewheres.
+    """
+    problems = []
+    for name, svc in compose.get("services", {}).items():
+        if svc.get("privileged"):
+            problems.append(f"{name} is privileged")
+        if "no-new-privileges:true" not in _security_opts(svc):
+            problems.append(f"{name} lacks security_opt no-new-privileges:true")
+        if not svc.get("mem_limit"):
+            problems.append(f"{name} has no mem_limit")
+        if not svc.get("pids_limit"):
+            problems.append(f"{name} has no pids_limit")
+        if not svc.get("cpus"):
+            problems.append(f"{name} has no cpus limit")
+
+    for name in (API, PROXY):
+        svc = service(compose, name)
+        if "ALL" not in [str(c).upper() for c in svc.get("cap_drop", [])]:
+            problems.append(f"{name} does not cap_drop ALL")
+        if svc.get("read_only") is not True:
+            problems.append(f"{name} does not have a read-only root filesystem")
+    adds = {str(c).upper() for c in service(compose, API).get("cap_add", [])}
+    if adds:
+        problems.append(f"api adds back capabilities it does not need: {sorted(adds)}")
+    adds = {str(c).upper() for c in service(compose, PROXY).get("cap_add", [])}
+    if adds - {"NET_BIND_SERVICE"}:
+        problems.append(f"proxy adds back more than NET_BIND_SERVICE: {sorted(adds)}")
+
+    user = str(service(compose, PROXY).get("user", "")).split(":")[0]
+    if user in NON_ROOT:
+        problems.append("proxy runs as root: set a numeric non-root user")
+
+    # A non-root proxy cannot write the named volumes, which are root-owned, so a
+    # one-shot root service fixes their ownership. It must stay off every network
+    # and drop everything but CHOWN, or it is a new way in.
+    init = service(compose, PROXY_INIT)
+    if not init:
+        problems.append(f"{PROXY_INIT} is missing, so the non-root proxy cannot write")
+    else:
+        if init.get("network_mode") != "none":
+            problems.append(f"{PROXY_INIT} has network access")
+        if init.get("networks"):
+            problems.append(f"{PROXY_INIT} is on a network")
+        if "ALL" not in [str(c).upper() for c in init.get("cap_drop", [])]:
+            problems.append(f"{PROXY_INIT} does not cap_drop ALL")
+        if {str(c).upper() for c in init.get("cap_add", [])} - {
+            "CHOWN",
+            "DAC_READ_SEARCH",
+        }:
+            problems.append(f"{PROXY_INIT} adds back more than it needs")
+        gate = (service(compose, PROXY).get("depends_on") or {}).get(PROXY_INIT, {})
+        if gate.get("condition") != "service_completed_successfully":
+            problems.append(f"proxy does not wait for {PROXY_INIT} to finish")
+    return problems
+
+
+def cloud_proxy_image_is_unprivileged(dockerfile: str) -> list[str]:
+    """proxy/Dockerfile is what Cloud Run, ECS and Container Apps actually run, so it
+    must not diverge from the compose service on the one service reachable from
+    outside (#50)."""
+    problems = []
+    user = re.search(r"^USER\s+65532(:65532)?\s*$", dockerfile, re.M)
+    if not user:
+        problems.append("proxy/Dockerfile does not switch to the non-root user 65532")
+    chown = re.search(r"^RUN\s+chown\s+-R\s+65532:65532\s+(.*)$", dockerfile, re.M)
+    if not chown or "/data" not in chown.group(1) or "/config" not in chown.group(1):
+        problems.append("proxy/Dockerfile does not hand /data and /config to that user")
+    elif user and chown.start() > user.start():
+        problems.append("the chown must come before USER, or it runs unprivileged")
+    return problems
+
+
 def every_rule(compose: dict) -> list[str]:
     return [
         *api_ports(compose),
@@ -175,6 +262,10 @@ def every_rule(compose: dict) -> list[str]:
         *database_image_pinned(compose),
         *override_file_is_named(),
         *shared_secret_reaches_both_ends(compose),
+        *container_hardening(compose),
+        *cloud_proxy_image_is_unprivileged(
+            (ROOT / "proxy" / "Dockerfile").read_text(encoding="utf-8")
+        ),
     ]
 
 
@@ -240,6 +331,96 @@ def main() -> int:
         broken = copy.deepcopy(compose)
         broken["services"][DB]["image"] = image
         check(f"db image '{image}' is noticed", bool(database_image_pinned(broken)))
+
+    def hardening_mutation(label: str, mutate) -> None:
+        broken = copy.deepcopy(compose)
+        mutate(broken["services"])
+        check(f"{label} is noticed", bool(container_hardening(broken)))
+
+    for name in (DB, API, PROXY):
+        hardening_mutation(
+            f"{name} losing no-new-privileges",
+            lambda s, n=name: s[n].pop("security_opt", None),
+        )
+        hardening_mutation(
+            f"{name} losing its memory limit", lambda s, n=name: s[n].pop("mem_limit")
+        )
+        hardening_mutation(
+            f"{name} losing its pids limit", lambda s, n=name: s[n].pop("pids_limit")
+        )
+        hardening_mutation(
+            f"{name} losing its cpu limit", lambda s, n=name: s[n].pop("cpus")
+        )
+        hardening_mutation(
+            f"{name} becoming privileged",
+            lambda s, n=name: s[n].update(privileged=True),
+        )
+    for name in (API, PROXY):
+        hardening_mutation(
+            f"{name} keeping its default capabilities",
+            lambda s, n=name: s[n].pop("cap_drop"),
+        )
+        hardening_mutation(
+            f"{name} with a writable root filesystem",
+            lambda s, n=name: s[n].update(read_only=False),
+        )
+    hardening_mutation("the proxy running as root", lambda s: s[PROXY].pop("user"))
+    hardening_mutation(
+        "the proxy running as uid 0", lambda s: s[PROXY].update(user="0:0")
+    )
+    hardening_mutation(
+        "the proxy adding back SYS_ADMIN",
+        lambda s: s[PROXY].update(cap_add=["NET_BIND_SERVICE", "SYS_ADMIN"]),
+    )
+    hardening_mutation(
+        "the api adding any capability back", lambda s: s[API].update(cap_add=["CHOWN"])
+    )
+    hardening_mutation(
+        "the ownership fixer joining a network",
+        lambda s: s[PROXY_INIT].update(networks=["edge"]),
+    )
+    hardening_mutation(
+        "the ownership fixer keeping network access",
+        lambda s: s[PROXY_INIT].pop("network_mode"),
+    )
+    hardening_mutation(
+        "the ownership fixer keeping every capability",
+        lambda s: s[PROXY_INIT].pop("cap_drop"),
+    )
+    hardening_mutation(
+        "the proxy not waiting for the ownership fixer",
+        lambda s: s[PROXY].pop("depends_on"),
+    )
+    hardening_mutation("the ownership fixer being removed", lambda s: s.pop(PROXY_INIT))
+
+    real = (ROOT / "proxy" / "Dockerfile").read_text(encoding="utf-8")
+    check(
+        "the cloud proxy image: a real Dockerfile passes",
+        not cloud_proxy_image_is_unprivileged(real),
+    )
+    check(
+        "the cloud proxy image: dropping USER is noticed",
+        bool(cloud_proxy_image_is_unprivileged(real.replace("USER 65532:65532", ""))),
+    )
+    check(
+        "the cloud proxy image: dropping the chown is noticed",
+        bool(
+            cloud_proxy_image_is_unprivileged(
+                re.sub(r"^RUN chown.*$", "", real, flags=re.M)
+            )
+        ),
+    )
+    check(
+        "the cloud proxy image: a chown after USER is noticed",
+        bool(
+            cloud_proxy_image_is_unprivileged(
+                real.replace(
+                    "RUN chown -R 65532:65532 /data /config\nUSER 65532:65532",
+                    "USER 65532:65532\nRUN chown -R 65532:65532 /data /config",
+                )
+            )
+        ),
+    )
 
     for side in (API, PROXY):
         broken = copy.deepcopy(compose)

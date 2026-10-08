@@ -250,8 +250,9 @@ restore with the wrong passphrase, exits non-zero.
 ### Backups: `make backup` is a tool, not a backup strategy
 
 `make backup` writes an encrypted dump of a running database. On its own it is not
-a backup plan (45 CFR 164.308(a)(7) makes a data backup plan *required*), for
-three reasons, each of which is a decision you make.
+a backup plan (the practice followed is the HIPAA Security Rule's contingency
+plan, 45 CFR 164.308(a)(7)), for three reasons, each of which is a decision you
+make.
 
 **1. Nothing schedules it.** Run it from the host's scheduler, for example daily
 at 02:30. `BACKUP_PASSPHRASE` must be in that job's environment, from a secret
@@ -296,14 +297,11 @@ on the host's disk. **Nothing in this stack encrypts it.** If the disk is not
 encrypted, whoever holds the disk (stolen, returned to a vendor, improperly
 disposed of) can read every record.
 
-45 CFR 164.312(a)(2)(iv), encryption at rest, is *addressable*: implement it, or
-document why an equivalent is reasonable. Either way it has to be a decision on
-the record, and there is a practical reason to make it. If this stack holds
-protected health information, whether a lost disk is a reportable breach can
-turn on whether the data was encrypted to the standard HHS describes (45 CFR
-164.402); ask your privacy officer. Whether this system is approved for
-protected health information at all is a separate question this repository has
-not answered.
+The practice followed is the HIPAA Security Rule's for encryption at rest (45 CFR
+164.312(a)(2)(iv)): implement it, or document why an equivalent is reasonable.
+Either way it has to be a decision on the record. This stack must not hold patient
+data (governance metadata only), so what a lost disk exposes is the review records
+and the personal data of the staff named in them, which is reason enough.
 
 To encrypt it, put **Docker's data root** (`/var/lib/docker` by default, which
 holds `pgdata`) on an encrypted volume:

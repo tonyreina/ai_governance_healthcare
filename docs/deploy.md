@@ -10,6 +10,13 @@ any storage mode, the self-hosted server included. The controls on this page
 the review record and the staff personal data in it. They are not a basis for
 storing patient data, and nothing here makes the deployment suitable for it.
 
+Where a section cites a HIPAA Security Rule standard (45 CFR Part 164), it
+names the practice the control follows. The rule governs systems that hold
+electronic protected health information (ePHI), and this one must not, so a
+cited standard is not a legal requirement on this system. The controls follow
+those standards anyway: they are what a hospital's security team already
+measures against, and they protect the sign-off record and the staff data in it.
+
 The application does not authenticate anybody. It reads an identity
 header that a reverse proxy puts on every request and uses it for
 `GET /api/me`, for audit-log attribution, and for checkpoint sign-offs.
@@ -125,8 +132,9 @@ space is more disk.
 
 ### Encryption at rest
 
-45 CFR 164.312(a)(2)(iv) is *addressable*: implement it or document why an
-equivalent is reasonable. On a managed database the provider's storage encryption
+The practice followed here is the HIPAA Security Rule's for encryption at rest
+(45 CFR 164.312(a)(2)(iv)): implement it, or document why an equivalent is
+reasonable. On a managed database the provider's storage encryption
 is the usual answer, and what to confirm differs:
 
 | | Storage encryption | Customer-managed key |
@@ -174,12 +182,12 @@ that any region meets a legal requirement.
 
 ### Backup and recovery
 
-45 CFR 164.308(a)(7) makes a data backup plan and a disaster recovery plan
-*required*, and testing them addressable. These records are the evidence that a
-clinical AI deployment was reviewed, and by whom: losing them is itself the
-compliance event, and re-entry cannot reconstruct sign-off dates or authorship.
-So the managed database's durability settings are not optional extras. Set them
-when you create the instance:
+The model is the HIPAA Security Rule's contingency plan (45 CFR 164.308(a)(7)):
+a data backup plan, a disaster recovery plan, and testing them. These records
+are the evidence that a clinical AI deployment was reviewed, and by whom: losing
+them is itself the compliance event, and re-entry cannot reconstruct sign-off
+dates or authorship. So the managed database's durability settings are not
+optional extras. Set them when you create the instance:
 
 | | Point-in-time recovery and backup retention | Deletion protection | Copy outside the account |
 |---|---|---|---|
@@ -292,8 +300,8 @@ things break it on managed platforms:
 
 Every read of a governance record is recorded, so the question a breach asks has
 an answer: *account X was compromised on the 3rd and closed on the 9th; which
-records did it open, and did it export any?* 45 CFR 164.312(b), audit controls,
-is a required standard.
+records did it open, and did it export any?* This follows the HIPAA Security
+Rule's audit controls standard (45 CFR 164.312(b)).
 
 `access_event` holds one row per access, **in the same transaction as the read
 it describes**: a list, a project's revision list, one revision, a project's
@@ -367,8 +375,9 @@ describes.
 
 The only record of a delete, a purge, a rejected request or a 401 used to be a
 line of English on container stdout, which nothing collected, so a restart lost
-it and nothing could alert on it. 45 CFR 164.308(a)(1)(ii)(D) asks for regular
-review of activity and 164.308(a)(6)(ii) for security incident detection.
+it and nothing could alert on it. The practice followed is the HIPAA Security
+Rule's regular review of activity (45 CFR 164.308(a)(1)(ii)(D)) and security
+incident detection (164.308(a)(6)(ii)).
 
 The API now writes **one JSON object per line** (`LOG_FORMAT=json`, the default),
 and every security-relevant event has a **stable name** and fields. Each line is
@@ -429,8 +438,9 @@ there is the part this repository cannot test:
 
 ### Session lifetime and automatic logoff
 
-45 CFR 164.312(a)(2)(iii), automatic logoff, is *addressable*: implement it, or
-document an equivalent and why. This application has **no session of its own**:
+The practice followed is the HIPAA Security Rule's for automatic logoff (45 CFR
+164.312(a)(2)(iii)): implement it, or document an equivalent and why. This
+application has **no session of its own**:
 identity arrives from your front door on every request, so the control that ends
 a session is the front door's, and the equivalent to point at is its session
 lifetime. Set it to what your risk assessment says for shared clinical
@@ -507,8 +517,9 @@ SELECT id, doc -> 'meta' ->> 'solution' AS solution,
 The dashboard also tells an owner, in *Access*, when they are a project's only
 owner, and `make doctor` warns with a count.
 
-**Emergency access** is for when that did not happen. HIPAA's emergency access
-procedure (45 CFR 164.312(a)(2)(ii)) is *required*, not addressable. Set
+**Emergency access** is for when that did not happen. It follows the HIPAA
+Security Rule's emergency access procedure (45 CFR 164.312(a)(2)(ii)): a record
+nobody can reach is a failure whatever it holds. Set
 `EMERGENCY_ACCESS_IDS` to one or more identity ids, comma-separated, as the proxy
 asserts them. Each holds owner rights on **every** project: read, export,
 reassign, archive, delete and purge.

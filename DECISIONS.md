@@ -917,6 +917,23 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Supersedes: D-21.
 - Source: the owner; #66; R-50.
 
+### D-52 Keep the citations, change what they claim
+
+- Status: Accepted
+- The HIPAA Security Rule standards stay cited, because they are the vocabulary
+  a hospital security team reviews against and they explain why each control
+  exists. What changed is the claim: "follows the practice of", not "is
+  required". The one sentence that tied encryption to a PHI breach rule (45 CFR
+  164.402) is gone from the docs and from `make preflight`'s refusal, which now
+  names what a lost disk does expose: the review records and staff data.
+- Code comments and test docstrings that cite a standard as the reason a control
+  exists are left as they are: they explain intent, and they are not read as a
+  statement to a deployer.
+- Rejected: removing the citations (it would hide why a control exists);
+  weakening a control because the rule no longer binds (the sign-off record and
+  staff data still need it).
+- Source: #121; R-49, R-51.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

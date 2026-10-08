@@ -41,8 +41,8 @@ function renderSetup(){
   const empty = !Object.keys(S.items).length && !Object.keys(S.card).length;
   return `<p class="eyebrow">${esc(t("setup.eyebrow"))}</p><h1>${esc(t("setup.title"))}</h1>
   <p class="lede">${esc(t("setup.lede"))}</p>
-  <div class="note ${st.key==="green"?"ok":""}" style="${st.key==="retired"?"border-color:var(--muted);background:var(--sunk)":""}"><b>${esc(st.label)}</b> · ${esc(phase(S).label)}${nr?` · ${esc(t("setup.nextReview",{date:fmtDay(nr)}))}`:""}
-    ${f.length?`<ul class="gaplist">${f.map(x=>`<li>${esc(x.text)}</li>`).join("")}</ul>`:""}</div>
+  <div class="note ${st.key==="green"?"ok":""}" style="${st.key==="retired"?"border-color:var(--muted);background:var(--sunk)":""}"><b>${esc(statusLabel(st))}</b> · ${esc(phaseLabel(phase(S)))}${nr?` · ${esc(t("setup.nextReview",{date:fmtDay(nr)}))}`:""}
+    ${f.length?`<ul class="gaplist">${f.map(x=>`<li>${esc(flagText(x))}</li>`).join("")}</ul>`:""}</div>
   <div class="fields">
     ${field("meta.solution",t("setup.f.solution"),"",0)}
     ${field("meta.org",t("setup.f.org"),"",0)}

@@ -194,7 +194,55 @@ def main() -> int:
             "Weiter zu" in page.inner_text(".pager"),
             page.inner_text(".pager"),
         )
+        page.evaluate("openProject([...PROJECTS.keys()][0], STAGES[0].id)")
+        page.wait_for_timeout(200)
+        segs = page.eval_on_selector_all(
+            ".ci .seg button", "bs => [...new Set(bs.map(b => b.textContent))]"
+        )
+        check(
+            "checklist status buttons are German",
+            {"Erfüllt", "Teilweise", "Nicht erfüllt"} <= set(segs),
+            str(segs),
+        )
+        html = page.evaluate("exportHTML()")
+        check(
+            "while the HTML export stays English",
+            "CHAI lifecycle assurance review" in html and "Erfüllt" not in html,
+        )
         page.evaluate("goHome()")
+        page.wait_for_timeout(200)
+        statuses = page.eval_on_selector_all(
+            ".prow .st", "es => es.map(e => e.textContent)"
+        )
+        check(
+            "dashboard statuses are German",
+            statuses and all(s in {"Nicht konform", "Aktualisierung nötig", "Im Plan",
+                                   "Außer Betrieb", "Gestoppt"} for s in statuses),
+            str(statuses),
+        )  # fmt: skip
+
+        print("Plural flags pick the language's form")
+        page.evaluate("setLocale('ru')")
+        forms = page.evaluate(
+            """() => [1, 2, 5, 21].map(n =>
+                 flagText({text: 'x', msg: ['flag.pastDue', {count: n}]}))"""
+        )
+        check(
+            "Russian: 1, 2, 5 and 21 actions take one, few, many, one",
+            forms == ["1 действие просрочено", "2 действия просрочено",
+                      "5 действий просрочено", "21 действие просрочено"],
+            str(forms),
+        )  # fmt: skip
+        page.evaluate("setLocale('de')")
+        english = page.evaluate(
+            "[...PROJECTS.values()].flatMap(p => flags(normalize(clone(p))))"
+            ".map(f => f.text)"
+        )
+        check(
+            "and the English text an export records is unchanged",
+            english and all(re.fullmatch(r"[\x20-\x7e]+", s) for s in english),
+            str(english[:3]),
+        )
 
         print("Dates follow the chosen language, not the browser's")
         check(
@@ -260,6 +308,17 @@ def main() -> int:
             f"{sorted(js_locales)} {sorted(files)}",
         )
 
+        print("The CC BY 4.0 attribution survives every translation")
+        for path in sorted((ROOT / "app" / "i18n").glob("*.json")):
+            credit = json.loads(path.read_text(encoding="utf-8"))["te.credit"]
+            check(
+                f"{path.stem}: license, copyright line and link kept",
+                "CC BY 4.0" in credit
+                and "© 2025 Coalition for Health AI" in credit
+                and "{link}" in credit,
+                credit[:80],
+            )
+
         print("Pseudo-locale: what is still hard-coded")
         page.evaluate("setLocale(Locale.PSEUDO); relocalize();")
         header = page.evaluate(
@@ -272,7 +331,7 @@ def main() -> int:
         page.evaluate("goHome()")
         counts = {}
         counts["dashboard"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
-        page.evaluate("openProject([...PROJECTS.keys()][0], 'checklist')")
+        page.evaluate("openProject([...PROJECTS.keys()][0], STAGES[0].id)")
         page.wait_for_timeout(200)
         counts["checklist"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
         page.evaluate("go('report')")

@@ -305,10 +305,22 @@ def run_payload(
         """async () => {
             exportPDF();
             const f = [...document.querySelectorAll('iframe')].pop();
-            await new Promise(r => setTimeout(r, 300));
+            // The app prints the frame once it loads. A real print dialog is modal
+            // in headless Firefox and can block this page for good (#160), so the
+            // frame's print() is replaced, from outside, before it loads; the test
+            // still sees that printing was reached.
+            let printed = 0;
+            const load = f.onload;
+            f.onload = () => {
+                f.contentWindow.print = () => { printed++; };
+                load();
+            };
+            for (let i = 0; i < 40 && !printed; i++) {
+                await new Promise(r => setTimeout(r, 50));
+            }
             let ran = 0;
             try { ran = f.contentWindow.__pwned || 0; } catch (e) { ran = -1; }
-            const out = {sandbox: f.getAttribute('sandbox') || '', ran};
+            const out = {sandbox: f.getAttribute('sandbox') || '', ran, printed};
             f.remove();   // the app's own frame; later audits look for others
             return out;
         }"""
@@ -317,6 +329,8 @@ def run_payload(
         bad.append(f"pdf frame: not sandboxed without scripts ({frame['sandbox']!r})")
     if frame["ran"]:
         bad.append(f"pdf frame: a payload ran ({frame['ran']})")
+    if not frame["printed"]:
+        bad.append("pdf frame: print was never reached (vacuous)")
     shot = ctx.new_page()
     shot.add_init_script("window.__pwned = 0")
     shot.set_content(out["html"])

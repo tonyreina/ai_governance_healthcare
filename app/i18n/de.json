@@ -229,6 +229,8 @@
   "ci.more": "Nachweise und Verantwortung",
   "ci.statusGroup": "Status",
   "ci.evidence": "Nachweise oder Notizen",
+  "md.hint": "Formatierung: **fett**, *kursiv*, - oder 1. für Listen, [Text](https://adresse) für Links. Keine Tabellen, Bilder oder HTML.",
+  "md.preview": "So wird es gelesen",
   "refs.title": "Nachweisverweise",
   "refs.none": "Noch keine Verweise.",
   "refs.titleLabel": "Titel des Verweises",

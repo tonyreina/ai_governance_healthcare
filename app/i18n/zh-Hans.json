@@ -235,6 +235,8 @@
   "ci.more": "证据和负责人",
   "ci.statusGroup": "状态",
   "ci.evidence": "证据或备注",
+  "md.hint": "格式：**粗体**、*斜体*，列表用 - 或 1.，链接用 [文字](https://地址)。不支持表格、图片或 HTML。",
+  "md.preview": "显示效果",
   "refs.title": "证据引用",
   "refs.none": "暂无引用。",
   "refs.titleLabel": "引用标题",

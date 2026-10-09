@@ -233,6 +233,8 @@
   "ci.more": "Preuves et responsable",
   "ci.statusGroup": "Statut",
   "ci.evidence": "Preuves ou notes",
+  "md.hint": "Mise en forme : **gras**, *italique*, - ou 1. pour les listes, [texte](https://adresse) pour les liens. Ni tableaux, ni images, ni HTML.",
+  "md.preview": "Aperçu du rendu",
   "refs.title": "Références de preuve",
   "refs.none": "Aucune référence pour l'instant.",
   "refs.titleLabel": "Titre de la référence",

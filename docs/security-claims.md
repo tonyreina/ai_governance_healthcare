@@ -1136,4 +1136,22 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_refs.py::parentheses and brackets in an address cannot end the link early`
   `tests/test_refs.py::entries that are not references are dropped`
   `tests/test_refs.py::with safeUrl weakened, the same probe shows the hole`
+  `tests/test_markdown.py::with safeUrl weakened the structure check would catch the hole`
+  `tests/test_injection.py::an app that does not escape is rejected`
+
+### C-87 Formatting in notes cannot introduce markup
+
+- **Claim:** In the notes and rationale fields, formatting is limited to bold,
+  italic, lists and http(s) links, and for any text the HTML and the Markdown
+  written from it contain only that: no raw HTML, image, table, heading, script
+  or non-http link, whatever the text holds, and the work is bounded on input
+  built to make a parser crawl.
+- **Asserted in:** `docs/guide.md` — "raw HTML, images, tables and headings are shown as the text they are"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_markdown.py::HTML holds only the subset's tags, links and attributes`
+  `tests/test_markdown.py::no raw HTML, image, line break or foreign link`
+  `tests/test_markdown.py::its links are the HTML's links`
+  `tests/test_markdown.py::with esc weakened the structure check would catch the tag`
+  `tests/test_markdown.py::with safeUrl weakened the structure check would catch the hole`
   `tests/test_injection.py::an app that does not escape is rejected`

@@ -34,7 +34,7 @@ function opticaItemHTML(it) {
         `<button data-set="${esc(it.key)}" data-store="optica.answers" data-s="${k}" aria-pressed="${st === k}">${esc(t(OPTICA_STATUS_KEY[k]))}</button>`).join("")}</div>
     </div>
     <div class="ci-detail">
-      <div><label for="oev_${esc(it.key)}">${esc(t("ci.evidence"))}</label><textarea id="oev_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.evidence" ${NO_BROWSER_ASSIST}>${esc(d.evidence || "")}</textarea></div>
+      <div><label for="oev_${esc(it.key)}">${esc(t("ci.evidence"))}</label><textarea id="oev_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.evidence" data-md="1" ${NO_BROWSER_ASSIST}>${esc(d.evidence || "")}</textarea>${mdPreviewHTML(d.evidence)}</div>
       <div><label for="oow_${esc(it.key)}">${esc(t("ci.owner"))}</label><input type="text" id="oow_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.owner" value="${esc(d.owner || "")}"></div>
       <div><label for="odu_${esc(it.key)}">${esc(t("ci.due"))}</label><input type="date" id="odu_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.due" value="${esc(d.due || "")}"></div>
       ${refsHTML(`optica.answers.${it.key}`, d)}

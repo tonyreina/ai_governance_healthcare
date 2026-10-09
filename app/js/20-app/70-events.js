@@ -152,6 +152,7 @@ document.addEventListener("input",e=>{
     if(UI.qAll) warmNames([...PROJECTS.values()].flatMap(idsOfProject)).then(updateDashboard);
     updateDashboard(); return;
   }
+  if(el.dataset && el.dataset.md) updateMdPreview(el);
   const p=el.dataset && el.dataset.bind; if(!p || RO || !S) return;
   // Mark this as live typing so the changelog waits for the field to be
   // finished rather than describing each keystroke.

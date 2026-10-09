@@ -65,12 +65,14 @@ characters Markdown reads as structure escaped, so a value cannot start a headin
 become a link or an image, or add raw HTML, and in the CSV a cell a spreadsheet
 would run as a formula is neutralized.
 
-The one thing a person types that becomes a link is the address of an
-[evidence reference](guide.md#evidence-references), and only an http or https
-address does. The HTML report links it with `rel="noopener noreferrer nofollow"`
-and prints the address beside it; the Markdown report writes it as a link with its
-parentheses encoded, and prints the address after it. A reference's file is
-listed by name, size and SHA-256, never included.
+What a person types becomes formatting or a link in two places only: the [notes
+and rationale fields](guide.md#formatting-notes), which take bold, italic, lists
+and http(s) links, and the address of an [evidence
+reference](guide.md#evidence-references). Only an http or https address becomes
+a link in either. The HTML report links it with `rel="noopener noreferrer
+nofollow"` and prints the address beside it; the Markdown report writes it as a
+link with its parentheses encoded, and prints the address after it. A
+reference's file is listed by name, size and SHA-256, never included.
 
 ## The report
 

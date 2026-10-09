@@ -6,6 +6,9 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",
    text, so an English name keeps its punctuation in a Hebrew page and a Hebrew one
    in an English page (D-63). For element content only, never an attribute. */
 const bdi = s => `<bdi>${esc(s)}</bdi>`;
+/* The default of a switch over a closed set: a member added without a case here
+   fails the first time it runs, not by quietly rendering nothing. */
+function assertNever(v){ throw new Error("unhandled member: " + String(v)); }
 /* Fields of an item or answer that this code branches on by name. */
 const Field = Object.freeze({ REFS: "refs" });
 const clone = o => o==null ? o : JSON.parse(JSON.stringify(o));

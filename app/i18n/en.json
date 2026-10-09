@@ -238,6 +238,8 @@
   "ci.more": "Evidence & owner",
   "ci.statusGroup": "Status",
   "ci.evidence": "Evidence or notes",
+  "md.hint": "Formatting: **bold**, *italic*, - or 1. for lists, [text](https://address) for links. No tables, images or HTML.",
+  "md.preview": "How this will read",
   "refs.title": "Evidence references",
   "refs.none": "No references yet.",
   "refs.titleLabel": "Title of the reference",

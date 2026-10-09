@@ -233,6 +233,8 @@
   "ci.more": "Evidencia y responsable",
   "ci.statusGroup": "Estado",
   "ci.evidence": "Evidencia o notas",
+  "md.hint": "Formato: **negrita**, *cursiva*, - o 1. para listas, [texto](https://dirección) para enlaces. Sin tablas, imágenes ni HTML.",
+  "md.preview": "Así se leerá",
   "refs.title": "Referencias de evidencia",
   "refs.none": "Aún no hay referencias.",
   "refs.titleLabel": "Título de la referencia",

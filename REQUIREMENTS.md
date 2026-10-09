@@ -1056,3 +1056,20 @@ honest answer and is a gap worth closing; see R-19.
 - Source: the owner, this session; DECISIONS D-70; claims C-85, C-86.
 - Enforced by: `tests/test_refs.py`, `server/tests/test_refs_merge.py` and the
   reference cases in `tests/test_injection.py`.
+
+### R-62 Notes take restricted Markdown, and nothing that can carry markup
+
+- Status: Active
+- The evidence or notes field of a criterion (CHAI and OPTICA) and a
+  checkpoint's rationale accept bold, italic, bulleted and numbered lists, and
+  links. Nothing else is formatting: raw HTML, images, tables and headings are
+  shown as the text they are. A link opens only if it is http or https, and its
+  address is always printed beside it.
+- The stored value is the text as typed. The screen, the HTML and PDF reports and
+  the Markdown report are each written from one parsed tree, never from the
+  source, so a value reaches them only as something the parser built.
+- The owner's decision, 2026-10-08: allow formatting and links to external
+  sites, no uploads (R-61), and guard against injection (R-59).
+- Source: the owner, this session; DECISIONS D-71; claim C-87.
+- Enforced by: `tests/test_markdown.py` and the Markdown-dressed payloads in
+  `tests/test_injection.py`.

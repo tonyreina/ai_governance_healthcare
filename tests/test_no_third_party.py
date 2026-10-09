@@ -166,7 +166,10 @@ def main() -> int:
         )
 
         print("The check notices a request, and a resource (mutation)")
-        probe = browser.new_page()
+        # The page's own policy refuses these requests (connect-src and img-src are
+        # 'self'), which is the point of it. The probe bypasses the policy so that this
+        # test shows its own detector can see a request, whatever stopped it.
+        probe = browser.new_context(bypass_csp=True).new_page()
         probed: list[str] = []
         probe.on("request", lambda r: probed.append(r.url))
         probe.goto(APP.as_uri())

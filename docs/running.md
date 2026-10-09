@@ -1,32 +1,32 @@
 # Running it
 
-The dashboard runs in three places, and **they are not equivalent**. Pick by
+The dashboard runs in two places, and **they are not equivalent**. Pick by
 what you need, not by what is easiest to open.
 
 ## Which mode does what
 
-| | GitHub Pages / open a file | Claude artifact | Docker stack |
-|---|---|---|---|
-| Storage | Browser `localStorage` | Artifact database | PostgreSQL |
-| Shared between people | **No** | Yes | Yes |
-| Survives clearing site data | **No** | Yes | Yes |
-| Signed-in identity | **None** | Yes | Yes, from your SSO |
-| Access control enforced | **No** | Partly | **Yes, server-side** |
-| Checkpoint sign-off means something | **No, self-asserted** | Yes | Yes |
-| Patient-identifiable information | **Never** | **Never** | **Never** |
-| Version snapshots | No | No | **Yes** |
-| Who read what is recorded | No | No | **Yes** |
-| Retention, disposal and litigation holds | No | No | **Yes** |
-| Live updates between people | No | Yes | Yes |
-| Both checklists, model card, metrics | Yes | Yes | Yes |
-| All exports, including PDF | Yes | Yes | Yes |
-| Changelog | Yes, this browser | Yes | Yes |
-| Record fingerprint | Yes | Yes | Yes |
+| | Example page (GitHub Pages, or open a file) | Docker stack |
+|---|---|---|
+| Storage | Browser `localStorage` | PostgreSQL |
+| Shared between people | **No** | Yes |
+| Survives clearing site data | **No** | Yes |
+| Signed-in identity | **None** | Yes, from your SSO |
+| Access control enforced | **No** | **Yes, server-side** |
+| Checkpoint sign-off means something | **No, self-asserted** | Yes |
+| Patient-identifiable information | **Never** | **Never** |
+| Version snapshots | No | **Yes** |
+| Who read what is recorded | No | **Yes** |
+| Retention, disposal and litigation holds | No | **Yes** |
+| Live updates between people | No | Yes |
+| Both checklists, model card, metrics | Yes | Yes |
+| All exports, including PDF | Yes | Yes |
+| Changelog | Yes, this browser | Yes |
+| Record fingerprint | Yes | Yes |
 
-Whichever mode you are in, the header names it: *This browser only*, *Claude
-artifact* or *Shared workspace*, and a warning under it says what that mode does
-and does not do. The app never silently falls back from one to another. If it
-expected a server and cannot reach one, it stops and says so.
+Whichever mode you are in, the header names it: *This browser only* or *Shared
+workspace*, and a warning under it says what that mode does and does not do. The
+app never silently falls back from one to another. If it expected a server and
+cannot reach one, it stops and says so.
 
 !!! danger "The published site is a demonstration, not a system of record"
 
@@ -123,15 +123,6 @@ These work only in the shared workspace:
   owner sees *Litigation hold*. From a terminal, `make dispose` reports what is
   past its retention period and changes nothing. See
   [Privacy and retention](privacy.md).
-
-## As a Claude artifact
-
-The same file can be published as a Claude artifact, which gives it the
-artifact's own database and a signed-in identity. Access control there is only
-partly enforced and there are no version snapshots, so it is a way to share a
-review inside a team, not the audited workspace. The header says
-*Claude artifact* and the banner says what is missing. See
-[Self-hosting](self-hosting.md) for the storage interface it implements.
 
 ## Stopping, and cleaning up
 

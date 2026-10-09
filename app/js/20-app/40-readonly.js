@@ -51,21 +51,6 @@ function fatalError(title, detail, opts){
    record is on a shared, access-controlled, audited server or in localStorage
    on one laptop. A user cannot be expected to infer "do not type a patient
    identifier here" from a two-word label in the header. */
-/* The same, for the Claude artifact mode: where the records live, and that it is
-   not the audited server. Facts from the comparison in docs/running.md; it does
-   not say whether any data classification is approved. */
-function showArtifactNotice(){
-  if(document.getElementById("artifactNotice")) return;
-  const el = document.createElement("div");
-  el.id = "artifactNotice";
-  el.className = "storage-warning";
-  el.setAttribute("role", "note");
-  el.innerHTML = `<b>${esc(t("safety.artifact.title"))}</b>
-    <span class="sw-detail">${esc(t("safety.artifact.detail"))} ${esc(t("safety.scope"))}</span>`;
-  const header = document.querySelector("header.top");
-  if(header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
-}
-
 /* The server mode's statement of the same scope. It used to carry none, so the
    mode that scores best on access control and audit read as the one fit for
    patient data (#34). The scope is the same in every mode (R-49): it is a policy,
@@ -101,11 +86,10 @@ function relocalize(){
   const pick = document.getElementById(HeaderControl.LANGUAGE);
   if(pick) pick.innerHTML = localeOptions();
   if(RO) setMode(t("mode.viewOnly"), "ro"); else setModeFor(MODE);
-  ["storageWarning", "artifactNotice", "scopeNotice"].forEach(id => {
+  ["storageWarning", "scopeNotice"].forEach(id => {
     const el = document.getElementById(id); if(el) el.remove();
   });
   if(MODE === Mode.LOCAL) showStorageWarning();
-  else if(MODE === Mode.ARTIFACT) showArtifactNotice();
   else if(MODE === Mode.API) showScopeNotice();
   if(document.body.classList.contains("home")) renderDashboardShell();
   else if(S) renderProject(false);

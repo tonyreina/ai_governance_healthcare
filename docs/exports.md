@@ -17,8 +17,8 @@ The portfolio CSV is on the home page.
 
 A copy that has left the tool is easy to mistake for the record. So each export
 says which storage mode produced it, in the header's own words: *This browser
-only*, *Claude artifact* or *Shared workspace*, with a sentence on what that mode
-does and does not guarantee. In the report it is a note at the end. In the JSON
+only* or *Shared workspace*, with a sentence on what that mode does and does
+not guarantee. In the report it is a note at the end. In the JSON
 it is a `storage` object with the mode, the label and the note. In the CSV it is
 a **Stored in** column.
 
@@ -81,8 +81,8 @@ choose *Save as PDF*.
 !!! note "Why the print dialog rather than a one-click download"
 
     No PDF library is bundled. Every option weighs hundreds of kilobytes, and
-    the dashboard has to stay one self-contained file small enough to publish
-    as an artifact: a PDF writer would be larger than the whole application.
+    the dashboard has to stay one self-contained file small enough to read in
+    one sitting: a PDF writer would be larger than the whole application.
 
     Browsers already render HTML to PDF well, with real fonts, selectable text
     and working links. A canvas-based library gives you an image of a document

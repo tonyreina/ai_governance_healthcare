@@ -23,6 +23,7 @@ import http.server
 import socketserver
 import sys
 import threading
+import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -59,24 +60,19 @@ HEALTH_OK = (
     '{"status":"ok","version":"test","database":"up","auth_mode":"proxy-header:proxy"}'
 )
 
-# A stand-in for what the Claude artifact runtime puts on `window`: `claude.use`
-# resolves "db" to a document-database-shaped object. Enough to select DbStore.
-ARTIFACT_RUNTIME = """
-(() => {
-  const docs = {};
-  const col = () => ({
-    onSnapshot: cb => { setTimeout(() => cb({docs: []})); return () => {}; },
-    doc: id => ({ set: async d => { docs[id] = d; }, update: async () => {},
-                  delete: async () => {} }),
-    add: async () => {},
-    orderBy: () => ({ limit: () => ({ onSnapshot: () => () => {} }) }),
-  });
-  window.claude = { use: async name =>
-    name === "db" ? { collection: col } : Promise.reject(new Error("no " + name)) };
-})();
-"""
-
 failures: list[str] = []
+
+
+def wait_until(page, expression: str, timeout: float = 15.0) -> None:
+    """Poll with page.evaluate. page.wait_for_function evaluates a string with the
+    page's own `eval`, which the page's Content-Security-Policy forbids (#154); this
+    keeps the tests running under the policy the app actually ships with."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if page.evaluate(expression):
+            return
+        page.wait_for_timeout(100)
+    raise TimeoutError(f"still false after {timeout}s: {expression}")
 
 
 def check(name: str, condition: bool, detail: str = "") -> None:
@@ -310,67 +306,12 @@ def main() -> int:
         )
         page.close()
 
-        # The Claude artifact mode is NOT the self-hosted server (#64). Its data
-        # lives in an artifact database outside the deploying organization's
-        # infrastructure, and it was labeled "Shared workspace", identically to
-        # the audited PostgreSQL server. Driven with a stand-in for the
-        # `window.claude` the artifact runtime provides.
-        page = browser.new_page()
-        page.add_init_script(ARTIFACT_RUNTIME)
-        page.goto(base + "/app/index.html")
-        page.wait_for_timeout(600)
-        header = page.locator("#mode").inner_text().strip()
-        check(
-            "artifact mode is not labeled like the self-hosted server",
-            header != "Shared workspace" and "artifact" in header.lower(),
-            header,
-        )
-        notice = page.evaluate(
-            "(document.getElementById('artifactNotice') || {}).textContent || ''"
-        ).lower()
-        check(
-            "artifact mode says, in the layout, where the data lives",
-            "artifact" in notice,
-            repr(notice),
-        )
-        check(
-            "and what it is not appropriate for",
-            "patient-identifiable" in notice,
-            repr(notice),
-        )
-        artifact_scope = page.evaluate(
-            "typeof SCOPE_NOTICE === 'undefined' ? '' : SCOPE_NOTICE"
-        ).lower()
-        check(
-            "and states the same data scope",
-            bool(artifact_scope) and artifact_scope in " ".join(notice.split()),
-            repr(notice[:160]),
-        )
-        check(
-            "artifact mode does not show the browser-only warning",
-            page.locator("#storageWarning").count() == 0,
-        )
-        page.evaluate("STORE.create('p1', {})")
-        page.evaluate("queuePatch('p1', {note: 'x'})")
-        page.wait_for_timeout(1200)
-        saved = page.locator("#saved").inner_text().strip()
-        check(
-            "artifact mode: a save does not claim the shared workspace",
-            "shared workspace" not in saved.lower() and "artifact" in saved.lower(),
-            saved,
-        )
-        page.close()
-
         page = browser.new_page()
         boot(page, base, (200, HEALTH_OK))
         check(
             "server mode shows no browser-only warning beside its scope notice",
             page.locator("#storageWarning").count() == 0
             and page.locator("#scopeNotice").count() == 1,
-        )
-        check(
-            "server mode shows no artifact notice",
-            page.locator("#artifactNotice").count() == 0,
         )
         headers = page.evaluate(
             "typeof MODE_LABEL === 'undefined' ? {} : Object.fromEntries("

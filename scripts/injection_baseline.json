@@ -22,11 +22,11 @@
     "innerHTML": 6
   },
   "app/js/20-app/40-readonly.js": {
-    "innerHTML": 6
+    "innerHTML": 5
   },
   "app/js/20-app/50-exports.js": {
     "attribute": 1,
-    "innerHTML": 3
+    "innerHTML": 1
   },
   "app/js/20-app/55-session.js": {
     "attribute": 1,

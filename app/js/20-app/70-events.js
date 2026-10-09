@@ -6,7 +6,7 @@ document.addEventListener("click",async e=>{
   const btn=e.target.closest("button");
   if(!btn && row){ openProject(row.dataset.open); return; }
   if(!btn) return;
-  if(btn.dataset.archive && !WORKSPACE_RO){
+  if(btn.dataset.archive){
     const id=btn.dataset.archive, p=PROJECTS.get(id);
     if(!p) return;
     if(!canOwn(p)){ toast(t("toast.ownerArchive")); return; }
@@ -103,7 +103,7 @@ document.addEventListener("click",async e=>{
   if(a==="claim"){
     if(!ME.id){ toast(t("toast.noUserClaim")); return; }
     S.access=accessPatch(S,ME.id,"owner"); queuePatch(CUR,Object.assign({access:S.access},stamp()));
-    writeLog(CUR,"Claimed ownership"); RO=false; CAN_DELETE=true; renderProject(false); toast(t("toast.nowOwner")); return;
+    writeLog(CUR,"Claimed ownership"); RO=false; renderProject(false); toast(t("toast.nowOwner")); return;
   }
   if(a==="grant"){
     if(!canOwn(S)){ toast(t("toast.ownerGrant")); return; }

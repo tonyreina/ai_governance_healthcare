@@ -120,9 +120,8 @@ function openProject(id,view){
   CUR=id; S=normalize(clone(p)); LOG=[]; LOG_TOTAL=null; openItems.clear();
   // Read-only is a property of this project and this user, not of the
   // workspace: the same person may own one review and only read another.
-  RO = WORKSPACE_RO || !canWrite(S);
+  RO = !canWrite(S);
   document.body.classList.toggle("ro", RO);
-  CAN_DELETE = !WORKSPACE_RO && canOwn(S);
   UI.view=view||"setup"; saveUI();
   warmNames(idsOfProject(S));
   unsubLog=STORE.subscribeLog(id,(l,meta)=>{ LOG=l||[]; LOG_TOTAL=(meta && Number.isFinite(meta.total)) ? meta.total : null; warmNames(LOG.map(e=>e.by)); if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });

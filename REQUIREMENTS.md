@@ -23,7 +23,8 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-01 The dashboard is one self-contained file
 
-- Status: Active
+- Status: Superseded by R-60 (2026-10-08): the Claude artifact is no longer a
+  target
 - The built dashboard (`docs/app/index.html`) is a single HTML document. It must
   run as a Claude artifact, open straight off disk with no server, and publish
   to GitHub Pages. Native ES modules and anything that needs a second file are
@@ -744,6 +745,28 @@ honest answer and is a gap worth closing; see R-19.
 - Source: the owner, on #155; DECISIONS D-67.
 - Enforced by: `tests/test_injection.py`, `tests/test_check_injection.py` with
   `pixi run check-injection`, `server/tests/test_sql_injection.py`.
+
+### R-60 One self-contained file, for the deployed stack and the example page
+
+- Status: Active
+- The owner's decision, 2026-10-08: the Claude artifact mode is removed. The
+  dashboard runs in two places only, the deployed stack (served by the proxy
+  from PostgreSQL) and the example page (GitHub Pages, or a file opened from
+  disk, with everything in the browser).
+- The built dashboard (`docs/app/index.html`) is still a single HTML document
+  with no second file, because `file://` blocks module loading and the example
+  page must work opened from disk. Source is split under `app/` and
+  concatenated by `scripts/build_app.py`; the built file is generated and never
+  edited by hand.
+- The page carries its own Content-Security-Policy as a meta tag first in its
+  `<head>`, the same policy the proxy sends (D-68), so it holds on both.
+- Supersedes: R-01. Amends the lists in R-02 (`ApiStore` and `LocalStore` are
+  the implementations; `DbStore` is gone) and R-04 (there is no artifact mode or
+  notice to label); the entries keep the history.
+- Source: the owner, this session; DECISIONS D-69.
+- Enforced by: `pixi run check-app`, the `build-app` pre-commit hook,
+  `tests/test_boot_storage.py` (each mode's label and notice) and
+  `tests/test_csp.py`.
 
 ### R-28 A project's creator is always one of its owners
 

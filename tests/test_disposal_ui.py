@@ -14,7 +14,7 @@ So this drives the real dialog against a mocked API and records what it does:
 * without that choice it makes ONE request (delete the project); with it, two, in
   the order that fails safe (destroy the history, then delete the project);
 * if the destroy step fails the project is NOT deleted and the user is told;
-* in the modes that have no version history (browser-only, artifact) the choice is
+* in the modes that have no version history (browser-only) the choice is
   not offered, because there is nothing to destroy, and the wording stays accurate.
 
     pixi run test-disposal-ui
@@ -27,7 +27,7 @@ import sys
 from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright
-from test_boot_storage import DOCS, HEALTH_OK, serve
+from test_boot_storage import DOCS, HEALTH_OK, serve, wait_until
 
 ME = "owner@hospital.example"
 PID = "p1"
@@ -78,8 +78,8 @@ def mock_api(page, calls: list[str], *, purge_status: int = 204) -> None:
 
 
 def open_dialog(page) -> None:
-    page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=15000)
-    page.wait_for_function("PROJECTS && PROJECTS.size >= 1", timeout=15000)
+    wait_until(page, "typeof LOADED !== 'undefined' && LOADED", 15)
+    wait_until(page, "PROJECTS && PROJECTS.size >= 1", 15)
     page.evaluate(f"openProject({PID!r}, 'setup')")
     page.wait_for_selector('[data-act="delete"]', timeout=10000)
     page.click('[data-act="delete"]')
@@ -208,9 +208,9 @@ def main() -> int:
         page = browser.new_page()
         page.route("**/api/health", lambda r: r.fulfill(status=404, body=""))
         page.goto(base + "/app/index.html")
-        page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=15000)
+        wait_until(page, "typeof LOADED !== 'undefined' && LOADED", 15)
         page.evaluate("loadSamples()")
-        page.wait_for_function("PROJECTS && PROJECTS.size >= 1", timeout=15000)
+        wait_until(page, "PROJECTS && PROJECTS.size >= 1", 15)
         page.evaluate("ME.id = null")
         first = page.evaluate("[...PROJECTS.keys()][0]")
         page.evaluate(f"openProject({first!r}, 'setup')")

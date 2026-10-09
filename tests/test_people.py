@@ -157,14 +157,8 @@ def main() -> int:
             "ghost@h" in page.evaluate("exportMD()"),
         )
 
-        print("Other modes keep their behavior")
-        page.evaluate(
-            "MODE = Mode.ARTIFACT; for (const k of Object.keys(NAMES)) delete NAMES[k]"
-        )
-        check(
-            "the Claude artifact mode still says 'someone' for the unknown",
-            "someone" in page.evaluate("who('ghost@h')"),
-        )
+        print("The browser-only mode keeps its behavior")
+        page.evaluate("for (const k of Object.keys(NAMES)) delete NAMES[k]")
         page.evaluate("MODE = Mode.LOCAL")
         check(
             "browser-only mode still says 'someone', never an id it made up",

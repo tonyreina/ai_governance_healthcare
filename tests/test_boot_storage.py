@@ -125,6 +125,28 @@ def main() -> int:
     with serve(DOCS) as base, sync_playwright() as p:
         browser = p.chromium.launch()
 
+        # 0. Opened from disk: there is no server behind a file:// page, so the
+        # app does not ask for one. WebKit reports the refused request as a
+        # page error even though the app catches it (#160).
+        # Counted at fetch() itself: Chromium refuses a file:// fetch before any
+        # request event, so watching requests would pass with or without the fix.
+        page = browser.new_page()
+        page.add_init_script(
+            "window.__asked = []; const f = window.fetch;"
+            " window.fetch = (u, o) => { window.__asked.push(String(u));"
+            " return f(u, o); };"
+        )
+        page.goto((DOCS / "app" / "index.html").as_uri())
+        wait_until(page, "typeof LOADED !== 'undefined' && LOADED")
+        asked = page.evaluate("window.__asked.filter(u => u.includes('/api/'))")
+        check("opened from disk -> no request for an API", not asked, str(asked))
+        check(
+            "opened from disk -> this browser only",
+            page.locator("#mode").inner_text().strip() == "This browser only",
+            page.locator("#mode").inner_text(),
+        )
+        page.close()
+
         # 1. A healthy API: shared workspace, no warning banner.
         page = browser.new_page()
         boot(page, base, (200, HEALTH_OK))

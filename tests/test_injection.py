@@ -85,6 +85,12 @@ PAYLOADS = [
     "+cmd|' /C calc'!A0",
     "@SUM(1+1)",
     "-2+3",
+    # The notes fields take a Markdown subset (R-62): the same attacks, dressed as it.
+    f'see this: **<img src=x onerror="{C}" data-inj>** [a](javascript:{C})',
+    f'see this: [a](https://x.example/"onmouseover="{C}"data-inj)',
+    f'see this: [<img src=x onerror="{C}" data-inj>](https://x.example/)',
+    "see this: ![i](https://tracker.example/p.png)"
+    f"\n- <script>{C}</script>\n1. [x](//e)",
 ]
 
 # Injected elements and attributes, in the page or in an export opened by itself.

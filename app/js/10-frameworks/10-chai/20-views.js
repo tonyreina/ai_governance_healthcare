@@ -29,7 +29,7 @@ function ciHTML(it){
       <div class="seg" role="group" aria-label="${esc(t("ci.statusGroup"))}">${Object.keys(STATUS).map(k=>`<button data-set="${it.id}" data-s="${k}" aria-pressed="${st===k}">${esc(t(STATUS_KEY[k]))}</button>`).join("")}</div>
     </div>
     <div class="ci-detail">
-      <div><label for="ev_${it.id}">${esc(t("ci.evidence"))}</label><textarea id="ev_${it.id}" rows="2" data-bind="items.${it.id}.evidence" ${NO_BROWSER_ASSIST}>${esc(d.evidence||"")}</textarea></div>
+      <div><label for="ev_${it.id}">${esc(t("ci.evidence"))}</label><textarea id="ev_${it.id}" rows="2" data-bind="items.${it.id}.evidence" data-md="1" ${NO_BROWSER_ASSIST}>${esc(d.evidence||"")}</textarea>${mdPreviewHTML(d.evidence)}</div>
       <div><label for="ow_${it.id}">${esc(t("ci.owner"))}</label><input type="text" id="ow_${it.id}" data-bind="items.${it.id}.owner" value="${esc(d.owner||"")}"></div>
       <div><label for="du_${it.id}">${esc(t("ci.due"))}</label><input type="date" id="du_${it.id}" data-bind="items.${it.id}.due" value="${esc(d.due||"")}"></div>
       ${refsHTML(`items.${it.id}`, d)}
@@ -125,7 +125,7 @@ function renderGate(key){
     <div class="fields">
       ${field(`gates.${key}.by`,t("gate.by"),t("gate.byHint"),0)}
       ${field(`gates.${key}.date`,t("gate.date"),"",0,null,"date")}
-      ${field(`gates.${key}.rationale`,t("gate.rationale"),t("gate.rationaleHint"),1)}
+      ${field(`gates.${key}.rationale`,t("gate.rationale"),t("gate.rationaleHint"),1,null,null,null,true)}
     </div>
     ${g.decision?`<p class="signed">${g.signedAt?tHtml("gate.recordedOn",{date:fmtDay(g.signedAt.slice(0,10))},{who:who(g.signedBy)}):tHtml("gate.recorded",{},{who:who(g.signedBy)})}${nr?` ${esc(t("gate.nextDue",{date:fmtDay(nr)}))}`:""}</p>`:""}
     ${key==="D"&&g.decision?`<p class="ro-hide" style="margin:12px 0 0"><button class="btn" data-act="newreview">${esc(t("gate.newReview"))}</button></p>`:""}
@@ -225,11 +225,11 @@ function reportBody(names){
     </tbody></table></div>
     <h2>${esc(t("report.checkpoints"))}</h2>
     <div class="r-wrap"><table class="rtable"><thead><tr><th>${esc(t("report.col.checkpoint"))}</th><th>${esc(t("gate.decision"))}</th><th>${esc(t("gate.by"))}</th><th>${esc(t("report.col.date"))}</th><th>${esc(t("gate.rationale"))}</th></tr></thead><tbody>
-    ${Object.keys(GATES).map(k=>{const g=S.gates[k]||{}; return `<tr><td>${esc(gateTitle(k))}<br><span style="color:var(--muted);font-size:12px">${esc(gateQuestion(k))}</span></td><td>${g.decision?`<b>${esc(optionText(g.decision))}</b>`:`<span style="color:var(--muted)">${esc(t("report.notDecided"))}</span>`}</td><td>${bdi(g.by||"")}${g.signedBy?`<br><span style="color:var(--muted);font-size:12px">${tHtml("report.recordedBy",{},{who:nm(g.signedBy)})}</span>`:""}</td><td>${esc(g.date||"")}</td><td style="white-space:pre-wrap">${bdi(g.rationale||"")}</td></tr>`;}).join("")}
+    ${Object.keys(GATES).map(k=>{const g=S.gates[k]||{}; return `<tr><td>${esc(gateTitle(k))}<br><span style="color:var(--muted);font-size:12px">${esc(gateQuestion(k))}</span></td><td>${g.decision?`<b>${esc(optionText(g.decision))}</b>`:`<span style="color:var(--muted)">${esc(t("report.notDecided"))}</span>`}</td><td>${bdi(g.by||"")}${g.signedBy?`<br><span style="color:var(--muted);font-size:12px">${tHtml("report.recordedBy",{},{who:nm(g.signedBy)})}</span>`:""}</td><td>${esc(g.date||"")}</td><td class="md">${mdHTML(g.rationale||"")}</td></tr>`;}).join("")}
     </tbody></table></div>
     <h2>${esc(t("report.gaps"))}</h2>
     ${gaps.length?`<div class="r-wrap"><table class="rtable"><thead><tr><th>${esc(t("report.col.stage"))}</th><th>${esc(t("report.col.criterion"))}</th><th>${esc(t("report.col.principle"))}</th><th>${esc(t("report.status"))}</th><th>${esc(t("ci.owner"))}</th><th>${esc(t("ci.due"))}</th></tr></thead><tbody>
-      ${gaps.map(it=>{const d=S.items[it.id]||{}; const late=d.due&&parseDay(d.due)<parseDay(TODAY()); return `<tr><td>${it.stage.n}</td><td>${esc(itemText(it))}${d.evidence?`<br><span style="color:var(--muted);font-size:12.5px;white-space:pre-wrap">${bdi(d.evidence)}</span>`:""}${refsReportHTML(d)}</td><td>${esc(principleName(it.p))}</td><td>${tag(d.status)}</td><td>${bdi(d.owner||"–")}</td><td${late?' style="color:var(--red);font-weight:700"':""}>${esc(d.due||"–")}</td></tr>`;}).join("")}
+      ${gaps.map(it=>{const d=S.items[it.id]||{}; const late=d.due&&parseDay(d.due)<parseDay(TODAY()); return `<tr><td>${it.stage.n}</td><td>${esc(itemText(it))}${d.evidence?`<div class="md md-note">${mdHTML(d.evidence)}</div>`:""}${refsReportHTML(d)}</td><td>${esc(principleName(it.p))}</td><td>${tag(d.status)}</td><td>${bdi(d.owner||"–")}</td><td${late?' style="color:var(--red);font-weight:700"':""}>${esc(d.due||"–")}</td></tr>`;}).join("")}
     </tbody></table></div>`:`<p>${esc(t("report.noGaps"))}</p>`}
     <h2>${esc(t("card.title"))}</h2>
     <div style="max-width:560px">${labelHTML()}</div>
@@ -238,7 +238,7 @@ function reportBody(names){
     ${LOG.length?`<div class="r-wrap"><table class="rtable"><tbody>${LOG.map(e=>`<tr><td style="width:120px">${esc(fmtDay((e.at||"").slice(0,10)))}</td><td>${bdi(e.text)}</td><td>${nm(e.by)}</td></tr>`).join("")}</tbody></table></div>`:`<p>${esc(t("report.noEvents"))}</p>`}
     <h2>${esc(t("report.appendix"))}</h2>
     ${STAGES.map(s=>`<h3 style="font-size:15px;margin:18px 0 6px">${s.n}. ${esc(stageTitle(s))}</h3><div class="r-wrap"><table class="rtable"><tbody>
-      ${s.items.map(it=>{const d=S.items[it.id]||{}; return `<tr><td style="width:46px"><span class="pchip">${it.p}</span></td><td>${esc(itemText(it))}${d.evidence?`<br><span style="color:var(--muted);font-size:12.5px;white-space:pre-wrap">${bdi(d.evidence)}</span>`:""}${refsReportHTML(d)}</td><td style="width:110px">${tag(d.status)}</td></tr>`;}).join("")}
+      ${s.items.map(it=>{const d=S.items[it.id]||{}; return `<tr><td style="width:46px"><span class="pchip">${it.p}</span></td><td>${esc(itemText(it))}${d.evidence?`<div class="md md-note">${mdHTML(d.evidence)}</div>`:""}${refsReportHTML(d)}</td><td style="width:110px">${tag(d.status)}</td></tr>`;}).join("")}
     </tbody></table></div>`).join("")}
     <p class="disclaimer">${esc(t("report.disclaimer"))}</p>`;
 }

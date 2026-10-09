@@ -56,6 +56,24 @@ owner and a due date. Give anything partial or not met an owner and a due date:
 once the tool is in a pilot or live, an overdue action turns the dashboard row
 red.
 
+### Formatting notes
+
+The **evidence or notes** field of a criterion, and a checkpoint's **rationale**,
+accept a small amount of formatting, and a preview appears under the box once you
+use any:
+
+| You type | You get |
+|---|---|
+| `**bold**` | **bold** |
+| `*italic*` or `_italic_` | *italic* |
+| a line starting with `-` or `1.` | a bulleted or numbered list |
+| `[the report](https://example.org/r)` | a link, with its address printed beside it |
+
+Nothing else is formatting: raw HTML, images, tables and headings are shown as
+the text they are, and a link opens only if it is an http or https address. The
+text is stored exactly as you typed it (the JSON export carries it unchanged),
+and the HTML, PDF and Markdown reports are written from the same reading of it.
+
 ### Evidence references
 
 Under a criterion's notes (CHAI or OPTICA) you can add **evidence references**:

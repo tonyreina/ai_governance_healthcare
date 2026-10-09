@@ -16,11 +16,11 @@ const get = (path)=> path.split(".").reduce((o,k)=>o==null||!safeKey(k)?undefine
 /* `label` and `hint` arrive translated. A select's options are the values stored in
    the record, which stay English so the data does not change with the reader's
    language; `optLabel` turns a stored value into what the reader sees. */
-function field(path,label,hint,long,opts,kind,optLabel){
+function field(path,label,hint,long,opts,kind,optLabel,md){
   const v=esc(get(path)||""); const id="f_"+path.replace(/\./g,"_");
   let input;
   if(opts) input=`<select id="${id}" data-bind="${path}"><option value="">${esc(t("field.choose"))}</option>${opts.map(o=>`<option value="${esc(o)}"${get(path)===o?" selected":""}>${esc(optLabel?optLabel(o):o)}</option>`).join("")}</select>`;
-  else if(long) input=`<textarea id="${id}" data-bind="${path}" rows="3" ${NO_BROWSER_ASSIST}>${v}</textarea>`;
+  else if(long) input=`<textarea id="${id}" data-bind="${path}" rows="3"${md?' data-md="1"':""} ${NO_BROWSER_ASSIST}>${v}</textarea>${md?mdPreviewHTML(get(path)):""}`;
   // `date` gives the browser's own picker and its validation. Asking someone
   // to type YYYY-MM-DD invites 03/04/2026, which is two different dates
   // depending on where the reader is -- not a good property for the date a

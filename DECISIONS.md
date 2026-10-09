@@ -1379,3 +1379,33 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   link to check it or to preview it (an outbound request on the reader's behalf,
   against C-80).
 - Source: the owner; R-61.
+
+### D-71 Notes are parsed to a tree, and both outputs are written from it
+
+- Status: Accepted
+- The owner asked for formatting in the notes field, with links to outside sites
+  allowed, and for protection against injection. The subset is bold, italic,
+  flat lists and http(s) links (R-62).
+- **One tree, two writers.** `mdParse()` builds blocks of inline runs. `mdHTML()`
+  escapes every run; `mdInlineMarkdown()` writes the subset back with every other
+  special character escaped. Neither looks at the source again, so the structure
+  of the output is the parser's, whatever the text holds. The alternative, a
+  library that renders Markdown to HTML and then a sanitizer, was rejected: it
+  is a third-party dependency in a page that must be one file (R-60), and
+  sanitizing after the fact is the pattern whose misses are the standing source
+  of XSS.
+- **Not a full Markdown.** No nesting of lists, no tables, no headings, no
+  images, no autolinks, no raw HTML. Each one is either a way to carry markup or
+  a request an outside server (an image) when a record is read. A line that looks
+  like one is shown as text.
+- **The address is always shown.** A link written `[safe words](https://elsewhere)`
+  is the standard disguise for a phishing link, so the report prints the address
+  beside the words.
+- **Bounded.** The first 50,000 characters are parsed and the rest is shown as
+  plain text; nesting stops at three levels; every pattern is anchored at the
+  position being read. `tests/test_markdown.py` times input built to make a
+  parser crawl.
+- **Scope.** Evidence or notes (CHAI and OPTICA) and a checkpoint's rationale.
+  The model card's long fields, the decline reason and the setup notes stay plain
+  text for now.
+- Source: the owner; R-62.

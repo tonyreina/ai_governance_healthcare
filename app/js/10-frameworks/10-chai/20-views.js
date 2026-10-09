@@ -86,7 +86,7 @@ function teSuggestHTML(){
       </div>`).join("")
       // The attribution CC BY 4.0 requires: the source, the license and the copyright
       // line stay in every language (te.credit keeps {link} and the © line verbatim).
-      + `<p style="font-size:12px;color:var(--muted);margin:12px 0 0">${tHtml("te.credit",{count:uc.metrics.length},{link:`<a href="${esc(uc.url)}" target="_blank" rel="noopener">${esc(t("te.linkText",{label:tf(`te.usecase.${chosen}`, uc.label)}))}</a>`})}</p>`
+      + `<p style="font-size:12px;color:var(--muted);margin:12px 0 0">${tHtml("te.credit",{count:uc.metrics.length},{link:`<a href="${esc(uc.url)}" target="_blank" rel="noopener">${esc(t("te.linkText",{label:tf(`te.usecase.${chosen}`, uc.label)}))}</a>`})}</p>`  // url-ok: CHAI's published address, from the generated definitions, not a person's text
       // CC BY 4.0 also asks that changes be indicated: the names are translated,
       // the descriptions behind the link are not, and the record keeps CHAI's English.
       + (frameworkTranslated() ? `<p class="te-note small" role="note">${esc(t("te.note"))}</p>` : "");
@@ -194,7 +194,9 @@ function reportBody(names){
   const all=allItems(); const ov=scoreOf(all);
   const unanswered=all.filter(it=>!(S.items[it.id]||{}).status).length;
   const gaps=all.filter(it=>{const st=(S.items[it.id]||{}).status; return !st||st==="notmet"||st==="partial";});
-  const tag=st=>`<span class="tag ${st||"none"}">${esc(st?t(STATUS_KEY[st]):t("report.unanswered"))}</span>`;
+  // A stored status is whatever an import or an API writer put there, so the class
+  // comes from the known set and never from the value (#155).
+  const tag=st=>{ const known=Object.hasOwn(STATUS_KEY,st); return `<span class="tag ${known?st:"none"}">${esc(known?t(STATUS_KEY[st]):t("report.unanswered"))}</span>`; };
   const m=S.meta, F=flags(S), st=statusOf(S), nr=nextReview(S);
   return `<div class="r-head">
       <p class="eyebrow">${esc(t("report.eyebrow"))}</p>

@@ -1065,3 +1065,35 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_fingerprint.py::an edited record fails to verify`
   `tests/test_fingerprint.py::the HTML report (which the PDF prints) has both digests`
   `tests/test_fingerprint.py::the notice says a SHA-256 travels in the JSON export, and now it does`
+
+### C-82 Text a person types stays text, on every screen and in every export
+
+- **Claim:** A value typed into any field of a project, or imported, never runs and
+  never becomes markup in the dashboard, the HTML report, the PDF's frame or the
+  Markdown report, cannot become a spreadsheet formula, and a new way of turning text
+  into markup is reviewed before it is added (R-59).
+- **Asserted in:** `docs/developing.md` — "Text a person types stays text."
+- **Asserted in:** `docs/exports.md` — "Whatever a person typed stays text in every export."
+- **Status:** partial
+- **Gap:** Escaping is the only barrier. The page policy still allows inline script
+  because the dashboard is one file (R-01), so a field the test does not reach would
+  run. The Markdown report is checked as text, not by every viewer that renders it. The
+  Claude artifact host is outside the repository. #154
+- **Enforced by:**
+  `tests/test_injection.py::an app that does not escape is rejected`
+  `tests/test_injection.py::the CSV rule notices a formula cell`
+  `tests/test_injection.py::the Markdown rules notice a heading, a script link and raw HTML`
+  `tests/test_check_injection.py::a stored value interpolated into a class attribute is counted`
+  `tests/test_check_injection.py::is within its baseline`
+
+### C-83 The server never builds SQL from text
+
+- **Claim:** Every SQL call passes a constant string with values as parameters, except
+  the migration files and the role the API serves as, and hostile text in any field is
+  stored and returned as text.
+- **Asserted in:** `docs/developing.md` — "the server passes values to SQL as parameters and never in the SQL text"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_sql_injection.py::test_every_sql_call_passes_a_constant_string`
+  `server/tests/test_sql_injection.py::test_the_guard_notices_each_way_text_reaches_sql`
+  `server/tests/test_sql_injection.py::test_hostile_text_is_stored_and_returned_as_text`

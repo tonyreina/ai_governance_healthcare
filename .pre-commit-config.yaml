@@ -86,6 +86,16 @@ repos:
         pass_filenames: false
         files: '^(server/app/.*\.py|scripts/.*\.py|examples/.*\.py|app/js/.*\.js|scripts/enum_baseline\.json)$'
 
+      # New ways of turning typed text into markup: an eval, an unescaped value in an
+      # attribute, a URL built from text, a new innerHTML (#154). A ratchet, like the
+      # enum check, so the existing reviewed ones do not block work.
+      - id: check-injection
+        name: check for unescaped text reaching markup
+        entry: pixi run check-injection
+        language: system
+        pass_filenames: false
+        files: '^(app/js/.*\.js|scripts/check_injection\.py|scripts/injection_baseline\.json)$'
+
       # The guardrail's own tests. A check never shown to fail is a claim, so
       # this runs whenever the checker or its tests change.
       # Every security claim in docs/security-claims.md must still be quoted in the

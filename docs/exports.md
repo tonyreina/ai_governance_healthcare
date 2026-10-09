@@ -59,6 +59,12 @@ appears in the read trail beside the reads that fetched the data
 ([Cloud deployment](deploy.md#the-read-trail)). That is a record of ordinary
 use, not a control: a modified client could omit it.
 
+Whatever a person typed stays text in every export. In the HTML report and the PDF
+it is escaped, in the Markdown report it is ended at the line and has the
+characters Markdown reads as structure escaped, so a value cannot start a heading,
+become a link or an image, or add raw HTML, and in the CSV a cell a spreadsheet
+would run as a formula is neutralized.
+
 ## The report
 
 The report has the status and its flags, readiness by stage and by principle, the

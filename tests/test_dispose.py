@@ -38,6 +38,7 @@ tpl = load("test_purge_ledger", ROOT / "tests" / "test_purge_ledger.py")
 
 failures: list[str] = []
 SECRET = "entered by mistake: MRN 00123"
+HOSTILE_NAME = "x$by$'; DROP TABLE projects; -- $by"
 
 
 def check(name: str, ok: bool, detail: str = "") -> None:
@@ -59,11 +60,23 @@ def unit() -> None:
     check("--apply without --by is refused", code == 2 and "--by" in out, out)
     code, out = run("--psql", "false", "--apply", "--by", "   ")
     check("so is a blank name", code == 2, out)
-    try:
-        ds.quote("x$by$; DROP TABLE projects; --")
-        check("a name that would end the quoting is refused", False)
-    except ValueError:
-        check("a name that would end the quoting is refused", True)
+    hostile = [
+        "x$by$; DROP TABLE projects; --",
+        "ends in the old tag$by",
+        "$by$",
+        "$$ ; DROP TABLE projects ; $$",
+        'o\'brien \\ "quoted"',
+        "",
+    ]
+    ok = True
+    for value in hostile:
+        literal = ds.quote(value)
+        tag = literal[: literal.index("$", 1) + 1]
+        body = literal[len(tag) :]
+        # The first thing that closes the literal is its own closing tag, at the end.
+        ok = ok and literal.endswith(tag) and body.find(tag) == len(body) - len(tag)
+        ok = ok and body[: -len(tag)] == value
+    check("a name is quoted so that nothing in it can end the quote", ok)
     report = {
         "policy": {"record_years": 6, "read_trail_years": 6,
                    "changed_at": "2026-01-01T00:00:00", "changed_by": "chai"},
@@ -161,6 +174,17 @@ def integration() -> None:
             "the run is recorded with who ran it",
             run_row["run_by"] == "ops@hospital.example" and run_row["projects"] == 1,
             str(run_row),
+        )
+        code, out = run("--psql", prefix, "--apply", "--by", HOSTILE_NAME)
+        check("a name full of quotes and SQL runs as data", code == 0, out)
+        recorded = tpl.psql(
+            name, "SELECT run_by FROM disposal_run ORDER BY id DESC LIMIT 1"
+        )
+        check(
+            "it is recorded exactly as typed, and the tables are intact",
+            recorded == HOSTILE_NAME
+            and tpl.psql(name, "SELECT count(*) FROM projects") == "1",
+            recorded,
         )
         people = tpl.psql(name, "SELECT string_agg(id, ',') FROM principals")
         check("someone still signing in is kept", people == "here@h.org", people)

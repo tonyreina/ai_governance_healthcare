@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import secrets
 import shlex
 import sys
 from pathlib import Path
@@ -50,11 +51,14 @@ APPLY_SQL = "SELECT row_to_json(r)::text FROM dispose_due({by}) r;"
 
 
 def quote(value: str) -> str:
-    """A SQL string literal, dollar-quoted so nothing in it can end it."""
-    tag = "$by$"
-    if tag in value:
-        raise ValueError("--by may not contain $by$")
-    return f"{tag}{value}{tag}"
+    """A SQL string literal, dollar-quoted with a random tag so nothing in the value can
+    end it. The tag is checked against the value joined to the closing tag, not the
+    value alone: a value ending in `$by` followed by a closing `$by$` would otherwise
+    close the quote early."""
+    while True:
+        tag = f"$by_{secrets.token_hex(8)}$"
+        if (value + tag).find(tag) == len(value):
+            return f"{tag}{value}{tag}"
 
 
 def day(value: str | None) -> str:

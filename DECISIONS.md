@@ -1220,6 +1220,36 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   putting the digest in each audit entry (the entry already carries the MD5).
 - Source: the owner, on #150; R-58.
 
+### D-67 Poison everything and look, rather than trace which fields are safe
+
+- Status: Accepted
+- The owner asked for a scan and a guard (#155).
+- **A test that poisons the document.** `tests/test_injection.py` takes a
+  populated project and replaces every string in it with each of 24 payloads,
+  including the fields an import can fill with anything (statuses, decisions,
+  dates), an extra key named like the payload, the change log, people's names,
+  the search box, saved state, the legacy record, the litigation-hold history
+  and an imported file. It renders every screen the project has and every
+  export, and checks that nothing ran, no payload markup was parsed, and the
+  text is still there as text. Because it poisons whatever the document holds, a
+  field added tomorrow is covered the day it is added. A mutation removes the
+  app's escape and the test must fail.
+- **A ratchet for the rest.** `scripts/check_injection.py` refuses `eval`, `new
+  Function`, `document.write`, `insertAdjacentHTML`, a `srcdoc` or `outerHTML`
+  assignment, a `javascript:` URL, a string timer and an `on*=` handler in
+  markup, and counts unescaped attribute interpolations and `innerHTML`
+  assignments per file so a new one fails. The existing ones were each read and
+  come from code. It is a tripwire, not proof: a value escaped for the wrong
+  context is invisible to it, which the payload test covers by behavior.
+- **On the server:** an AST test fails on any SQL call whose first argument is
+  not a constant string, except the two named places that run trusted DDL, and a
+  database test round-trips hostile text. A NUL character is a 422.
+- Rejected: a sanitizer library (R-01 allows no dependency, and escaping on
+  output is the right tool for text that is never meant to be markup); a
+  taint-tracking analysis of the JavaScript (more machinery than the app, and
+  the poison test finds the same bugs by running the code).
+- Source: the owner, on #155; R-59.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

@@ -51,6 +51,7 @@ jobs:
       - run: pixi run test-workflows
 
       - run: pixi run test-enums
+      - run: pixi run test-check-injection
       - run: pixi run test-check-i18n
 
       # The showcase video on the docs site: present, under its size cap,
@@ -199,6 +200,12 @@ jobs:
       - name: fingerprint
         if: ${{ !cancelled() }}
         run: pixi run test-fingerprint
+
+      # Text a person types stays text, on every screen and in every export: each string
+      # in a project poisoned with markup and script payloads, then audited (#154).
+      - name: injection
+        if: ${{ !cancelled() }}
+        run: pixi run test-injection
 
       # Governance metadata only, never patient data, in any mode, stated where a
       # deployer reads first (#34). The in-app notice is in test-boot.

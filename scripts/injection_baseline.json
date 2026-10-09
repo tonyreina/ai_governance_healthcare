@@ -1,0 +1,41 @@
+{
+  "app/js/00-core/50-dom.js": {
+    "attribute": 20
+  },
+  "app/js/10-frameworks/05-project/00-setup.js": {
+    "attribute": 9,
+    "innerHTML": 3
+  },
+  "app/js/10-frameworks/10-chai/20-views.js": {
+    "attribute": 28,
+    "innerHTML": 1
+  },
+  "app/js/10-frameworks/20-optica/20-views.js": {
+    "attribute": 4
+  },
+  "app/js/20-app/10-shell.js": {
+    "attribute": 2,
+    "innerHTML": 2
+  },
+  "app/js/20-app/20-dashboard.js": {
+    "attribute": 14,
+    "innerHTML": 6
+  },
+  "app/js/20-app/40-readonly.js": {
+    "innerHTML": 6
+  },
+  "app/js/20-app/50-exports.js": {
+    "attribute": 1,
+    "innerHTML": 3
+  },
+  "app/js/20-app/55-session.js": {
+    "attribute": 1,
+    "innerHTML": 1
+  },
+  "app/js/20-app/70-events.js": {
+    "attribute": 1
+  },
+  "app/js/20-app/80-boot.js": {
+    "innerHTML": 1
+  }
+}

@@ -42,6 +42,11 @@ function exportPDF(){
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
   frame.setAttribute("title", t("print.frameTitle"));
+  // The report is only read and printed, so it gets no script at all. It is same-origin
+  // so print() is reachable, which means a script in it would run as the app; without
+  // allow-scripts a markup slip in the report cannot (#155). allow-modals is what lets
+  // the document's print dialog open.
+  frame.setAttribute("sandbox", "allow-same-origin allow-modals");
   frame.style.cssText = "position:fixed;left:-9999px;top:0;width:820px;height:1160px;border:0";  // rtl-ok: off screen either way
   frame.onload = () => {
     const win = frame.contentWindow;
@@ -60,28 +65,32 @@ function exportPDF(){
   document.body.appendChild(frame);
   // srcdoc keeps it same-origin, so contentWindow.print() is reachable; a blob
   // URL would be a different origin in some browsers and throw.
-  frame.srcdoc = exportHTML();
+  frame.srcdoc = exportHTML();   // xss-ok: the frame is sandboxed without allow-scripts (above); tests/test_injection.py
   toast(t("toast.printOpening"));
 }
 
 function exportMD(){
   // The Markdown report reads in the reader's language (D-60), like the HTML one.
   const all=allItems(), ov=scoreOf(all), m=S.meta, L=[];
-  const st=s=>t(s?STATUS_KEY[s]:"report.unanswered");
-  // Backslashes first: escaping only the pipe turned a value's own `\|` into `\\|`,
-  // an escaped backslash and a live pipe that ends the cell (#124).
-  const line=s=>String(s||"").replace(/\n+/g," ").replace(/\\/g,"\\\\").replace(/\|/g,"\\|");
+  const st=s=>t(Object.hasOwn(STATUS_KEY,s)?STATUS_KEY[s]:"report.unanswered");
+  // Every value a person typed goes through here. It ends the line (a value cannot
+  // start a heading, a quotation or a table row) and backslash-escapes what Markdown
+  // reads as structure: emphasis, links and images, code, tables and raw HTML. The
+  // backslash itself goes first: escaping only the pipe turned a value's own `\|` into
+  // an escaped backslash and a live pipe that ends the cell (#124). A viewer that
+  // renders HTML would otherwise run a colleague's markup (#155).
+  const line=s=>String(s??"").replace(/[\r\n\u2028\u2029]+/g," ").replace(/[\\`*_\[\]()<>|!~]/g,c=>"\\"+c);
   const nm=id=>displayName(id);
-  const fieldLine=(labelKey,value)=>t("md.fieldLine",{label:t(labelKey),value});
-  const shown=(map,v)=>v?(map[v]?t(map[v]):v):"–";
+  const fieldLine=(labelKey,value)=>t("md.fieldLine",{label:t(labelKey),value:line(value)});
+  const shown=(map,v)=>v?(Object.hasOwn(map,v)?t(map[v]):v):"–";
   const prov=storageNoteShown();
-  L.push(`# ${m.solution||t("project.untitled")}: ${t("export.titleSuffix")}`,"");
-  L.push(fieldLine("report.status",statusLabel(statusOf(S))),fieldLine("report.phase",phaseLabel(phase(S))),fieldLine("report.org",m.org||"–"),fieldLine("report.developer",m.developer||"–"),fieldLine("report.sourcing",shown(SOURCING_KEY,m.sourcing)),fieldLine("report.riskTier",shown(RISK_KEY,m.riskTier)),fieldLine("report.sponsor",m.sponsor||"–"),fieldLine("report.nextReview",nextReview(S)||"–"),fieldLine("md.team",line(m.reviewers)||"–"),fieldLine("md.scope",line(m.scope)||"–"),fieldLine("md.generated",TODAY()),fieldLine("md.language",LOCALE),fieldLine("md.storedIn",`${prov.label}. ${prov.note}`),"");
+  L.push(`# ${m.solution?line(m.solution):t("project.untitled")}: ${t("export.titleSuffix")}`,"");
+  L.push(fieldLine("report.status",statusLabel(statusOf(S))),fieldLine("report.phase",phaseLabel(phase(S))),fieldLine("report.org",m.org||"–"),fieldLine("report.developer",m.developer||"–"),fieldLine("report.sourcing",shown(SOURCING_KEY,m.sourcing)),fieldLine("report.riskTier",shown(RISK_KEY,m.riskTier)),fieldLine("report.sponsor",m.sponsor||"–"),fieldLine("report.nextReview",nextReview(S)||"–"),fieldLine("md.team",m.reviewers||"–"),fieldLine("md.scope",m.scope||"–"),fieldLine("md.generated",TODAY()),fieldLine("md.language",LOCALE),fieldLine("md.storedIn",`${prov.label}. ${prov.note}`),"");
   const F=flags(S); L.push(`## ${t("report.flags")}`,""); if(F.length) F.forEach(f=>L.push(`- **${t(f.sev==="red"?"status.red":"status.amber")}:** ${flagText(f)}`)); else L.push(t("md.none")); L.push("");
   L.push(`## ${t("report.readiness")}`,"",t("md.overall",{pct:ov.pct,answered:ov.answered,total:ov.total}),"",`| ${t("report.col.principle")} | ${t("report.col.score")} |`,"|---|---|");
   Object.keys(PRINCIPLES).forEach(k=>L.push(`| ${principleName(k)} | ${scoreOf(all.filter(it=>it.p===k)).pct}% |`));
   L.push("",`## ${t("report.checkpoints")}`,"",`| ${t("report.col.checkpoint")} | ${t("gate.decision")} | ${t("gate.by")} | ${t("report.col.date")} | ${t("md.rationale")} |`,"|---|---|---|---|---|");
-  Object.keys(GATES).forEach(k=>{const g=S.gates[k]||{}; L.push(`| ${gateTitle(k)}: ${gateQuestion(k)} | ${g.decision?optionText(g.decision):t("md.notDecided")} | ${line(g.by)}${g.signedBy?` (${t("report.recordedBy",{who:line(nm(g.signedBy))})})`:""} | ${line(g.date)} | ${line(g.rationale)} |`);});
+  Object.keys(GATES).forEach(k=>{const g=S.gates[k]||{}; L.push(`| ${gateTitle(k)}: ${gateQuestion(k)} | ${g.decision?line(optionText(g.decision)):t("md.notDecided")} | ${line(g.by)}${g.signedBy?` (${t("report.recordedBy",{who:line(nm(g.signedBy))})})`:""} | ${line(g.date)} | ${line(g.rationale)} |`);});
   L.push("",`## ${t("md.openGaps")}`,"");
   const gaps=all.filter(it=>{const s=(S.items[it.id]||{}).status; return !s||s==="notmet"||s==="partial";});
   if(gaps.length){ L.push(`| ${t("report.col.stage")} | ${t("report.col.criterion")} | ${t("report.status")} | ${t("ci.owner")} | ${t("ci.due")} |`,"|---|---|---|---|---|"); gaps.forEach(it=>{const d=S.items[it.id]||{}; L.push(`| ${it.stage.n} | ${line(itemText(it))} | ${st(d.status)} | ${line(d.owner)} | ${line(d.due)} |`);}); }
@@ -90,7 +99,7 @@ function exportMD(){
   if(frameworkTranslated()) L.push(`_${t("fw.note")}_`,"");
   CARD.forEach(sec=>{L.push(`### ${cardSecName(sec)}`,""); sec.fields.forEach(f=>L.push(`- **${cardLabel(f[0])}:** ${line(cardValOf(S,f[0]))||`_${t("label.notProvided")}_`}`)); L.push("");
     if(sec.sec==="Trust ingredients"){ L.push(`### ${t("metrics.title")}`,""); if(S.metrics.length){L.push(`| ${t("metrics.col.category")} | ${t("metrics.col.metric")} | ${t("metrics.col.value")} | ${t("metrics.col.ci")} | ${t("md.population")} |`,"|---|---|---|---|---|"); S.metrics.forEach(x=>L.push(`| ${line(metricCatName(x.cat))} | ${line(x.name)} | ${line(x.value)} | ${line(x.ci)} | ${line(x.pop)} |`));} else L.push(`_${t("md.noneEntered")}_`); L.push("");}});
-  L.push(`## ${t("report.history")}`,""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${(e.at||"").slice(0,10)}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push(t("md.none")); L.push("");
+  L.push(`## ${t("report.history")}`,""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${line(String(e.at||"").slice(0,10))}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push(t("md.none")); L.push("");
   L.push(`## ${t("report.appendix")}`,"");
   STAGES.forEach(s=>{L.push(`### ${s.n}. ${stageTitle(s)}`,""); s.items.forEach(it=>{const d=S.items[it.id]||{}; L.push(`- [${it.p}] ${itemText(it)}: **${st(d.status)}**${d.evidence?` (${line(d.evidence)})`:""}`);}); L.push("");});
   L.push("---",`_${t("md.footer")}_`,"",t("export.fingerprint",contentHashes(S)));

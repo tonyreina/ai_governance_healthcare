@@ -32,6 +32,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+import asyncpg
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -458,6 +459,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response = await call_next(request)
         response.headers["X-Chai-Auth-Mode"] = settings.auth_mode
         return response
+
+    @app.exception_handler(asyncpg.exceptions.DataError)
+    async def unstorable(request: Request, exc: Exception) -> JSONResponse:
+        """The database refused data a writer sent (SQLSTATE class 22), most often the
+        NUL character (U+0000), which PostgreSQL text and jsonb cannot hold. That is the
+        writer's input, so it is a 422, not a server error that any writer could
+        provoke at will. The text is not logged: it is the thing that was refused."""
+        log.warning(
+            "refused data the database cannot store on %s %s (%s)",
+            request.method,
+            request.url.path,
+            type(exc).__name__,
+        )
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": "The request contains data that cannot be stored, "
+                "such as the NUL character (U+0000)."
+            },
+        )
 
     @app.exception_handler(Exception)
     async def unhandled(request: Request, exc: Exception) -> JSONResponse:

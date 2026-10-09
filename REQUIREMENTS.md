@@ -722,6 +722,26 @@ honest answer and is a gap worth closing; see R-19.
   export recomputed in Python from the file alone, what moves it, tampering
   noticed, the reports and their translation, the schema).
 
+### R-59 Text a person types stays text
+
+- Status: Active
+- The owner's instruction, 2026-10-08: scan for injection attacks and guard
+  against them (#155). A governance record is written by many people and read by
+  a board and a regulator, and the dashboard's page policy has to allow inline
+  script (R-01), so escaping is the barrier and has to hold everywhere.
+- Every string in a project, every key's value, the change log, people's names,
+  the search box, saved interface state, the legacy record and an imported file
+  reach the screen, the exports and the database as text: nothing runs, nothing
+  becomes markup, a Markdown export cannot be made to start a heading, a link to
+  a script, an image or raw HTML, a spreadsheet cell is not a formula, and no
+  SQL is built from text.
+- A new way of turning text into markup (an `eval`, a URL built from text, an
+  unescaped attribute value, a new `innerHTML`) is reviewed before it is added.
+- Not done: a page policy without `'unsafe-inline'` (#154).
+- Source: the owner, on #155; DECISIONS D-67.
+- Enforced by: `tests/test_injection.py`, `tests/test_check_injection.py` with
+  `pixi run check-injection`, `server/tests/test_sql_injection.py`.
+
 ### R-28 A project's creator is always one of its owners
 
 - Status: Active

@@ -271,6 +271,12 @@ In short:
 - **A closed set of values gets a type.** A role, a status or a mode is a
   `StrEnum` in Python and a frozen object in JavaScript, never a bare string.
   `pixi run check-enums` enforces it as a ratchet that only shrinks.
+- **Text a person types stays text.** Every value is escaped on its way into
+  markup, a link built from text goes through `safeUrl()`, and the server passes
+  values to SQL as parameters and never in the SQL text. `pixi run test-injection`
+  poisons every string in a project and audits every screen and export,
+  `pixi run check-injection` refuses new ways of turning text into markup, and a
+  server test fails on SQL built at run time.
 - **A security claim names its test.** Any sentence in the docs or the interface
   that asserts a security property gets a row in [Security claims](security-claims.md)
   with the test that enforces it, and `pixi run check-claims` fails if a quoted

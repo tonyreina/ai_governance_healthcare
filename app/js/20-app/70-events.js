@@ -32,7 +32,7 @@ document.addEventListener("click",async e=>{
     if(f && f.id==="optica") setOpticaEnabled(!f.enabled(S));
     return;
   }
-  if(btn.dataset.filter){ UI.filter=btn.dataset.filter; saveUI(); updateDashboard(); document.querySelector(`[data-filter="${UI.filter}"]`)?.focus(); return; }
+  if(btn.dataset.filter){ UI.filter=btn.dataset.filter; saveUI(); updateDashboard(); document.querySelector(`[data-filter="${CSS.escape(UI.filter)}"]`)?.focus(); return; }
   if(btn.dataset.set && !RO){
     const id=btn.dataset.set, store=btn.dataset.store||"items";
     const cur=((get(store)||{})[id]||{}).status||"";

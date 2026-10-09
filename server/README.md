@@ -157,6 +157,16 @@ named on a project the caller can read (its access lists, sign-offs, last editor
 and log authors). Any other id is omitted, not refused, so the table cannot be
 walked. At most 100 ids per request. Recording never fails a request.
 
+## Text is data
+
+Every value reaches SQL as a parameter. `tests/test_sql_injection.py` fails on
+any call that passes anything but a constant string, except the two places that
+run trusted DDL (the migration files and the role the API serves as, whose name
+and password the server quotes with `format(%I, %L)`), and it round-trips hostile
+text through every place the API takes text. PostgreSQL cannot store the NUL
+character (U+0000), so a request containing one is refused with a 422 rather
+than failing with a server error.
+
 ## Reading the whole audit history
 
 `GET /api/projects/{id}/log` returns the newest page (60 by default, newest

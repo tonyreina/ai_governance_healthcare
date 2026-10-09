@@ -65,6 +65,13 @@ characters Markdown reads as structure escaped, so a value cannot start a headin
 become a link or an image, or add raw HTML, and in the CSV a cell a spreadsheet
 would run as a formula is neutralized.
 
+The one thing a person types that becomes a link is the address of an
+[evidence reference](guide.md#evidence-references), and only an http or https
+address does. The HTML report links it with `rel="noopener noreferrer nofollow"`
+and prints the address beside it; the Markdown report writes it as a link with its
+parentheses encoded, and prints the address after it. A reference's file is
+listed by name, size and SHA-256, never included.
+
 ## The report
 
 The report has the status and its flags, readiness by stage and by principle, the
@@ -100,8 +107,9 @@ Each project exports as JSON, validated by
 [`schema/project.schema.json`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/schema/project.schema.json)
 (`chai-review/2`). The file holds the status, phase, next review date and flags
 as computed at export time; the project's `meta`, checkpoint decisions and metrics;
-the model card; the whole checklist with each criterion's status, evidence, owner
-and due date; the scores; and `_state`, the project as the tool stores it.
+the model card; the whole checklist with each criterion's status, evidence, owner,
+due date and `references`; the scores; and `_state`, the project as the tool
+stores it.
 
 Only `_state` is read back. Everything else is derived for the reader's
 convenience. **Import project JSON** on the home page reads `_state` and creates

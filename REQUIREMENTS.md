@@ -1038,3 +1038,21 @@ honest answer and is a gap worth closing; see R-19.
   do not add a job that deletes on a schedule. `docs/privacy.md` says it is
   undecided and its Art. 30 draft leaves the field to be filled in.
 - Source: #57.
+
+### R-61 Evidence is referenced, never uploaded
+
+- Status: Active
+- A criterion's evidence can point at a link and at a file, but this tool does
+  not hold the file. A file picked as evidence is fingerprinted in the browser;
+  the record keeps its name, size and SHA-256 and nothing else, and no code path
+  sends the file or its bytes anywhere.
+- A reference's link opens only if it is an http or https address with no
+  credentials, when typed and when read back from a stored or imported record.
+- References are stored so that two people adding one at the same moment both
+  keep theirs, and each appears in the HTML, Markdown and JSON exports and in
+  the change history.
+- The owner's decision, 2026-10-08: no uploads ("forget about the upload"),
+  links to external sites allowed.
+- Source: the owner, this session; DECISIONS D-70; claims C-85, C-86.
+- Enforced by: `tests/test_refs.py`, `server/tests/test_refs_merge.py` and the
+  reference cases in `tests/test_injection.py`.

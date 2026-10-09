@@ -6,6 +6,8 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",
    text, so an English name keeps its punctuation in a Hebrew page and a Hebrew one
    in an English page (D-63). For element content only, never an attribute. */
 const bdi = s => `<bdi>${esc(s)}</bdi>`;
+/* Fields of an item or answer that this code branches on by name. */
+const Field = Object.freeze({ REFS: "refs" });
 const clone = o => o==null ? o : JSON.parse(JSON.stringify(o));
 const isObj = v => v && typeof v==="object" && !Array.isArray(v);
 /* Keys that reach an object's prototype instead of a property of its own. JSON.parse

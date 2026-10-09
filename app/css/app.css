@@ -106,6 +106,16 @@ input:hover,select:hover,textarea:hover{border-color:var(--muted)}
 .seg button[aria-pressed="true"][data-s="na"]{background:var(--sunk);color:var(--ink)}
 .ci-detail{display:none;grid-template-columns:minmax(0,1fr) 180px 150px;gap:10px;margin-block:10px 2px;margin-inline:38px 0}
 .ci.open .ci-detail{display:grid}
+.refs{grid-column:1/-1;font-size:13px}
+.refs-h{font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px}
+.refs-list{margin:0 0 8px;padding-inline-start:18px}
+.refs-list li{margin-bottom:4px;overflow-wrap:anywhere}
+.refs-list .ref-url,.refs-list .ref-date,.refs-list .ref-file{display:block;color:var(--muted);font-size:12px}
+.refs-list code{font-size:11px;word-break:break-all}
+.refs-none,.refs-hint{color:var(--muted);font-size:12.5px;margin:0 0 6px}
+.refs-add{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.refs-add input[type=text]{flex:1 1 160px}
+.refs-add input[type=url]{flex:2 1 220px}
 .ci-detail label{font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px}
 
 /* metrics */

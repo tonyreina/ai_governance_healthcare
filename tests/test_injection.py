@@ -200,6 +200,20 @@ def run_payload(
     sample = page.evaluate("clone([...PROJECTS.values()][0])")
     doc = page.evaluate(TAINT, [sample, payload])
     doc.pop("id", None)
+    # Evidence references (R-61): the same poison in a title, in the address, in a
+    # file's name, and in a second holder (an OPTICA answer).
+    hostile_ref = {
+        "title": payload,
+        "url": "https://e.example/?q=" + payload,
+        "date": "2026-01-01",
+        "at": "1",
+        "file": {"name": payload, "size": 5, "sha256": "a" * 64},
+    }
+    doc["items"][next(iter(doc["items"]))]["refs"] = {"rinj000001": hostile_ref}
+    optica_key = page.evaluate("OPTICA_ITEMS[0].key")
+    doc.setdefault("optica", {}).setdefault("answers", {}).setdefault(optica_key, {})[
+        "refs"
+    ] = {"rinj000002": hostile_ref}
     page.evaluate(
         "async (d) => { await STORE.create('inj1', d); }",
         doc,

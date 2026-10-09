@@ -24,6 +24,14 @@ document.addEventListener("click",async e=>{
     S.access=accessPatch(S,id,""); queuePatch(CUR,Object.assign({access:S.access},stamp()));
     writeLog(CUR,`Removed access for ${id}`); renderMain(false); toast(t("toast.accessRemoved")); return;
   }
+  if(btn.dataset.addref && !RO){ const box=btn.closest(".refs"); if(box) await addRef(btn.dataset.addref, box); return; }
+  if(btn.dataset.delref && !RO){ removeRef(btn.dataset.refpath, btn.dataset.delref); return; }
+  if(btn.dataset.verifyref){
+    const path=btn.dataset.refpath, id=btn.dataset.verifyref;
+    const pick=document.createElement("input"); pick.type="file";
+    pick.addEventListener("change",()=>verifyRef(path,id,pick.files[0]));
+    pick.click(); return;
+  }
   if(btn.dataset.open){ openProject(btn.dataset.open); return; }
   if(btn.dataset.home){ goHome(); return; }
   if(btn.dataset.go){ go(btn.dataset.go); return; }

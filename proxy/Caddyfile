@@ -75,14 +75,20 @@
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 
 		# The dashboard is one file with everything inline and no third-party
-		# origins, so the policy can be this tight. 'unsafe-inline' is required
-		# because the script and style ARE inline; it is not a loosening of an
-		# otherwise-strict policy, it is the whole policy for a single-file app.
+		# origins, so the policy can be this tight.
 		#
-		# What this buys: any future HTML-injection bug becomes a blocked
-		# request rather than an exfiltration channel, because connect-src and
-		# img-src cannot reach another origin.
-		Content-Security-Policy "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		# The script is allowed by its hash, not by 'unsafe-inline'.
+		#
+		# An injected <script>, an event handler or a javascript: URL is then
+		# refused by the browser even if the page failed to escape something, and
+		# connect-src and img-src cannot reach another origin, so an injection is
+		# a blocked request rather than an exfiltration channel. Style stays
+		# inline, because the app styles itself.
+		#
+		# The policy is GENERATED from the built page (scripts/build_app.py writes
+		# proxy/csp.caddy), because the hash changes with every build. compose.yaml
+		# mounts it and proxy/Dockerfile copies it, at this path (#154).
+		import /etc/caddy/csp.caddy
 
 		# Caddy announces itself otherwise. Nothing needs to know.
 		-Server

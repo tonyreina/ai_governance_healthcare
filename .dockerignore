@@ -9,4 +9,5 @@
 # that opens something it should not.
 *
 !proxy/Caddyfile
+!proxy/csp.caddy
 !docs/app/

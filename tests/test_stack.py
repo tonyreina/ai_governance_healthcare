@@ -61,7 +61,8 @@ def wait_until(page, expression: str, timeout: float = 20.0) -> None:
 
     NOT page.wait_for_function: that evaluates its argument with the page's own
     `eval`, which the Content-Security-Policy this stack serves
-    (`script-src 'unsafe-inline'`, deliberately no `unsafe-eval`) forbids. This
+    (`script-src` is a hash of the page's script, deliberately no `unsafe-eval`)
+    forbids. This
     suite broke the day that policy shipped and nobody noticed, because CI did not
     run it (#32). `page.evaluate` goes through the debugging protocol instead, so
     the app is still tested under the policy it actually ships with.

@@ -326,6 +326,8 @@ services:
 
     volumes:
       - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The Content-Security-Policy, generated from the built dashboard (#154).
+      - ./proxy/csp.caddy:/etc/caddy/csp.caddy:ro
       # The dashboard is a single pre-built static file. It is MOUNTED, not
       # rebuilt in Docker: it is generated on the host by `pixi run build-app`
       # from the sources under app/. Read-only so the web server cannot be

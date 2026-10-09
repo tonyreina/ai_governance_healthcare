@@ -95,7 +95,7 @@ AUDIT = """(base) => {
   if (n('script') > base.script) bad.push('a script was added');
   if (n('iframe') > base.iframe) bad.push('an iframe was added');
   if (n('base')) bad.push('a base element');
-  if (n('meta[http-equiv]')) bad.push('a meta refresh');
+  if (n('meta[http-equiv="refresh" i]')) bad.push('a meta refresh');
   if (n('form') > base.form) bad.push('a form was added');
   if (n('link[rel=stylesheet]')) bad.push('a stylesheet link');
   if (n('[srcdoc]')) bad.push('a srcdoc');

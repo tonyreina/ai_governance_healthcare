@@ -737,7 +737,10 @@ honest answer and is a gap worth closing; see R-19.
   SQL is built from text.
 - A new way of turning text into markup (an `eval`, a URL built from text, an
   unescaped attribute value, a new `innerHTML`) is reviewed before it is added.
-- Not done: a page policy without `'unsafe-inline'` (#154).
+- The proxy serves a policy that allows the dashboard's script by its hash, not
+  by `'unsafe-inline'` (D-68), as a second barrier. The static Pages copy and
+  the Claude artifact host set their own headers, so there escaping is the only
+  one.
 - Source: the owner, on #155; DECISIONS D-67.
 - Enforced by: `tests/test_injection.py`, `tests/test_check_injection.py` with
   `pixi run check-injection`, `server/tests/test_sql_injection.py`.
@@ -870,8 +873,11 @@ honest answer and is a gap worth closing; see R-19.
 - The Content-Security-Policy, HSTS, `nosniff`, Referrer-Policy and frame
   denial apply to `/api/*` responses and the dashboard alike, and `Server` is
   removed.
-- Source: `proxy/Caddyfile`; closed issues #14, #27.
-- Enforced by: `tests/test_proxy_identity.py`.
+- The policy's `script-src` is the SHA-256 of the dashboard's one inline script,
+  generated from the built page into `proxy/csp.caddy` (D-68). The exported
+  report carries a policy of its own that allows no script.
+- Source: `proxy/Caddyfile`; closed issues #14, #27, #154.
+- Enforced by: `tests/test_proxy_identity.py`, `tests/test_csp.py`.
 
 ### R-25 The documented first-run path works with any password
 

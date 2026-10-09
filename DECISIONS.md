@@ -1250,6 +1250,32 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   the poison test finds the same bugs by running the code).
 - Source: the owner, on #155; R-59.
 
+### D-68 The proxy's policy names the page's script by its hash
+
+- Status: Accepted
+- The owner asked for the open issues to be fixed (#154).
+- **Generated, because the hash changes with every build.**
+  `scripts/build_app.py` computes the SHA-256 of the page's one inline script
+  and writes the policy header to `proxy/csp.caddy`. The Caddyfile imports it,
+  compose mounts it and the cloud image copies it. The build refuses a page with
+  more or fewer than one inline script. The existing build-app hook already
+  fails when a generated file differs, so the policy cannot go stale.
+- **No `'unsafe-inline'` for script.** An injected `<script>`, an `on*` handler
+  or a `javascript:` link is refused by the browser even if the page failed to
+  escape something. Style stays inline, because the app styles itself.
+- **The exported report has a policy of its own**, inline in the file: no script
+  at all and no outside resource, so a report opened from disk or a mail
+  attachment cannot run one either.
+- **Where it applies.** The proxy, which is the shared workspace. The GitHub
+  Pages copy cannot set headers, and a policy meta tag in the page would also
+  bind the Claude artifact host, which injects its own script, so neither gets
+  one.
+- Rejected: a nonce (the page is one static file served the same way everywhere,
+  so there is nothing to template per request); a hash maintained by hand in the
+  Caddyfile (it would break the dashboard on the first build after someone
+  forgot).
+- Source: the owner; R-16, R-59.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

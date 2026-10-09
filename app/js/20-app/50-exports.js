@@ -14,6 +14,7 @@ function exportHTML(){
   // In the reader's language (R-55, D-60); the JSON and CSV exports stay English.
   const prov = storageNoteShown();
   return `<!DOCTYPE html><html lang="${esc(LOCALE)}" dir="${localeDir(LOCALE)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
 <title>${esc(S.meta.solution||t("export.untitled"))} – ${esc(t("export.titleSuffix"))}</title>
 <!-- No webfont link. The exported report is the artifact that gets emailed
      around a hospital and opened on clinical workstations, and a stylesheet

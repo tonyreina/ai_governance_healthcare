@@ -234,6 +234,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: pixi run test-no-3p
 
+      # The proxy's Content-Security-Policy names the dashboard's script by its hash and
+      # refuses any other; the exported report carries a policy that allows no script (#154).
+      - name: content security policy
+        if: ${{ !cancelled() }}
+        run: pixi run test-csp
+
   stack:
     name: stack (end to end, Docker Compose)
     runs-on: ubuntu-latest

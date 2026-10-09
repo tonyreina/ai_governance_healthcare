@@ -16,6 +16,10 @@ FROM caddy:2@sha256:8dc9fa87b36b25303d1c67d2a09f5824b7f3bfd72cb052f246e5da2133fe
 
 COPY proxy/Caddyfile /etc/caddy/Caddyfile
 
+# The Content-Security-Policy, generated from the built dashboard by
+# scripts/build_app.py: its script-src is the hash of that page's script (#154).
+COPY proxy/csp.caddy /etc/caddy/csp.caddy
+
 # The single self-contained index.html produced by scripts/build_app.py.
 COPY docs/app/ /srv/app/
 

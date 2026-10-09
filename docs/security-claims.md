@@ -1038,20 +1038,20 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-80 The dashboard and its exports contact no outside service
 
-- **Claim:** Loading the dashboard makes no request to another host, and the
-  standalone report it produces links no outside stylesheet, script or font, so
-  opening one announces nothing to a third party (R-05).
+- **Claim:** No screen, dialog, language or export of the dashboard makes a
+  request to another host, none of its exports carries a resource a viewer would
+  fetch on its own, and opening a saved report announces nothing to a third party
+  (R-05). A link the reader chooses to follow is not such a request.
 - **Asserted in:** `docs/index.md` — "The dashboard and its exports contact no
   outside service."
 - **Asserted in:** `docs/adopting.md` — "The dashboard and its exports contact no
   outside service."
-- **Status:** partial
-- **Gap:** The test loads the page and checks the HTML report. It does not drive
-  every screen, and it does not read the PDF, Markdown or JSON exports, which carry
-  no resources a viewer would fetch. A link the reader chooses to click, such as the
-  attribution link to CHAI's published page, is not a request the page makes. #149
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_no_third_party.py::loading the dashboard makes no external request`
+  `tests/test_no_third_party.py::no screen, dialog, language or export makes a request to another host`
+  `tests/test_no_third_party.py::the Markdown export has no image (an image is a request when it is read)`
+  `tests/test_no_third_party.py::opening the saved report makes no request to another host`
   `tests/test_no_third_party.py::the HTML export has no http(s) resource URLs at all`
 
 ### C-81 A SHA-256 of the record travels in the JSON export
@@ -1075,10 +1075,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Asserted in:** `docs/developing.md` — "Text a person types stays text."
 - **Asserted in:** `docs/exports.md` — "Whatever a person typed stays text in every export."
 - **Status:** partial
-- **Gap:** Escaping is the only barrier. The page policy still allows inline script
-  because the dashboard is one file (R-01), so a field the test does not reach would
-  run. The Markdown report is checked as text, not by every viewer that renders it. The
-  Claude artifact host is outside the repository. #154
+- **Gap:** Escaping is the first barrier, and the proxy's policy is the second (C-84),
+  but the GitHub Pages copy cannot set headers and the Claude artifact host sets its own,
+  so there escaping is the only one. The Markdown report is checked as text, not by every
+  viewer that renders it. #157
 - **Enforced by:**
   `tests/test_injection.py::an app that does not escape is rejected`
   `tests/test_injection.py::the CSV rule notices a formula cell`
@@ -1097,3 +1097,18 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_sql_injection.py::test_every_sql_call_passes_a_constant_string`
   `server/tests/test_sql_injection.py::test_the_guard_notices_each_way_text_reaches_sql`
   `server/tests/test_sql_injection.py::test_hostile_text_is_stored_and_returned_as_text`
+
+### C-84 The proxy's policy refuses script the page did not ship
+
+- **Claim:** The Content-Security-Policy the proxy serves allows the dashboard's one
+  inline script by its SHA-256 and not by `'unsafe-inline'`, so an injected script,
+  an event handler or a `javascript:` link is refused by the browser, and the exported
+  report carries a policy of its own that allows no script at all.
+- **Asserted in:** `proxy/Caddyfile` — "The script is allowed by its hash, not by 'unsafe-inline'."
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_csp.py::names the hash of the page's one script`
+  `tests/test_csp.py::an injected inline script, handler and javascript: link did not run`
+  `tests/test_csp.py::a policy that names a different script does not boot the app`
+  `tests/test_csp.py::so a script put into a saved report does not run`
+  `tests/test_proxy_identity.py::content-security-policy`

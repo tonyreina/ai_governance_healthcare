@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -52,11 +53,12 @@ EXPECTED_HEADERS = {
     "referrer-policy": "same-origin",
     "x-frame-options": "DENY",
     "strict-transport-security": "max-age=31536000; includeSubDomains",
-    "content-security-policy": (
-        "default-src 'none'; script-src 'unsafe-inline'; style-src "
-        "'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src "
-        "'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
-    ),
+    # The Content-Security-Policy is generated from the built dashboard (its script-src
+    # is that script's hash), so it is read from the generated file the proxy imports.
+    "content-security-policy": re.search(
+        r'Content-Security-Policy "([^"]+)"',
+        (Path(__file__).resolve().parent.parent / "proxy" / "csp.caddy").read_text(),
+    ).group(1),
 }
 
 # proxy/Caddyfile caps /api/* bodies with `max_size 2MB`. Caddy parses that
@@ -243,6 +245,8 @@ def start_caddy(workdir: Path, env: dict[str, str]) -> None:
         f"{PORT}:80",
         "-v",
         f"{CADDYFILE}:/etc/caddy/Caddyfile:ro",
+        "-v",
+        f"{CADDYFILE.parent / 'csp.caddy'}:/etc/caddy/csp.caddy:ro",
         "-v",
         f"{workdir}/srv:/srv/app:ro",
         "-e",

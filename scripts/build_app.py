@@ -24,6 +24,7 @@ import hashlib
 import json
 import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -95,14 +96,43 @@ def catalogs_js() -> str:
     )
 
 
+class _Scripts(HTMLParser):
+    """Every <script> in a page: its attributes, and its text as the browser sees it."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.found: list[tuple[list[tuple[str, str | None]], str]] = []
+        self._open: list | None = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script":  # enum-ok: an HTML tag name from html.parser
+            self._open = [attrs, []]
+
+    def handle_data(self, data):
+        if self._open is not None:
+            self._open[1].append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "script" and self._open is not None:  # enum-ok: an HTML tag name
+            self.found.append((self._open[0], "".join(self._open[1])))
+            self._open = None
+
+
 def inline_script(html: str) -> str:
-    """The text of the page's one inline script, exactly as the browser sees it."""
-    found = re.findall(r"<script>(.*?)</script>", html, re.S)
-    if len(found) != 1 or re.search(r"<script\b(?!>)", html):
+    """The text of the page's one inline script, exactly as the browser sees it.
+
+    Read with an HTML parser, not a pattern: the policy's hash has to be of what the
+    browser executes, and a pattern for a tag misses the spellings a parser does not."""
+    parser = _Scripts()
+    parser.feed(html)
+    parser.close()
+    inline = [text for attrs, text in parser.found if not attrs]
+    if len(inline) != 1 or len(parser.found) != 1:
         raise SystemExit(
-            f"error: the page must have exactly one inline <script>; found {len(found)}"
+            "error: the page must have exactly one <script>, with no attributes; "
+            f"found {len(parser.found)}"
         )
-    return found[0]
+    return inline[0]
 
 
 def script_hash(html: str) -> str:

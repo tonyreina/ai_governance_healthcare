@@ -55,9 +55,33 @@ ROOT_FORBIDDEN = [
     "probe-licensed-source.pdf",
     ".git/",
 ]
-ROOT_NEEDED = ["proxy/Caddyfile", "docs/app/index.html"]
 SERVER_FORBIDDEN = [".env.dockerignore-probe", "tests/"]
-SERVER_NEEDED = ["app/main.py", "migrations/", "pyproject.toml"]
+
+
+def copy_sources(dockerfile: str) -> list[str]:
+    """Every path a Dockerfile COPYs from its build context, in order.
+
+    Read from the Dockerfile, not listed here: a list kept by hand is how the proxy
+    image stopped building when it began to copy a generated policy file that the
+    allowlist in .dockerignore did not admit (#154). A COPY from another stage is not
+    from the context.
+    """
+    sources: list[str] = []
+    for line in dockerfile.splitlines():
+        parts = line.strip().split()
+        if not parts or parts[0].upper() != "COPY":
+            continue
+        args = [p for p in parts[1:] if not p.startswith("--")]
+        if any(p.startswith("--from") for p in parts[1:]) or len(args) < 2:
+            continue
+        sources += [a for a in args[:-1] if a != "."]
+    return sources
+
+
+ROOT_NEEDED = copy_sources((ROOT / "proxy" / "Dockerfile").read_text(encoding="utf-8"))
+SERVER_NEEDED = copy_sources(
+    (ROOT / "server" / "Dockerfile").read_text(encoding="utf-8")
+)
 
 
 def sent_files(context: Path, workdir: Path, candidates: list[str]) -> list[str]:
@@ -127,6 +151,20 @@ def main() -> int:
         check("a clean listing passes", not leaks(["proxy/Caddyfile"], [".env"]))
         check("a forbidden directory is noticed", bool(leaks([".git"], [".git/"])))
         check("a missing needed file is noticed", bool(missing([], ["a"])))
+        sample = (
+            "FROM x AS build\nCOPY a.txt b/ /dest/\nCOPY --chown=1:1 c.caddy /etc/c\n"
+            "COPY --from=build /out /srv\nCOPY . /ctx\n  copy d /d\n"
+        )
+        check(
+            "the COPY sources are read from a Dockerfile, skipping other stages",
+            copy_sources(sample) == ["a.txt", "b/", "c.caddy", "d"],
+            str(copy_sources(sample)),
+        )
+        check(
+            "the proxy image's sources include the generated policy file",
+            "proxy/csp.caddy" in ROOT_NEEDED and "docs/app/" in ROOT_NEEDED,
+            str(ROOT_NEEDED),
+        )
 
         probe = [*ROOT_FORBIDDEN, ".env", *ROOT_NEEDED]
         server_probe = [*SERVER_FORBIDDEN, ".env", *SERVER_NEEDED]

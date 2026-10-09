@@ -59,8 +59,11 @@ def policy() -> str:
 
 
 def script_hash(html: str) -> str:
-    scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
-    digest = hashlib.sha256(scripts[0].encode("utf-8")).digest()
+    """The hash of the page's script, worked out here and not by the build, so the
+    build's own parser is checked against a second way of reading the page."""
+    start = html.index("<script>") + len("<script>")
+    text = html[start : html.index("</script>", start)]
+    digest = hashlib.sha256(text.encode("utf-8")).digest()
     return "'sha256-" + base64.b64encode(digest).decode("ascii") + "'"
 
 

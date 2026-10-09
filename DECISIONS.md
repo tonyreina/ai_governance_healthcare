@@ -1437,3 +1437,23 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   `golang.org/x/net`: drop the build stage and the `COPY --from`, and remove
   `test-proxy-image` with it.
 - Source: GitHub Actions run 37977974877 (the image scan on PR #165).
+
+### D-73 The policy and injection suites run in three browser engines
+
+- Status: Accepted
+- The page's Content-Security-Policy is enforced by each browser's own
+  implementation, and a hospital's workstations are not all Chromium. The
+  page-policy (`tests/test_csp.py`) and injection (`tests/test_injection.py`)
+  suites also run in Firefox and WebKit, in the `engines` CI job (#160).
+- `TEST_BROWSER` chooses the engine, Chromium by default. An unknown value is an
+  error, not a fallback, so a typo in the CI matrix cannot run Chromium twice
+  and call it cross-browser. `tests/test_workflows.py` fails if the job, either
+  engine or either suite goes missing.
+- **What the first runs found:** WebKit reports the app's refused `file://`
+  request for `/api/health` as a page error even though the app catches it, so
+  the app no longer probes for a server from a page opened from disk. Headless
+  Firefox could block on the PDF export's real print dialog, so the injection
+  test replaces that one frame's `print()` and checks it was reached.
+- **Rejected:** running every browser suite in all three engines (most test the
+  app's logic, which does not vary by engine, and would triple CI time).
+- Source: #160.

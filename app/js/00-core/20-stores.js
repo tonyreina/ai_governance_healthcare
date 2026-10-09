@@ -195,6 +195,9 @@ ApiStore.EVENTS = ["project.created","project.updated","project.deleted","log.ap
    user should not wait on it. */
 async function detectApi(base){
   base = base || "/api";
+  // A page opened from disk has no server behind it, so do not ask: WebKit
+  // reports the refused request as a page error even though it is caught (#160).
+  if(location.protocol === "file:") return {verdict:"absent"};  // enum-ok: a URL scheme, defined by the URL standard
   try{
     const ctl = new AbortController();
     const t = setTimeout(()=>ctl.abort(), 2500);

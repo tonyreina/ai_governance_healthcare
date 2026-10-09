@@ -4,7 +4,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-08vwdT+lglnD9OnKviT1IRWBottdsqLmE+u6InwzjD4='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-CNrQ8Ou85P4nWs0IzuMpPUkAzAtOaACkAdUWbGk646w='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Health AI assurance review</title>
@@ -1120,6 +1120,9 @@ ApiStore.EVENTS = ["project.created","project.updated","project.deleted","log.ap
    user should not wait on it. */
 async function detectApi(base){
   base = base || "/api";
+  // A page opened from disk has no server behind it, so do not ask: WebKit
+  // reports the refused request as a page error even though it is caught (#160).
+  if(location.protocol === "file:") return {verdict:"absent"};  // enum-ok: a URL scheme, defined by the URL standard
   try{
     const ctl = new AbortController();
     const t = setTimeout(()=>ctl.abort(), 2500);

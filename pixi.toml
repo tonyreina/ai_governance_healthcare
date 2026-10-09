@@ -54,6 +54,7 @@ test-framework-i18n = "python tests/test_framework_i18n.py"
 test-audit = "python tests/test_audit_log.py"
 # Free-text fields opt out of browser spellcheck and form history (#59).
 test-text-fields = "python tests/test_text_fields.py"
+test-refs = "python tests/test_refs.py"
 test-no-3p = "python tests/test_no_third_party.py"
 # The proxy's policy names the dashboard's script by hash and refuses any other (#154).
 test-csp = "python tests/test_csp.py"

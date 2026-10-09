@@ -1349,3 +1349,33 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Must not claim "no PHI detected". OpenMed publishes no aggregate F1, precision
   or recall, and says a clean result is not a compliance claim.
 - Waits on R-21: the data classification is the owner's decision first.
+
+### D-70 Evidence references are an object keyed by id, and the file is a fingerprint
+
+- Status: Accepted
+- The owner asked whether evidence could be uploaded (PDFs) and decided against
+  it: "forget about the upload", with links to external sites allowed (R-61).
+- **Stored at `<item>.refs`, an object keyed by reference id.** The merge rule
+  replaces arrays wholesale, so an array would lose one of two references added
+  at the same time; keyed by id, both survive, and removal is a `null` at one
+  key. `server/tests/test_refs_merge.py` shows both against PostgreSQL.
+- **A file is a name, a size and a SHA-256, computed in the browser.** It uses
+  Web Crypto when the page has it and the page's own SHA-256 (D-66) when it does
+  not, because Web Crypto is absent on plain http. The two are tested against
+  `hashlib` at every padding boundary. The cap is 256 MB because the file is read
+  into memory in one piece; hashing in chunks needs the page's own SHA-256 to be
+  incremental, which it is not.
+- **A link goes through `safeUrl()`**: http and https only, no credentials, no
+  whitespace or control characters, 2,000 characters at most. The reader of a
+  stored record runs it again, so a record written by something else (an import,
+  an API call) cannot carry `javascript:` into a link.
+- **Markdown links are `[title](address)` with parentheses encoded**, not the
+  angle-bracket form, because `encodeURIComponent` leaves parentheses alone (a
+  bug the test found) and a reader of the file cannot tell `(<url>)` from raw
+  HTML.
+- **Rejected:** uploading files to the server (this tool would then hold documents
+  that may name a patient, with retention, disposal and breach duties it was
+  designed to avoid); an array of references (loses concurrent adds); fetching a
+  link to check it or to preview it (an outbound request on the reader's behalf,
+  against C-80).
+- Source: the owner; R-61.

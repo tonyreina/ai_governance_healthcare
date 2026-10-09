@@ -20,7 +20,7 @@ function opticaItemHTML(it) {
   const st = d.status || "";
   const open = openItems.has(it.key);
   const late = d.due && parseDay(d.due) < parseDay(TODAY()) && st !== "met" && st !== "na";
-  const notes = (d.evidence || d.owner || d.due || d.declineReason) && !open
+  const notes = (d.evidence || d.owner || d.due || d.declineReason || refList(d).length) && !open
     ? `<span class="has-notes">${late ? `<b style="color:var(--red)">${esc(t("ci.overdue", {date: fmtDay(d.due)}))}</b>` : esc(t("ci.notes"))}</span>` : "";
   const chai = it.chai && it.chai.length
     ? `<span class="pchip" title="${esc(t("optica.coveredBy", {ids: it.chai.join(", ")}))}">${esc(it.chai[0])}</span>`
@@ -37,6 +37,7 @@ function opticaItemHTML(it) {
       <div><label for="oev_${esc(it.key)}">${esc(t("ci.evidence"))}</label><textarea id="oev_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.evidence" ${NO_BROWSER_ASSIST}>${esc(d.evidence || "")}</textarea></div>
       <div><label for="oow_${esc(it.key)}">${esc(t("ci.owner"))}</label><input type="text" id="oow_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.owner" value="${esc(d.owner || "")}"></div>
       <div><label for="odu_${esc(it.key)}">${esc(t("ci.due"))}</label><input type="date" id="odu_${esc(it.key)}" data-bind="optica.answers.${esc(it.key)}.due" value="${esc(d.due || "")}"></div>
+      ${refsHTML(`optica.answers.${it.key}`, d)}
       ${st === "declined" ? `<div class="wide"><label for="odr_${esc(it.key)}">${esc(t("optica.whyDeclined"))}</label><textarea id="odr_${esc(it.key)}" rows="2" data-bind="optica.answers.${esc(it.key)}.declineReason" ${NO_BROWSER_ASSIST}>${esc(d.declineReason || "")}</textarea></div>` : ""}
     </div>
   </li>`;

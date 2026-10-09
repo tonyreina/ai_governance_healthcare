@@ -102,7 +102,7 @@ function exportMD(){
     if(sec.sec==="Trust ingredients"){ L.push(`### ${t("metrics.title")}`,""); if(S.metrics.length){L.push(`| ${t("metrics.col.category")} | ${t("metrics.col.metric")} | ${t("metrics.col.value")} | ${t("metrics.col.ci")} | ${t("md.population")} |`,"|---|---|---|---|---|"); S.metrics.forEach(x=>L.push(`| ${line(metricCatName(x.cat))} | ${line(x.name)} | ${line(x.value)} | ${line(x.ci)} | ${line(x.pop)} |`));} else L.push(`_${t("md.noneEntered")}_`); L.push("");}});
   L.push(`## ${t("report.history")}`,""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${line(String(e.at||"").slice(0,10))}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push(t("md.none")); L.push("");
   L.push(`## ${t("report.appendix")}`,"");
-  STAGES.forEach(s=>{L.push(`### ${s.n}. ${stageTitle(s)}`,""); s.items.forEach(it=>{const d=S.items[it.id]||{}; L.push(`- [${it.p}] ${itemText(it)}: **${st(d.status)}**${d.evidence?` (${line(d.evidence)})`:""}`);}); L.push("");});
+  STAGES.forEach(s=>{L.push(`### ${s.n}. ${stageTitle(s)}`,""); s.items.forEach(it=>{const d=S.items[it.id]||{}; L.push(`- [${it.p}] ${itemText(it)}: **${st(d.status)}**${d.evidence?` (${line(d.evidence)})`:""}`); refsMarkdown(d,line).forEach(x=>L.push(`  - ${t("refs.title")}: ${x}`));}); L.push("");});
   L.push("---",`_${t("md.footer")}_`,"",t("export.fingerprint",contentHashes(S)));
   return L.join("\n");
 }
@@ -118,7 +118,7 @@ function projectJSON(p){
     status:statusOf(p).label, phase:phase(p).label, next_review:nextReview(p), flags:flags(p),
     meta:p.meta, gates:p.gates, metrics:p.metrics,
     model_card:Object.fromEntries(CARD_FIELDS.map(k=>[k,cardValOf(p,k)])),
-    checklist:all.map(it=>({id:it.id,stage:it.stage.n,principle:it.p,criterion:it.text,...(({status,evidence,owner,due})=>({status:status||null,evidence:evidence||"",owner:owner||"",due:due||""}))(p.items[it.id]||{})})),
+    checklist:all.map(it=>({id:it.id,stage:it.stage.n,principle:it.p,criterion:it.text,...(({status,evidence,owner,due})=>({status:status||null,evidence:evidence||"",owner:owner||"",due:due||""}))(p.items[it.id]||{}), references:refsData(p.items[it.id])})),
     scores:{overall:scoreOf(all,p.items).pct,...Object.fromEntries(Object.keys(PRINCIPLES).map(k=>[k,scoreOf(all.filter(it=>it.p===k),p.items).pct]))},
     _state:state
   };

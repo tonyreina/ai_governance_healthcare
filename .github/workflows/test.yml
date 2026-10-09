@@ -224,6 +224,9 @@ jobs:
       - name: free-text fields do not feed the browser's spellchecker
         if: ${{ !cancelled() }}
         run: pixi run test-text-fields
+      - name: evidence references are links and fingerprints, never the file
+        if: ${{ !cancelled() }}
+        run: pixi run test-refs
       - name: CHAI metric picker
         if: ${{ !cancelled() }}
         run: pixi run test-te

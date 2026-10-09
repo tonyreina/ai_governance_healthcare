@@ -161,6 +161,26 @@
           },
           "due": {
             "type": "string"
+          },
+          "references": {
+            "type": "array",
+            "description": "Evidence references: links and file fingerprints. A file is never included, only its name, size and SHA-256.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {"type": "string"},
+                "url": {"type": ["string", "null"], "description": "An http or https address, or null."},
+                "date": {"type": ["string", "null"]},
+                "file": {
+                  "type": ["object", "null"],
+                  "properties": {
+                    "name": {"type": "string"},
+                    "size": {"type": "integer"},
+                    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                  }
+                }
+              }
+            }
           }
         }
       }

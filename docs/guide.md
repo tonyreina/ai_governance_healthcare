@@ -56,6 +56,25 @@ owner and a due date. Give anything partial or not met an owner and a due date:
 once the tool is in a pilot or live, an overdue action turns the dashboard row
 red.
 
+### Evidence references
+
+Under a criterion's notes (CHAI or OPTICA) you can add **evidence references**:
+a title, a link, a date, and optionally a file. A reference points at evidence that
+lives somewhere else, such as a validation report on your document system, so the
+record says what was relied on without holding it.
+
+- **A link opens only if it is an http or https address** with no user name or
+  password in it. Anything else is refused when you type it, and never made a link
+  when it is read back. The address is printed beside the link, so a reader sees
+  where a click goes.
+- **The file is never uploaded.** Pick a file and this browser computes its
+  SHA-256; the record keeps the file's name, size and that digest, and nothing
+  else. Later, **Check a file** tells anyone holding a copy whether it is the same
+  one. Do not put patient information in a title or a file name: those are stored.
+- References appear in the HTML report, the Markdown report and the JSON export
+  (under each criterion's `references`), and a change to one is written to the
+  change history.
+
 The criteria are this project's own paraphrase of CHAI's, not CHAI's text. See
 [Notice and license](notice.md) and the [full list](frameworks/chai-checklist.md).
 

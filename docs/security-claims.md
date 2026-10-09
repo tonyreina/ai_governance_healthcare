@@ -1104,3 +1104,36 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_csp.py::opened from disk it refuses the same injection too`
   `tests/test_csp.py::a tag naming a different script does not boot the app`
   `tests/test_proxy_identity.py::content-security-policy`
+
+### C-85 An evidence reference's file never leaves the browser
+
+- **Claim:** Attaching a file to an evidence reference reads it in the browser and
+  stores its name, size and SHA-256, and nothing else: the file is not uploaded,
+  its bytes are not in the record, and the code that reads it has no way to send
+  anything.
+- **Asserted in:** `docs/guide.md` — "The file is never uploaded."
+- **Asserted in:** `app/i18n/en.json` — "A file is never uploaded: only its name, size and SHA-256 are kept"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_refs.py::the stored file is a name, a size and a digest, nothing else`
+  `tests/test_refs.py::no bytes of the file are in the record`
+  `tests/test_refs.py::adding a file made no network request`
+  `tests/test_refs.py::the reference code has no way to send anything`
+  `tests/test_refs.py::a fetch in the reference code is noticed`
+  `tests/test_refs.py::the stored SHA-256 is hashlib's`
+  `server/tests/test_refs_merge.py::test_concurrent_adds_to_one_item_keep_every_reference`
+
+### C-86 A reference's link is http or https, or it is not a link
+
+- **Claim:** The address of an evidence reference becomes a link only if it is an
+  http or https address with no credentials in it, both when it is typed and when it
+  is read back from a stored or imported record, in the dashboard and in every
+  export.
+- **Asserted in:** `docs/guide.md` — "**A link opens only if it is an http or https address**"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_refs.py::a stored javascript: address is never made a link`
+  `tests/test_refs.py::parentheses and brackets in an address cannot end the link early`
+  `tests/test_refs.py::entries that are not references are dropped`
+  `tests/test_refs.py::with safeUrl weakened, the same probe shows the hole`
+  `tests/test_injection.py::an app that does not escape is rejected`

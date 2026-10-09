@@ -28,7 +28,8 @@ function describePath(path) {
   if (parts[0] === "items") {
     const id = parts[1];
     const item = (typeof allItems === "function" ? allItems() : []).find(i => i.id === id);
-    const what = { status: "status", evidence: "evidence", owner: "owner", due: "due date" }[parts[2]] || parts[2];
+    const what = parts[2] === Field.REFS ? "evidence reference"
+      : { status: "status", evidence: "evidence", owner: "owner", due: "due date" }[parts[2]] || parts[2];
     return item ? `${what} of “${item.text}”` : `${what} of criterion ${id}`;
   }
 
@@ -46,8 +47,9 @@ function describePath(path) {
   if (parts[0] === "optica" && parts[1] === "answers") {
     const key = parts[2];
     const item = (typeof OPTICA_ITEMS !== "undefined" ? OPTICA_ITEMS : []).find(i => i.key === key);
-    const what = { status: "status", evidence: "evidence", owner: "owner",
-                   due: "due date", declineReason: "reason for declining" }[parts[3]] || parts[3];
+    const what = parts[3] === Field.REFS ? "evidence reference"
+      : { status: "status", evidence: "evidence", owner: "owner",
+          due: "due date", declineReason: "reason for declining" }[parts[3]] || parts[3];
     return item ? `OPTICA ${item.num}: ${what}` : `OPTICA ${key}: ${what}`;
   }
 
@@ -71,6 +73,10 @@ function describeValue(path, value) {
   if (value === undefined || value === null || value === "") return "empty";
   if (typeof value === "boolean") return value ? "yes" : "no";
   if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? "" : "s"}`;
+  if (typeof value === "object" && /\.refs\.[^.]+$/.test(path)) {
+    const label = String(value.title || (value.file && value.file.name) || value.url || "").slice(0, 60);
+    return `“${label}”${value.url ? ` ${value.url}` : ""}${value.file && value.file.sha256 ? ` (SHA-256 ${value.file.sha256})` : ""}`;
+  }
   if (typeof value === "object") return "updated";
 
   const text = String(value);

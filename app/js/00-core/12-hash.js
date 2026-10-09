@@ -111,8 +111,10 @@ const SHA256_PRIMES = (() => {
 const SHA256_H0 = SHA256_PRIMES.slice(0, 8).map(p => Math.floor((Math.sqrt(p) % 1) * 4294967296));
 const SHA256_K = SHA256_PRIMES.map(p => Math.floor((Math.cbrt(p) % 1) * 4294967296));
 
-function sha256(input) {
-  const bytes = new TextEncoder().encode(input);
+function sha256(input) { return sha256Bytes(new TextEncoder().encode(input)); }
+
+/* The same digest over raw bytes, for a file a person attaches as evidence. */
+function sha256Bytes(bytes) {
   const bitLen = bytes.length * 8;
   const padded = new Uint8Array((((bytes.length + 8) >> 6) + 1) * 64);
   padded.set(bytes);

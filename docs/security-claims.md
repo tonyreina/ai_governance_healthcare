@@ -1060,9 +1060,9 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Asserted in:** `docs/developing.md` — "Text a person types stays text."
 - **Asserted in:** `docs/exports.md` — "Whatever a person typed stays text in every export."
 - **Status:** partial
-- **Gap:** Escaping is the first barrier, and the page's own policy is the second (C-84).
-  The Markdown report is checked as text, not by every viewer that renders it, and the
-  policy is tested in Chromium only. #160
+- **Gap:** Escaping is the first barrier, and the page's own policy is the second (C-84),
+  and both are tested in Chromium, Firefox and WebKit. The Markdown report is checked
+  as text, not as a Markdown renderer turns it into HTML. #167
 - **Enforced by:**
   `tests/test_injection.py::an app that does not escape is rejected`
   `tests/test_injection.py::the CSV rule notices a formula cell`
@@ -1089,11 +1089,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   opened from disk), allows the dashboard's one inline script by its SHA-256 and not
   by `'unsafe-inline'`, so an injected script, an event handler or a `javascript:`
   link is refused by the browser, and the exported report carries a policy of its own
-  that allows no script at all.
+  that allows no script at all. Each browser enforces the policy with its own
+  implementation, so the tests run in Chromium, Firefox and WebKit (#160).
 - **Asserted in:** `proxy/Caddyfile` — "The script is allowed by its hash, not by 'unsafe-inline'."
-- **Status:** partial
-- **Gap:** The tests run in Chromium only, and each browser enforces the policy with
-  its own implementation. #160
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_csp.py::names the hash of the page's one script`
   `tests/test_csp.py::an injected inline script, handler and javascript: link did not run`

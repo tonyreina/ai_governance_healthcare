@@ -308,6 +308,11 @@ jobs:
       - name: build contexts
         run: pixi run test-dockerignore
 
+      # The cloud proxy image rebuilds Caddy with a patched Go (D-72); nothing else
+      # starts that binary, so build it, run it, and check it is the stack's release.
+      - name: the cloud proxy image
+        run: pixi run test-proxy-image
+
       - name: bring up the stack
         run: |
           # The generator the docs and preflight tell people to use. Base64 emits

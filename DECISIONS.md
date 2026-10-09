@@ -1409,3 +1409,31 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   The model card's long fields, the decline reason and the setup notes stay plain
   text for now.
 - Source: the owner; R-62.
+
+### D-72 The cloud proxy rebuilds Caddy with a patched Go, until upstream does
+
+- Status: Accepted (as a fix to a failing required check; revert condition
+  below)
+- The image scan began failing on 2026-10-09 with no change in this repository:
+  the official `caddy:2` image of 2026-10-05 (Caddy v2.11.7) is built with Go
+  1.26.8, which has two HIGH denial-of-service fixes pending in `net/http` and
+  `crypto/tls` (CVE-2026-78667, CVE-2026-97031). A newer scanner database also
+  flags `golang.org/x/net` v0.59.0 (CVE-2026-78669). The proxy is the process
+  every request reaches first, and the newest official image was the one pinned.
+- **What changed:** `proxy/Dockerfile` builds the same Caddy release from source
+  in the official `caddy:2-builder` image (Go 1.27.2), with `golang.org/x/net`
+  raised to v0.60.0 and the standard modules only, and copies the binary into the
+  official `caddy:2` runtime image. Both images are pinned by digest.
+  `tests/test_proxy_image.py` builds and runs it and checks it is the release
+  `compose.yaml` pins with the same modules, and that a different release is
+  noticed.
+- **Rejected:** a `.trivyignore` entry (it weakens the check that found a real
+  issue, which the repository rules forbid); waiting for upstream (every pull
+  request would stay blocked on `tests passed`).
+- **Not changed:** the local compose stack still runs the official image, which
+  the scan reports without blocking; it is reached only from the network an
+  operator chooses.
+- **Revert when** an official `caddy:2` is built with a fixed Go and a fixed
+  `golang.org/x/net`: drop the build stage and the `COPY --from`, and remove
+  `test-proxy-image` with it.
+- Source: GitHub Actions run 37977974877 (the image scan on PR #165).

@@ -23,7 +23,7 @@ import sys
 from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright
-from test_boot_storage import DOCS, HEALTH_OK, serve
+from test_boot_storage import DOCS, HEALTH_OK, serve, wait_until
 
 ME = "owner@hospital.example"
 PID = "p1"
@@ -76,8 +76,8 @@ def mock_api(page, sent: list[dict], me: str = ME) -> None:
 
 
 def open_setup(page) -> None:
-    page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=15000)
-    page.wait_for_function("PROJECTS && PROJECTS.size >= 1", timeout=15000)
+    wait_until(page, "typeof LOADED !== 'undefined' && LOADED", 15)
+    wait_until(page, "PROJECTS && PROJECTS.size >= 1", 15)
     page.evaluate(f"openProject({PID!r}, 'setup')")
     page.wait_for_timeout(500)
 
@@ -155,9 +155,9 @@ def main() -> int:
         page = browser.new_page()
         page.route("**/api/health", lambda r: r.fulfill(status=404, body=""))
         page.goto(base + "/app/index.html")
-        page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=15000)
+        wait_until(page, "typeof LOADED !== 'undefined' && LOADED", 15)
         page.evaluate("loadSamples()")
-        page.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
+        wait_until(page, "PROJECTS && PROJECTS.size >= 10", 15)
         page.evaluate("openProject([...PROJECTS.keys()][0], 'setup')")
         page.wait_for_timeout(300)
         check(

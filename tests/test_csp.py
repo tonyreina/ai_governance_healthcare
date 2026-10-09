@@ -21,7 +21,11 @@ What is asserted:
   `javascript:` link are each refused (and reported as violations);
 * given a policy with the wrong hash, the dashboard does not boot (the check can fail);
 * the exported report carries a policy of its own, so a saved report opened from disk
-  cannot run script either.
+  cannot run script either;
+* the page carries the same policy itself, as a meta tag first in its <head>, so it also
+  holds on the static example page and in a copy opened from disk, which cannot set
+  headers: served with no header at all it boots and refuses the same three injections,
+  and a meta policy naming a different script stops it from booting.
 
     pixi run test-csp
 """
@@ -78,8 +82,8 @@ def wait_until(page, expression: str, timeout: float = 15.0) -> None:
     raise TimeoutError(f"still false after {timeout}s: {expression}")
 
 
-def open_under(browser, csp: str):
-    """The dashboard, served with `csp` as its response header."""
+def open_under(browser, csp: str | None, html: str | None = None):
+    """The dashboard, served with `csp` as its header (none, as on a static host)."""
     ctx = browser.new_context()
     page = ctx.new_page()
     violations: list[str] = []
@@ -89,18 +93,11 @@ def open_under(browser, csp: str):
              window.reportViolation(e.violatedDirective + ' ' + e.blockedURI));
            window.__pwned = 0;"""
     )
-    html = APP.read_text(encoding="utf-8")
-    page.route(
-        URL,
-        lambda route: route.fulfill(
-            status=200,
-            body=html,
-            headers={
-                "content-type": "text/html; charset=utf-8",
-                "content-security-policy": csp,
-            },
-        ),
-    )
+    html = html if html is not None else APP.read_text(encoding="utf-8")
+    headers = {"content-type": "text/html; charset=utf-8"}
+    if csp:
+        headers["content-security-policy"] = csp
+    page.route(URL, lambda route: route.fulfill(status=200, body=html, headers=headers))
     # A static host: there is no API here, which the app takes as browser-only mode.
     page.route("**/api/**", lambda route: route.fulfill(status=404, body=""))
     page.goto(URL)
@@ -237,6 +234,99 @@ def main() -> int:
         check(
             "so a script put into a saved report does not run",
             shot.evaluate("window.__pwned") == 0,
+        )
+        ctx.close()
+        browser.close()
+
+    print(
+        "The page's own policy (no header: the static example page, or a file on disk)"
+    )
+    source = APP.read_text(encoding="utf-8")
+    head = source.split("<head>", 1)[1].split("<script", 1)[0]
+    tag = re.search(
+        r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', head
+    )
+    check("the page carries a policy tag", tag is not None)
+    check(
+        "as the first child of <head>, ahead of anything that could load",
+        re.match(r"\s*<meta http-equiv=\"Content-Security-Policy\"", head) is not None,
+        head[:80],
+    )
+    meta = tag.group(1) if tag else ""
+    check(
+        "naming the hash of the page's one script, with no 'unsafe-inline' for script",
+        script_hash(source) in meta
+        and "unsafe-inline" not in meta.split("script-src")[1].split(";")[0],
+    )
+    header_only = ("frame-ancestors",)
+    check(
+        "and the same directives as the proxy's header, but frame-ancestors",
+        sorted(meta.split("; "))
+        == sorted(d for d in csp.split("; ") if not d.startswith(header_only)),
+        f"{meta} | {csp}",
+    )
+    inject = (
+        "() => { const s = document.createElement('script');"
+        " s.textContent = 'window.__pwned++'; document.body.appendChild(s);"
+        " const d = document.createElement('div');"
+        " d.innerHTML = '<img src=x onerror=\"window.__pwned++\">';"
+        " document.body.appendChild(d);"
+        " const a = document.createElement('a');"
+        " a.href = 'javascript:window.__pwned++'; document.body.appendChild(a);"
+        " a.click(); }"
+    )
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        ctx, page, violations = open_under(browser, None)  # no header at all
+        wait_until(page, "typeof LOADED !== 'undefined' && LOADED")
+        check(
+            "served with no header it boots, with no violation",
+            not violations,
+            str(violations[:2]),
+        )
+        page.evaluate(inject)
+        page.wait_for_timeout(300)
+        check(
+            "and refuses an injected script, handler and javascript: link",
+            page.evaluate("window.__pwned") == 0,
+        )
+        ctx.close()
+        # The same file opened from disk, as a copy someone saved would be.
+        ctx = browser.new_context()
+        disk = ctx.new_page()
+        disk.add_init_script("window.__pwned = 0")
+        disk.goto(APP.as_uri())
+        wait_until(disk, "typeof LOADED !== 'undefined' && LOADED")
+        disk.evaluate(inject)
+        disk.wait_for_timeout(300)
+        check(
+            "opened from disk it refuses the same injection too",
+            disk.evaluate("window.__pwned") == 0,
+        )
+        ctx.close()
+        # Without the tag the same injection runs, so the checks above can fail.
+        bare = re.sub(
+            r'<meta http-equiv="Content-Security-Policy"[^>]*>', "", source, count=1
+        )
+        check("the mutation removed the tag", bare != source)
+        ctx, page, _ = open_under(browser, None, bare)
+        wait_until(page, "typeof LOADED !== 'undefined' && LOADED")
+        page.evaluate(inject)
+        page.wait_for_timeout(300)
+        check(
+            "without the tag, the same injection DOES run (the test can fail)",
+            page.evaluate("window.__pwned") > 0,
+        )
+        ctx.close()
+        # A tag that names a different script stops the dashboard, as a header does.
+        other = "'sha256-" + base64.b64encode(b"y" * 32).decode() + "'"
+        ctx, page, _ = open_under(
+            browser, None, source.replace(script_hash(source), other, 1)
+        )
+        page.wait_for_timeout(1200)
+        check(
+            "a tag naming a different script does not boot the app",
+            not page.evaluate("typeof LOADED !== 'undefined' && LOADED"),
         )
         ctx.close()
         browser.close()

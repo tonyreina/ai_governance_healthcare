@@ -9,7 +9,6 @@ function setSaved(t){ document.getElementById("saved").textContent=t; }
 const SAVED_LABEL = Object.freeze({   // catalog keys: the text is the reader's language
   [Mode.LOCAL]: "saved.local",
   [Mode.API]: "saved.api",
-  [Mode.ARTIFACT]: "saved.artifact",
 });
 function savedLabel(mode){ return t(SAVED_LABEL[mode] || "saved.generic"); }
 function stamp(extra){ return Object.assign({updatedAt:new Date().toISOString(), updatedBy:ME.id||null}, extra||{}); }

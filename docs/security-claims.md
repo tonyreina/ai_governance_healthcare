@@ -140,8 +140,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** A reader cannot write, a writer cannot delete, and a stranger gets
   404, not 403, so existence is not confirmed.
-- **Asserted in:** `docs/running.md` — "| Access control enforced | **No** |
-  Partly | **Yes, server-side** |"
+- **Asserted in:** `docs/running.md` — "| Access control enforced | **No** | **Yes, server-side** |"
 - **Asserted in:** `docs/guide.md` — "On the server these are enforced by the API, not just by the buttons the page shows."
 - **Status:** enforced
 - **Enforced by:**
@@ -168,8 +167,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   #31.)
 - **Asserted in:** `docs/deploy.md` — "**A checkpoint sign-off means
   something.**"
-- **Asserted in:** `docs/running.md` — "| Checkpoint sign-off means something |
-  **No, self-asserted** | Yes | Yes |"
+- **Asserted in:** `docs/running.md` — "| Checkpoint sign-off means something | **No, self-asserted** | Yes |"
 - **Asserted in:** `docs/index.md` — "On the shared server a sign-off carries the name of the person signed in through your hospital's own single sign-on"
 - **Asserted in:** `docs/guide.md` — "On the shared server that identity comes from your hospital's single sign-on and cannot be set from the browser."
 - **Status:** enforced
@@ -177,16 +175,6 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_signoff.py::TestTheForgeryFromTheIssue::test_a_writer_cannot_sign_off_as_the_cmo`
   `server/tests/test_signoff.py::TestWhoSignedAndWhen::test_a_new_decision_is_attributed_to_the_caller_not_the_claim`
   `tests/test_stack.py::the sign-off is attributed to the proxy identity, not the claim`
-
-### C-13 In the Claude artifact mode, identity and sign-off hold
-
-- **Claim:** The comparison table says the artifact mode has a signed-in
-  identity and a meaningful sign-off.
-- **Asserted in:** `docs/running.md` — "| Signed-in identity | **None** | Yes |
-  Yes, from your SSO |"
-- **Status:** unenforced
-- **Gap:** Rests on the Claude artifact runtime, which is outside this
-  repository and cannot be exercised from a test here.
 
 ### C-14 Cross-site writes are refused
 
@@ -256,8 +244,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** Every revision is kept, and the only permitted change to one is a
   purge.
-- **Asserted in:** `docs/running.md` — "| Version snapshots | No | No | **Yes**
-  |"
+- **Asserted in:** `docs/running.md` — "| Version snapshots | No | **Yes** |"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_versions.py::TestVersions::test_history_is_append_only`
@@ -384,14 +371,12 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-29 Each storage mode is labeled distinctly
 
 - **Claim:** The header names the mode, so a user can tell the audited server
-  from the other modes.
+  from the example page.
 - **Asserted in:** `app/js/00-core/30-state.js` — "and no two modes share one"
 - **Status:** enforced
 - **Enforced by:**
-  `tests/test_boot_storage.py::artifact mode is not labeled like the self-hosted server`
   `tests/test_boot_storage.py::no two modes share a header label`
   `tests/test_boot_storage.py::every Mode has a header label`
-  `tests/test_boot_storage.py::artifact mode says, in the layout, where the data lives`
 
 ### C-30 Live updates reach other users, and only those who may see the project
 
@@ -788,7 +773,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   so a read that cannot be recorded is not served.
 - **Asserted in:** `docs/deploy.md` — "A read that cannot be recorded is not served."
 - **Asserted in:** `docs/index.md` — "Who *read* a record is recorded too."
-- **Asserted in:** `docs/running.md` — "| Who read what is recorded | No | No | **Yes** |"
+- **Asserted in:** `docs/running.md` — "| Who read what is recorded | No | **Yes** |"
 - **Status:** partial
 - **Gap:** Exports are built in the browser and reported by a beacon a client can
   omit: they are a record of ordinary use, bounded by the recorded reads that fetched
@@ -1075,10 +1060,9 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Asserted in:** `docs/developing.md` — "Text a person types stays text."
 - **Asserted in:** `docs/exports.md` — "Whatever a person typed stays text in every export."
 - **Status:** partial
-- **Gap:** Escaping is the first barrier, and the proxy's policy is the second (C-84),
-  but the GitHub Pages copy cannot set headers and the Claude artifact host sets its own,
-  so there escaping is the only one. The Markdown report is checked as text, not by every
-  viewer that renders it. #157
+- **Gap:** Escaping is the first barrier, and the page's own policy is the second (C-84).
+  The Markdown report is checked as text, not by every viewer that renders it, and the
+  policy is tested in Chromium only. #160
 - **Enforced by:**
   `tests/test_injection.py::an app that does not escape is rejected`
   `tests/test_injection.py::the CSV rule notices a formula cell`
@@ -1100,15 +1084,23 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-84 The proxy's policy refuses script the page did not ship
 
-- **Claim:** The Content-Security-Policy the proxy serves allows the dashboard's one
-  inline script by its SHA-256 and not by `'unsafe-inline'`, so an injected script,
-  an event handler or a `javascript:` link is refused by the browser, and the exported
-  report carries a policy of its own that allows no script at all.
+- **Claim:** The Content-Security-Policy the proxy serves, and the same policy carried
+  by the page itself as a meta tag (so it holds on the example page and in a copy
+  opened from disk), allows the dashboard's one inline script by its SHA-256 and not
+  by `'unsafe-inline'`, so an injected script, an event handler or a `javascript:`
+  link is refused by the browser, and the exported report carries a policy of its own
+  that allows no script at all.
 - **Asserted in:** `proxy/Caddyfile` — "The script is allowed by its hash, not by 'unsafe-inline'."
-- **Status:** enforced
+- **Status:** partial
+- **Gap:** The tests run in Chromium only, and each browser enforces the policy with
+  its own implementation. #160
 - **Enforced by:**
   `tests/test_csp.py::names the hash of the page's one script`
   `tests/test_csp.py::an injected inline script, handler and javascript: link did not run`
   `tests/test_csp.py::a policy that names a different script does not boot the app`
   `tests/test_csp.py::so a script put into a saved report does not run`
+  `tests/test_csp.py::served with no header it boots, with no violation`
+  `tests/test_csp.py::and refuses an injected script, handler and javascript: link`
+  `tests/test_csp.py::opened from disk it refuses the same injection too`
+  `tests/test_csp.py::a tag naming a different script does not boot the app`
   `tests/test_proxy_identity.py::content-security-policy`

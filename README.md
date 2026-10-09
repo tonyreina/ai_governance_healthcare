@@ -69,18 +69,18 @@ mode, which the browser-only demonstration copy above is not.
 
 ## Running it
 
-There are three modes and **they are not equivalent**. Only one of them
+There are two modes and **they are not equivalent**. Only the deployed stack
 enforces access control, keeps an audit log on a server, or produces a
-checkpoint sign-off that means anything.
+checkpoint sign-off that means anything. The other is the example page.
 
-| | Docker stack | Claude artifact | Open a file / GitHub Pages |
-|---|---|---|---|
-| Storage | PostgreSQL | Artifact database | Browser `localStorage` |
-| Shared between people | Yes | Yes | **No** |
-| Identity | Your hospital SSO | Yes | **None** |
-| Access control enforced | **Yes, server-side** | Partly | **No** |
-| Audit log | Yes, append-only | Yes | This browser only |
-| Version snapshots | **Yes** | No | No |
+| | Deployed stack | Example page (GitHub Pages, or a file) |
+|---|---|---|
+| Storage | PostgreSQL | Browser `localStorage` |
+| Shared between people | Yes | **No** |
+| Identity | Your hospital SSO | **None** |
+| Access control enforced | **Yes, server-side** | **No** |
+| Audit log | Yes, append-only | This browser only |
+| Version snapshots | **Yes** | No |
 
 See [Running it](docs/running.md) for the full comparison.
 
@@ -134,7 +134,7 @@ python3 -m http.server 8000 --directory docs
 ```
 
 All persistence goes through one interface, implemented by `ApiStore` (the
-Docker stack), `DbStore` (artifact) and `LocalStore` (browser). To back the tool
+deployed stack) and `LocalStore` (the example page). To back the tool
 with something else, add a class with the same methods. The app selects one at
 boot and **never silently falls back**: if a server was expected and cannot be
 reached, it stops and says so. See [Developing it](docs/developing.md#the-store).

@@ -32,7 +32,7 @@ CROISSANT = ROOT / "examples" / "croissant_export.py"
 
 failures: list[str] = []
 
-MODES = ("LOCAL", "API", "ARTIFACT")
+MODES = ("LOCAL", "API")
 
 
 def check(name: str, ok: bool, detail: str = "") -> None:
@@ -71,9 +71,7 @@ def main() -> int:
 
         made = {m: produce(page, m) for m in MODES}
         labels = {made[m]["label"] for m in MODES}
-        check(
-            "the three modes have three different labels", len(labels) == 3, str(labels)
-        )
+        check("the two modes have two different labels", len(labels) == 2, str(labels))
 
         for m in MODES:
             out = made[m]

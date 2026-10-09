@@ -39,7 +39,6 @@ function renderMain(focusTop) {
   const fk = focusTop ? null : focusKey(document.activeElement);
 
   m.innerHTML = v.fw.render(v, S);
-  if (v.kind === "report") updateDlUI();
 
   applyRO(m);
   resolveNames(m);

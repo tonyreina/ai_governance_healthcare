@@ -250,7 +250,6 @@ function renderReport(){
       <button class="btn" data-act="dl-json">${esc(t("report.dlJson"))}</button>
       <button class="btn ghost" data-act="print">${esc(t("report.print"))}</button>
     </div>
-    <div id="dlFallback"></div>
     ${reportBody()}
     ${pager()}
   </div>`;

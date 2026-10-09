@@ -1276,6 +1276,34 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   forgot).
 - Source: the owner; R-16, R-59.
 
+### D-69 The Claude artifact mode is removed
+
+- Status: Accepted
+- The owner's decision, 2026-10-08: "I just need the true deployed app and the
+  example http webpage." The dashboard no longer runs as a Claude artifact.
+- **What went:** `DbStore`, the `ARTIFACT` mode and its header, saved-label,
+  provenance and notice strings in all eight languages, the artifact's
+  downloads and read-only handling, the copy-it-yourself fallback for views
+  that cannot download, the artifact column of the comparison tables, claim
+  C-13 (which asserted the artifact's identity and sign-off, and rested on a
+  runtime outside the repository), and the tests that drove a stand-in for the
+  artifact runtime.
+- **What it bought:** the page can carry its own Content-Security-Policy. The
+  artifact host injected script of its own, which a policy in the page would
+  have blocked, so the page had to go without one there. With the host gone,
+  the build writes the same policy into the page as a meta tag (the proxy still
+  sends it as a header), which also covers the example page and a copy opened
+  from disk. Issue #157 closed with it.
+- **Compatibility:** exports from earlier versions may carry
+  `storage.mode: "artifact"`; the schema still accepts it and says it is no
+  longer produced.
+- Not done: removing `artifact` from old DECISIONS and REQUIREMENTS entries
+  (history stays; R-60 says what changed).
+- Supersedes: R-01 (by R-60). The artifact parts of D-22 (the `Mode` enum
+  listed `ARTIFACT`) remain as history; D-22's enum now has three members,
+  `CONNECTING`, `LOCAL` and `API`.
+- Source: the owner; R-60.
+
 ### D-29 Redaction is defined once, in SQL, and the trigger verifies the result
 
 - Status: Accepted

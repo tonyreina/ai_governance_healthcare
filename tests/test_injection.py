@@ -38,6 +38,7 @@ import json
 import re
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -134,6 +135,18 @@ TAINT = """(args) => {
 }"""
 
 
+def wait_until(page, expression: str, timeout: float = 15.0) -> None:
+    """Poll with page.evaluate. page.wait_for_function evaluates a string with the
+    page's own `eval`, which the page's Content-Security-Policy forbids (#154); this
+    keeps the tests running under the policy the app actually ships with."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if page.evaluate(expression):
+            return
+        page.wait_for_timeout(100)
+    raise TimeoutError(f"still false after {timeout}s: {expression}")
+
+
 def md_problems(md: str) -> list[str]:
     bad = []
     if re.search(r"(?m)^#\s*injected heading", md):
@@ -167,7 +180,7 @@ def open_app(browser, url: str | None = None):
     errors: list[str] = []
     page.on("pageerror", lambda e: errors.append(str(e)[:120]))
     page.goto(url or APP.as_uri())
-    page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=15000)
+    wait_until(page, "typeof LOADED !== 'undefined' && LOADED", 15)
     return ctx, page, errors
 
 
@@ -183,7 +196,7 @@ def run_payload(
     ctx, page, errors = open_app(browser, url)
     base = page.evaluate(BASE)
     page.evaluate("loadSamples()")
-    page.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
+    wait_until(page, "PROJECTS && PROJECTS.size >= 10", 15)
     sample = page.evaluate("clone([...PROJECTS.values()][0])")
     doc = page.evaluate(TAINT, [sample, payload])
     doc.pop("id", None)
@@ -191,7 +204,7 @@ def run_payload(
         "async (d) => { await STORE.create('inj1', d); }",
         doc,
     )
-    page.wait_for_function("PROJECTS.has('inj1')", timeout=5000)
+    wait_until(page, "PROJECTS.has('inj1')", 5)
 
     # People's names, the change log, the search box and the saved state.
     page.evaluate(
@@ -315,7 +328,7 @@ def saved_state_problems(browser, payload: str) -> list[str]:
     ctx.add_init_script("window.__pwned = 0")
     page = ctx.new_page()
     page.goto(APP.as_uri())
-    page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=15000)
+    wait_until(page, "typeof LOADED !== 'undefined' && LOADED", 15)
     base = page.evaluate(BASE)
     page.evaluate(
         """(p) => {
@@ -327,7 +340,7 @@ def saved_state_problems(browser, payload: str) -> list[str]:
         payload,
     )
     page.reload()
-    page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=15000)
+    wait_until(page, "typeof LOADED !== 'undefined' && LOADED", 15)
     page.wait_for_timeout(200)
     audit(page, base, "saved state and the legacy record", bad)
     ctx.close()
@@ -385,6 +398,12 @@ def main() -> int:
             'const esc = s => String(s ?? "");',
             html,
             count=1,
+        )
+        # The page's own policy names the script by hash, so it would refuse this
+        # copy and never boot it. This mutation tests escaping alone, so the
+        # policy goes too.
+        weak = re.sub(
+            r'<meta http-equiv="Content-Security-Policy"[^>]*>', "", weak, count=1
         )
         check("the mutation replaced the escape", weak != html)
         with tempfile.TemporaryDirectory() as tmp:

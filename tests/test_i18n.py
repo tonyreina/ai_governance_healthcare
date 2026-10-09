@@ -449,8 +449,7 @@ def main() -> int:
         data = json.loads(page.evaluate("JSON.stringify(projectJSON(S))"))
         check(
             "the JSON export stays English, a machine contract",
-            data["storage"]["label"]
-            in ("This browser only", "Shared workspace", "Claude artifact")
+            data["storage"]["label"] in ("This browser only", "Shared workspace")
             and data["status"]
             in ("Out of compliance", "Needs update", "On track", "Retired", "Stopped"),
             str(data["storage"]),

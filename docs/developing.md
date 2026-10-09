@@ -24,11 +24,12 @@ language, which tests prove what, and the rules a change has to meet.
 
 `docs/app/index.html` is **generated**. Do not edit it.
 
-The dashboard has to ship as one self-contained file: it runs as a Claude
-artifact, it is opened straight off disk with no server, and it is published to
-GitHub Pages. But a single file holding the CSS, two governance frameworks, eight
-languages and all the rendering is not maintainable. So the source is split under
-`app/` and concatenated by `scripts/build_app.py`:
+The dashboard has to ship as one self-contained file: it is served by the proxy
+in the deployed stack, it is opened straight off disk with no server, and it is
+published to GitHub Pages as the example page. But a single file holding the
+CSS, two governance frameworks, eight languages and all the rendering is not
+maintainable. So the source is split under `app/` and concatenated by
+`scripts/build_app.py`:
 
 ```text
 app/
@@ -74,12 +75,11 @@ implement one interface:
 | `log(id, entry)` | Append an audit-log entry |
 | `subscribeLog(id, cb)` | Stream the most recent log entries for a project |
 
-Three implementations ship: `DbStore` (the Claude artifact's database),
-`LocalStore` (browser `localStorage`) and `ApiStore` (the self-hosted FastAPI and
-PostgreSQL backend). `ApiStore` is selected automatically when `/api/health`
-answers, so one build serves both the GitHub Pages copy and the Docker stack. It
-never falls back silently: if a server was expected and cannot be reached, the
-app stops and says so.
+Two implementations ship: `LocalStore` (browser `localStorage`, the example page)
+and `ApiStore` (the self-hosted FastAPI and PostgreSQL backend). `ApiStore` is
+selected automatically when `/api/health` answers, so one build serves both the
+GitHub Pages copy and the Docker stack. It never falls back silently: if a
+server was expected and cannot be reached, the app stops and says so.
 
 `ApiStore` also has methods only a server can honor: `purgeVersions` (destroy a
 project's history), `getHold` and `setHold` (litigation holds), `recordExport`
@@ -94,8 +94,7 @@ service, add a class implementing the six methods and select it at boot.
 
     `LocalStore` has no concept of a user, so checkpoint sign-offs it records
     are self-asserted. If sign-offs need to carry weight for audit, your backend
-    must supply an authenticated identity, as the API does from the proxy and the
-    artifact database does from its host.
+    must supply an authenticated identity, as the API does from the proxy.
 
 ## Adding a framework
 

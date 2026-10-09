@@ -68,9 +68,9 @@ def table_problems(text: str) -> list[str]:
     for line in text.splitlines():
         if line.startswith("| Patient-identifiable information"):
             cells = [c.strip() for c in line.strip("|").split("|")][1:]
-            if len(cells) == 3 and all(c == "**Never**" for c in cells):
+            if len(cells) == 2 and all(c == "**Never**" for c in cells):
                 return []
-            return [f"the row is not Never in all three modes: {cells}"]
+            return [f"the row is not Never in both modes: {cells}"]
     return ["the comparison table has no patient-identifiable information row"]
 
 
@@ -168,8 +168,8 @@ def main() -> int:
     check(
         "a row that allows one mode is noticed",
         bool(table_problems(running.replace(
-            "| Patient-identifiable information | **Never** | **Never** | **Never** |",
-            "| Patient-identifiable information | **Never** | **Never** | Yes |",
+            "| Patient-identifiable information | **Never** | **Never** |",
+            "| Patient-identifiable information | **Never** | Yes |",
         ))),
     )  # fmt: skip
     check("a missing row is noticed", bool(table_problems("| a | b |")))

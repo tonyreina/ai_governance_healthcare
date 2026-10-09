@@ -29,7 +29,7 @@ function exportHTML(){
 
    No PDF library is bundled. Every option (jsPDF, pdfmake, html2pdf) is
    hundreds of kilobytes, and this dashboard has to stay one self-contained
-   file small enough to publish as an artifact -- a PDF writer would be larger
+   file small enough to read in one sitting -- a PDF writer would be larger
    than the entire application. Browsers already render HTML to PDF well, with
    correct fonts, selectable text and working links, which a canvas-based
    library does not give you.
@@ -156,24 +156,6 @@ function exportCSV(){
 }
 const slug = s=> (s||"ai-solution").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,60) || "ai-solution";
 
-let DL=null, dlChecked=false;
-const STANDALONE = !(window.claude && typeof window.claude.use==="function");
-function updateDlUI(){
-  const fb=document.getElementById("dlFallback"); if(!fb) return;
-  // dl-pdf is deliberately excluded: it goes through the browser's print
-  // dialog, not the downloads API, so it keeps working in a view where saving
-  // a file does not. Hiding it with the rest would remove the one export still
-  // available exactly when the others are gone.
-  const btns=[...document.querySelectorAll('#ractions [data-act^="dl-"]')]
-    .filter(b=>b.dataset.act!=="dl-pdf");
-  if(DL||STANDALONE){ btns.forEach(b=>b.hidden=false); fb.innerHTML=""; return; }
-  if(!dlChecked) return;
-  btns.forEach(b=>b.hidden=true);
-  fb.innerHTML=`<details class="fallback"><summary style="cursor:pointer;font-size:14px;font-weight:600">${esc(t("dl.unavailable"))}</summary>
-    <p style="font-size:13px;color:var(--muted)">${esc(t("dl.howTo"))}</p>
-    <label class="vh" for="fbmd">Markdown</label><textarea id="fbmd" readonly>${esc(exportMD())}</textarea>
-    <label class="vh" for="fbjs">JSON</label><textarea id="fbjs" readonly style="margin-top:8px">${esc(JSON.stringify(projectJSON(S),null,2))}</textarea></details>`;
-}
 /* Report an export to the server, where there is one. A failure is said out loud: the
    file was produced either way, but the user should not believe it was recorded when
    it was not (the same reasoning as the audit queue, #45). */
@@ -183,23 +165,12 @@ async function noteExport(format){
   catch(e){ toast(t("toast.exportNotRecorded")); }
 }
 
-async function download(filename,data){
-  if(STANDALONE){
-    const types={html:"text/html",md:"text/markdown",json:"application/json",csv:"text/csv"};
-    const ext=filename.split(".").pop();
-    const url=URL.createObjectURL(new Blob([data],{type:(types[ext]||"text/plain")+";charset=utf-8"}));
-    const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1000); toast(t("toast.savedFile",{name:filename})); return;
-  }
-  if(!DL){ toast(t("toast.noDownloads")); return; }
-  try{ const r=await DL.save({filename,data}); if(r&&r.status==="saved") toast(t("toast.savedFile",{name:filename})); }
-  catch(e){
-    const c=e&&e.code;
-    if(c==="declined") return;
-    if(c==="rate_limited") toast(t("toast.savePromptOpen"));
-    else if(c==="extension_not_enabled") toast(t("toast.fileTypeUnavailable"));
-    else { DL=null; updateDlUI(); toast(t("toast.noDownloads")); }
-  }
+function download(filename,data){
+  const types={html:"text/html",md:"text/markdown",json:"application/json",csv:"text/csv"};
+  const ext=filename.split(".").pop();
+  const url=URL.createObjectURL(new Blob([data],{type:(types[ext]||"text/plain")+";charset=utf-8"}));
+  const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000); toast(t("toast.savedFile",{name:filename}));
 }
 
 /* Deleting a project destroys a governance record for everyone, and

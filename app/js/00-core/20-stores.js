@@ -1,16 +1,6 @@
 /* ============================================================
-   Stores: shared database, or this browser as a fallback
+   Stores: the self-hosted server, or this browser
    ============================================================ */
-class DbStore{
-  constructor(db){ this.db=db; }
-  col(){ return this.db.collection("projects"); }
-  subscribeAll(cb,err){ return this.col().onSnapshot(s=>cb(s.docs.map(d=>({id:d.id,...clone(d.data())}))),err); }
-  create(id,data){ return this.col().doc(id).set(data); }
-  update(id,patch){ return this.col().doc(id).update(patch); }
-  remove(id){ return this.col().doc(id).delete(); }
-  log(id,e){ return this.db.collection(`projects/${id}/log`).add(e); }
-  subscribeLog(id,cb){ return this.db.collection(`projects/${id}/log`).orderBy("at","desc").limit(60).onSnapshot(s=>cb(s.docs.map(d=>clone(d.data()))),()=>{}); }
-}
 class LocalStore{
   constructor(){ this.k="chai-portfolio-local-v1"; this.d=this.load(); this.subs=[]; this.logSubs={}; }
   load(){ try{ return JSON.parse(localStorage.getItem(this.k)) || {projects:{},logs:{}}; }catch(e){ return {projects:{},logs:{}}; } }

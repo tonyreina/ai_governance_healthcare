@@ -10,22 +10,19 @@ const Mode = Object.freeze({
   CONNECTING: "connecting",  // booting; the store is not chosen yet
   LOCAL: "local",            // this browser only (localStorage)
   API: "api",                // the self-hosted server (PostgreSQL)
-  ARTIFACT: "artifact",      // a Claude artifact's database
 });
 /* What the header says about each mode. Keyed by Mode, like SAVED_LABEL, so a
-   new mode cannot ship without a label, and no two modes share one: the
-   Claude artifact mode was labeled "Shared workspace", identically to the
-   self-hosted PostgreSQL server, which hid the difference between data inside
-   a hospital's administrative boundary and data outside it (#64). */
+   new mode cannot ship without a label, and no two modes share one: a mode once
+   carried the same label as the self-hosted server, which hid the difference between
+   data inside a hospital's administrative boundary and data outside it (#64). */
 /* The header's label for each mode, as a catalog key (the text is translated; the
    English text in MODE_LABEL below is what exports carry, so it stays stable). */
 const MODE_LABEL_KEY = Object.freeze({
-  [Mode.LOCAL]: "mode.local", [Mode.API]: "mode.api", [Mode.ARTIFACT]: "mode.artifact",
+  [Mode.LOCAL]: "mode.local", [Mode.API]: "mode.api",
 });
 const MODE_LABEL = Object.freeze({
   [Mode.LOCAL]:    Object.freeze({text:"This browser only", cls:""}),
   [Mode.API]:      Object.freeze({text:"Shared workspace",  cls:"shared"}),
-  [Mode.ARTIFACT]: Object.freeze({text:"Claude artifact",   cls:"artifact"}),
 });
 /* The data scope, stated in every storage mode (#34, R-49). The owner decided this
    tool holds governance metadata only, in any mode: there is no reason for a
@@ -41,14 +38,13 @@ const SCOPE_NOTICE = I18N_CATALOGS[Locale.EN]["safety.scope"];   // English: exp
 const MODE_PROVENANCE = Object.freeze({
   [Mode.LOCAL]:    "Kept in one browser on one computer. Sign-offs here are self-asserted: nothing verifies who made them, and there is no server-side audit log or version history.",
   [Mode.API]:      "Kept on the self-hosted governance server, with server-side access control, a version history and an audit log. Sign-offs are recorded against the signed-in identity.",
-  [Mode.ARTIFACT]: "Kept in a Claude artifact's own database, not on a server your organization runs. Access control is only partly enforced, and there is no version history.",
 });
 /* The storage mode, as an export records it: the header's own label, a stable machine
    value, and the sentence above. */
 /* The same, in the reader's language, for the reports a person reads (HTML, PDF,
    Markdown). storageNote() stays English: the JSON export is a machine contract. */
 const MODE_PROVENANCE_KEY = Object.freeze({
-  [Mode.LOCAL]: "provenance.local", [Mode.API]: "provenance.api", [Mode.ARTIFACT]: "provenance.artifact",
+  [Mode.LOCAL]: "provenance.local", [Mode.API]: "provenance.api",
 });
 function storageNoteShown(){
   return { label: MODE_LABEL_KEY[MODE] ? t(MODE_LABEL_KEY[MODE]) : t("provenance.unknownLabel"),
@@ -72,10 +68,7 @@ const Act = Object.freeze({
   LOG_OLDER: "log-older",   // load a deeper page of the audit history
   UNLOCK: "unlock",         // leave the idle lock: reload, through the front door
 });
-let STORE=null, MODE=Mode.CONNECTING, RO=false, CAN_DELETE=true, USER=null;
-// Set when the whole workspace is view-only (an artifact shared read-only).
-// Outranks any per-project role: it is a property of how you got here.
-let WORKSPACE_RO=false;
+let STORE=null, MODE=Mode.CONNECTING, RO=false;
 const ME={id:null};
 let PROJECTS=new Map(), LOADED=false;
 let CUR=null;              // open project id
@@ -101,7 +94,7 @@ const UNNAMED=new Set();
 /* What to show for a person: their name if known, "you" for the viewer, and
    otherwise what each mode can honestly say. The server-backed mode shows the id
    (ugly, but it is what a reviewer can match to a directory, and "someone" tells
-   them nothing); the Claude artifact and browser-only modes keep "someone", since
+   them nothing); the browser-only mode keeps "someone", since
    an id there is not something a person can use or should be shown (#39). */
 function displayName(id){
   if(!id) return "someone";
@@ -110,9 +103,8 @@ function displayName(id){
   return MODE===Mode.API ? id : "someone";
 }
 
-/* Where names come from: the Claude runtime's profiles(), or the server store's. */
+/* Where names come from: the server store's profiles(). */
 function nameSource(){
-  if(USER && USER.profiles) return USER;
   if(STORE && typeof STORE.profiles==="function") return STORE;
   return null;
 }

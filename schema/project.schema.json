@@ -38,6 +38,7 @@
       "required": ["mode", "label", "note"],
       "properties": {
         "mode": {
+          "description": "'artifact' was a mode of earlier versions (a Claude artifact); it is no longer produced, and is accepted so older exports still validate.",
           "enum": ["local", "api", "artifact", "connecting"]
         },
         "label": {"type": "string"},

@@ -208,6 +208,35 @@ def actionlint_missing(workflow: dict) -> list[str]:
     )
 
 
+ENGINES_JOB = "engines"
+ENGINE_SUITES = ("pixi run test-csp", "pixi run test-injection")
+OTHER_ENGINES = {"firefox", "webkit"}
+
+
+def engine_problems(workflow: dict) -> list[str]:
+    """The page policy and the injection suite run in Firefox and WebKit (#160)."""
+    job = jobs(workflow).get(ENGINES_JOB)
+    if job is None:
+        return [f"there is no {ENGINES_JOB!r} job, so only Chromium is tested"]
+    problems = []
+    matrix = set(job.get("strategy", {}).get("matrix", {}).get("engine", []))
+    if matrix != OTHER_ENGINES:
+        problems.append(
+            f"{ENGINES_JOB} runs {sorted(matrix)}, not {sorted(OTHER_ENGINES)}"
+        )
+    if "matrix.engine" not in str(job.get("env", {}).get("TEST_BROWSER", "")):
+        problems.append(f"{ENGINES_JOB} does not pass the engine as TEST_BROWSER")
+    runs = " ".join(str(s.get("run", "")) for s in job.get("steps", []))
+    problems += [
+        f"{ENGINES_JOB} does not run `{suite}`"
+        for suite in ENGINE_SUITES
+        if suite not in runs
+    ]
+    if "playwright install" not in runs or "matrix.engine" not in runs:
+        problems.append(f"{ENGINES_JOB} does not install the engine it tests")
+    return problems
+
+
 def every_rule(
     workflow: dict, tasks: dict, files: list[str], compose: dict
 ) -> list[str]:
@@ -220,6 +249,7 @@ def every_rule(
         *missing_timeouts(workflow),
         *postgres_drift(workflow, compose),
         *aggregate_problems(workflow),
+        *engine_problems(workflow),
         *trigger_problems(workflow),
         *permission_problems(workflow),
         *actionlint_missing(workflow),
@@ -327,6 +357,20 @@ def main() -> int:
         "an aggregate that is skipped, not failed, is noticed",
         bool(aggregate_problems(broken)),
     )
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)[ENGINES_JOB]
+    check("no engines job is noticed", bool(engine_problems(broken)))
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[ENGINES_JOB]["strategy"]["matrix"]["engine"] = ["firefox"]
+    check("a missing WebKit is noticed", bool(engine_problems(broken)))
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)[ENGINES_JOB]["env"]["TEST_BROWSER"]
+    check(
+        "an engine never passed to the tests is noticed", bool(engine_problems(broken))
+    )
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)[ENGINES_JOB]["steps"][-1]
+    check("a dropped suite is noticed", bool(engine_problems(broken)))
     broken = copy.deepcopy(workflow)
     del jobs(broken)[AGGREGATE_JOB]
     check("no aggregate job is noticed", bool(aggregate_problems(broken)))

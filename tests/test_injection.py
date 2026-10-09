@@ -41,6 +41,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from browser_engine import launch
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -369,7 +370,7 @@ def saved_state_problems(browser, payload: str) -> list[str]:
 
 def main() -> int:
     with sync_playwright() as pw:
-        browser = pw.chromium.launch()
+        browser = launch(pw)
         print("Every string poisoned, every screen and export audited")
         all_errors: set[str] = set()
         for payload in PAYLOADS:

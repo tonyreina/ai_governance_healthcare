@@ -276,6 +276,10 @@ In short:
   poisons every string in a project and audits every screen and export,
   `pixi run check-injection` refuses new ways of turning text into markup, and a
   server test fails on SQL built at run time.
+  The page-policy and injection suites run in Chromium by default; set
+  `TEST_BROWSER=firefox` or `webkit` to run them in another engine (CI runs
+  both, because each engine enforces the policy itself). An unknown value is an
+  error, not Chromium.
 - **A security claim names its test.** Any sentence in the docs or the interface
   that asserts a security property gets a row in [Security claims](security-claims.md)
   with the test that enforces it, and `pixi run check-claims` fails if a quoted

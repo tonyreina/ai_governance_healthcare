@@ -355,13 +355,47 @@ jobs:
         if: ${{ always() }}
         run: docker compose down -v
 
+  # The page's own policy is enforced by each browser's own implementation, so the
+  # two suites that depend on it run in Firefox and WebKit as well (#160). The
+  # matrix value reaches the tests as TEST_BROWSER, and an unknown value is an
+  # error there, not a fallback to Chromium.
+  engines:
+    name: browser engines (${{ matrix.engine }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [firefox, webkit]
+    env:
+      TEST_BROWSER: ${{ matrix.engine }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        with:
+          locked: true
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ matrix.engine }}-${{ hashFiles('pixi.lock') }}
+
+      - run: pixi run playwright install --with-deps ${{ matrix.engine }}
+
+      - name: the page policy refuses injected script in this engine
+        run: pixi run test-csp
+      - name: poisoned text stays text in this engine
+        if: ${{ !cancelled() }}
+        run: pixi run test-injection
+
   # One check that means "everything passed", so branch protection can require a
   # single name and a new job cannot be forgotten. `skipped` counts as a failure:
   # a job that did not run proved nothing.
   tests-passed:
     name: tests passed
     if: ${{ always() }}
-    needs: [workflows, server, browser, stack]
+    needs: [workflows, server, browser, engines, stack]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

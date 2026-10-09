@@ -34,12 +34,14 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import os
 import re
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from browser_engine import engine_name, launch
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -142,8 +144,24 @@ def main() -> int:
         in (ROOT / "proxy" / "Dockerfile").read_text(),
     )
 
+    # A typo in a CI matrix must not run Chromium twice and call it cross-browser.
+    kept = os.environ.get("TEST_BROWSER")
+    try:
+        os.environ["TEST_BROWSER"] = "firefx"
+        try:
+            engine_name()
+            refused = False
+        except SystemExit:
+            refused = True
+    finally:
+        if kept is None:
+            os.environ.pop("TEST_BROWSER", None)
+        else:
+            os.environ["TEST_BROWSER"] = kept
+    check("an unknown TEST_BROWSER is an error, not Chromium", refused)
+
     with sync_playwright() as pw:
-        browser = pw.chromium.launch()
+        browser = launch(pw)
 
         print("The dashboard under that policy")
         ctx, page, violations = open_under(browser, csp)
@@ -276,7 +294,7 @@ def main() -> int:
         " a.click(); }"
     )
     with sync_playwright() as pw:
-        browser = pw.chromium.launch()
+        browser = launch(pw)
         ctx, page, violations = open_under(browser, None)  # no header at all
         wait_until(page, "typeof LOADED !== 'undefined' && LOADED")
         check(

@@ -1266,10 +1266,12 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - **The exported report has a policy of its own**, inline in the file: no script
   at all and no outside resource, so a report opened from disk or a mail
   attachment cannot run one either.
-- **Where it applies.** The proxy, which is the shared workspace. The GitHub
-  Pages copy cannot set headers, and a policy meta tag in the page would also
-  bind the Claude artifact host, which injects its own script, so neither gets
-  one.
+- **Where it applies.** The proxy, which is the shared workspace, and the
+  published GitHub Pages copy. Pages cannot set headers, so
+  `scripts/pages_policy.py` adds the same policy as a meta tag to the built site
+  at publish time (#157). It is not in the file in the repository, which a
+  Claude artifact also runs: that host injects its own script, which a policy in
+  the page would block, so the artifact host gets none.
 - Rejected: a nonce (the page is one static file served the same way everywhere,
   so there is nothing to template per request); a hash maintained by hand in the
   Caddyfile (it would break the dashboard on the first build after someone

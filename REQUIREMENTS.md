@@ -738,9 +738,9 @@ honest answer and is a gap worth closing; see R-19.
 - A new way of turning text into markup (an `eval`, a URL built from text, an
   unescaped attribute value, a new `innerHTML`) is reviewed before it is added.
 - The proxy serves a policy that allows the dashboard's script by its hash, not
-  by `'unsafe-inline'` (D-68), as a second barrier. The static Pages copy and
-  the Claude artifact host set their own headers, so there escaping is the only
-  one.
+  by `'unsafe-inline'` (D-68), as a second barrier, and so does the published
+  Pages copy, through a meta tag added at publish time. The Claude artifact host
+  sets its own policy, so there escaping is the only barrier.
 - Source: the owner, on #155; DECISIONS D-67.
 - Enforced by: `tests/test_injection.py`, `tests/test_check_injection.py` with
   `pixi run check-injection`, `server/tests/test_sql_injection.py`.

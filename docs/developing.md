@@ -296,8 +296,11 @@ pixi run docs-build    # writes ./site, and fails on a broken internal link
 ```
 
 The GitHub Actions workflow at `.github/workflows/pages.yml` builds the site and
-publishes it on every push to `main`. Enable it once under **Settings → Pages →
-Build and deployment → Source: GitHub Actions**.
+publishes it on every push to `main`. GitHub Pages cannot set response headers,
+so the workflow first adds the dashboard's Content-Security-Policy to the built
+copy as a meta tag (`scripts/pages_policy.py`); the file in the repository is
+left without one. Enable it once under **Settings → Pages → Build and deployment
+→ Source: GitHub Actions**.
 
 The checklist and metrics pages under `frameworks/` are generated (`pixi run
 gen-docs`) and are not edited by hand.

@@ -33,6 +33,11 @@ jobs:
       # silently publishing a site with holes in it.
       - run: pixi run zensical build --clean --strict
 
+      # GitHub Pages cannot set response headers, so the published copy of the dashboard
+      # gets its Content-Security-Policy as a meta tag, added to the built site only. The
+      # file in the repository is also what a Claude artifact runs, and stays untouched (#157).
+      - run: pixi run python scripts/pages_policy.py site/app/index.html
+
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5

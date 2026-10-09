@@ -1075,10 +1075,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Asserted in:** `docs/developing.md` — "Text a person types stays text."
 - **Asserted in:** `docs/exports.md` — "Whatever a person typed stays text in every export."
 - **Status:** partial
-- **Gap:** Escaping is the first barrier, and the proxy's policy is the second (C-84),
-  but the GitHub Pages copy cannot set headers and the Claude artifact host sets its own,
-  so there escaping is the only one. The Markdown report is checked as text, not by every
-  viewer that renders it. #157
+- **Gap:** Escaping is the first barrier, and a page policy is the second (C-84), on the
+  proxy and on the published Pages copy. The Claude artifact host sets its own policy and
+  injects its own script, so there escaping is the only barrier. The Markdown report is
+  checked as text, not by every viewer that renders it. #157
 - **Enforced by:**
   `tests/test_injection.py::an app that does not escape is rejected`
   `tests/test_injection.py::the CSV rule notices a formula cell`
@@ -1102,8 +1102,9 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** The Content-Security-Policy the proxy serves allows the dashboard's one
   inline script by its SHA-256 and not by `'unsafe-inline'`, so an injected script,
-  an event handler or a `javascript:` link is refused by the browser, and the exported
-  report carries a policy of its own that allows no script at all.
+  an event handler or a `javascript:` link is refused by the browser, the published
+  GitHub Pages copy carries the same policy as a meta tag added at publish time, and the
+  exported report carries a policy of its own that allows no script at all.
 - **Asserted in:** `proxy/Caddyfile` — "The script is allowed by its hash, not by 'unsafe-inline'."
 - **Status:** enforced
 - **Enforced by:**
@@ -1111,4 +1112,6 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_csp.py::an injected inline script, handler and javascript: link did not run`
   `tests/test_csp.py::a policy that names a different script does not boot the app`
   `tests/test_csp.py::so a script put into a saved report does not run`
+  `tests/test_csp.py::and refuses an injected script, handler and javascript: link`
+  `tests/test_csp.py::the Pages workflow runs the step after the build`
   `tests/test_proxy_identity.py::content-security-policy`

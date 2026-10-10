@@ -1154,3 +1154,53 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_markdown.py::with esc weakened the structure check would catch the tag`
   `tests/test_markdown.py::with safeUrl weakened the structure check would catch the hole`
   `tests/test_injection.py::an app that does not escape is rejected`
+
+### C-90 A framework definition's text is never run
+
+- **Claim:** Whatever characters a framework definition holds (a name, an item,
+  a status, a checkpoint, a sample), the dashboard shows them as text and runs
+  none of them, on every screen and in the HTML and Markdown exports.
+- **Asserted in:** `docs/frameworks/custom.md` — "A definition's text is never run as code"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_custom_build.py::the markup shows as text`
+  `tests/test_custom_build.py::none of it runs`
+  `tests/test_custom_build.py::no element it names is made`
+  `tests/test_custom_build.py::the HTML export holds no tag from it`
+  `tests/test_custom_build.py::the Markdown export holds no tag from it`
+
+### C-91 A build opens only its own framework's records
+
+- **Claim:** A build of other frameworks lists, opens and imports only records
+  stamped with its own primary; a record of another framework, including an
+  unstamped one from the published build, is left off the portfolio and refused
+  when opened or imported (R-67).
+- **Asserted in:** `docs/frameworks/custom.md` — "Your build lists, opens and imports only its own records"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_custom_build.py::the portfolio lists only the example's record`
+  `tests/test_custom_build.py::opening an unstamped record is refused`
+  `tests/test_custom_build.py::opening another primary's record is refused`
+  `tests/test_custom_build.py::every record it makes is stamped with its primary`
+
+### C-92 A custom build's saved work is kept apart from the published build's
+
+- **Claim:** In local mode a build of other frameworks stores its records under
+  browser storage keys carrying its primary's id, never the published build's
+  keys.
+- **Asserted in:** `docs/frameworks/custom.md` — "your build saves under browser storage keys that carry your primary's id"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_custom_build.py::its records are stored under the example's key, not the published build's`
+
+### C-93 A custom build cannot overwrite the published page or its policy
+
+- **Claim:** `build_app.py --config` refuses an `--out` under `docs/` or
+  `proxy/`, and a custom build leaves the published dashboard and the proxy's
+  policy byte for byte as they were.
+- **Asserted in:** `docs/frameworks/custom.md` — "The build refuses an `--out` under `docs/` or `proxy/`"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_build_config.py::the published page and policy are untouched`
+  `tests/test_build_config.py::an --out under docs/ or proxy/ is refused`
+  `tests/test_build_config.py::--config without --out is refused`

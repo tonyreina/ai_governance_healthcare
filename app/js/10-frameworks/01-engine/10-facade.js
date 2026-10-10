@@ -26,7 +26,7 @@ const UiSlot = Object.freeze({
   GATE_EYEBROW: "gateEyebrow", GATE_GAPS: "gateGaps", GATE_ANSWERED_PARTIAL: "gateAnsweredPartial",
   GATE_ALL_MET: "gateAllMet", GATE_GAP_ITEM: "gateGapItem",
   // The portfolio, setup and the delete dialog.
-  DASH_LEDE: "dashLede", SETUP_EYEBROW: "setupEyebrow", FW_LEDE: "fwLede",
+  DASH_LEDE: "dashLede", DASH_EMPTY: "dashEmpty", SETUP_EYEBROW: "setupEyebrow", FW_LEDE: "fwLede",
   DEL_REMOVES: "delRemoves", DEL_DESTROYS: "delDestroys",
   // The report and the exports.
   REPORT_EYEBROW: "reportEyebrow", TITLE_SUFFIX: "titleSuffix", COL_SECTION: "colSection",
@@ -54,7 +54,8 @@ const DEFAULT_SLOT = Object.freeze({
   [UiSlot.GATE_EYEBROW]: "engine.gate.eyebrow", [UiSlot.GATE_GAPS]: "engine.gate.gaps",
   [UiSlot.GATE_ANSWERED_PARTIAL]: "engine.gate.answeredPartial", [UiSlot.GATE_ALL_MET]: "engine.gate.allMet",
   [UiSlot.GATE_GAP_ITEM]: "engine.gate.gapItem",
-  [UiSlot.DASH_LEDE]: "engine.dash.lede", [UiSlot.SETUP_EYEBROW]: "engine.setup.eyebrow",
+  [UiSlot.DASH_LEDE]: "engine.dash.lede", [UiSlot.DASH_EMPTY]: "engine.dash.empty",
+  [UiSlot.SETUP_EYEBROW]: "engine.setup.eyebrow",
   [UiSlot.FW_LEDE]: "engine.fw.lede", [UiSlot.DEL_REMOVES]: "engine.del.removes", [UiSlot.DEL_DESTROYS]: "engine.del.destroys",
   [UiSlot.REPORT_EYEBROW]: "engine.report.eyebrow", [UiSlot.TITLE_SUFFIX]: "engine.export.titleSuffix",
   [UiSlot.COL_SECTION]: "engine.col.section", [UiSlot.COL_ITEM]: "engine.col.item",

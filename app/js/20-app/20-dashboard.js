@@ -19,7 +19,7 @@ function lcTrack(p){
 }
 function dashData(){
   const fw=spine();
-  const list=[...PROJECTS.values()].map(p=>normalize(p));
+  const list=[...PROJECTS.values()].filter(isOwnRecord).map(p=>normalize(p));
   const rows=list.map(p=>({p, st:fw.status(p), f:fw.flags(p), score:fw.score(p).pct, nr:fw.nextReview(p)}));
   return rows;
 }
@@ -32,7 +32,7 @@ function renderDashboardShell(){
   document.getElementById("projName").textContent = t("header.portfolio");
   const m=document.getElementById("main");
   let legacy=null;
-  try{ const raw=localStorage.getItem("chai-review-v1"); if(raw && !localStorage.getItem("chai-legacy-imported")){ const j=JSON.parse(raw); if(j&&j.meta&&(j.meta.solution||Object.keys(j.items||{}).length)) legacy=j; } }catch(e){}
+  try{ const raw=localStorage.getItem("chai-review-v1"); if(raw && !localStorage.getItem("chai-legacy-imported")){ const j=JSON.parse(raw); if(j&&j.meta&&isOwnRecord(j)&&(j.meta.solution||Object.keys(j.items||{}).length)) legacy=j; } }catch(e){}
   m.innerHTML = `
     <div class="dash-head">
       <div><p class="eyebrow">${esc(t("dash.eyebrow"))}</p><h1>${esc(t("dash.title"))}</h1>
@@ -81,14 +81,18 @@ function updateDashboard(){
     list = rows.map(r=>Object.assign(r,{hits:textHits(r.p,q)})).filter(r=>r.hits.length);
   }
   else if(q) list=list.filter(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.org].join(" ").toLowerCase().includes(q));
-  const note = everything
+  // Records of another framework (from another build on this server) are not this
+  // build's to show; say how many are left out rather than hide them silently.
+  const foreign=[...PROJECTS.values()].filter(p=>!isOwnRecord(p)).length;
+  const hidden = foreign ? `<p class="small search-note" id="foreignNote">${esc(t("dash.foreignHidden",{count:foreign}))}</p>` : "";
+  const note = hidden + (everything
     ? `<p class="small search-note" id="searchNote">${esc(t("dash.searchNote"))}${MODE===Mode.API?` ${esc(t("dash.searchNoteServer"))}`:""}</p>`
-    : "";
+    : "");
   const rank={red:0,amber:1,green:2,retired:3};
   list.sort((a,b)=>(rank[a.st.key]-rank[b.st.key]) || (b.f.length-a.f.length) || (a.p.meta.solution||"").localeCompare(b.p.meta.solution||""));
   if(!rows.length){
     const samples=spine().samples;
-    host.innerHTML=`<div class="empty-state"><p>${esc(samples?t("dash.empty",{count:samples.count()}):t("dash.emptyNoSamples"))}</p>
+    host.innerHTML=`${hidden}<div class="empty-state"><p>${esc(samples?t(uiKey(UiSlot.DASH_EMPTY),{count:samples.count()}):t("dash.emptyNoSamples"))}</p>
       <div class="ro-hide" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="new">${esc(t("dash.newProject"))}</button>${samples?`<button class="btn" data-act="samples">${esc(t("dash.loadSamples"))}</button>`:""}</div></div>`;
     applyRO(host); return;
   }
@@ -126,6 +130,7 @@ function goHome(){
 function openProject(id,view){
   flushAllChanges();          // leaving a project ends any edit in progress
   const p=PROJECTS.get(id); if(!p) return;
+  if(!isOwnRecord(p)){ toast(t("toast.foreignRecord",{name:String(recordFramework(p)).slice(0,64)})); return; }
   if(unsubLog){ unsubLog(); unsubLog=null; }
   CUR=id; S=normalize(clone(p)); LOG=[]; LOG_TOTAL=null; openItems.clear();
   // Read-only is a property of this project and this user, not of the

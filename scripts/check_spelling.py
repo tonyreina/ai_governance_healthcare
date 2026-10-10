@@ -42,6 +42,8 @@ SKIP_DIRS = {
     ".venv",
     "venv",
     "backups",
+    # Output of a build of other frameworks (pixi run build-example), ignored by git.
+    "build",
 }
 # This file IS the word list. Scanning it would flag every British key, and
 # --fix would rewrite the keys to match their values, quietly turning the

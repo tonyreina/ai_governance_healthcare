@@ -22,6 +22,8 @@ nav = [
     "frameworks/chai-metrics.md",
     "frameworks/optica.md",
     "frameworks/optica-checklist.md",
+    "frameworks/custom.md",
+    "frameworks/example-checklist.md",
     "frameworks/evidence.md",
   ] },
   { "Crosswalk" = "crosswalk.md" },

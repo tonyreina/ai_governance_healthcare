@@ -132,7 +132,8 @@ string (browser storage keys aside).
     categories and gates with their labels, a decision's class (`GateClass`),
     the answers, phase, flags, status, next review, score and report body,
     plus optional Markdown and JSON extras and worked examples. The full list
-    is in `00-registry.js`; CHAI's is `10-chai/25-spine.js`.
+    is in `00-registry.js`, and `90-register.js` builds it from a
+    definition; CHAI's extras are in `10-chai/25-spine.js`.
 
     Optional frameworks never propagate status in either direction. An OPTICA
     answer cannot move a CHAI score, and vice versa. The frameworks ask
@@ -141,10 +142,8 @@ string (browser storage keys aside).
     Evidence can be cited in both; a judgment in one is never a judgment in
     the other.
 
-    Building with a framework of your own in place of CHAI is in progress:
-    the definition format and the engine are done; neutral wording for a
-    framework without its own catalog keys, and a build that selects other
-    frameworks, are the rest of #168.
+    To build the dashboard with a framework of your own in place of CHAI
+    and OPTICA, see [Bring your own framework](frameworks/custom.md).
 
 ## Languages
 

@@ -250,6 +250,9 @@ jobs:
       - name: the shell never names a framework
         if: ${{ !cancelled() }}
         run: pixi run test-framework-boundary
+      - name: a build of other frameworks works and names nothing of CHAI or OPTICA
+        if: ${{ !cancelled() }}
+        run: pixi run test-custom-build
       - name: CHAI metric picker
         if: ${{ !cancelled() }}
         run: pixi run test-te

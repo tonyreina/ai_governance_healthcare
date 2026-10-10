@@ -51,7 +51,8 @@
     "fwNote": "fw.note",
     "flagLiveOpen": "flag.liveNotMet",
     "flagNoRationale": "flag.noRationale",
-    "flagNoDeployDate": "flag.noDeployDate"
+    "flagNoDeployDate": "flag.noDeployDate",
+    "dashEmpty": "dash.empty"
   },
   "statuses": [
     {

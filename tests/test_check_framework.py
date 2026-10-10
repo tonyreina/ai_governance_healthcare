@@ -522,6 +522,93 @@ def main() -> int:
             "not a risk tier",
         )
 
+    print("Samples (mutation)")
+    item0 = REAL[CHAI]["sections"][0]["items"][0]["id"]
+    gate0 = REAL[CHAI]["gates"][0]
+    option0 = gate0["options"][0]["value"]
+    status0 = REAL[CHAI]["statuses"][0]["value"]
+
+    def sample(**over: object) -> dict:
+        s = {
+            "name": "Example",
+            "answers": {item0: status0},
+            "decisions": {gate0["id"]: [option0, -10, "Why"]},
+            "meta": {"riskTier": "High"},
+        }
+        s.update(over)
+        return s
+
+    found = run(lambda c, o: setv(c, "samples", [sample()]))
+    check("a sample that names what exists passes", found == [], str(found[:3]))
+    notices(
+        "a sample answers an item that does not exist",
+        lambda c, o: setv(c, "samples", [sample(answers={"nope": status0})]),
+        CHAI,
+        "$.samples[0].answers.nope",
+        "no item 'nope'",
+    )
+    notices(
+        "a sample answers with a status that does not exist",
+        lambda c, o: setv(c, "samples", [sample(answers={item0: "maybe"})]),
+        CHAI,
+        f"$.samples[0].answers.{item0}",
+        "no status 'maybe'",
+    )
+    notices(
+        "a sample decides a gate that does not exist",
+        lambda c, o: setv(c, "samples", [sample(decisions={"Q": [option0, 0]})]),
+        CHAI,
+        "$.samples[0].decisions.Q",
+        "no gate 'Q'",
+    )
+    notices(
+        "a sample decides with an option the gate does not have",
+        lambda c, o: setv(
+            c, "samples", [sample(decisions={gate0["id"]: ["Shrug", 0]})]
+        ),
+        CHAI,
+        f"$.samples[0].decisions.{gate0['id']}[0]",
+        "has no option 'Shrug'",
+    )
+    notices(
+        "a sample's risk tier setup never stores",
+        lambda c, o: setv(c, "samples", [sample(meta={"riskTier": "Severe"})]),
+        CHAI,
+        "$.samples[0].meta.riskTier",
+        "not a risk tier",
+    )
+    notices(
+        "two samples with one name",
+        lambda c, o: setv(c, "samples", [sample(), sample()]),
+        CHAI,
+        "$.samples[1].name",
+        "duplicate",
+    )
+    notices(
+        "a supplement with samples",
+        lambda c, o: setv(o, "samples", [{"name": "x"}]),
+        OPTICA,
+        "$.samples",
+        "only a primary",
+    )
+    # The stamp is the build's to write: a sample cannot set meta.framework.
+    found = run(
+        lambda c, o: setv(c, "samples", [sample(meta={"framework": {"id": "x"}})])
+    )
+    check(
+        "a sample that sets the record's framework stamp",
+        any("samples" in line and "framework" in line for line in found),
+        str(found[:3]),
+    )
+    found = run(
+        lambda c, o: setv(c, "samples", [sample(decisions={gate0["id"]: [option0]})])
+    )
+    check(
+        "a decision with no day",
+        any("$.samples[0].decisions" in line for line in found),
+        str(found[:3]),
+    )
+
     print("Flags (mutation)")
     notices(
         "a flag on a gate that does not exist",

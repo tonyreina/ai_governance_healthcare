@@ -2,7 +2,7 @@
    Stores: the self-hosted server, or this browser
    ============================================================ */
 class LocalStore{
-  constructor(){ this.k="chai-portfolio-local-v1"; this.d=this.load(); this.subs=[]; this.logSubs={}; }
+  constructor(){ this.k="chai-portfolio-local-v1"+BUILD_SUFFIX; this.d=this.load(); this.subs=[]; this.logSubs={}; }
   load(){ try{ return JSON.parse(localStorage.getItem(this.k)) || {projects:{},logs:{}}; }catch(e){ return {projects:{},logs:{}}; } }
   persist(){
     try{ localStorage.setItem(this.k,JSON.stringify(this.d)); return true; }

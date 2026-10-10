@@ -83,8 +83,8 @@ let LOG_TOTAL=null;
 const openItems=new Set();
 const pending={}, timers={}, flushing={};
 let UI={view:"setup", project:null, filter:"all", q:""};
-try{ UI=Object.assign(UI, JSON.parse(localStorage.getItem("chai-ui-v2"))||{}); }catch(e){}
-function saveUI(){ try{ localStorage.setItem("chai-ui-v2",JSON.stringify({view:UI.view,project:CUR,filter:UI.filter})); }catch(e){} }
+try{ UI=Object.assign(UI, JSON.parse(localStorage.getItem("chai-ui-v2"+BUILD_SUFFIX))||{}); }catch(e){}
+function saveUI(){ try{ localStorage.setItem("chai-ui-v2"+BUILD_SUFFIX,JSON.stringify({view:UI.view,project:CUR,filter:UI.filter})); }catch(e){} }
 
 /* names */
 const NAMES={};

@@ -125,7 +125,8 @@ class Shape(StrEnum):
 # its path.
 TEST_PREFIXES = ("tests/", "server/tests/")
 SKIP_PARTS = frozenset(
-    {"__pycache__", ".pixi", ".git", "node_modules", "site", ".cache"}
+    # .claude holds agents' git worktrees: other checkouts, not this one's code.
+    {"__pycache__", ".pixi", ".git", "node_modules", "site", ".cache", ".claude"}
 )
 JS_ROOT = "app/"
 JS_SUFFIXES = (".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx")

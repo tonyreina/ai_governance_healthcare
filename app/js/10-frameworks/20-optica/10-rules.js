@@ -33,16 +33,8 @@ const opticaAnswer = (p, key) => opticaAnswers(p)[key] || {};
    answered (the stakeholder did respond) but contribute nothing to
    the percentage, and are reported separately so they stay visible. */
 function opticaScore(items, p) {
-  const answers = opticaAnswers(p);
-  let sum = 0, n = 0, answered = 0, declined = 0;
-  items.forEach(it => {
-    const st = (answers[it.key] || {}).status;
-    if (st) answered++;
-    if (st === "declined") { declined++; return; }
-    if (st === "na") return;
-    n++; sum += OPTICA_VAL[st] || 0;
-  });
-  return { pct: n ? Math.round(sum / n * 100) : 0, answered, total: items.length, applicable: n, declined };
+  // The engine's score, keyed by item id (OPTICA's `key`).
+  return ENGINES.optica.score(items.map(it => ({ id: it.key })), opticaAnswers(p));
 }
 
 /* Who still owes answers. OPTICA assigns each item to one of five

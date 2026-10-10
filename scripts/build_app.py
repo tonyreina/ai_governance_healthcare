@@ -24,6 +24,7 @@ import hashlib
 import json
 import re
 import sys
+from enum import StrEnum
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -68,11 +69,61 @@ def ordered(directory: Path, suffix: str) -> list[Path]:
     return sorted((p for p in directory.rglob(f"*{suffix}")), key=key)
 
 
+# The default build: what docs/app/index.html and proxy/csp.caddy are (#168). The
+# committed app/frameworks.json must say exactly this; a build of other frameworks
+# writes elsewhere (step 3), never over the published page.
+class Role(StrEnum):
+    """A framework definition's role (schema/framework.schema.json)."""
+
+    PRIMARY = "primary"
+    SUPPLEMENT = "supplement"
+
+
+DEFAULT_FRAMEWORKS = {"primary": "chai", "frameworks": ["chai", "optica"]}
+FRAMEWORKS_CONFIG = SRC / "frameworks.json"
+
+
+def framework_defs(config: Path = FRAMEWORKS_CONFIG) -> dict:
+    """The selected framework definitions, in the config's order, checked against
+    the config: the primary is listed, and its definition says it is the primary."""
+    cfg = json.loads(config.read_text(encoding="utf-8"))
+    if cfg != DEFAULT_FRAMEWORKS:
+        raise SystemExit(
+            f"error: {config} must be "
+            f"{json.dumps(DEFAULT_FRAMEWORKS)} for the published build; "
+            "a build of other frameworks is not supported yet"
+        )
+    defs = {}
+    for fid in cfg["frameworks"]:
+        path = SRC / "frameworks" / fid / "framework.json"
+        if not path.exists():
+            raise SystemExit(f"error: {path} is missing")
+        defs[fid] = json.loads(path.read_text(encoding="utf-8"))
+    primary = defs.get(cfg["primary"])
+    if (
+        primary is None
+        or Role(primary.get("role", Role.SUPPLEMENT)) is not Role.PRIMARY
+    ):
+        raise SystemExit(
+            f"error: {cfg['primary']} is not a primary framework definition"
+        )
+    return defs
+
+
+def frameworks_js() -> str:
+    body = json.dumps(framework_defs(), ensure_ascii=False, separators=(",", ":"))
+    return (
+        "/* Generated from app/frameworks/<id>/framework.json"
+        " by scripts/build_app.py. */\n"
+        f"const FRAMEWORK_DEFS = Object.freeze({body});"
+    )
+
+
 def catalogs_js() -> str:
     """The message catalogs, app/i18n/<locale>.json, as one frozen object (#80).
 
     Embedded rather than fetched: the dashboard is one file that must work opened from
-    disk and as a Claude artifact (R-01), so nothing can be loaded at run time. English
+    disk (R-60), so nothing can be loaded at run time. English
     first, then the rest by name, so the output is stable.
     """
     files = sorted(
@@ -205,7 +256,7 @@ def main() -> int:
     css = "\n\n".join(p.read_text(encoding="utf-8").strip("\n") for p in css_files)
     js = (
         "\n\n".join(
-            [catalogs_js()]
+            [catalogs_js(), frameworks_js()]
             + [p.read_text(encoding="utf-8").strip("\n") for p in js_files]
         )
         + "\n"

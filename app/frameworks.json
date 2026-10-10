@@ -1,0 +1,4 @@
+{
+  "primary": "chai",
+  "frameworks": ["chai", "optica"]
+}

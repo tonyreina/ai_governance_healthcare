@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -185,8 +186,8 @@ def main(argv: list[str]) -> int:
     # once recorded "OPTICA on" with no OPTICA views at all.
     check(
         "the OPTICA-on pass shows OPTICA's chapters",
-        sum("/optica-on/view/o" in k for k in pieces) == 10 * 13,
-        str(sum("/optica-on/view/o" in k for k in pieces)),
+        sum(bool(re.search(r"/optica-on/view/o\d+$", k)) for k in pieces) == 10 * 13,
+        str(sum(bool(re.search(r"/optica-on/view/o\d+$", k)) for k in pieces)),
     )
     now = digest(pieces)
     if update:

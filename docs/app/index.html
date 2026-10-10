@@ -4,7 +4,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LlbcUu16EgGigWN449ctPe+wpcsSH6ORrylIgxUJCa0='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-mtA7N5aY0P0kj8aC1HBrE4nLrIHeQFY+AC/OLWf4aSw='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Health AI assurance review</title>
@@ -4780,8 +4780,10 @@ function checkRetirementRules(health){
   const rules = health && health.retirement_rules;
   RULES_PROBLEMS = rulesProblems(rules, BUILD);
   // The server's word for its primary, shown as text and never trusted as more.
-  RULES_SERVER_PRIMARY = rules && typeof rules === "object" && !Array.isArray(rules)
-    ? String(rules.primary).slice(0, 64) : "";
+  // A server that names none (or not as text) is shown as "?", never "undefined".
+  const named = rules && typeof rules === "object" && !Array.isArray(rules)
+    && typeof rules.primary === "string" && rules.primary;
+  RULES_SERVER_PRIMARY = named ? rules.primary.slice(0, 64) : "?";
   showRulesBanner();
   return RULES_PROBLEMS;
 }

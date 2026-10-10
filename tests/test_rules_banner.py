@@ -455,6 +455,12 @@ def scenarios(browser, url: str, build: dict, run: Run) -> None:
             and page.evaluate("rulesBlockWrites()"),
             str(b),
         )
+        if label == "no primary":
+            check(
+                "no primary: the sentence never says 'undefined'",
+                "undefined" not in b.get("text", "") and '"?"' in b.get("text", ""),
+                b.get("text", ""),
+            )
         page.close()
 
     for label, rules in (

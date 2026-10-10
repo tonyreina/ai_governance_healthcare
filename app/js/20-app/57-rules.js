@@ -13,8 +13,10 @@ function checkRetirementRules(health){
   const rules = health && health.retirement_rules;
   RULES_PROBLEMS = rulesProblems(rules, BUILD);
   // The server's word for its primary, shown as text and never trusted as more.
-  RULES_SERVER_PRIMARY = rules && typeof rules === "object" && !Array.isArray(rules)
-    ? String(rules.primary).slice(0, 64) : "";
+  // A server that names none (or not as text) is shown as "?", never "undefined".
+  const named = rules && typeof rules === "object" && !Array.isArray(rules)
+    && typeof rules.primary === "string" && rules.primary;
+  RULES_SERVER_PRIMARY = named ? rules.primary.slice(0, 64) : "?";
   showRulesBanner();
   return RULES_PROBLEMS;
 }

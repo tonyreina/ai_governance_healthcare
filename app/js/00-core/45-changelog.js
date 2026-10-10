@@ -25,33 +25,10 @@
 function describePath(path) {
   const parts = String(path).split(".");
 
-  if (parts[0] === "items") {
-    const id = parts[1];
-    const item = (typeof allItems === "function" ? allItems() : []).find(i => i.id === id);
-    const what = parts[2] === Field.REFS ? "evidence reference"
-      : { status: "status", evidence: "evidence", owner: "owner", due: "due date" }[parts[2]] || parts[2];
-    return item ? `${what} of “${item.text}”` : `${what} of criterion ${id}`;
-  }
-
-  if (parts[0] === "gates") {
-    const gate = GATES[parts[1]];
-    const what = { decision: "decision", by: "decided by", date: "decision date",
-                   rationale: "rationale", conditions: "conditions" }[parts[2]] || parts[2];
-    return gate ? `${what} for ${gate.title}` : `${what} for checkpoint ${parts[1]}`;
-  }
-
-  if (parts[0] === "card") {
-    return `model card: ${CARD_LABEL[parts[1]] || parts[1]}`;
-  }
-
-  if (parts[0] === "optica" && parts[1] === "answers") {
-    const key = parts[2];
-    const item = (typeof OPTICA_ITEMS !== "undefined" ? OPTICA_ITEMS : []).find(i => i.key === key);
-    const what = parts[3] === Field.REFS ? "evidence reference"
-      : { status: "status", evidence: "evidence", owner: "owner",
-          due: "due date", declineReason: "reason for declining" }[parts[3]] || parts[3];
-    return item ? `OPTICA ${item.num}: ${what}` : `OPTICA ${key}: ${what}`;
-  }
+  // A framework's own keys (CHAI's items, gates, card and metrics; OPTICA's
+  // answers) are described by that framework (#168).
+  const own = frameworkDescribePath(parts);
+  if (own) return own;
 
   if (parts[0] === "meta") {
     const labels = { solution: "solution name", org: "organization", developer: "developer",
@@ -61,7 +38,6 @@ function describePath(path) {
     return labels[parts[1]] || parts[1];
   }
 
-  if (parts[0] === "metrics") return "key metrics";
   if (parts[0] === "access") return "who has access";
   if (parts[0] === "archived") return "archived state";
   return parts.join(" › ");
@@ -81,7 +57,7 @@ function describeValue(path, value) {
 
   const text = String(value);
   if (/\.status$/.test(path)) {
-    return STATUS[text] || (typeof OPTICA_STATUS !== "undefined" ? OPTICA_STATUS[text] : "") || text;
+    return frameworkStatusName(text) || text;
   }
   return text.length > 60 ? `“${text.slice(0, 57)}…”` : `“${text}”`;
 }

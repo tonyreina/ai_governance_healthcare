@@ -24,14 +24,8 @@
     },
     "app/js/00-core/45-changelog.js": {
       "access": 1,
-      "answers": 1,
       "archived": 1,
-      "card": 1,
-      "gates": 1,
-      "items": 1,
-      "meta": 1,
-      "metrics": 1,
-      "optica": 1
+      "meta": 1
     },
     "app/js/00-core/50-dom.js": {
       "date": 1
@@ -48,7 +42,6 @@
     },
     "app/js/10-frameworks/10-chai/10-rules.js": {
       "High": 1,
-      "Retire": 1,
       "deployed": 2,
       "met": 1,
       "na": 1,
@@ -105,13 +98,9 @@
       "partial": 1,
       "red": 1
     },
-    "app/js/20-app/60-examples.js": {
-      "sepsis-risk-prediction": 1
-    },
     "app/js/20-app/70-events.js": {
       "Escape": 1,
       "SELECT": 1,
-      "addmetric": 1,
       "archive": 1,
       "claim": 1,
       "date": 1,
@@ -132,7 +121,6 @@
       "newform": 1,
       "newreview": 1,
       "notmet": 1,
-      "optica": 1,
       "partial": 1,
       "print": 1,
       "samples": 1

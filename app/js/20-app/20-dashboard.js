@@ -1,17 +1,26 @@
 /* ============================================================
    Dashboard
    ============================================================ */
+/* The lifecycle track: one pip per section of the primary framework, and a
+   diamond for each checkpoint after the section it follows. Built from the
+   framework's own sections and gates, so another framework draws its own (#168). */
+const GATE_PIP = Object.freeze({
+  [GateClass.GO]: "go", [GateClass.CONDITIONAL]: "cond", [GateClass.REVISE]: "cond",
+  [GateClass.STOP]: "stop", [GateClass.RETIRE]: "stop",
+});
 function lcTrack(p){
-  const ph=phase(p);
-  const pip=s=>{const c=scoreOf(s.items,p.items); const frac=c.total?c.answered/c.total:0;
-    return `<span class="pip${frac===1?" full":""}${ph.stage===s.n?" cur":""}" title="${esc(t("dash.pipTitle",{n:s.n,answered:c.answered,total:c.total}))}"><i style="height:${Math.round(frac*100)}%"></i>${s.n}</span>`;};
-  const gd=k=>{const d=dec(p,k); const cls=!d?"":(/Stop|Retire/.test(d)?"stop":/conditions|changes|Revise|Retrain/.test(d)?"cond":"go"); return `<span class="gd ${cls}" title="${esc(gateTitle(k))}: ${esc(d?optionText(d):t("dash.gateOpen"))}"></span>`;};
-  const S_=STAGES;
-  return `<div class="lc" aria-hidden="true">${pip(S_[0])}${gd("A")}${pip(S_[1])}${pip(S_[2])}${pip(S_[3])}${gd("B")}${pip(S_[4])}${gd("C")}${pip(S_[5])}${gd("D")}</div><div class="lc-label">${esc(phaseLabel(ph))}</div>`;
+  const fw=spine(), ph=fw.phase(p);
+  const pip=s=>{const c=fw.score(p,s.items); const frac=c.total?c.answered/c.total:0;
+    return `<span class="pip${frac===1?" full":""}${ph.stage===s.n?" cur":""}" title="${esc(t("dash.pipTitle",{n:s.n,answered:c.answered,total:c.total}))}"><i style="height:${Math.round(frac*100)}%"></i>${esc(s.n)}</span>`;};
+  const gd=g=>{const d=fw.gateRecord(p,g.id).decision||""; const c=fw.decisionClass(d); const cls=c?GATE_PIP[c]:""; return `<span class="gd ${cls}" title="${esc(fw.gateLabel(g.id))}: ${esc(d?fw.optionLabel(d):t("dash.gateOpen"))}"></span>`;};
+  const gates=fw.gates();
+  const track=fw.sections().map(s=>pip(s)+gates.filter(g=>g.after===s.id).map(gd).join("")).join("");
+  return `<div class="lc" aria-hidden="true">${track}</div><div class="lc-label">${esc(phaseLabel(ph))}</div>`;
 }
 function dashData(){
+  const fw=spine();
   const list=[...PROJECTS.values()].map(p=>normalize(p));
-  const rows=list.map(p=>({p, st:statusOf(p), f:flags(p), score:scoreOf(allItems(),p.items).pct, nr:nextReview(p)}));
+  const rows=list.map(p=>({p, st:fw.status(p), f:fw.flags(p), score:fw.score(p).pct, nr:fw.nextReview(p)}));
   return rows;
 }
 /* The portfolio's search fields, by element id: one definition, read by the
@@ -78,8 +87,9 @@ function updateDashboard(){
   const rank={red:0,amber:1,green:2,retired:3};
   list.sort((a,b)=>(rank[a.st.key]-rank[b.st.key]) || (b.f.length-a.f.length) || (a.p.meta.solution||"").localeCompare(b.p.meta.solution||""));
   if(!rows.length){
-    host.innerHTML=`<div class="empty-state"><p>${esc(t("dash.empty",{count:SAMPLES.length}))}</p>
-      <div class="ro-hide" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="new">${esc(t("dash.newProject"))}</button><button class="btn" data-act="samples">${esc(t("dash.loadSamples"))}</button></div></div>`;
+    const samples=spine().samples;
+    host.innerHTML=`<div class="empty-state"><p>${esc(samples?t("dash.empty",{count:samples.count()}):t("dash.emptyNoSamples"))}</p>
+      <div class="ro-hide" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="new">${esc(t("dash.newProject"))}</button>${samples?`<button class="btn" data-act="samples">${esc(t("dash.loadSamples"))}</button>`:""}</div></div>`;
     applyRO(host); return;
   }
   if(!list.length){ host.innerHTML= note + (everything
@@ -95,7 +105,7 @@ function updateDashboard(){
         ${r.hits&&everything?`<div class="psub hits">${esc(t("dash.foundIn",{places:r.hits.slice(0,4).join("; ")}))}${r.hits.length>4?` ${esc(t("dash.andMore",{count:r.hits.length-4}))}`:""}</div>`:""}</div>
       <div>${lcTrack(p)}</div>
       <div><span class="pct">${r.score}%</span></div>
-      <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">${esc(t("dash.overdue"))}</div>`:""}`:`<span class="small">${esc(t(phase(p).key==="deployed"?"dash.notSet":"dash.notLive"))}</span>`}</div>
+      <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">${esc(t("dash.overdue"))}</div>`:""}`:`<span class="small">${esc(t(spine().phase(p).key==="deployed"?"dash.notSet":"dash.notLive"))}</span>`}</div>
       <div><span class="st ${r.st.key}">${esc(statusLabel(r.st))}</span>
         ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(flagText(f))}</li>`).join("")}${r.f.length>3?`<li>${esc(t("dash.andMore",{count:r.f.length-3}))}</li>`:""}</ul>`:""}
         <button class="icon-btn ro-hide parchive" data-archive="${esc(p.id)}"

@@ -26,11 +26,17 @@ function gapsUpTo(p,stageId){
   return STAGES.slice(0,idx+1).flatMap(s=>s.items.filter(it=>{const st=(p.items[it.id]||{}).status; return !st||st==="notmet";}).map(it=>({...it,stage:s})));
 }
 const dec = (p,k)=> ((p.gates||{})[k]||{}).decision||"";
-const isGo = d => /^(Proceed|Continue)/.test(d||"");
+/* A decision's class, or null when none is recorded. A stored value this build
+   does not know (an edited import, a renamed option) has no class, so it neither
+   advances nor ends anything. */
+const optionClass = d => (d && Object.hasOwn(GATE_OPTION_CLASS, d)) ? GATE_OPTION_CLASS[d] : null;
+const isGo = d => ADVANCES.has(optionClass(d));
+const GATE_IDS = Object.keys(GATES);
 function phase(p){
   // `label` is the English an export records; `msg` is the catalog key a reader sees.
-  if([dec(p,"A"),dec(p,"B"),dec(p,"C")].includes("Stop")) return {key:"retired",label:"Stopped",msg:"phase.stopped"};
-  if(dec(p,"D")==="Retire") return {key:"retired",label:"Retired",msg:"phase.retired"};
+  const classes = GATE_IDS.map(k => optionClass(dec(p,k)));
+  if(classes.includes(GateClass.STOP)) return {key:"retired",label:"Stopped",msg:"phase.stopped"};
+  if(classes.includes(GateClass.RETIRE)) return {key:"retired",label:"Retired",msg:"phase.retired"};
   if(isGo(dec(p,"C"))) return {key:"deployed",label:"Deployed",stage:6,msg:"phase.deployed"};
   if(isGo(dec(p,"B"))) return {key:"pilot",label:"Pilot",stage:5,msg:"phase.pilot"};
   if(isGo(dec(p,"A"))) return {key:"build",label:"Design, build & assess",stage:2,msg:"phase.build"};
@@ -65,7 +71,7 @@ function flags(p){
     else { const d=parseDay(nr), left=daysBetween(today,d);
       if(left<0) F.push({sev:"red",text:`Periodic review overdue since ${fmtDay(nr)}`,msg:["flag.reviewOverdue",{date:nr}]});
       else if(left<=30) F.push({sev:"amber",text:`Periodic review due ${fmtDay(nr)}`,msg:["flag.reviewDue",{date:nr}]}); }
-    if(dec(p,"D")==="Retrain or revise") F.push({sev:"amber",text:"Last review asked for retraining or revision",msg:["flag.retrain",{}]});
+    if(optionClass(dec(p,"D"))===GateClass.REVISE) F.push({sev:"amber",text:"Last review asked for retraining or revision",msg:["flag.retrain",{}]});
   }
   if(live||piloting){
     const missing=CORE_CARD.filter(k=>!cardValOf(p,k));
@@ -76,7 +82,7 @@ function flags(p){
   }
   ["A","B","C","D"].forEach(k=>{ const g=p.gates[k]||{};
     if(isGo(g.decision) && !(g.rationale||"").trim()){
-      if(/conditions|changes/.test(g.decision)) F.push({sev:"amber",text:`${GATES[k].title}: conditional approval with no conditions recorded`,msg:["flag.noConditions",{gateKey:k}]});
+      if(optionClass(g.decision)===GateClass.CONDITIONAL) F.push({sev:"amber",text:`${GATES[k].title}: conditional approval with no conditions recorded`,msg:["flag.noConditions",{gateKey:k}]});
       else if(gapsUpTo(p,GATES[k].after).length) F.push({sev:"amber",text:`${GATES[k].title}: approved with open criteria and no rationale`,msg:["flag.noRationale",{gateKey:k}]});
     }});
   if(!live && p.updatedAt){ const idle=daysBetween(new Date(p.updatedAt),new Date()); if(idle>90) F.push({sev:"amber",text:`No activity in ${idle} days`,msg:["flag.idle",{count:idle}]}); }
@@ -88,18 +94,4 @@ function statusOf(p){
   if(f.some(x=>x.sev==="red")) return {key:"red",label:"Out of compliance",msg:"status.red"};
   if(f.length) return {key:"amber",label:"Needs update",msg:"status.amber"};
   return {key:"green",label:"On track",msg:"status.green"};
-}
-
-/* What a reader sees for a phase, a status or a flag. The objects keep their English
-   `label`/`text` for exports (which stay English); `msg` names the catalog entry, and
-   a date parameter is formatted in the reader's language here. */
-const phaseLabel = ph => t(ph.msg);
-const statusLabel = st => t(st.msg);
-function flagText(f){
-  if(!f.msg) return f.text;
-  const [key, params] = f.msg;
-  const p = Object.assign({}, params);
-  if(p.date) p.date = fmtDay(p.date);
-  if(p.gateKey){ p.gate = gateTitle(p.gateKey); delete p.gateKey; }
-  return t(key, p);
 }

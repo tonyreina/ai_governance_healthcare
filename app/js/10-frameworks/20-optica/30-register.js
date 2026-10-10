@@ -7,6 +7,9 @@
 registerFramework({
   id: "optica",
   label: "OPTICA",
+  describePath: opticaDescribePath,
+  statusName: v => Object.hasOwn(OPTICA_STATUS, v) ? OPTICA_STATUS[v] : undefined,
+  toggle: on => setOpticaEnabled(on),
 
   enabled: p => opticaOn(p),
 

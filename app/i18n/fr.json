@@ -69,6 +69,7 @@
   "dash.searchNote": "Recherche dans le texte actuel de tous les projets que vous pouvez ouvrir, archivés compris. Les versions antérieures et le journal d'audit ne sont pas inclus.",
   "dash.searchNoteServer": "Un administrateur peut y effectuer une recherche avec make subject-access.",
   "dash.empty": "Aucun projet d'IA pour l'instant. Ajoutez la première solution que votre établissement évalue, ou chargez {count} projets d'exemple, un par cas d'usage CHAI, pour voir comment fonctionnent les alertes de conformité.",
+  "dash.emptyNoSamples": "Aucun projet d'IA pour l'instant. Ajoutez la première solution que votre organisation évalue.",
   "dash.loadSamples": "Charger les projets d'exemple",
   "dash.noTextMatch": "Aucun projet ne contient ce texte.",
   "dash.noMatch": "Aucun projet ne correspond. Effacez la recherche ou choisissez un autre statut.",

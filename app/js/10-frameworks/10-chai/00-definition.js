@@ -75,6 +75,19 @@ const GATES = {
   D:{after:"s6",title:"Checkpoint D",q:"Periodic review decision",help:"Based on monitoring, should the solution continue as is, change, or be retired? Record a new review each cycle; the next due date is set from it.",options:["Continue","Continue with changes","Retrain or revise","Retire"]}
 };
 
+/* Each decision's class (GateClass in 00-core/10-model.js). The stored value is the
+   English option, unchanged; only its meaning is declared here. */
+const GATE_OPTION_CLASS = Object.freeze({
+  "Proceed": GateClass.GO,
+  "Proceed with conditions": GateClass.CONDITIONAL,
+  "Revise and resubmit": GateClass.REVISE,
+  "Stop": GateClass.STOP,
+  "Continue": GateClass.GO,
+  "Continue with changes": GateClass.CONDITIONAL,
+  "Retrain or revise": GateClass.REVISE,
+  "Retire": GateClass.RETIRE,
+});
+
 const CARD = [
   {sec:"Identity",fields:[
     ["name","Name","",0],["developer","Developer","",0],["contact","Inquiries or to report an issue","Email or phone",0],

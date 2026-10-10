@@ -64,7 +64,7 @@ function renderSetup(){
 
   <h2>${esc(t("setup.manage"))}</h2>
   <div style="display:flex;flex-wrap:wrap;gap:8px">
-    ${empty&&!RO?`<button class="btn" data-act="example">${esc(t("setup.example"))}</button>`:""}
+    ${empty&&!RO&&spine().samples?`<button class="btn" data-act="example">${esc(t("setup.example"))}</button>`:""}
     ${canOwn(S)?`<button class="btn" data-act="archive">${esc(t(S.archived?"setup.restore":"setup.archive"))}</button>
     <button class="btn danger" data-act="delete">${esc(t("setup.delete"))}</button>`
     :`<p style="font-size:13px;color:var(--muted);margin:0">${esc(t("setup.ownerOnly",{note:roleNote()}))}</p>`}

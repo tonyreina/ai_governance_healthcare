@@ -79,6 +79,7 @@
   "dash.searchNote": "正在搜索您可以打开的所有项目的当前文本，包括已归档的项目。不会搜索早期版本和审计日志。",
   "dash.searchNoteServer": "管理员可以使用 make subject-access 搜索这些内容。",
   "dash.empty": "还没有 AI 项目。添加您所在机构正在评估的第一个解决方案，或加载 {count} 个示例项目（每个 CHAI 用例一个），了解合规提示的工作方式。",
+  "dash.emptyNoSamples": "还没有 AI 项目。请添加贵机构正在评估的第一个解决方案。",
   "dash.loadSamples": "加载示例项目",
   "dash.noTextMatch": "没有项目包含该文本。",
   "dash.noMatch": "没有匹配的项目。请清除搜索或选择其他状态。",

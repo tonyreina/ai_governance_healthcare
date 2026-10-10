@@ -36,7 +36,7 @@ const U="Usefulness, usability & efficacy", F="Fairness & equity", SR="Safety & 
    today, so the dashboard's overdue and due-soon states are live. */
 const SAMPLES=[
   {
-    name:"Sepsis early warning (sample)", use:"sepsis-risk-prediction",
+    name:"Sepsis early warning (sample)", use:"sepsis-risk-prediction", fullCard:true,
     meta:{developer:"Example Vendor, Inc.",sourcing:"Purchased from a vendor",sponsor:"Dr. L. Chen, Critical Care",riskTier:"High",reviewCadence:"12 months",scope:"All adult inpatient units"},
     stages:[1,2,3,4,5,6],
     items:{"s3-2":["notmet","Vendor declined to share cohort demographics.","Procurement",-20],
@@ -173,7 +173,7 @@ function buildSample(spec, now){
       rationale:/Stop|Revise/.test(decision)?"See the review record.":"Met criteria for this stage.",
       signedBy:ME.id||null,signedAt:iso(day)};
   });
-  if(spec.card) p.card=Object.assign(spec.use==="sepsis-risk-prediction"?clone(EX_CARD):{}, spec.card);
+  if(spec.card) p.card=Object.assign(spec.fullCard?clone(EX_CARD):{}, spec.card);
   if(spec.metrics) p.metrics=clone(spec.metrics);
   if(spec.cardAt!=null) p.cardUpdatedAt=iso(spec.cardAt);
   if(spec.updated!=null) p.updatedAt=iso(spec.updated);

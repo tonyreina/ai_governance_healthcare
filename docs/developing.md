@@ -44,9 +44,11 @@ app/
     10-frameworks/
       00-registry.js           the framework contract
       05-project/              project setup (not owned by any framework)
-      10-chai/                 definition, T&E metrics, rules, views, registration
+      10-chai/                 definition, T&E metrics, rules, views, spine,
+                               examples, its own controls, registration
       20-optica/               the same files, independently
     20-app/                    shell, dashboard, exports, session, events, boot
+                               (none of which names a framework)
 ```
 
 Files concatenate in filename order, so a definition must live in a file that
@@ -109,16 +111,28 @@ A framework is a directory under `app/js/10-frameworks/` whose last file calls
 | `render(view, p)` | markup for one view |
 | `blank()` | extra keys for a new project |
 | `normalize(p)` | repair shape on load; must be idempotent |
+| `primary` | `true` on exactly one framework per build (below) |
+| `spine` | the primary's answers to what the shell asks (below) |
+| `describePath(parts)`, `statusName(v)` | the change history's words for its own keys |
+| `panel()`, `onClick(btn)`, `onChange(el)`, `toggle(on)` | optional: a side panel, its own controls, an opt-in switch |
 
 Nothing else in the app names a framework. The rail, the router and the pager
-read only the registry.
+read only the registry, and `pixi run test-framework-boundary` fails if a file
+in `00-core/` or `20-app/` names anything CHAI or OPTICA defines.
 
 !!! warning "One framework owns the status"
 
-    CHAI is always enabled and owns the compliance status, the readiness scores
-    and the dashboard. That is deliberate: the dashboard needs **one** status,
-    and averaging two frameworks' judgements would produce a number that means
+    Exactly one framework per build is the **primary**: the portfolio's status,
+    phase, flags, readiness score and report come from it (CHAI, in the default
+    build). That is deliberate: the portfolio needs **one** status, and
+    averaging two frameworks' judgments would produce a number that means
     nothing.
+
+    The shell asks the primary through its **spine**: items, sections,
+    categories and gates with their labels, a decision's class (`GateClass`),
+    the answers, phase, flags, status, next review, score and report body,
+    plus optional Markdown and JSON extras and worked examples. The full list
+    is in `00-registry.js`; CHAI's is `10-chai/25-spine.js`.
 
     Optional frameworks never propagate status in either direction. An OPTICA
     answer cannot move a CHAI score, and vice versa. The frameworks ask
@@ -126,6 +140,9 @@ read only the registry.
     item fully discharges a CHAI criterion; see the [crosswalk](crosswalk.md).
     Evidence can be cited in both; a judgment in one is never a judgment in
     the other.
+
+    Replacing CHAI with a framework of your own, defined as data and chosen at
+    build time, is in progress (#168).
 
 ## Languages
 

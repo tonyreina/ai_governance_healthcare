@@ -1073,3 +1073,25 @@ honest answer and is a gap worth closing; see R-19.
 - Source: the owner, this session; DECISIONS D-71; claim C-87.
 - Enforced by: `tests/test_markdown.py` and the Markdown-dressed payloads in
   `tests/test_injection.py`.
+
+### R-63 A build can use its own governance framework
+
+- Status: Active
+- The owner's decision, 2026-10-10 (#168): a developer can build the dashboard
+  with their own framework, with its own stages, criteria and checkpoints,
+  instead of CHAI and OPTICA. Frameworks are data run by one generic engine;
+  the choice is made at build time, as a reviewed change and a rebuild, never
+  by an upload at run time; and a build may leave CHAI and OPTICA out
+  entirely. The default build stays CHAI plus OPTICA.
+- Exactly one framework per build is the primary: the portfolio's status,
+  phase, flags, score and report come from it, never from a mix of two.
+- The shell (`app/js/00-core`, `app/js/20-app`) names no framework. It asks the
+  primary through the registry's spine, so a framework is replaced without a
+  change outside its own directory.
+- Existing records keep their item and checkpoint ids, so they need no
+  migration.
+- Source: the owner, this session; issue #168; DECISIONS D-74.
+- Enforced by: `tests/test_framework_boundary.py` (the shell names no CHAI or
+  OPTICA identifier, and a stand-in primary drives the portfolio and every
+  export). The engine, the definition schema and the build switch are steps 2
+  and 3 of #168 and not yet built.

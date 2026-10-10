@@ -3,17 +3,24 @@
    Declares CHAI to the shell. This is the only file that has to
    change when a CHAI screen is added or reordered.
 
-   CHAI is always enabled. It owns the project document's `items`
-   and `gates` keys, the compliance status on the dashboard, and the
-   applied model card -- so the tool is a CHAI tool with other
-   frameworks alongside, not a neutral host of several equals. That
-   is a deliberate choice: the dashboard needs ONE status, and
-   mixing two frameworks' judgements into one number would be
-   meaningless. See docs/crosswalk.md.
+   CHAI is the primary framework of the default build: always on, it
+   owns the project document's `items` and `gates` keys, the status on
+   the portfolio (through its spine, 25-spine.js), and the applied model
+   card. There is ONE primary per build, because the portfolio needs one
+   status and mixing two frameworks' judgments into one number would be
+   meaningless (docs/crosswalk.md). Another framework can be the primary
+   in a build of its own (#168).
    ============================================================ */
 registerFramework({
   id: "chai",
   label: "CHAI",
+  primary: true,
+  spine: CHAI_SPINE,
+  describePath: chaiDescribePath,
+  statusName: v => Object.hasOwn(STATUS, v) ? STATUS[v] : undefined,
+  panel: () => renderLabel(),
+  onClick: btn => chaiClick(btn),
+  onChange: el => chaiChange(el),
 
   enabled: () => true,
 
@@ -37,7 +44,7 @@ registerFramework({
           id: "g" + key, kind: "gate", gate: key, label: gateTitle(key), cls: "gate",
           numHTML: '<span class="diamond" aria-hidden="true"></span>',
           meta: () => { const d = (p.gates[key] || {}).decision || ""; return d ? esc(shortDecision(d)) : esc(t("dash.gateOpen")); },
-          metaCls: () => { const d = (p.gates[key] || {}).decision || ""; return !d ? "" : (/Stop|Retire|Revise|Retrain/.test(d) ? "warn" : "done"); },
+          metaCls: () => { const d = (p.gates[key] || {}).decision || ""; return !d ? "" : (isGo(d) ? "done" : "warn"); },
         });
       });
     });

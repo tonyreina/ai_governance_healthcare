@@ -95,6 +95,41 @@ def run() -> list[str]:
         sc = page.evaluate("opticaScore(OPTICA_ITEMS, S)")
         check("decline counted separately", sc["declined"] == 1, str(sc))
         check("decline counts as answered", sc["answered"] == 2, str(sc))
+        # #173: the change history names an OPTICA status in OPTICA's words.
+        page.evaluate("flushChanges(CUR, 'optica.answers.7-11.status')")
+        page.wait_for_timeout(300)
+        entry = page.evaluate(
+            "(LOG.find(e => /OPTICA 7\\.11: status/.test(e.text)) || {}).text || ''"
+        )
+        check(
+            "the history says Answered, OPTICA's word, not CHAI's Met",
+            "Answered" in entry and "Met" not in entry,
+            entry,
+        )
+
+        # #172: the reason field appears as soon as Declined is chosen, not only after
+        # the screen is drawn again.
+        check(
+            "choosing Declined shows the reason field at once",
+            page.query_selector('[data-bind="optica.answers.7-12.declineReason"]')
+            is not None,
+        )
+
+        # #171: a soft refresh re-syncs each status button from the store it names.
+        # It used to read every button from CHAI's answers, so OPTICA's pressed
+        # state was cleared (no CHAI item has the key 7-11).
+        page.evaluate("syncInputs()")
+        check(
+            "a re-sync keeps an OPTICA answer's button pressed",
+            page.get_attribute('[data-set="7-11"][data-s="met"]', "aria-pressed")
+            == "true",
+            page.get_attribute('[data-set="7-11"][data-s="met"]', "aria-pressed") or "",
+        )
+        check(
+            "and leaves the other buttons unpressed",
+            page.get_attribute('[data-set="7-11"][data-s="notmet"]', "aria-pressed")
+            == "false",
+        )
 
         # Off then on again must not lose answers.
         page.evaluate("go('setup')")

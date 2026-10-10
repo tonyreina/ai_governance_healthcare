@@ -230,6 +230,9 @@ jobs:
       - name: notes take a Markdown subset and nothing that carries markup
         if: ${{ !cancelled() }}
         run: pixi run test-markdown
+      - name: what the default build shows and exports is pinned
+        if: ${{ !cancelled() }}
+        run: pixi run test-snapshot
       - name: the shell never names a framework
         if: ${{ !cancelled() }}
         run: pixi run test-framework-boundary

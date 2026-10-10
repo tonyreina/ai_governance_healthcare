@@ -152,6 +152,25 @@ def main() -> int:
             "but is by a double backslash before a pipe (mutation)",
             len(md_cells(r"| a \\| b | c |")) == 3,
         )
+        # #178: a sample checkpoint's rationale follows the decision's class, not a
+        # regular expression over its wording (which missed "Retrain or revise").
+        made = page.evaluate(
+            """() => Object.fromEntries(["Proceed", "Continue with changes",
+                "Revise and resubmit", "Stop", "Retrain or revise", "Retire"].map(d =>
+                [d, buildSample({name: "x", gates: {D: [d, -1]}}, new Date())
+                      .gates.D.rationale]))"""
+        )
+        approves = {"Proceed", "Continue with changes"}
+        wrong = {
+            d: r
+            for d, r in made.items()
+            if (r == "Met criteria for this stage.") != (d in approves)
+        }
+        check(
+            "a sample's rationale matches whether its decision approves",
+            not wrong,
+            str(wrong),
+        )
         browser.close()
 
     print()

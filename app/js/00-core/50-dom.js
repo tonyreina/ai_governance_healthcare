@@ -50,6 +50,8 @@ function focusKey(el){
 function editingInMain(){ const a=document.activeElement, m=document.getElementById("main"); return a && m.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); }
 function syncInputs(){
   document.querySelectorAll("#main [data-bind]").forEach(el=>{ if(el===document.activeElement) return; const v=get(el.dataset.bind)??""; if(el.value!==v) el.value=v; });
-  document.querySelectorAll("#main [data-set]").forEach(b=>b.setAttribute("aria-pressed",String((S.items[b.dataset.set]||{}).status===b.dataset.s)));
+  // Each button reads the store it names (OPTICA's are optica.answers), not CHAI's
+  // items: reading items cleared every OPTICA button on a soft refresh (#171).
+  document.querySelectorAll("#main [data-set]").forEach(b=>{ const answers=get(b.dataset.store||"items")||{}; b.setAttribute("aria-pressed",String((answers[b.dataset.set]||{}).status===b.dataset.s)); });
 }
 function barCls(p){ return p>=80?"":p>=50?"mid":"low"; }

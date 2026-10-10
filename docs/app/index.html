@@ -4,7 +4,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-l5JHpekOQmjBkiaUBv52MPCwWntfbGfxkx9U50Zqi64='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-uS3nGWWqyIlJrCSpVjcDb8Pc02CyzpSnOGigEVITawQ='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Health AI assurance review</title>
@@ -1637,7 +1637,7 @@ function describeValue(path, value) {
 
   const text = String(value);
   if (/\.status$/.test(path)) {
-    return frameworkStatusName(text) || text;
+    return frameworkStatusName(path, text) || text;
   }
   return text.length > 60 ? `“${text.slice(0, 57)}…”` : `“${text}”`;
 }
@@ -1796,7 +1796,9 @@ function focusKey(el){
 function editingInMain(){ const a=document.activeElement, m=document.getElementById("main"); return a && m.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); }
 function syncInputs(){
   document.querySelectorAll("#main [data-bind]").forEach(el=>{ if(el===document.activeElement) return; const v=get(el.dataset.bind)??""; if(el.value!==v) el.value=v; });
-  document.querySelectorAll("#main [data-set]").forEach(b=>b.setAttribute("aria-pressed",String((S.items[b.dataset.set]||{}).status===b.dataset.s)));
+  // Each button reads the store it names (OPTICA's are optica.answers), not CHAI's
+  // items: reading items cleared every OPTICA button on a soft refresh (#171).
+  document.querySelectorAll("#main [data-set]").forEach(b=>{ const answers=get(b.dataset.store||"items")||{}; b.setAttribute("aria-pressed",String((answers[b.dataset.set]||{}).status===b.dataset.s)); });
 }
 function barCls(p){ return p>=80?"":p>=50?"mid":"low"; }
 
@@ -2221,8 +2223,14 @@ function frameworkDescribePath(parts) {
   }
   return null;
 }
-const frameworkStatusName = value => {
-  for (const f of FRAMEWORKS) { const n = f.statusName ? f.statusName(value) : undefined; if (n) return n; }
+/* A stored status's English name, from the framework that owns the path: OPTICA's
+   "met" is "Answered", CHAI's is "Met". Asking the first framework that knew the
+   value logged OPTICA answers in CHAI's words (#173). */
+const frameworkStatusName = (path, value) => {
+  const parts = String(path).split(".");
+  for (const f of FRAMEWORKS) {
+    if (f.describePath && f.describePath(parts) && f.statusName) return f.statusName(value);
+  }
   return undefined;
 };
 
@@ -3378,7 +3386,7 @@ function buildSample(spec, now){
   });
   Object.entries(spec.gates||{}).forEach(([k,[decision,day]])=>{
     p.gates[k]={decision,by:"AI governance committee",date:d(day),
-      rationale:/Stop|Revise/.test(decision)?"See the review record.":"Met criteria for this stage.",
+      rationale:isGo(decision)?"Met criteria for this stage.":"See the review record.",   // by class (#178)
       signedBy:ME.id||null,signedAt:iso(day)};
   });
   if(spec.card) p.card=Object.assign(spec.fullCard?clone(EX_CARD):{}, spec.card);
@@ -3580,7 +3588,7 @@ function opticaItemHTML(it) {
     ? `<span class="pchip" title="${esc(t("optica.coveredBy", {ids: it.chai.join(", ")}))}">${esc(it.chai[0])}</span>`
     : `<span class="pchip" title="${esc(t("optica.notCovered"))}">—</span>`;
 
-  return `<li class="ci${open ? " open" : ""}" data-item="${esc(it.key)}">
+  return `<li class="ci${open ? " open" : ""}" data-item="${esc(it.key)}" data-reason-for="declined">
     <div class="ci-row">
       ${chai}
       <div class="ci-text">${esc(opticaItemText(it))}<button class="more" data-toggle="${esc(it.key)}" aria-expanded="${open}">${esc(t(open ? "ci.hide" : "ci.more"))}</button>${notes}</div>
@@ -4438,6 +4446,11 @@ document.addEventListener("click",async e=>{
     edit(`${store}.${id}.status`, val);
     const li=btn.closest(".ci");
     li.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.s===val)));
+    // A status that asks for a reason (OPTICA's Declined) adds or removes a field,
+    // so the item is drawn again, open, with the field in place (#172). The item
+    // names that status itself; the shell compares two values it was given.
+    const reasonFor=li.dataset.reasonFor;
+    if(reasonFor && (val===reasonFor || cur===reasonFor)){ openItems.add(id); renderMain(false); renderRail(); return; }
     if((val==="partial"||val==="notmet") && !openItems.has(id)){ openItems.add(id); li.classList.add("open"); const m=li.querySelector(".more"); m.textContent=t("ci.hide"); m.setAttribute("aria-expanded","true"); }
     renderRail(); return;
   }

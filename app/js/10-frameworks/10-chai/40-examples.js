@@ -170,7 +170,7 @@ function buildSample(spec, now){
   });
   Object.entries(spec.gates||{}).forEach(([k,[decision,day]])=>{
     p.gates[k]={decision,by:"AI governance committee",date:d(day),
-      rationale:/Stop|Revise/.test(decision)?"See the review record.":"Met criteria for this stage.",
+      rationale:isGo(decision)?"Met criteria for this stage.":"See the review record.",   // by class (#178)
       signedBy:ME.id||null,signedAt:iso(day)};
   });
   if(spec.card) p.card=Object.assign(spec.fullCard?clone(EX_CARD):{}, spec.card);

@@ -864,6 +864,80 @@ def main() -> int:
         str(found[:3]),
     )
 
+    print("Catalog keys and the sentences a screen needs (PR B1)")
+
+    def has(found: list, words: str) -> bool:
+        return any(words in line for line in found)
+
+    found = run(lambda c, o: c["ui"].update(noSuchSlot="stage.eyebrow"))
+    check("a slot the screens do not have", has(found, "$.ui"), str(found[:2]))
+    found = run(lambda c, o: c["ui"].update(sectionEyebrow="no.such.key"))
+    check(
+        "a slot naming a missing catalog key",
+        has(found, "'no.such.key' is not a key"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: c["ui"].pop("sectionAnswered"))
+    check(
+        "a framework without a required slot",
+        has(found, "needs the 'sectionAnswered' slot"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: o["ui"].pop("overviewTitle"))
+    check(
+        "a supplement without its overview's title",
+        has(found, "needs the 'overviewTitle' slot"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: o["ui"].pop("turnOn"))
+    check(
+        "an opt-in supplement without its switch's words",
+        has(found, "needs the 'turnOn' slot"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: o["ui"].pop("relay"))
+    check(
+        "stakeholders without their table's words",
+        has(found, "needs the 'relay' slot"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: o["ui"].pop("notCovered"))
+    check(
+        "a crossRef chip without its empty case",
+        has(found, "needs the 'notCovered' slot"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: o["statuses"][3].pop("reasonMsg"))
+    check(
+        "a reason field without its label key",
+        has(found, "needs reasonMsg"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: setv(c["statuses"][0], "msg", "status.nosuch"))
+    check(
+        "a status naming a missing catalog key",
+        has(found, "'status.nosuch' is not a catalog key"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: setv(c["phases"][0], "msg", "phase.nosuch"))
+    check(
+        "a phase naming a missing catalog key",
+        has(found, "'phase.nosuch' is not a catalog key"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: setv(o["whos"][0], "msg", "who.nosuch"))
+    check(
+        "a stakeholder naming a missing catalog key",
+        has(found, "'who.nosuch' is not a catalog key"),
+        str(found[:2]),
+    )
+    drifted = copy.deepcopy(SCHEMA)
+    drifted["properties"]["ui"]["propertyNames"]["enum"].remove("legend")
+    check(
+        "the schema's slot list and UiSlot drifting apart",
+        bool(ck.schema_drift(drifted)),
+    )
+
     if failures:
         print(f"\n{len(failures)} failed: {', '.join(failures)}")
         return 1

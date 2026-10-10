@@ -54,25 +54,33 @@ def run() -> list[str]:
         page.evaluate(f"openProject({pid!r}, 'setup')")
         page.wait_for_timeout(300)
 
-        check("OPTICA defaults to off", page.evaluate("opticaOn(S) === false"))
+        check(
+            "OPTICA defaults to off",
+            page.evaluate("FACADES.optica.enabled(S) === false"),
+        )
         check(
             "no optica key on an untouched project",
             page.evaluate("S.optica === undefined"),
         )
         base_views = page.evaluate("activeViews().length")
-        chai_before = page.evaluate("scoreOf(STAGES[0].items).pct")
+        chai_before = page.evaluate(
+            "FACADES.chai.score(ENGINES.chai.sections[0].items, S).pct"
+        )
 
         # Switch it on through the UI, not by poking state.
         page.click('[data-framework="optica"]')
         page.wait_for_timeout(400)
 
-        check("OPTICA reports enabled", page.evaluate("opticaOn(S) === true"))
+        check(
+            "OPTICA reports enabled",
+            page.evaluate("FACADES.optica.enabled(S) === true"),
+        )
         added = page.evaluate("activeViews().length") - base_views
         check("adds 14 views (overview + 13 chapters)", added == 14, f"added {added}")
-        check("exposes 77 items", page.evaluate("OPTICA_ITEMS.length") == 77)
+        check("exposes 77 items", page.evaluate("ENGINES.optica.items.length") == 77)
         check(
             "item keys are dot-free",
-            page.evaluate("OPTICA_ITEMS.every(i => !i.key.includes('.'))"),
+            page.evaluate("ENGINES.optica.items.every(i => !i.id.includes('.'))"),
         )
 
         # Answer an item, then assert CHAI is untouched.
@@ -81,18 +89,20 @@ def run() -> list[str]:
         page.click('[data-set="7-11"][data-s="met"]')
         page.wait_for_timeout(400)
         check(
-            "answer recorded", page.evaluate("opticaAnswer(S,'7-11').status === 'met'")
+            "answer recorded",
+            page.evaluate("(FACADES.optica.answers(S)['7-11'] || {}).status === 'met'"),
         )
         check(
             "CHAI score unmoved by an OPTICA answer",
-            page.evaluate("scoreOf(STAGES[0].items).pct") == chai_before,
+            page.evaluate("FACADES.chai.score(ENGINES.chai.sections[0].items, S).pct")
+            == chai_before,
         )
         check("CHAI items untouched", page.evaluate("S.items['7-11'] === undefined"))
 
         # A decline is answered but contributes nothing to the percentage.
         page.click('[data-set="7-12"][data-s="declined"]')
         page.wait_for_timeout(400)
-        sc = page.evaluate("opticaScore(OPTICA_ITEMS, S)")
+        sc = page.evaluate("FACADES.optica.score(null, S)")
         check("decline counted separately", sc["declined"] == 1, str(sc))
         check("decline counts as answered", sc["answered"] == 2, str(sc))
         # #173: the change history names an OPTICA status in OPTICA's words.
@@ -142,13 +152,13 @@ def run() -> list[str]:
         )
         check(
             "answers kept while off",
-            page.evaluate("opticaAnswer(S,'7-11').status === 'met'"),
+            page.evaluate("(FACADES.optica.answers(S)['7-11'] || {}).status === 'met'"),
         )
         page.click('[data-framework="optica"]')
         page.wait_for_timeout(400)
         check(
             "answers survive an off/on cycle",
-            page.evaluate("opticaAnswer(S,'7-11').status === 'met'"),
+            page.evaluate("(FACADES.optica.answers(S)['7-11'] || {}).status === 'met'"),
         )
 
         check("no page errors", not errors, "; ".join(errors[:3]))

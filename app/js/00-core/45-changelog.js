@@ -34,7 +34,7 @@ function describePath(path) {
     const labels = { solution: "solution name", org: "organization", developer: "developer",
       sourcing: "sourcing", sponsor: "clinical sponsor", riskTier: "risk tier",
       reviewCadence: "review cadence", startDate: "review start date",
-      reviewers: "review team", scope: "scope", chaiUseCase: "CHAI use case" };
+      reviewers: "review team", scope: "scope" };
     return labels[parts[1]] || parts[1];
   }
 

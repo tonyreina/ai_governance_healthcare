@@ -1097,6 +1097,23 @@ honest answer and is a gap worth closing; see R-19.
   `pixi run check-framework` (pre-commit and CI) against
   `schema/framework.schema.json` and the rules a schema cannot state, each rule
   shown failing in `tests/test_check_framework.py`. The app runs CHAI and
-  OPTICA from their definitions through the engine (D-75); the snapshot
-  (`tests/test_snapshot.py`) shows that changed nothing a reader sees. A build
-  of other frameworks (the build switch) is step 3 of #168 and not yet built.
+  OPTICA from their definitions through the engine (D-75), and every screen
+  they show is drawn by the engine from the definition (D-77); the snapshot
+  (`tests/test_snapshot.py`) shows that changed nothing a reader sees. The
+  boundary test now also covers the engine, the setup screen and the
+  registration, and string literals that name a framework. A build of other
+  frameworks (the build switch) is step 3 of #168 and not yet built.
+
+### R-64 A supplement never feeds the primary
+
+- Status: Active
+- No answer in a supplement framework (OPTICA, or a developer's) changes the
+  primary's status, phase, flags, next review or score, and the primary never
+  reads a supplement's answers. Evidence may be cited in both; a judgment in one
+  is never a judgment in the other.
+- Source: docs/crosswalk.md and docs/developing.md, where this was stated but
+  recorded nowhere as a requirement; the owner's decision that a build has one
+  primary (R-63).
+- Enforced by: `tests/test_engine.py` ("OPTICA answers change nothing CHAI
+  decides, on every sample", with a control that shows the comparison can fail)
+  and `tests/test_optica.py` ("CHAI score unmoved by an OPTICA answer").

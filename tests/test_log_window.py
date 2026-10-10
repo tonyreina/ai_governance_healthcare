@@ -139,7 +139,7 @@ def main() -> int:
         check("the markdown export says it", window in page.evaluate("exportMD()"))
         check(
             "the printable report says it",
-            window in page.evaluate("reportBody(false)"),
+            window in page.evaluate("spine().reportBody(false)"),
         )
 
         check(

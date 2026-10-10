@@ -174,7 +174,7 @@ def main() -> int:
         # The server's retention SQL holds the same set (server/tests/test_retention.py
         # reads it from the definition); this is the dashboard's side, on the engine.
         rows = page.evaluate(
-            """() => CHAI_DEF.gates.flatMap(g => g.options.map(o => {
+            """() => FRAMEWORK_DEFS.chai.gates.flatMap(g => g.options.map(o => {
                  const ph = ENGINES.chai.phase({gates: {[g.id]: {decision: o.value}},
                                                 items: {}, meta: {}});
                  return [g.id, o.value, o.class, ph.key];
@@ -191,6 +191,44 @@ def main() -> int:
             "and the ending ones are the four the server retires",
             ending == [("A", "Stop"), ("B", "Stop"), ("C", "Stop"), ("D", "Retire")],
             str(ending),
+        )
+
+        print("A supplement never feeds the primary (R-64)")
+        # Every OPTICA item answered, some declined, OPTICA switched on: CHAI's status,
+        # phase, flags, next review and score are exactly what they were. A control
+        # that changes one of CHAI's own answers shows the comparison can fail.
+        page.evaluate("loadSamples()")
+        end = time.time() + 15
+        while time.time() < end and not page.evaluate("PROJECTS.size >= 10"):
+            page.wait_for_timeout(100)
+        verdicts = page.evaluate(
+            """() => {
+              const view = p => JSON.stringify([spine().status(p), spine().phase(p),
+                spine().flags(p), spine().nextReview(p), spine().score(p)]);
+              return [...PROJECTS.values()].map(p0 => {
+                const p = normalize(clone(p0));
+                const before = view(p);
+                p.optica = {enabled: true, answers: Object.fromEntries(
+                  ENGINES.optica.items.map((it, i) =>
+                    [it.id, {status: i % 3 ? "met" : "declined"}]))};
+                const after = view(p);
+                const c = normalize(clone(p0));
+                const first = ENGINES.chai.items[0].id;
+                const was = (c.items[first] || {}).status;
+                c.items[first] = {status: was === "notmet" ? "met" : "notmet"};
+                return [before === after, before !== view(c)];
+              });
+            }"""
+        )
+        check(
+            "OPTICA answers change nothing CHAI decides, on every sample",
+            len(verdicts) >= 10 and all(v[0] for v in verdicts),
+            str(verdicts),
+        )
+        check(
+            "while one CHAI answer does change it (the check can fail)",
+            all(v[1] for v in verdicts),
+            str(verdicts),
         )
 
         print("A plain checklist with no lifecycle")

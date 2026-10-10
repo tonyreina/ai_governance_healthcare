@@ -24,14 +24,55 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "docs" / "app" / "index.html"
-SHELL = [ROOT / "app" / "js" / "00-core", ROOT / "app" / "js" / "20-app"]
-
-# Every top-level name CHAI or OPTICA defines, read from their directories, so
-# a new one is covered without editing this list.
-FRAMEWORK_DIRS = [
-    ROOT / "app" / "js" / "10-frameworks" / "10-chai",
-    ROOT / "app" / "js" / "10-frameworks" / "20-optica",
+FW_JS = ROOT / "app" / "js" / "10-frameworks"
+# Code that must name no framework: the shell, the engine, the project's setup
+# screen, the registry and the registration of every definition.
+SHELL = [
+    ROOT / "app" / "js" / "00-core",
+    ROOT / "app" / "js" / "20-app",
+    FW_JS / "01-engine",
+    FW_JS / "05-project",
 ]
+SHELL_FILES = [FW_JS / "00-registry.js", FW_JS / "90-register.js"]
+GENERIC = {"01-engine", "05-project"}
+
+# Every top-level name a framework's own code defines (today only CHAI's plug-ins:
+# OPTICA is pure data), read from the directories, so a new one is covered
+# without editing this list.
+FRAMEWORK_DIRS = sorted(
+    d for d in FW_JS.iterdir() if d.is_dir() and d.name not in GENERIC
+)
+
+# String literals the shell may keep although they say "chai": the browser storage
+# keys people's saved work and settings live under. Renaming one loses that state.
+ALLOWED_LITERALS = frozenset(
+    {
+        "chai-locale",
+        "chai-ui-v2",
+        "chai-portfolio-local-v1",
+        "chai-api-origin-seen",
+        "chai-review-v1",
+        "chai-legacy-imported",
+    }
+)
+FRAMEWORK_WORD = re.compile(r"\b(chai|optica)\b", re.I)
+# The two alternatives never match the same character (a backslash only starts an
+# escape), so a run of backslashes cannot make this backtrack (CodeQL).
+STRING = re.compile(r"""(["'`])((?:\\.|(?!\1)[^\\])*)\1""")
+# Names the engine replaced: defined nowhere now (#168 PR B1).
+RETIRED = (
+    "STAGES",
+    "GATES",
+    "PRINCIPLES",
+    "OPTICA",
+    "OPTICA_ITEMS",
+    "allItems",
+    "opticaScore",
+    "opticaAnswer",
+    "setOpticaEnabled",
+    "CHAI_SPINE",
+    "scoreOf",
+)
 DEFINITION = re.compile(
     r"^(?:const|let|function|async function)\s+([A-Za-z_$][\w$]*)", re.M
 )
@@ -205,8 +246,11 @@ STAND_IN = """
     flags: p => [{sev: "amber", text: "Stand-in flag ZZQ"}],
     status: p => ({key: "amber", label: "Needs update", msg: "status.amber"}),
     nextReview: () => null,
-    score: (p, list) => scoreOf(list || ITEMS, (p.zz || {}).answers || {}),
+    score: (p, list) => ENGINES.chai.score(list || ITEMS, (p.zz || {}).answers || {}),
     reportBody: () => "<p>Stand-in report ZZQ</p>",
+    isLive: ph => ph.role === "live", reportViewId: "report", reviewGateId: () => null,
+    fileSuffix: "zz-review", schemaId: "zz-review/1",
+    statusKnown: v => v === "met", statusLabel: v => v,
   };
   FRAMEWORKS.forEach(f => { f.primary = false; });
   registerFramework({id: "zz", label: "ZZ", primary: true, spine: sp,
@@ -296,26 +340,74 @@ def stand_in() -> None:
         browser.close()
 
 
+def literals(source: str) -> list[tuple[int, str]]:
+    """String literals that say a framework's name, comments aside."""
+    found = []
+    for n, line in enumerate(code_only(source).split("\n"), 1):
+        for m in STRING.finditer(line):
+            text = m.group(2)
+            if FRAMEWORK_WORD.search(text) and text not in ALLOWED_LITERALS:
+                found.append((n, text[:60]))
+    return found
+
+
+def shell_paths() -> list[Path]:
+    return [p for d in SHELL for p in sorted(d.glob("*.js"))] + SHELL_FILES
+
+
 def main() -> int:
     names = framework_names()
-    print("The names CHAI and OPTICA define")
+    print("The names a framework's own code defines")
     check(
-        "read from their directories, and there are many",
-        len(names) > 40 and {"STAGES", "GATES", "OPTICA_ITEMS", "flags"} <= names,
+        "read from its directories, and there are many",
+        len(names) > 20 and {"CARD", "loadSamples", "labelHTML"} <= names,
         f"{len(names)}",
     )
+    defined = set()
+    for p in (ROOT / "app" / "js").rglob("*.js"):
+        defined |= set(DEFINITION.findall(p.read_text(encoding="utf-8")))
+    check(
+        "the names the engine replaced are defined nowhere",
+        not (set(RETIRED) & defined),
+        str(sorted(set(RETIRED) & defined)),
+    )
+    check(
+        "OPTICA has no code of its own: it is a definition",
+        not (FW_JS / "20-optica").exists(),
+    )
 
-    print("The shell names none of them")
-    for d in SHELL:
-        for path in sorted(d.glob("*.js")):
-            found = uses(path.read_text(encoding="utf-8"), names)
-            rel = path.relative_to(ROOT).as_posix()
-            check(rel, not found, ", ".join(f"line {n}: {w}" for n, w in found[:5]))
+    print("The shell, the engine and setup name none of them")
+    for path in shell_paths():
+        found = uses(path.read_text(encoding="utf-8"), names)
+        rel = path.relative_to(ROOT).as_posix()
+        check(rel, not found, ", ".join(f"line {n}: {w}" for n, w in found[:5]))
+
+    print("Nor say a framework's name in a string")
+    for path in shell_paths():
+        found = literals(path.read_text(encoding="utf-8"))
+        rel = path.relative_to(ROOT).as_posix()
+        check(rel, not found, ", ".join(f"line {n}: {w!r}" for n, w in found[:4]))
+    check(
+        "the allowlist holds only browser storage keys",
+        all(k.startswith("chai-") and "." not in k for k in ALLOWED_LITERALS),
+    )
+    check(
+        "a framework's name in a string is noticed (mutation)",
+        bool(literals('label = "CHAI use case";')),
+    )
+    check("a storage key is not", not literals('localStorage.getItem("chai-ui-v2")'))
+    check(
+        "an escaped quote stays inside its string",
+        bool(literals(r'x = "say \"CHAI\" here";')),
+    )
+    t0 = time.time()
+    literals('"' + "\\a" * 5000)
+    check("a run of backslashes cannot make it crawl", time.time() - t0 < 1.0)
 
     print("A use slipped back in is noticed (mutation)")
-    check("a direct call", bool(uses("const x = statusOf(p);", names)))
-    check("a definition read", bool(uses("STAGES.forEach(s => s)", names)))
-    check("not a comment", not uses("// statusOf(p) was here\n/* STAGES */", names))
+    check("a direct call", bool(uses("const x = labelHTML(p);", names)))
+    check("a definition read", bool(uses("CARD.forEach(s => s)", names)))
+    check("not a comment", not uses("// labelHTML(p) was here\n/* CARD */", names))
     check("not a property of the spine", not uses("const f = spine().flags(p);", names))
     check("not an object key", not uses("const row = {phase: x, flags: y};", names))
     check(
@@ -328,7 +420,7 @@ def main() -> int:
     )
     check(
         "but code inside a template is read",
-        bool(uses("h = `<b>${statusOf(p).label}</b>`;", names)),
+        bool(uses("h = `<b>${labelHTML(p)}</b>`;", names)),
     )
 
     print("A stand-in primary drives the portfolio and the exports")

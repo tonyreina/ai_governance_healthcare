@@ -50,6 +50,9 @@ const frameworkById = id => FRAMEWORKS.find(f => f.id === id);
      gateRecord(p, id)  {decision, by, date, rationale, signedBy, ...}
      decisionClass(d)   a GateClass member, or null
      answers(p)         {itemId: {status, evidence, owner, due, refs}}
+     statusKnown(v), statusLabel(v)   whether a stored status is one it defines;
+                        its label as the reader sees it
+     isLive(phase), reviewGateId(), reportViewId, fileSuffix, schemaId
      phase(p), flags(p), status(p), nextReview(p)
      score(p, items?)   {pct, answered, total, applicable}
      reportBody(names)  the report's HTML (screen, HTML export, PDF)
@@ -149,3 +152,9 @@ function frameworkChange(el) {
   for (const f of activeFrameworks(S)) if (f.onChange && f.onChange(el)) return true;
   return false;
 }
+
+/* What a framework's own code adds to the framework its definition makes (CHAI:
+   the model card view, its report section, its samples). Collected here, first,
+   and read when 90-register.js registers every definition. */
+const FRAMEWORK_EXTRAS = {};
+function frameworkExtras(id, extras) { FRAMEWORK_EXTRAS[id] = Object.assign(FRAMEWORK_EXTRAS[id] || {}, extras); }

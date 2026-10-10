@@ -172,7 +172,7 @@ def main() -> int:
         )
         zh.evaluate("loadSamples()")
         zh.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
-        zh.evaluate("openProject([...PROJECTS.keys()][0], STAGES[0].id)")
+        zh.evaluate("openProject([...PROJECTS.keys()][0], ENGINES.chai.sections[0].id)")
         zh.wait_for_timeout(200)
         note = zh.inner_text(".fw-note")
         check(
@@ -279,7 +279,9 @@ def main() -> int:
             "Weiter zu" in page.inner_text(".pager"),
             page.inner_text(".pager"),
         )
-        page.evaluate("openProject([...PROJECTS.keys()][0], STAGES[0].id)")
+        page.evaluate(
+            "openProject([...PROJECTS.keys()][0], ENGINES.chai.sections[0].id)"
+        )
         page.wait_for_timeout(200)
         segs = page.eval_on_selector_all(
             ".ci .seg button", "bs => [...new Set(bs.map(b => b.textContent))]"
@@ -369,7 +371,7 @@ def main() -> int:
         print("OPTICA")
         page.evaluate(
             "openProject([...PROJECTS.keys()][0], 'setup');"
-            " setOpticaEnabled(true); go('o1');"
+            " setFrameworkEnabled('optica', true); go('o1');"
         )
         page.wait_for_timeout(200)
         segs = page.eval_on_selector_all(
@@ -398,7 +400,7 @@ def main() -> int:
         )  # fmt: skip
         page.evaluate("setLocale('de')")
         english = page.evaluate(
-            "[...PROJECTS.values()].flatMap(p => flags(normalize(clone(p))))"
+            "[...PROJECTS.values()].flatMap(p => spine().flags(normalize(clone(p))))"
             ".map(f => f.text)"
         )
         check(
@@ -508,13 +510,15 @@ def main() -> int:
         page.evaluate("goHome()")
         counts = {}
         counts["dashboard"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
-        page.evaluate("openProject([...PROJECTS.keys()][0], STAGES[0].id)")
+        page.evaluate(
+            "openProject([...PROJECTS.keys()][0], ENGINES.chai.sections[0].id)"
+        )
         page.wait_for_timeout(200)
         counts["checklist"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
         page.evaluate("go('report')")
         page.wait_for_timeout(200)
         counts["report"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
-        page.evaluate("setOpticaEnabled(true); go('o1');")
+        page.evaluate("setFrameworkEnabled('optica', true); go('o1');")
         page.wait_for_timeout(200)
         counts["optica"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
         ctx.close()

@@ -1,30 +1,20 @@
 /* ============================================================
-   CHAI: the spine
-   CHAI's answers to what the shell asks of the primary framework
-   (00-registry.js). The shell calls these and never the CHAI
-   functions behind them, so another framework can stand in its
-   place (#168).
+   CHAI: what its code adds to the engine's framework (#168)
+   The model card view and report section, the Markdown and JSON
+   extras, the samples, the side panel and its own controls.
    ============================================================ */
-const CHAI_SPINE = {
-  items: () => allItems().map(it => ({ ...it, category: it.p, section: it.stage })),
-  itemLabel: it => itemText(it),
-  sections: () => STAGES,
-  sectionLabel: s => stageTitle(s),
-  categories: () => Object.keys(PRINCIPLES).map(k => ({ id: k, name: PRINCIPLES[k].name })),
-  categoryLabel: k => principleName(k),
-  gates: () => GATE_IDS.map(k => ({ id: k, after: GATES[k].after, title: GATES[k].title })),
-  gateLabel: k => gateTitle(k),
-  gateQuestion: k => gateQuestion(k),
-  optionLabel: o => optionText(o),
-  gateRecord: (p, k) => (p.gates || {})[k] || {},
-  decisionClass: d => optionClass(d),
-  answers: p => p.items || {},
-  phase: p => phase(p),
-  flags: p => flags(p),
-  status: p => statusOf(p),
-  nextReview: p => nextReview(p),
-  score: (p, list) => scoreOf(list || allItems(), p.items),
-  reportBody: names => reportBody(names),
+/* The model card view, in the rail after the last checkpoint. */
+const CHAI_CARD_VIEW = "card";
+frameworkExtras("chai", {
+  views: p => [{
+    id: CHAI_CARD_VIEW, kind: CHAI_CARD_VIEW, label: t("card.title"), glyph: "≡", sep: "before",
+    meta: () => `${CARD_FIELDS.filter(k => cardValOf(p, k)).length}/${CARD_FIELDS.length}`,
+  }],
+  render: v => v.kind === CHAI_CARD_VIEW ? renderCardForm() : "",
+  // In the report, before the history: the card as a reader would see it.
+  reportSections: () => `<h2>${esc(t("card.title"))}</h2>
+    <div style="max-width:560px">${labelHTML()}</div>
+    `,
   markdownExtras: ctx => chaiCardMarkdown(ctx),
   jsonExtras: p => ({ model_card: Object.fromEntries(CARD_FIELDS.map(k => [k, cardValOf(p, k)])) }),
   // Worked examples: a portfolio of sample projects, and one filled-in project.
@@ -37,7 +27,11 @@ const CHAI_SPINE = {
         card: clone(p.card), cardUpdatedAt: p.cardUpdatedAt};
     },
   },
-};
+  panel: () => renderLabel(),
+  onClick: btn => chaiClick(btn),
+  onChange: el => chaiChange(el),
+  describePath: parts => chaiDescribePath(parts),
+});
 
 /* The model card and its metrics, in the Markdown report. CHAI's own section:
    another framework has no card, and contributes its own extras or none. */
@@ -61,24 +55,11 @@ function chaiCardMarkdown({ line, p }){
   return L;
 }
 
-/* The change history's words for CHAI's own keys. */
-const ChaiKey = Object.freeze({ ITEMS: "items", GATES: "gates", CARD: "card", METRICS: "metrics" });
-const CHAI_ITEM_FIELD = Object.freeze({ status: "status", evidence: "evidence", owner: "owner", due: "due date" });
-const CHAI_GATE_FIELD = Object.freeze({ decision: "decision", by: "decided by", date: "decision date",
-  rationale: "rationale", conditions: "conditions" });
+/* The change history's words for the model card's and the metrics' keys (the
+   items and checkpoints are the engine's). */
+const ChaiKey = Object.freeze({ CARD: "card", METRICS: "metrics", META: "meta", USE_CASE: "chaiUseCase" });
 function chaiDescribePath(parts){
-  if(parts[0] === ChaiKey.ITEMS){
-    const id = parts[1];
-    const item = allItems().find(i => i.id === id);
-    const what = parts[2] === Field.REFS ? "evidence reference"
-      : (Object.hasOwn(CHAI_ITEM_FIELD, parts[2]) ? CHAI_ITEM_FIELD[parts[2]] : parts[2]);
-    return item ? `${what} of “${item.text}”` : `${what} of criterion ${id}`;
-  }
-  if(parts[0] === ChaiKey.GATES){
-    const gate = Object.hasOwn(GATES, parts[1]) ? GATES[parts[1]] : null;
-    const what = Object.hasOwn(CHAI_GATE_FIELD, parts[2]) ? CHAI_GATE_FIELD[parts[2]] : parts[2];
-    return gate ? `${what} for ${gate.title}` : `${what} for checkpoint ${parts[1]}`;
-  }
+  if(parts[0] === ChaiKey.META && parts[1] === ChaiKey.USE_CASE) return "CHAI use case";
   if(parts[0] === ChaiKey.CARD) return `model card: ${Object.hasOwn(CARD_LABEL, parts[1]) ? CARD_LABEL[parts[1]] : parts[1]}`;
   if(parts[0] === ChaiKey.METRICS) return "key metrics";
   return null;

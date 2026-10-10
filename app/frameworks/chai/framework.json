@@ -15,6 +15,11 @@
     "category": "principle"
   },
   "viewPrefix": "",
+  "ui": {
+    "railShort": "rail.stageShort",
+    "sectionEyebrow": "stage.eyebrow",
+    "sectionAnswered": "stage.answered"
+  },
   "statuses": [
     {
       "value": "met",

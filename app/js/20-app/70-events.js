@@ -116,10 +116,10 @@ document.addEventListener("click",async e=>{
   else if(a==="example" && spine().samples){ const patch=spine().samples.fill(S); const st=stamp(); queuePatch(CUR,Object.assign(patch,st)); writeLog(CUR,"Example data filled in"); renderProject(false); toast(t("toast.exampleFilled")); }
   else if(a==="archive"){ if(!canOwn(S)){ toast(t("toast.ownerArchive")); return; } const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?t("toast.archived"):t("toast.restored")); }
   else if(a==="delete"){ if(!canOwn(S)){ toast(t("toast.ownerDelete")); return; } openDeleteDialog(); }
-  else if(a==="newreview"){ const now=new Date().toISOString(); const patch={gates:{D:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); writeLog(CUR,`Checkpoint D: periodic review recorded (${S.gates.D.decision})`); renderRail(); renderMain(false); toast(t("toast.reviewRecorded")); }
-  else if(a==="dl-html"){ download(`${slug(S.meta.solution)}-chai-review.html`, exportHTML()); noteExport(ExportFormat.HTML); }
-  else if(a==="dl-md"){ download(`${slug(S.meta.solution)}-chai-review.md`, exportMD()); noteExport(ExportFormat.MD); }
-  else if(a==="dl-json"){ download(`${slug(S.meta.solution)}-chai-review.json`, JSON.stringify(projectJSON(S),null,2)); noteExport(ExportFormat.JSON); }
+  else if(a==="newreview"){ const k=spine().reviewGateId(); if(!k) return; const now=new Date().toISOString(); const patch={gates:{[k]:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); const title=(spine().gates().find(x=>x.id===k)||{title:k}).title; writeLog(CUR,`${title}: periodic review recorded (${S.gates[k].decision})`); renderRail(); renderMain(false); toast(t("toast.reviewRecorded")); }
+  else if(a==="dl-html"){ download(`${slug(S.meta.solution)}-${spine().fileSuffix}.html`, exportHTML()); noteExport(ExportFormat.HTML); }
+  else if(a==="dl-md"){ download(`${slug(S.meta.solution)}-${spine().fileSuffix}.md`, exportMD()); noteExport(ExportFormat.MD); }
+  else if(a==="dl-json"){ download(`${slug(S.meta.solution)}-${spine().fileSuffix}.json`, JSON.stringify(projectJSON(S),null,2)); noteExport(ExportFormat.JSON); }
   else if(a==="dl-pdf"){ exportPDF(); noteExport(ExportFormat.PDF); }
   else if(a==="print"){ window.print(); noteExport(ExportFormat.PDF); }
 });
@@ -175,7 +175,7 @@ addEventListener("pagehide", flushAllChanges);
 addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="hidden") flushAllChanges(); });
 
 document.getElementById("brandBtn").onclick=()=>goHome();
-document.getElementById("goReport").onclick=()=>{ if(S) go("report"); };
+document.getElementById("goReport").onclick=()=>{ if(S) go(spine().reportViewId); };
 document.getElementById("importFile").onchange=async e=>{
   const f=e.target.files[0]; if(!f) return;
   try{

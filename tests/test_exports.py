@@ -117,7 +117,7 @@ def main() -> int:
         hostile = "GAPMARK \\| Met | forged \\"
         md = page.evaluate(
             """(v) => {
-                const it = allItems()[0];
+                const it = ENGINES.chai.items[0];
                 S.items[it.id] = {status: "notmet", owner: v};
                 S.metrics = [{cat: "CATMARK | x", name: "m", value: "1",
                               ci: "", pop: ""}];

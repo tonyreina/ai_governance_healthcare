@@ -1,30 +1,14 @@
 /* ============================================================
-   Content model
-   Checklist items are paraphrased summaries organized around the
-   CHAI six-stage lifecycle and five principles. They are not the
-   official CHAI Responsible AI Checklist text.
+   CHAI: the applied model card and its metrics (plug-in data)
    ============================================================ */
-/* CHAI's content is data: app/frameworks/chai/framework.json, embedded by the build
-   as FRAMEWORK_DEFS.chai and run by the engine (01-engine/). These are TRANSITIONAL
-   views of that definition in the shapes CHAI's screens still read (#168 PR A); the
-   generic renderers replace them, and tests/test_framework_boundary.py fails if one
-   is still here after that. */
-const CHAI_DEF = FRAMEWORK_DEFS.chai;
+/* CHAI's criteria, stages, checkpoints and rules are data:
+   app/frameworks/chai/framework.json, run by the engine (01-engine/). What
+   remains here is CHAI's code plug-ins: the applied model card and its key
+   metrics. */
 /* CHAI's code plug-ins, by the names its definition uses. */
 const ChaiPlugin = Object.freeze({
   MODEL_CARD: "chai.modelCard", METRICS: "chai.metrics", TE_METRICS: "chai.teMetrics", SAMPLES: "chai.samples",
 });
-const PRINCIPLES = Object.freeze(Object.fromEntries(CHAI_DEF.categories.map(c => [c.id, {name: c.name}])));
-const STAGES = CHAI_DEF.sections.map(s => ({
-  id: s.id, n: s.n, title: s.title, blurb: s.blurb,
-  ...((s.slots || []).includes(ChaiPlugin.METRICS) ? {metrics: true} : {}),
-  items: s.items.map(it => ({id: it.id, p: it.category, text: it.text})),
-}));
-const GATES = Object.fromEntries(CHAI_DEF.gates.map(g => [g.id,
-  {after: g.after, title: g.title, q: g.question, help: g.help, options: g.options.map(o => o.value)}]));
-/* Each decision's class (GateClass in 00-core/10-model.js), from the definition. */
-const GATE_OPTION_CLASS = Object.freeze(Object.fromEntries(
-  CHAI_DEF.gates.flatMap(g => g.options.map(o => [o.value, o.class]))));
 
 const CARD = [
   {sec:"Identity",fields:[

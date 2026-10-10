@@ -316,8 +316,10 @@ In short:
   word by word (camelCase and SHOUTING_CASE). A quotation keeps its spelling
   with `spelling-ok` on the line, or with a `glob: phrase` entry in
   `.spelling-allow`, which exempts that exact phrase only in the files the glob
-  matches, and not the rest of its line. `pixi run test-check-spelling` shows
-  the checker failing.
+  matches, and not the rest of its line. Latin binomials, taxa and a short list
+  of genera, places and titles keep their spelling. Run with no arguments, it
+  reads every text file, as the pre-commit hook does. `pixi run
+  test-check-spelling` shows the checker failing.
 
 ## The documentation site
 

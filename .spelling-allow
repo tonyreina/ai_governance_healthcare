@@ -7,6 +7,10 @@
 
 # GitHub Actions' own spelling. `cancelled()` is a status-check function and
 # 'cancelled' is the value in `needs.<job>.result`; neither can be respelled.
+# The cost of scoping by file: in a workflow, these two phrases are exempt
+# everywhere, including our own comments, so a comment there that writes either
+# one is not caught. Only the exact phrase is exempt; the rest of the line, and
+# the bare word, are still checked.
 .github/workflows/*.yml: cancelled()
 .github/workflows/*.yml: 'cancelled'
 

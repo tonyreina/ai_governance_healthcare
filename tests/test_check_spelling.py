@@ -19,26 +19,36 @@ What is pinned, both ways:
   dropping one is always noticed;
 * a British word written with a ligature ("oe" or "ae" as one letter) is caught;
 * American words, and American words a careless new stem would generate
-  ("precise", "compelled", "lustring", "Haemophilus"), are not flagged;
+  ("precise", "compelled", "lustring", "improvisation", "leucovorin"), are not
+  flagged;
+* names that keep a British segment (Latin binomials, taxa, genera, places and
+  titles) are not flagged and --fix leaves them alone, while the same segments
+  in prose, a capitalized common noun among them, are caught;
 * a slash in prose (two words joined by "/") is not a path, while a URL, ./, ../, an
-  absolute path and a path with a file extension are;
-* `spelling-ok` exempts its own line and no other; a `.spelling-allow` entry
-  exempts its exact phrase, in its own case, only in the files its glob names,
-  and an entry with no glob is refused;
-* a file that is not UTF-8 is reported, not passed;
-* targets() and skip() read every kind of file we write (.py, .js, .json, .toml,
-  .yml, .yaml, .sql, .md, a Caddyfile and a Dockerfile, app/i18n/en.json) and
-  none of our real files is skipped, while translations, SKIP_DIRS,
-  QUOTED_VERBATIM, the allowlist and the checker itself are;
+  absolute path and a path with a file extension are; a URL needs "://" and
+  ends at whitespace, and a segment ending in a dot has no extension;
+* `spelling-ok`, in lowercase, exempts its own line and no other; a
+  `.spelling-allow` entry exempts its exact phrase as a whole, in its own case
+  (a mixed-case one too), only in the files its glob names, matched against the
+  path from the repository root, and an entry with no glob is refused, by
+  parse_allowlist() and by the command, which exits 1;
+* a file that is not UTF-8, or cannot be read at all, is reported, not passed;
+* targets() and skip() read every kind of text file pre-commit would pass (code,
+  documentation, .css, .html, .txt, .rst, .svg, a Makefile, a shell script, a
+  .caddy file, .env.example, the ignore files, a lock file, a LICENSE) and none
+  of our real files is skipped, while a binary file, a symbolic link,
+  translations, SKIP_DIRS, QUOTED_VERBATIM (pinned to exactly its entries),
+  the allowlist and the checker itself are;
 * --fix rewrites in place, keeping case, and leaves exempt text alone;
 * the command exits nonzero on a hit, or a file it cannot read, and zero on
   clean input.
 
-Then the checker is broken on purpose (a word, stem, ending, prefix or segment
-dropped; a stem added that generates an American word; case folding off; an
-exemption widened, unscoped or disabled; a file kind no longer read) and the
-same assertions must notice. A check never shown to fail is a claim, not a
-control.
+Then the checker is broken on purpose, at least once for each property above
+(MUTATIONS lists them), and the same assertions must notice. A check never
+shown to fail is a claim, not a control. One mutation proposed in review is not
+here because it changes nothing: removing a lookbehind from the slash pattern,
+which matched from the leftmost character anyway, so the lookbehind was
+deleted instead.
 
 The British words below are test data, so their lines carry `spelling-ok`.
 
@@ -47,7 +57,9 @@ The British words below are test data, so their lines carry `spelling-ok`.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import re
 import subprocess
 import sys
@@ -136,6 +148,19 @@ instalment installment  spelling-ok
 instalments installments  spelling-ok
 instil instill  spelling-ok
 instils instills  spelling-ok
+appal appall  spelling-ok
+appals appalls  spelling-ok
+enthral enthrall  spelling-ok
+enthrals enthralls  spelling-ok
+enthralment enthrallment  spelling-ok
+distil distill  spelling-ok
+distils distills  spelling-ok
+tranquillise tranquilize  spelling-ok
+tranquillised tranquilized  spelling-ok
+tranquillises tranquilizes  spelling-ok
+tranquillising tranquilizing  spelling-ok
+tranquilliser tranquilizer  spelling-ok
+tranquillisers tranquilizers  spelling-ok
 skilful skillful  spelling-ok
 skilfully skillfully  spelling-ok
 unskilful unskillful  spelling-ok
@@ -209,6 +234,24 @@ cheques checks  spelling-ok
 pyjamas pajamas  spelling-ok
 aeroplane airplane  spelling-ok
 aeroplanes airplanes  spelling-ok
+aeon eon  spelling-ok
+aeons eons  spelling-ok
+mediaeval medieval  spelling-ok
+cosy cozy  spelling-ok
+cosier cozier  spelling-ok
+cosiest coziest  spelling-ok
+cosily cozily  spelling-ok
+cosiness coziness  spelling-ok
+liquorice licorice  spelling-ok
+yoghurt yogurt  spelling-ok
+yoghurts yogurts  spelling-ok
+centrepiece centerpiece  spelling-ok
+centrepieces centerpieces  spelling-ok
+centreline centerline  spelling-ok
+centrelines centerlines  spelling-ok
+fibreoptic fiberoptic  spelling-ok
+fibreoptics fiberoptics  spelling-ok
+fibreglass fiberglass  spelling-ok
 tumourigenic tumorigenic  spelling-ok
 tumourigenicity tumorigenicity  spelling-ok
 tumourigenesis tumorigenesis  spelling-ok
@@ -229,6 +272,8 @@ clamouring clamoring  spelling-ok
 colour color  spelling-ok
 colourings colorings  spelling-ok
 colourful colorful  spelling-ok
+colourfulness colorfulness  spelling-ok
+colourisation colorization  spelling-ok
 colourfully colorfully  spelling-ok
 colourless colorless  spelling-ok
 colourise colorize  spelling-ok
@@ -247,6 +292,7 @@ favourably favorably  spelling-ok
 unfavourable unfavorable  spelling-ok
 favourite favorite  spelling-ok
 favourites favorites  spelling-ok
+favouritism favoritism  spelling-ok
 fervour fervor  spelling-ok
 flavours flavors  spelling-ok
 harbour harbor  spelling-ok
@@ -262,6 +308,7 @@ neighbourhood neighborhood  spelling-ok
 neighbourhoods neighborhoods  spelling-ok
 neighbouring neighboring  spelling-ok
 neighbourly neighborly  spelling-ok
+neighbourliness neighborliness  spelling-ok
 neighbours neighbors  spelling-ok
 odours odors  spelling-ok
 parlour parlor  spelling-ok
@@ -435,6 +482,50 @@ victimised victimized  spelling-ok
 virtualisation virtualization  spelling-ok
 visualise visualize  spelling-ok
 weaponised weaponized  spelling-ok
+traumatise traumatize  spelling-ok
+traumatised traumatized  spelling-ok
+stigmatise stigmatize  spelling-ok
+destigmatise destigmatize  spelling-ok
+destigmatisation destigmatization  spelling-ok
+fertilise fertilize  spelling-ok
+fertilisation fertilization  spelling-ok
+fertiliser fertilizer  spelling-ok
+ionise ionize  spelling-ok
+ionisation ionization  spelling-ok
+pasteurise pasteurize  spelling-ok
+pasteurisation pasteurization  spelling-ok
+nebulise nebulize  spelling-ok
+nebuliser nebulizer  spelling-ok
+cauterise cauterize  spelling-ok
+metastasise metastasize  spelling-ok
+metastasised metastasized  spelling-ok
+mineralisation mineralization  spelling-ok
+demineralisation demineralization  spelling-ok
+heparinised heparinized  spelling-ok
+lyophilised lyophilized  spelling-ok
+homogenise homogenize  spelling-ok
+homogenisation homogenization  spelling-ok
+oxidise oxidize  spelling-ok
+oxidiser oxidizer  spelling-ok
+crystallise crystallize  spelling-ok
+crystallisation crystallization  spelling-ok
+hypnotise hypnotize  spelling-ok
+institutionalise institutionalize  spelling-ok
+deinstitutionalisation deinstitutionalization  spelling-ok
+medicalise medicalize  spelling-ok
+medicalisation medicalization  spelling-ok
+humanise humanize  spelling-ok
+dehumanising dehumanizing  spelling-ok
+commercialise commercialize  spelling-ok
+commercialisation commercialization  spelling-ok
+moisturise moisturize  spelling-ok
+moisturiser moisturizer  spelling-ok
+pressurise pressurize  spelling-ok
+depressurised depressurized  spelling-ok
+immobilise immobilize  spelling-ok
+immobilisation immobilization  spelling-ok
+neovascularisation neovascularization  spelling-ok
+hyperpolarisation hyperpolarization  spelling-ok
 
 # -yse
 analyse analyze  spelling-ok
@@ -527,6 +618,7 @@ foetuses fetuses  spelling-ok
 foetal fetal  spelling-ok
 caesarean cesarean  spelling-ok
 caesareans cesareans  spelling-ok
+caesarian cesarian  spelling-ok
 anaemia anemia  spelling-ok
 anaemic anemic  spelling-ok
 leukaemia leukemia  spelling-ok
@@ -565,6 +657,13 @@ aetiology etiology  spelling-ok
 sulphur sulfur  spelling-ok
 sulphate sulfate  spelling-ok
 sulphuric sulfuric  spelling-ok
+homoeopathy homeopathy  spelling-ok
+homoeopathic homeopathic  spelling-ok
+homoeostasis homeostasis  spelling-ok
+leucocyte leukocyte  spelling-ok
+leucocytes leukocytes  spelling-ok
+leucocytosis leukocytosis  spelling-ok
+leucopenia leukopenia  spelling-ok
 """
 
 # The ligatures, read as their two letters.
@@ -603,7 +702,55 @@ aerial aerobic aesthetic archaeology academia Caesar coelacanth coelom
 Haemophilus Haemonchus paean onomatopoeia phoenix Oedipus coefficient coed
 algae larvae vertebrae formulae maestro Michael Israel amoeba hemorrhage
 edema esophagus fetus feces celiac apnea sulfur estrogen pediatric anesthesia
+improvisation improvise improvised supervise merchandise franchise demise
+otherwise likewise appall appalled appalling enthrall enthralled enthralling
+distill distilled distillation tranquillity tranquilize leucovorin leucine
+homeopathy eon medieval licorice yogurt cozy cosine ionic ionization humanism
+pressure moisture crystalline fertility oxide mineral centerpiece fiberglass
+paedomorphosis paedomorphic paedogenesis paedogenetic Caesarea Aemilia Aemilius
 """
+
+# Names that keep a British segment in American text: Latin binomials, taxa,
+# genera, places and titles. Each would be corrupted by --fix if flagged.
+NAMES = [
+    "Haemophilus influenzae type b",  # spelling-ok
+    "Enterococcus faecalis and Enterococcus faecium",  # spelling-ok
+    "E. faecalis, E. faecium and S. haemolyticus.",  # spelling-ok
+    "Staphylococcus haemolyticus was cultured.",  # spelling-ok
+    "Mannheimia haemolytica causes it.",  # spelling-ok
+    "Faecalibacterium prausnitzii is a gut commensal.",  # spelling-ok
+    "Haemagogus and Haemadipsa and Haematopinus.",  # spelling-ok
+    "Haematobia, Haemoproteus and Haemaphysalis.",  # spelling-ok
+    "The order Haemosporida; the alga Haematococcus.",  # spelling-ok
+    "Oestrus ovis, of the family Oestridae.",  # spelling-ok
+    "Paederus beetles.",  # spelling-ok
+    "Sulphur, Louisiana, and Sulphur, LA.",  # spelling-ok
+    "Sulphur Springs and White Sulphur Springs.",  # spelling-ok
+    "See the Encyclopaedia Britannica.",  # spelling-ok
+    "Caesarea Maritima; Aemilia and Aemilius.",  # spelling-ok
+]
+
+# The same segments in prose, which must still be caught: a capitalized common
+# noun, and lines that look like a binomial and are not one.
+NOT_NAMES = [
+    ("Haemorrhage was noted.", ["Haemorrhage"]),  # spelling-ok
+    ("Paediatric Care", ["Paediatric"]),  # spelling-ok
+    ("Trauma haematoma noted.", ["haematoma"]),  # spelling-ok
+    ("Pneumonia oedema persists.", ["oedema"]),  # spelling-ok
+    ("Severe haemolysis and anaemia.", ["haemolysis", "anaemia"]),  # spelling-ok
+    ("The foetus, the oesophagitis.", ["foetus", "oesophagitis"]),  # spelling-ok
+    # A capitalized word is a genus only if it looks Latin.
+    ("Viable foetus at term.", ["foetus"]),  # spelling-ok
+    ("Leukaemia virus", ["Leukaemia"]),  # spelling-ok
+    ("Foetus data", ["Foetus"]),  # spelling-ok
+    ("Oestrus cycles vary.", ["Oestrus"]),  # spelling-ok
+    ("Sulphur is yellow.", ["Sulphur"]),  # spelling-ok
+    ("Sulphur springs bubble.", ["Sulphur"]),  # spelling-ok
+    ("Encyclopaedia entries.", ["Encyclopaedia"]),  # spelling-ok
+    ("A Caesarean section.", ["Caesarean"]),  # spelling-ok
+    ("The haemophilus vaccine.", []),
+    ("A paedophile.", ["paedophile"]),  # spelling-ok
+]
 
 # Ordinary American lines that must stay clean: URLs and paths among them.
 CLEAN = [
@@ -615,11 +762,20 @@ CLEAN = [
     "Edit app/i18n/colour.json, then reload.",  # spelling-ok
 ]
 
-# Prose with a slash is prose, not a path: each British word is still caught.
+# Prose with a slash is prose, not a path, and a URL is only the URL: each
+# British word outside one is still caught.
 SLASHED_PROSE = [
     ("Pick a colour/flavour for it.", ["colour", "flavour"]),  # spelling-ok
     ("Notes on labour/delivery.", ["labour"]),  # spelling-ok
     ("the centre/periphery split", ["centre"]),  # spelling-ok
+    # A segment ending in a dot is not a file extension.
+    ("And so on...colour/flavour now.", ["colour", "flavour"]),  # spelling-ok
+    ("Then colour./flavour now.", ["colour", "flavour"]),  # spelling-ok
+    # A URL ends at whitespace, not at the end of the line.
+    ("See https://example.org/x for the colour.", ["colour"]),  # spelling-ok
+    # A URL has "://": a colon alone does not make one.
+    ("A note:colour here.", ["colour"]),  # spelling-ok
+    ("mailto:colour", ["colour"]),  # spelling-ok
 ]
 
 
@@ -655,9 +811,11 @@ def scan(
     allow: list[tuple[str, str]] | None = None,
     name: str = "sample.md",
 ) -> dict:
-    """Run mod.check on a file of `lines`; return {line number: [(word, fix)]}."""
+    """Run mod.check on a file of `lines`; return {line number: [(word, fix)]}.
+    `name` may have directories, which are made under a temporary one."""
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         problems = mod.check(path, allow or [])
     found: dict[int, list[tuple[str, str]]] = {}
@@ -758,6 +916,25 @@ def american_left_alone(mod: ModuleType) -> list[str]:
     return [f"no false positives (flagged {sorted(named.items())[:5]})"] * bool(found)
 
 
+def names(mod: ModuleType) -> list[str]:
+    """Binomials, taxa, genera, places and titles keep their spelling, and --fix
+    leaves them as written; the same segments in prose are still caught."""
+    bad = []
+    found = scan(mod, NAMES)
+    if found:
+        flagged = {NAMES[n - 1]: hits for n, hits in found.items()}
+        bad.append(f"names are left alone (flagged {flagged})")
+    text = "\n".join(NAMES) + "\n"
+    if fixed(mod, text) != text:
+        bad.append("--fix leaves names alone")
+    found = scan(mod, [line for line, _ in NOT_NAMES])
+    got = {n: [w for w, _ in hits] for n, hits in found.items()}
+    want = {n: words for n, (_, words) in enumerate(NOT_NAMES, 1) if words}
+    if got != want:
+        bad.append(f"a segment in prose is caught ({got})")
+    return bad
+
+
 def slashes_in_prose(mod: ModuleType) -> list[str]:
     found = scan(mod, [line for line, _ in SLASHED_PROSE])
     got = {n: [w for w, _ in hits] for n, hits in found.items()}
@@ -772,13 +949,16 @@ def case_folding(mod: ModuleType) -> list[str]:
 
 
 def spelling_ok(mod: ModuleType) -> list[str]:
+    """The marker exempts its own line, and only as written: lowercase."""
     lines = [
         "The colour is quoted.  <!-- spelling-ok -->",  # spelling-ok
         "The colour is not.",  # spelling-ok
         "spelling ok is not the marker: colour",  # spelling-ok
+        "The colour.  # SPELLING-OK is not the marker either",  # spelling-ok
     ]
     found = scan(mod, lines)
-    return [] if sorted(found) == [2, 3] else [f"spelling-ok is per line ({found})"]
+    ok = sorted(found) == [2, 3, 4]
+    return [] if ok else [f"spelling-ok is per line, in lowercase ({found})"]
 
 
 GHA = "cancelled"  # spelling-ok
@@ -796,6 +976,9 @@ def allowlist(mod: ModuleType) -> list[str]:
         "if result == 'cancelled':",  # spelling-ok
         "if result == the 'Cancelled' state:",  # spelling-ok
         "if result == THE 'CANCELLED' STATE:",  # spelling-ok
+        # The phrase is exempt as a whole, not word by word: its quoted word
+        # elsewhere on the same line is still caught.
+        f"Keep {PHRASE}; '{GHA}' alone is wrong.",
     ]
     found = scan(mod, lines, allow)
     british = ("behaviour", "cancelled", "Cancelled", "CANCELLED")  # spelling-ok
@@ -804,21 +987,50 @@ def allowlist(mod: ModuleType) -> list[str]:
         3: [(british[1], "canceled")],
         4: [(british[2], "Canceled")],
         5: [(british[3], "CANCELED")],
+        6: [(british[1], "canceled")],
     }
     if found != want:
         bad.append(f"an allowed phrase exempts only itself, in its own case ({found})")
 
-    # Scoped: allowed in a workflow, not in Markdown or Python.
+    # A phrase in mixed case is matched as written: not folded either way.
+    error = "CancelledError"  # spelling-ok
+    lines = [
+        f"except asyncio.{error}:",
+        f"x = {error[0].lower()}{error[1:]}",
+        f"X = {error[:9]}{error[9:].upper()}",
+    ]
+    found = scan(mod, lines, [("*.py", error)], name="tool.py")
+    if sorted(found) != [2, 3]:
+        bad.append(f"a mixed-case phrase is matched as written ({found})")
+
+    # Scoped: allowed in a workflow, not in Markdown, Python, or a .yml file
+    # anywhere else.
+    workflows = ".github/workflows/*.yml"
     for name, scope, exempt in [
         ("ci.yml", "*.yml", True),
         ("notes.md", "*.yml", False),
-        ("tool.py", ".github/workflows/*.yml", False),
+        ("tool.py", workflows, False),
         ("tool.py", "*.py", True),
+        (".github/workflows/ci.yml", workflows, True),
+        ("other/ci.yml", workflows, False),
+        ("ci.yml", workflows, False),
+        (".github/ci.yml", workflows, False),
     ]:
         hits = scan(mod, [f"x = {PHRASE}"], [(scope, PHRASE)], name=name)
         if bool(hits) == exempt:
             verb = "exempts" if exempt else "does not exempt"
             bad.append(f"the glob {scope!r} {verb} {name}")
+
+    # A real workflow file, read from the repository root: the glob is matched
+    # against the path from ROOT, not the file's name.
+    for rel, exempt in [
+        (".github/workflows/test.yml", True),
+        ("compose.yaml", False),
+        ("docs/ci.yml", False),
+    ]:
+        got = mod.allowed_in(ROOT / rel, [(workflows, PHRASE)])
+        if got != ([PHRASE] if exempt else []):
+            bad.append(f"the glob {workflows!r} on {rel} gives {got}")
 
     # A line with no glob is refused, not read as allowed everywhere.
     for text in [f"{GHA}()", f"'{GHA}'", f": {GHA}()", "*.yml:"]:
@@ -843,13 +1055,25 @@ def allowlist(mod: ModuleType) -> list[str]:
 
 
 def unreadable(mod: ModuleType) -> list[str]:
-    """A file that is not UTF-8 is reported, not passed in silence."""
+    """A file that is not UTF-8, or cannot be read at all, is reported, not
+    passed in silence."""
+    bad = []
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "latin1.md"
         path.write_bytes("The colour of café.\n".encode("latin-1"))  # spelling-ok
         problems = mod.check(path, [])
-    ok = len(problems) == 1 and "UTF-8" in problems[0]
-    return [] if ok else [f"a file that is not UTF-8 is reported ({problems})"]
+        ok = len(problems) == 1 and "UTF-8" in problems[0]
+        if not ok:
+            bad.append(f"a file that is not UTF-8 is reported ({problems})")
+        for what, path in [
+            ("a directory", Path(tmp)),
+            ("a missing file", Path(tmp) / "gone.md"),
+        ]:
+            problems = mod.check(path, [])
+            ok = len(problems) == 1 and "could not be read" in problems[0]
+            if not ok:
+                bad.append(f"{what} is reported, not passed ({problems})")
+    return bad
 
 
 def fixes(mod: ModuleType) -> list[str]:
@@ -875,8 +1099,24 @@ def fixes(mod: ModuleType) -> list[str]:
     return [] if got == want else [f"--fix keeps case and exemptions ({got!r})"]
 
 
-# Files of every kind the checker must read, each with a British word in it.
+# Files of every kind the checker must read, each with a British word in it:
+# every kind pre-commit's `types: [text]` passes, so a whole-repository run and
+# the hook read the same files.
 SCANNED = [
+    "app/style.css",
+    "docs/page.html",
+    "requirements.txt",
+    "docs/notes.rst",
+    "Makefile",
+    "scripts/run.sh",
+    "proxy/site.caddy",
+    ".env.example",
+    ".gitignore",
+    ".dockerignore",
+    ".trivyignore",
+    "LICENSE",
+    "app/icon.svg",
+    "pixi.lock",
     "pkg/module.py",
     "app/js/50-view/10-panel.js",
     "data/table.json",
@@ -892,8 +1132,15 @@ SCANNED = [
     "scripts/tool.py",
     "server/schema.sql",
 ]
-# Translations, which the checker must not judge by English spelling (#80).
-NOT_SCANNED = ["app/i18n/de.json", "app/i18n/framework/fr.json"]
+# Translations, which the checker must not judge by English spelling (#80); a
+# binary file, which pre-commit would not call text; and a symbolic link, which
+# pre-commit does not pass (its target is read on its own).
+NOT_SCANNED = [
+    "app/i18n/de.json",
+    "app/i18n/framework/fr.json",
+    "app/logo.png",
+    "docs/link.md",
+]
 
 
 def scanned(mod: ModuleType) -> list[str]:
@@ -906,7 +1153,12 @@ def scanned(mod: ModuleType) -> list[str]:
             word = "colour"  # spelling-ok
             json_file = rel.endswith(".json")
             body = f'{{"note": "the {word}"}}\n' if json_file else f"# the {word}\n"
-            path.write_text(body, encoding="utf-8")
+            if rel.endswith(".png"):
+                path.write_bytes(b"\x89PNG\r\n\x1a\n\x00" + body.encode())
+            elif rel == "docs/link.md":
+                path.symlink_to(root / "docs/page.html")
+            else:
+                path.write_text(body, encoding="utf-8")
         saved = mod.ROOT
         mod.ROOT = root
         try:
@@ -945,11 +1197,45 @@ def real_files_read(mod: ModuleType) -> list[str]:
     return [f"our own files are not skipped ({skipped})"] if skipped else []
 
 
+# Exactly what is quoted verbatim, so an entry added to hide a file is noticed.
+QUOTED = {
+    "data/chai_te_metrics.json",
+    "docs/frameworks/chai-metrics.md",
+    "app/js/10-frameworks/10-chai/05-te-metrics.js",
+    "docs/app/index.html",
+}
+
+
+def quoted_verbatim(mod: ModuleType) -> list[str]:
+    if mod.QUOTED_VERBATIM == QUOTED:
+        return []
+    return [f"QUOTED_VERBATIM is exactly its entries ({mod.QUOTED_VERBATIM ^ QUOTED})"]
+
+
+TRANSLATIONS = [
+    ("app/i18n/de.json", True),
+    ("app/i18n/framework/fr.json", True),
+    ("app/i18n/en.json", False),
+    ("app/i18n/framework/en.json", False),
+    ("app/i18n/de.json/notes.md", False),
+    ("app/i18n/framework/de.json/notes.md", False),
+    ("app/i18n/sub/de.json", False),
+    ("docs/app/i18n/de.json", False),
+    ("app/i18n/de.yaml", False),
+]
+
+
+def translations(mod: ModuleType) -> list[str]:
+    wrong = [rel for rel, want in TRANSLATIONS if mod.is_translation(rel) != want]
+    return [f"is_translation() reads only a catalog ({wrong})"] if wrong else []
+
+
 PROPERTIES = [
     every_word,
     table,
     ligatures,
     american_left_alone,
+    names,
     slashes_in_prose,
     case_folding,
     spelling_ok,
@@ -958,6 +1244,8 @@ PROPERTIES = [
     fixes,
     scanned,
     real_files_read,
+    quoted_verbatim,
+    translations,
 ]
 
 
@@ -1006,13 +1294,14 @@ def coverage() -> None:
         check(f"{family}: a form of every ending", not missing, str(missing))
         missing = [p for p in prefixes if p not in {d[1] for d in used}]
         check(f"{family}: a form of every prefix", not missing, str(missing))
-    missing = [b for b, _ in cs.SEGMENTS if not any(b in w for w in british)]
+    missing = [b for b, _ in cs.SEGMENTS if not any(re.search(b, w) for w in british)]
     check("a form of every segment", not missing, str(missing))
 
     redundant = [
         w
         for w in cs.EXPLICIT
-        if w in cs.generate(cs.FAMILIES, {}) or any(b in w for b, _ in cs.SEGMENTS)
+        if w in cs.generate(cs.FAMILIES, {})
+        or any(re.search(b, w) for b, _ in cs.SEGMENTS)
     ]
     check(
         "no EXPLICIT word is also generated, so dropping one is noticed",
@@ -1142,6 +1431,35 @@ def command_line() -> None:
         )
         check("and the file is clean after", run(str(bad)).returncode == 0)
 
+    print("A malformed .spelling-allow fails the command")
+    code = malformed_allowlist_exit(cs)
+    check("an unscoped allowlist line exits 1", code == 1, str(code))
+    source = SCRIPT.read_text(encoding="utf-8")
+    for n, (what, old, new) in enumerate(MALFORMED_MUTATIONS):
+        check(f"mutation applies once: {what}", source.count(old) == 1, repr(old))
+        mutant = load(source.replace(old, new), f"check_spelling_mutant_m{n}")
+        code = malformed_allowlist_exit(mutant)
+        check(f"noticed: {what}", code != 1, str(code))
+
+
+def malformed_allowlist_exit(mod: ModuleType) -> int | str:
+    """What main() returns, for a clean file, when .spelling-allow has a line with
+    no glob."""
+    with tempfile.TemporaryDirectory() as tmp:
+        allow = Path(tmp) / ".spelling-allow"
+        allow.write_text("cancelled()\n", encoding="utf-8")  # spelling-ok
+        good = Path(tmp) / "good.md"
+        good.write_text("Our judgments.\n", encoding="utf-8")
+        saved = mod.ALLOWLIST
+        mod.ALLOWLIST = allow
+        try:
+            with contextlib.redirect_stderr(io.StringIO()):
+                return mod.main([str(good)])
+        except Exception as error:  # a crash is reported, not passed
+            return repr(error)
+        finally:
+            mod.ALLOWLIST = saved
+
 
 # ---------------------------------------------------------------------------
 # Mutation tests: break a copy of the checker, demand the properties notice.
@@ -1156,7 +1474,7 @@ MUTATIONS: list[tuple[str, str, str]] = [
     ("'ageing' is dropped", '"ageing": "aging",', ""),  # spelling-ok
     ("'oesophagus' is dropped", '("oesoph", "esoph"),', ""),  # spelling-ok
     ("'haemorrhage' is dropped (its segment)", '("haem", "hem"),', ""),  # spelling-ok
-    ("the -aemia segment is dropped", '("aemi", "emi"),', ""),  # spelling-ok
+    ("the -aemia segment is dropped", '("(?<=[a-z])aemi", "emi"),', ""),
     ("the -yse stem 'catal' is dropped", '"catal", ', ""),
     ("the -ise stem 'immun' is dropped", '"immun",', ""),
     ("the -our stem 'ferv' is dropped", '"ferv",', ""),
@@ -1174,7 +1492,6 @@ MUTATIONS: list[tuple[str, str, str]] = [
         "return BRITISH.get(respelled, respelled)",
         "return respelled",
     ),
-    ("a genus is respelled", "if key.startswith(GENERA):", "if False:"),
     # A new stem that generates an American word must be noticed.
     ("the -ise stem 'prec' is added", '"priorit",', '"priorit", "prec",'),
     ("the -ll stem 'compel' is added", '"counsel",', '"counsel", "compel",'),
@@ -1232,7 +1549,11 @@ MUTATIONS: list[tuple[str, str, str]] = [
         "WORD.finditer(scannable)",
         "WHOLE.finditer(scannable)",
     ),
-    ("URLs are not blanked", "scannable = blank_urls(scannable)", "pass"),
+    (
+        "URLs are not blanked",
+        "scannable = blank_names(blank_urls(scannable))",
+        "scannable = blank_names(scannable)",
+    ),
     (
         "any run with a slash is a path",
         'if path.startswith(("./", "../", "/")) or any(',
@@ -1244,13 +1565,18 @@ MUTATIONS: list[tuple[str, str, str]] = [
         "except UnicodeDecodeError as error:\n        return [] if True else [",
     ),
     ("--fix ignores case", "return american.upper()", "return american"),
-    ("'.js' is not read", '".js",', ""),
-    ("'.py' is not read", '".py",', ""),
+    # Which files a whole-repository run reads.
     (
-        "a Caddyfile is not read",
-        'CHECK_NAMES = {"Caddyfile", "Dockerfile", "Makefile"}',
-        'CHECK_NAMES = {"Dockerfile", "Makefile"}',
+        "only known suffixes are read",
+        "and is_text(p)",
+        'and p.suffix in {".md", ".py", ".js", ".json", ".yml", ".toml"}',
     ),
+    (
+        "a binary file is read",
+        "return not head.translate(None, TEXT_BYTES)",
+        "return True",
+    ),
+    ("a symbolic link is read", "and not p.is_symlink()", ""),
     ("app/ is a SKIP_DIRS directory", '"backups",', '"backups", "app",'),
     (
         "docs/developing.md is quoted verbatim",
@@ -1261,6 +1587,143 @@ MUTATIONS: list[tuple[str, str, str]] = [
         "en.json is treated as a translation",
         '\n        and parts[2] != f"{Locale.EN}.json"',
         "",
+    ),
+    (
+        "a translation is any path with a catalog's name in it",
+        "len(parts) == 3",
+        "len(parts) >= 3",
+    ),
+    (
+        "QUOTED_VERBATIM grows",
+        '"docs/app/index.html",',
+        '"docs/app/index.html", "README.md",',
+    ),
+    # URLs and paths.
+    ("a URL runs to the end of the line", r'://\S+")', r'://.*")'),
+    ("a colon makes a URL", r'*://\S+")', r'*:\S+")'),
+    (
+        "any dot is a file extension",
+        r'EXTENSION = re.compile(r"\w\.[A-Za-z0-9]+$")',
+        r'EXTENSION = re.compile(r"\.")',
+    ),
+    (
+        "a dot and a word anywhere is a file extension",
+        r'EXTENSION = re.compile(r"\w\.[A-Za-z0-9]+$")',
+        r'EXTENSION = re.compile(r"\.[A-Za-z0-9]+$")',
+    ),
+    # The allowlist.
+    (
+        "an allowlist glob also matches the file's name",
+        "if where.match(glob)]",
+        "if where.match(glob) or where.match(PurePosixPath(glob).name)]",
+    ),
+    (
+        "an allowed phrase is blanked word by word",
+        "    for phrase in allow:\n",
+        "    for phrase in [w for p in allow for w in p.split()]:\n",
+    ),
+    (
+        "an allowed phrase is compared in lowercase",
+        'scannable = scannable.replace(phrase, " " * len(phrase))',
+        'scannable = scannable.replace(phrase.lower(), " " * len(phrase))',
+    ),
+    (
+        "relative() gives the file's name",
+        "return resolved.relative_to(ROOT).as_posix()",
+        "return resolved.name",
+    ),
+    (
+        "a file that cannot be read is passed in silence",
+        'return [f"{path}: could not be read',
+        'return [] if True else [f"{path}: could not be read',
+    ),
+    (
+        "the marker is read in any case",
+        "if MARKER in line:",
+        "if MARKER in line.lower():",
+    ),
+    # Names.
+    (
+        "names are not blanked",
+        "scannable = blank_names(blank_urls(scannable))",
+        "scannable = blank_urls(scannable)",
+    ),
+    (
+        "genera are respelled",
+        "if key in GENERA or key.endswith(TAXON_SUFFIXES):",
+        "if key.endswith(TAXON_SUFFIXES):",
+    ),
+    (
+        "taxa are respelled",
+        "if key in GENERA or key.endswith(TAXON_SUFFIXES):",
+        "if key in GENERA:",
+    ),
+    (
+        "proper nouns are respelled",
+        "    for name in PROPER_NOUNS:\n",
+        "    for name in ():\n",
+    ),
+    (
+        "species epithets are respelled",
+        "        if not EPITHET.fullmatch(epithet):",
+        "        if True:",
+    ),
+    (
+        "any word after a genus is an epithet",
+        "        if not EPITHET.fullmatch(epithet):",
+        "        if False:",
+    ),
+    (
+        "an English noun is an epithet",
+        "(?<!ous)(?<!sis)(?<!itis)(?<!ia)(?<!ma)(?<!oea)",
+        "",
+    ),
+    (
+        "any capitalized word is a genus",
+        r"(?:us|um|a|is|on|es|as|ix))|[A-Z]\.) +",
+        r")|[A-Z]\.) +",
+    ),
+    (
+        "the genus of a binomial is respelled",
+        "            spans.append(match.span(1))",
+        "            pass",
+    ),
+    (
+        "a genus in -a is left alone",
+        "if genus and KEPT_GENUS.fullmatch(genus) and LATIN_ONLY.fullmatch(epithet):",
+        "if genus:",
+    ),
+    (
+        "a genus is left alone before any epithet",
+        " and LATIN_ONLY.fullmatch(epithet):",
+        ":",
+    ),
+    ("-aemi- starts a word", '("(?<=[a-z])aemi", "emi")', '("aemi", "emi")'),
+    ("caesar is a segment", '("caesar(?=[ei]an)", "cesar")', '("caesar", "cesar")'),
+    (
+        "paedomorphosis is respelled",
+        '("paed(?!omorph|ogene)", "ped")',  # spelling-ok
+        '("paed", "ped")',  # spelling-ok
+    ),
+    (
+        "leuco is a segment",
+        '("leucocyt", "leukocyt")',  # spelling-ok
+        '("leuco", "leuko")',
+    ),
+]
+
+# main() refusing a malformed .spelling-allow, broken: these are run by
+# command_line(), which calls main() itself.
+MALFORMED_MUTATIONS = [
+    (
+        "a malformed allowlist exits zero",
+        "        print(error, file=sys.stderr)\n        return 1\n",
+        "        print(error, file=sys.stderr)\n        return 0\n",
+    ),
+    (
+        "a malformed allowlist is read as empty",
+        "        allow = load_allowlist()\n",
+        "        allow = []\n",
     ),
 ]
 

@@ -942,7 +942,8 @@ honest answer and is a gap worth closing; see R-19.
   spelling.
 - Enforced by: `pixi run check-spelling` (pre-commit, and CI through the lint
   workflow's `prek run --all-files`), which generates each listed root's
-  inflections and matches the British medical segments (D-81). The checker is
+  inflections and matches the British medical segments, leaving names such as
+  Latin binomials alone (D-81). The checker is
   itself tested by `pixi run test-check-spelling` (CI and pre-commit),
   including mutation tests (#169).
 - Not enforced: commit messages (the check reads files, not messages), and any

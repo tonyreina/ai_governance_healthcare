@@ -14,22 +14,51 @@ spellings too: "dialogue", "analogue", "monologue", "prologue" and the other
 -ogue words except "catalogue" (CLAUDE.md names "catalog"); "burnt", "dreamt",
 "spelt"; "glamour"; "fulfilled", "enrolled" (the American past tense doubles
 the l); "analyses" (the plural of "analysis"); "aesthetic", "archaeology",
-"amoeba"; and the name "Caesar" (only "caesarean" is caught).
+"amoeba"; and the name "Caesar" (only "caesarean" and "caesarian" are caught).
 
 The list is of roots, not of words: each root's inflections (plurals, -ed,
 -ing, -er, the -isation family, un-, re- and the like) are generated from it,
 because a list of exact forms missed "judgements" while it listed "judgement"
 (#169). The British medical digraphs ("haem", "oesoph", "paed", "-aemia" and the
-like) are matched as segments anywhere in a word, so every inflection of
-"haemorrhage" or "oedema" is caught without being listed. Words are read the
-way code writes them, so the parts of an identifier (``colourPicker``,
-``MAX_COLOURS``, ``data-colour-id``) are checked too, in any case, and the
-ligatures "œ" and "æ" are read as "oe" and "ae". tests/test_check_spelling.py
-pins all of this.
+like) are matched as segments in a word, so every inflection of "haemorrhage"
+or "oedema" is caught without being listed.
+
+A segment can also be part of a name that keeps its spelling in American text,
+and --fix must not respell a name. Those are recognized by their shape, with a
+short list only where no shape tells them apart:
+
+* a species epithet, the lowercase Latin word after a genus ("Enterococcus
+  faecalis", "S. haemolyticus"): a capitalized Latin-shaped word or a capital
+  and a period, then a lowercase word with a Latin ending (and the genus too
+  when it ends in -us or -um: "Oestrus ovis");
+* a taxon by its rank's suffix ("Oestridae", "Haemosporida",
+  "Faecalibacterium", "Haematococcus");
+* a segment narrowed where a name or an American word shares its letters:
+  "-aemi-" never starts a word ("Aemilia"), the "caesar" of "caesarean" must be
+  followed by "-ean" or "-ian" ("Caesarea"), "paed" is not the "paedomorph-"
+  or "paedogen-" of American biology, and only "leucocyt-" and "leucopeni-"
+  are caught ("leucovorin" is American);
+* GENERA, the genera with a British segment that stand alone in a sentence
+  ("Haemophilus", "Haematobia"), and PROPER_NOUNS, the places and titles
+  ("Sulphur Springs", "Encyclopaedia Britannica").
+
+A capitalized word is otherwise checked like any other: a heading ("Paediatric
+Care") and an identifier (``PaediatricWard``) are ours to spell, so
+"Haemorrhage was noted." is caught. The other way, leaving every capitalized
+segment word alone unless it is a known common noun, was rejected: it needs a
+list of every common medical word, the list this checker exists not to keep.
+Its cost is a name that has no shape and is not listed, like the city of
+Sulphur, Louisiana written without its state; that takes ``spelling-ok``.
+
+Words are read the way code writes them, so the parts of an identifier
+(``colourPicker``, ``MAX_COLOURS``, ``data-colour-id``) are checked too, in any
+case, and the ligatures "œ" and "æ" are read as "oe" and "ae".
+tests/test_check_spelling.py pins all of this.
 
 Quoting a source that spells a word the British way is legitimate. Two escapes:
 
-* Put ``spelling-ok`` in a comment on the same line; that line is skipped.
+* Put ``spelling-ok``, in lowercase, in a comment on the same line; that line is
+  skipped.
 * Add ``glob: phrase`` to ``.spelling-allow`` in the repo root, one per line.
   The phrase, matched exactly and case-sensitively, is skipped in the files the
   glob matches (``*.py``, ``.github/workflows/*.yml``; matched from the right,
@@ -38,6 +67,13 @@ Quoting a source that spells a word the British way is legitimate. Two escapes:
 
 A file that is not valid UTF-8 is reported, not skipped: a check that cannot
 read a file has not checked it.
+
+Run with no arguments, it reads every text file under the repository, by the
+rule pre-commit's ``types: [text]`` uses for a file it cannot name (see
+is_text()), so a whole-repository run and the hook read the same kinds of file:
+a shell script, a .caddy file, .env.example and .gitignore as well as code and
+documentation. Symbolic links are not read (pre-commit does not pass them; the
+target is read on its own), nor anything under SKIP_DIRS.
 
 Run via: pixi run check-spelling
 """
@@ -66,6 +102,11 @@ SKIP_DIRS = {
     "backups",
     # Output of a build of other frameworks (pixi run build-example), ignored by git.
     "build",
+    # Tool caches, ignored by git and never ours to spell.
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
 }
 # This file IS the word list. Scanning it would flag every British key, and
 # --fix would rewrite the keys to match their values, quietly turning the
@@ -84,21 +125,14 @@ QUOTED_VERBATIM = {
     # app/ ARE checked, so nothing of ours escapes review by being in here.
     "docs/app/index.html",
 }
-CHECK_SUFFIXES = {
-    ".md",
-    ".py",
-    ".js",
-    ".html",
-    ".css",
-    ".yaml",
-    ".yml",
-    ".toml",
-    ".json",
-    ".sql",
-    ".rst",
-    ".txt",
-}
-CHECK_NAMES = {"Caddyfile", "Dockerfile", "Makefile"}
+# The bytes a text file is made of, by the rule of identify, which pre-commit's
+# `types: [text]` uses for a file it cannot classify by its name: the printable
+# range and the usual control characters. A NUL, or any other control byte, in
+# the first KiB makes a file binary. Bytes 0x80-0xFF are text, so a Latin-1 file
+# is read, and reported as not UTF-8.
+TEXT_BYTES = bytes(
+    sorted({7, 8, 9, 10, 11, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7F})
+)
 
 # British -> American, by root. A word list of exact forms catches the forms
 # someone thought to type: "judgement" was listed and "judgements" was not, so
@@ -126,12 +160,15 @@ FAMILIES: dict[str, Family] = {
             ("ourably", "orably"),
             ("ourite", "orite"),
             ("ourites", "orites"),
+            ("ouritism", "oritism"),
             ("ourer", "orer"),
             ("ourers", "orers"),
             ("ourful", "orful"),
             ("ourfully", "orfully"),
+            ("ourfulness", "orfulness"),
             ("ourless", "orless"),
             ("ourly", "orly"),
+            ("ourliness", "orliness"),
             ("ourhood", "orhood"),
             ("ourhoods", "orhoods"),
             ("ourism", "orism"),
@@ -141,6 +178,7 @@ FAMILIES: dict[str, Family] = {
             ("ourise", "orize"),
             ("ourised", "orized"),
             ("ourising", "orizing"),
+            ("ourisation", "orization"),
         ),
         ("", "mis", "dis", "un", "water", "multi"),
         (
@@ -230,7 +268,21 @@ FAMILIES: dict[str, Family] = {
             ("isations", "izations"),
             ("isational", "izational"),
         ),
-        ("", "re", "un", "de", "dis", "mis", "pre", "non", "over", "under"),
+        (
+            "",
+            "re",
+            "un",
+            "de",
+            "dis",
+            "mis",
+            "pre",
+            "non",
+            "over",
+            "under",
+            "im",
+            "neo",
+            "hyper",
+        ),
         (
             # "anesthet": the American segment, so "anaesthetise" is caught by
             # its segment and its ending together (see american()).
@@ -241,14 +293,17 @@ FAMILIES: dict[str, Family] = {
             "capital",
             "categor",
             "catheter",
+            "cauter",
             "central",
             "character",
             "civil",
             "colon",
+            "commercial",
             "conceptual",
             "container",
             "contextual",
             "critic",
+            "crystall",
             "custom",
             "digit",
             "emphas",
@@ -256,45 +311,61 @@ FAMILIES: dict[str, Family] = {
             "equal",
             "familiar",
             "fantas",
+            "fertil",
             "final",
             "formal",
             "general",
             "global",
             "harmon",
+            "heparin",
+            "homogen",
             "hospital",
+            "human",
+            "hypnot",
             "hypothes",
             "ideal",
             "immun",
             "incentiv",
             "initial",
+            "institutional",
             "internal",
+            "ion",
             "item",
             "jeopard",
             "legal",
             "legitim",
             "local",
+            "lyophil",
             "marginal",
             "material",
             "maxim",
+            "medical",
             "memor",
             "metabol",
+            "metastas",
+            "mineral",
             "minim",
             "mobil",
             "modern",
+            "moistur",
             "monet",
             "national",
+            "nebul",
             "neutral",
             "normal",
             "operational",
             "optim",
             "organ",
+            "oxid",
             "parameter",
             "parametr",
+            "pasteur",
             "patron",
             "penal",
             "personal",
             "polar",
             "popular",
+            "pressur",
             "priorit",
             "privat",
             "pseudonym",
@@ -312,6 +383,7 @@ FAMILIES: dict[str, Family] = {
             "stabil",
             "standard",
             "steril",
+            "stigmat",
             "subsid",
             "summar",
             "symbol",
@@ -320,6 +392,7 @@ FAMILIES: dict[str, Family] = {
             "synthes",
             "theor",
             "token",
+            "traumat",
             "trivial",
             "util",
             "vapor",
@@ -431,6 +504,22 @@ EXPLICIT: dict[str, str] = {
     "instalments": "installments",
     "instil": "instill",
     "instils": "instills",
+    # Only the forms the American spelling does not share: "appalled",
+    # "appalling", "enthralled", "distilled" are American too.
+    "appal": "appall",
+    "appals": "appalls",
+    "enthral": "enthrall",
+    "enthrals": "enthralls",
+    "enthralment": "enthrallment",
+    "distil": "distill",
+    "distils": "distills",
+    # British in the doubled l and the -ise together; "tranquillity" is American.
+    "tranquillise": "tranquilize",
+    "tranquillised": "tranquilized",
+    "tranquillises": "tranquilizes",
+    "tranquillising": "tranquilizing",
+    "tranquilliser": "tranquilizer",
+    "tranquillisers": "tranquilizers",
     "skilful": "skillful",
     "skilfully": "skillfully",
     "unskilful": "unskillful",
@@ -513,6 +602,25 @@ EXPLICIT: dict[str, str] = {
     "pyjamas": "pajamas",
     "aeroplane": "airplane",
     "aeroplanes": "airplanes",
+    "aeon": "eon",
+    "aeons": "eons",
+    "mediaeval": "medieval",
+    "cosy": "cozy",
+    "cosier": "cozier",
+    "cosiest": "coziest",
+    "cosily": "cozily",
+    "cosiness": "coziness",
+    "liquorice": "licorice",
+    "yoghurt": "yogurt",
+    "yoghurts": "yogurts",
+    # Compounds of -re words, which that family's endings do not make.
+    "centrepiece": "centerpiece",
+    "centrepieces": "centerpieces",
+    "centreline": "centerline",
+    "centrelines": "centerlines",
+    "fibreoptic": "fiberoptic",
+    "fibreoptics": "fiberoptics",
+    "fibreglass": "fiberglass",
     # "tumour" is in the -our family; these are built on it with no ending of
     # that family's.
     "tumourigenic": "tumorigenic",
@@ -521,19 +629,24 @@ EXPLICIT: dict[str, str] = {
 }
 
 # British spellings that are a segment of many words, mostly medical since this
-# is aimed at US health systems. Each is matched anywhere in a word and replaced
-# by its American segment, so "haemorrhages", "haemorrhagic", "haematoma" and
-# "haemodialysis" are all caught by "haem" without a list of their forms. A
-# segment is here only if no American word contains it; each was checked, and
-# the American look-alikes in the tests ("aerial", "academia", "coelacanth",
-# "Caesar", "paean", "onomatopoeia") pin that. "oea" alone is not a segment
-# (only "rrhoea" and "pnoea" are), nor is "coel" (the American "coelacanth"
-# and "coelom" contain it), nor "caesar" (the name).
+# is aimed at US health systems. Each is a regular expression matched in a word
+# and replaced by its American segment, so "haemorrhages", "haemorrhagic",
+# "haematoma" and "haemodialysis" are all caught by "haem" without a list of
+# their forms. A segment is meant to be one no American word contains. That was
+# checked only against the words we thought of, which are the American
+# look-alikes pinned in tests/test_check_spelling.py ("aerial", "academia",
+# "coelacanth", "Caesar", "paean", "onomatopoeia", "leucovorin" and the rest);
+# it is not a search of a dictionary. Where one of them shares a segment's
+# letters, the segment is narrowed: "oea" alone is not a segment (only "rrhoea"
+# and "pnoea" are), nor is "coel" ("coelacanth", "coelom"), nor "leuco"
+# ("leucovorin"); "caesar" only before "-ean" or "-ian" (the names "Caesar" and
+# "Caesarea"); "-aemi-" never at the start of a word ("Aemilia"); "paed" not in
+# "paedomorphosis" or "paedogenesis", which American biology spells so.
 SEGMENTS: tuple[tuple[str, str], ...] = (
     ("haem", "hem"),  # haemorrhage, haematoma, haemodynamic, haemophilia
-    ("aemi", "emi"),  # anaemia, leukaemia, septicaemic, glycaemic, ischaemia
+    ("(?<=[a-z])aemi", "emi"),  # anaemia, leukaemia, septicaemic, ischaemia
     ("anaes", "anes"),  # anaesthesia, anaesthetise
-    ("paed", "ped"),  # paediatric, orthopaedist, encyclopaedia
+    ("paed(?!omorph|ogene)", "ped"),  # paediatric, orthopaedist, encyclopaedia
     ("oesoph", "esoph"),  # oesophagus, oesophagitis
     ("oestr", "estr"),  # oestrogen, oestradiol
     ("oedem", "edem"),  # oedema, oedematous
@@ -541,15 +654,73 @@ SEGMENTS: tuple[tuple[str, str], ...] = (
     ("faec", "fec"),  # faeces, faecal
     ("gynaec", "gynec"),  # gynaecology, gynaecologic
     ("coeliac", "celiac"),
-    ("caesare", "cesare"),  # caesarean
+    ("caesar(?=[ei]an)", "cesar"),  # caesarean, caesarian
     ("aetiolog", "etiolog"),  # aetiology
     ("rrhoea", "rrhea"),  # diarrhoea, gonorrhoea
     ("pnoea", "pnea"),  # apnoea, dyspnoea
     ("sulph", "sulf"),  # sulphur, sulphate, sulphide
+    ("homoeo", "homeo"),  # homoeopathy, homoeostasis
+    ("leucocyt", "leukocyt"),  # leucocyte, leucocytosis
+    ("leucopeni", "leukopeni"),  # leucopenia
 )
-# Latin genus names keep their spelling in American text ("Haemophilus
-# influenzae"), so a word that starts with one is not respelled.
-GENERA: tuple[str, ...] = ("haemophilus", "haemaphysalis", "haemonchus")
+SEGMENT_PATTERNS = tuple((re.compile(b), a) for b, a in SEGMENTS)
+
+# Names that keep a British segment in American text, so must not be respelled.
+#
+# Genera that stand alone in a sentence, where no shape tells "Haematobia" (a
+# fly) from "haematuria" (British for hematuria). Matched as the whole word.
+# "Oestrus" is not here: alone it is far more often the British "estrus", and
+# as a genus it comes with its species ("Oestrus ovis"), which BINOMIAL reads.
+GENERA: frozenset[str] = frozenset(
+    {
+        "haemophilus",
+        "haemaphysalis",
+        "haemonchus",
+        "haemagogus",
+        "haemadipsa",
+        "haematopinus",
+        "haematobia",
+        "haemoproteus",
+        "paederus",
+    }
+)
+# A taxon named by its rank's suffix: a family (-idae), subfamily (-inae), order
+# (-ida), plant family (-aceae), or a bacterial or algal genus (-bacterium,
+# -bacter, -coccus, -monas). No common word with a British segment ends so.
+TAXON_SUFFIXES: tuple[str, ...] = (
+    "idae",
+    "inae",
+    "ida",
+    "aceae",
+    "bacterium",
+    "bacter",
+    "coccus",
+    "monas",
+)
+# A species epithet: the lowercase word after a genus, which is a capitalized
+# word with a Latin ending, or the genus's initial and a period ("Enterococcus
+# faecalis", "E. faecium", "Mannheimia haemolytica"). The epithet must look Latin
+# too, and not like an English noun of the -sis, -itis, -ia, -ma or -oea kinds
+# ("Trauma haematoma" is prose, and is checked). The genus is left alone too
+# when it ends in -us or -um and its epithet ends in -ae, -ii, -i or -is
+# ("Oestrus ovis"), endings an English word after "Foetus" or "Oesophagus"
+# almost never has; a genus in -a stays checked ("Leukaemia virus" is prose).
+BINOMIAL = re.compile(
+    r"\b(?:([A-Z][a-z]{3,}(?:us|um|a|is|on|es|as|ix))|[A-Z]\.) +([a-z]+)\b"
+)
+EPITHET = re.compile(
+    r"[a-z]{2,}(?:us|um|ae|ii|i|is|a)(?<!ous)(?<!sis)(?<!itis)(?<!ia)(?<!ma)(?<!oea)"
+)
+LATIN_ONLY = re.compile(r"[a-z]+(?:ae|i|is)(?<!sis)(?<!itis)")
+KEPT_GENUS = re.compile(r"[A-Z][a-z]+(?:us|um)")
+# Places and titles, matched exactly and case-sensitively anywhere. "Sulphur"
+# alone is read as the element: the city is named with its state.
+PROPER_NOUNS: tuple[str, ...] = (
+    "Encyclopaedia Britannica",
+    "Sulphur Springs",  # Texas; and White Sulphur Springs, West Virginia
+    "Sulphur, Louisiana",
+    "Sulphur, LA",
+)
 
 
 def generate(families: dict[str, Family], explicit: dict[str, str]) -> dict[str, str]:
@@ -577,11 +748,11 @@ def american(word: str) -> str | None:
     hit = BRITISH.get(key)
     if hit is not None:
         return hit
-    if key.startswith(GENERA):
+    if key in GENERA or key.endswith(TAXON_SUFFIXES):
         return None
     respelled = key
-    for british, american_segment in SEGMENTS:
-        respelled = respelled.replace(british, american_segment)
+    for pattern, american_segment in SEGMENT_PATTERNS:
+        respelled = pattern.sub(american_segment, respelled)
     if respelled == key:
         return None
     # A segment and an ending can both be British: "anaesthetise" is respelled
@@ -599,9 +770,12 @@ WORD = re.compile(r"[A-ZŒÆ]+(?![a-zœæ])|[A-ZŒÆ]?[a-zœæ]+")
 WHOLE = re.compile(r"[A-Za-zŒÆœæ]+")
 # A URL or a path can legitimately contain any spelling; it is not prose. A URL
 # has a scheme. A run with a slash is a path only if it starts with "./", "../"
-# or "/", or a segment has a file extension: "colour/flavour" is prose.
+# or "/", or a segment has a file extension: "colour/flavour" is prose. A run
+# is matched from its first character (a match starts at the leftmost place it
+# can, and every character a run is made of can start one), so no lookbehind
+# is needed to keep a match from starting mid-run.
 URL = re.compile(r"\b[A-Za-z][\w+.-]*://\S+")
-SLASHED = re.compile(r"(?<![\w./-])[\w.~-]*/[\w./~-]*")
+SLASHED = re.compile(r"[\w.~-]*/[\w./~-]*")
 EXTENSION = re.compile(r"\w\.[A-Za-z0-9]+$")
 
 
@@ -621,6 +795,23 @@ def blank_path(match: re.Match[str]) -> str:
 
 def blank_urls(line: str) -> str:
     return SLASHED.sub(blank_path, URL.sub(blank, line))
+
+
+def blank_names(line: str) -> str:
+    """Blank the proper nouns and the species epithets, which keep their
+    spelling. Each is replaced by spaces of its length, so columns hold."""
+    for name in PROPER_NOUNS:
+        line = line.replace(name, " " * len(name))
+    for match in BINOMIAL.finditer(line):
+        genus, epithet = match.group(1, 2)
+        if not EPITHET.fullmatch(epithet):
+            continue
+        spans = [match.span(2)]
+        if genus and KEPT_GENUS.fullmatch(genus) and LATIN_ONLY.fullmatch(epithet):
+            spans.append(match.span(1))
+        for start, end in spans:
+            line = line[:start] + " " * (end - start) + line[end:]
+    return line
 
 
 def american_for(word: str, american: str) -> str:
@@ -645,7 +836,7 @@ def find(line: str, allow: list[str]) -> list[tuple[int, str, str]]:
     scannable = line
     for phrase in allow:
         scannable = scannable.replace(phrase, " " * len(phrase))
-    scannable = blank_urls(scannable)
+    scannable = blank_names(blank_urls(scannable))
     hits = []
     for match in WORD.finditer(scannable):
         word = match.group(0)
@@ -755,6 +946,17 @@ def check(path: Path, allow: list[Allow]) -> list[str]:
     return problems
 
 
+def is_text(path: Path) -> bool:
+    """Whether pre-commit would call `path` a text file. One that cannot be
+    opened counts as text, so check() reports it rather than it being dropped."""
+    try:
+        with path.open("rb") as handle:
+            head = handle.read(1024)
+    except OSError:
+        return True
+    return not head.translate(None, TEXT_BYTES)
+
+
 def targets(argv: list[str]) -> list[Path]:
     if argv:
         return [Path(a) for a in argv]
@@ -762,8 +964,9 @@ def targets(argv: list[str]) -> list[Path]:
         p
         for p in ROOT.rglob("*")
         if p.is_file()
+        and not p.is_symlink()
         and not any(d in SKIP_DIRS for d in p.relative_to(ROOT).parts)
-        and (p.suffix in CHECK_SUFFIXES or p.name in CHECK_NAMES)
+        and is_text(p)
     ]
 
 

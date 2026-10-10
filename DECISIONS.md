@@ -1677,15 +1677,36 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   American too ("analyses", "cancellation", "enrolled", "programmed") are never
   generated.
 - **Segments, for the medical digraphs.** British segments that no American
-  word we know of contains (`SEGMENTS` in the checker, such as the
-  "haem" of the blood words) are matched anywhere in a word <!-- spelling-ok -->
+  word we know of contains (`SEGMENTS` in the checker, regular expressions such
+  as the "haem" of the blood words) are matched in a word <!-- spelling-ok -->
   and respelled, so every inflection of a medical word is caught without being
   listed. A word British in both its segment and its ending is respelled in
-  both. Each segment was checked against American look-alikes, which the tests
-  pin, and narrowed where one exists: not bare "oea" or "coel" ("coelacanth"
-  and "coelom" are American), and not "caesar" (the name "Caesar" is left
-  alone; only the obstetric word is caught). Latin genus names keep their
-  spelling (`GENERA`: "Haemophilus").
+  both. "No American word we know of" means the American look-alikes the tests
+  pin, not a dictionary search. Where one shares a segment's letters, the
+  segment is narrowed: not bare "oea", "coel" ("coelacanth", "coelom") or
+  "leuco" ("leucovorin"); "caesar" only before "-ean" or "-ian" ("Caesar",
+  "Caesarea"); "-aemi-" never at the start of a word ("Aemilia"); and the
+  segment for "pediatric" not in "paedomorphosis" or "paedogenesis", which
+  American biology spells so.
+- **Names keep their spelling, recognized by shape first.** A British segment
+  in a name is not respelled, and `--fix` leaves the name as written. A species
+  epithet is the lowercase Latin-shaped word after a Latin-shaped capitalized
+  genus or a genus initial ("Enterococcus faecalis", "S. haemolyticus"), and
+  the genus is left alone too when it ends in -us or -um and its epithet in -ae,
+  -i or -is ("Oestrus ovis"). A taxon is read by its rank's suffix ("Oestridae",
+  "Haemosporida", "Faecalibacterium", "Haematococcus"). Where no shape tells a
+  name from a word, a short list does: `GENERA`, genera that stand alone in a
+  sentence ("Haemophilus", "Haematobia"), and `PROPER_NOUNS`, places and titles
+  ("Sulphur Springs", "Sulphur, Louisiana", "Encyclopaedia Britannica").
+  A capitalized word is otherwise checked like any other, so a capitalized
+  common noun at the start of a sentence, a heading and a part of an
+  identifier are caught.
+  **Rejected:** leaving every capitalized segment word alone unless it is a
+  known common noun, which needs a list of every common medical word (the list
+  this checker exists not to keep) and would pass headings and identifiers.
+  Its cost is a name with no shape that is not listed, such as the city of
+  Sulphur written without its state, or "Oestrus" alone; <!-- spelling-ok -->
+  those take `spelling-ok`.
 - **Left out on purpose**, because they are standard or common American
   spellings: "dialogue", "analogue" and the other -ogue words (except the
   catalog word, which CLAUDE.md names); "burnt", "dreamt", "spelt";
@@ -1707,19 +1728,65 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   file extension, so two British words joined by a slash in prose are
   checked. A URL needs a scheme. The allowlist file itself is skipped, like
   the checker: each of its entries is a British phrase.
-- **Nothing is skipped in silence.** A file that is not valid UTF-8 is reported
-  as a problem, not passed.
+- **Nothing is skipped in silence.** A file that is not valid UTF-8, or cannot
+  be read, is reported as a problem, not passed.
+- **A whole-repository run reads what the hook reads.** Run with no arguments,
+  the checker reads every text file outside `SKIP_DIRS` (git and tool
+  directories, build output, caches), judged by identify's rule that
+  pre-commit's `types: [text]` uses for a file it cannot name by extension: no
+  NUL or other control byte in the first KiB. So `pixi run check-spelling`
+  reads shell scripts, `.caddy` files, `.env.example`, the ignore files and the
+  lock file, as the hook does, and not a suffix list that drifts from it.
+  Symbolic links are not read (pre-commit does not pass them; the target is
+  read on its own). The one difference left: the hook reads only files git
+  tracks, while the no-argument run also reads untracked files that are not
+  in `SKIP_DIRS`.
 - **Shown to fail:** `tests/test_check_spelling.py` checks every generated word,
   and every word of a hand-written table, in each of the nine contexts it lists
   (prose, a comment, a string, snake_case, kebab-case, camelCase, Title case,
   UPPER CASE, UPPER_SNAKE). The table names every `EXPLICIT` word and a form of
   every stem, ending, prefix and segment, and the test demands it does. It also
-  checks American look-alikes, slashes in prose, both exemptions and their
-  scope, a file that is not UTF-8, which files a whole-repository run reads,
-  the skips and `--fix`, and breaks copies of the checker (a word, stem,
-  ending, prefix or segment dropped; a stem added that generates an American
-  word; an exemption widened; a kind of file no longer read) to show each is
-  noticed.
+  checks American look-alikes, names (binomials, taxa, genera, places, titles)
+  and the same segments in prose, ligatures, slashes and URLs in prose, the
+  marker, the allowlist and its scope, a file that is not UTF-8 or cannot be
+  read, which files a whole-repository run reads, what `is_translation()`
+  accepts, the skips, `QUOTED_VERBATIM` exactly, `--fix`, and that a malformed
+  allowlist makes the command exit 1. Each of these is then broken in a copy
+  of the checker, and the test demands the break is noticed. The one mutation
+  proposed in review and not there is removing the slash pattern's
+  lookbehind: it changed nothing (a match starts at the leftmost character it
+  can), so the lookbehind was deleted. The mutations, as the test's
+  `MUTATIONS` names them:
+
+    - **Words:** an `EXPLICIT` word, a stem of each family, an ending
+      (-ourise, -isational, -llist), the -ce prefix "sub", or a segment (those
+      of "oesophagus", "haemorrhage" and "anaemia") dropped; <!-- spelling-ok -->
+      endings or prefixes no longer generated; a segment word's ending not
+      respelled; a stem added that generates an American word ("prec",
+      "compel", "lust"); case folding off; ligatures not read, or not letters;
+      identifiers not split.
+    - **Names:** names not blanked; genera, taxa, proper nouns or species
+      epithets respelled; any word after a genus taken as an epithet; an
+      English noun (-sis, -itis, -ia, -ma, -oea) taken as an epithet; any
+      capitalized word taken as a genus; the genus of a binomial respelled; a
+      genus in -a left alone; a genus left alone before any epithet; "-aemi-"
+      matched at the start of a word; the British segments of "cesarean",
+      "pediatric" and "leukocyte" widened to their bare letters.
+    - **Exemptions:** the marker ignored, read in any case, or any mention of
+      "spelling" taken for it; the allowlist ignored; an allowed phrase
+      exempting its whole line, matched in any case, compared in lowercase, or
+      blanked word by word; a glob ignored, or also matched against the file's
+      name; `relative()` giving the file's name; an unscoped line accepted; a
+      malformed allowlist exiting zero or read as empty.
+    - **URLs and paths:** URLs not blanked; a URL running to the end of the
+      line; a colon alone making a URL; any run with a slash taken as a path;
+      any dot, or a dot and a word anywhere, taken as a file extension.
+    - **Files:** a file that is not UTF-8, or cannot be read, passed in
+      silence; only known suffixes read; a binary file or a symbolic link read;
+      `app/` added to `SKIP_DIRS`; `docs/developing.md` or another file added
+      to `QUOTED_VERBATIM`, or `QUOTED_VERBATIM` ignored; `en.json` taken as a
+      translation, or any path with a catalog's name in it; the checker or the
+      allowlist no longer skipping itself; `--fix` ignoring case.
 - **Rejected:** listing more exact forms (the failure #169 describes, repeated
   for the next unlisted one); matching any word that contains a British stem
   (flags "enrolled" and "fulfilled", and a checker that cries wolf gets

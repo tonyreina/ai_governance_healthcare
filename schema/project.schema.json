@@ -2,26 +2,23 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tonyreina.github.io/ai_governance_healthcare/schema/project.schema.json",
   "title": "Governance review: project export",
-  "description": "One project as written by 'Download project data (JSON)', from the published build (CHAI, 'chai-review/2') or a build of any other framework ('<id>-review/<n>', D-79). The structure is the same for every framework; where a value comes from the framework's definition (its item ids, statuses, categories, phases and checkpoints), this schema states it for the published framework only, under the 'chai-review/2' condition at the end (D-82). Fields other than _state are derived for convenience; import reads _state. tests/test_export_schema.py validates real exports against this file, and also with every object closed, so a field the export writes and this file does not describe fails.",
+  "description": "One project as written by 'Download project data (JSON)', from the published build (CHAI, 'chai-review/2') or a build of any other framework ('<id>-review/<n>', D-79). The structure is the same for every framework; where a value comes from the framework's definition (its item ids, statuses, categories, phases, checkpoints, card fields and supplements), this schema states it for the published framework only, under the 'chai-review/2' condition at the end (D-82). Every field the export always writes is required. Fields other than _state are derived for convenience; import reads _state, the record as stored. tests/test_export_schema.py validates real exports against this file, and also with every object closed, so a field the export writes and this file does not describe fails.",
   "type": "object",
-  "required": ["schema", "meta", "checklist", "_state"],
+  "required": ["schema", "generated", "storage", "project_id", "fingerprint", "status", "phase", "next_review", "flags", "meta", "gates", "metrics", "checklist", "scores", "_state"],
   "properties": {
     "schema": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}-review/[1-9][0-9]*$",
       "description": "The framework's export id: 'chai-review/2' for the published build, the definition's export.schemaId for any other (the pattern is the one schema/framework.schema.json gives it)."
     },
-    "generated": {
-      "type": "string",
-      "format": "date-time"
-    },
+    "generated": {"type": "string", "format": "date-time"},
     "project_id": {
       "type": ["string", "null"],
       "description": "The id of the project this was exported from. Part of what the fingerprint covers, so a reader can recompute it. Import ignores it and creates a new project."
     },
     "fingerprint": {
       "type": "object",
-      "description": "Identifies this exact version of the record, so a report or a filed copy can be tied to it. MD5 is a version fingerprint only; SHA-256 is the digest to quote if a hash is ever offered as evidence that a record was not altered. Recompute with examples/load_export.py (verify_fingerprint). Absent in older exports (#150).",
+      "description": "Identifies this exact version of the record, so a report or a filed copy can be tied to it. MD5 is a version fingerprint only; SHA-256 is the digest to quote if a hash is ever offered as evidence that a record was not altered. Computed over _state with project_id as its id, by the rule 'of' states. Recompute with examples/load_export.py (verify_fingerprint). Absent in exports from before #150, which this schema does not describe.",
       "required": ["md5", "sha256", "of"],
       "properties": {
         "md5": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
@@ -31,7 +28,7 @@
     },
     "storage": {
       "type": "object",
-      "description": "Where the record was kept when this was exported, so a filed copy carries its own provenance (#93). Absent in older exports.",
+      "description": "Where the record was kept when this was exported, so a filed copy carries its own provenance (#93).",
       "required": ["mode", "label", "note"],
       "properties": {
         "mode": {
@@ -50,22 +47,25 @@
       "type": "string",
       "description": "The label of one of the framework's phases, or 'Retired' or 'Stopped'."
     },
-    "next_review": {
-      "type": ["string", "null"],
-      "format": "date"
-    },
+    "next_review": {"type": ["string", "null"], "format": "date"},
     "flags": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["sev", "text"],
+        "required": ["sev", "text", "msg"],
         "properties": {
           "sev": {"enum": ["red", "amber"]},
-          "text": {"type": "string", "description": "The flag, in English."},
+          "text": {
+            "type": "string",
+            "description": "The flag, in English, its dates included (\"Sep 5, 2026\"), whatever the language of the dashboard that exported it."
+          },
           "msg": {
             "type": "array",
             "description": "The dashboard's catalog key for the flag and its parameters, which the dashboard uses to show it in the reader's language. The key is the dashboard's, not a stable identifier; read text.",
-            "prefixItems": [{"type": "string"}, {"type": "object"}],
+            "prefixItems": [
+              {"type": "string"},
+              {"type": "object"}
+            ],
             "minItems": 2,
             "maxItems": 2
           }
@@ -74,20 +74,17 @@
     },
     "meta": {"$ref": "#/$defs/meta"},
     "gates": {"$ref": "#/$defs/gates"},
-    "metrics": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/metric"}
-    },
+    "metrics": {"type": "array", "items": {"$ref": "#/$defs/metric"}},
     "model_card": {
       "type": "object",
-      "description": "The published framework's applied model card. Absent from another framework's export.",
+      "description": "The published framework's applied model card, every field of it. Absent from another framework's export.",
       "additionalProperties": {"type": "string"}
     },
     "checklist": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "stage", "principle", "criterion", "status"],
+        "required": ["id", "stage", "principle", "criterion", "status", "evidence", "owner", "due", "references"],
         "properties": {
           "id": {"type": "string", "description": "The item's id in the framework's definition."},
           "stage": {"type": "integer", "minimum": 1, "description": "The number of the item's section."},
@@ -127,28 +124,27 @@
       "type": "object",
       "description": "Readiness in percent: overall, and one per category id of the framework.",
       "required": ["overall"],
-      "properties": {
-        "overall": {"type": "integer"}
-      },
+      "properties": {"overall": {"type": "integer"}},
       "additionalProperties": {"type": "integer"}
     },
     "_state": {
       "type": "object",
-      "description": "The stored project document. This is what import reads.",
+      "description": "The record as stored, which is what the fingerprint covers and import reads. A record an older version of the dashboard wrote may lack fields the dashboard fills in when it shows it (meta.chaiUseCase, card, access); the export keeps it as stored, so a reader recomputes the fingerprint the server gives it.",
       "required": ["meta", "items"],
       "properties": {
         "meta": {"$ref": "#/$defs/meta"},
         "items": {
           "type": "object",
           "description": "The primary framework's answers, keyed by item id.",
-          "additionalProperties": {"type": "object"}
+          "additionalProperties": {"$ref": "#/$defs/answer"}
         },
         "gates": {"$ref": "#/$defs/gates"},
-        "metrics": {
-          "type": "array",
-          "items": {"$ref": "#/$defs/metric"}
+        "metrics": {"type": "array", "items": {"$ref": "#/$defs/metric"}},
+        "card": {
+          "type": "object",
+          "description": "The published framework's model card, as typed: field name to text.",
+          "additionalProperties": {"type": "string"}
         },
-        "card": {"type": "object"},
         "access": {
           "type": "object",
           "description": "Who may open the project, by user id. Empty lists mean unrestricted.",
@@ -168,7 +164,8 @@
       "additionalProperties": {
         "$ref": "#/$defs/supplement",
         "description": "Any other key is a supplementary framework's record, under its id (OPTICA's is 'optica')."
-      }
+      },
+      "propertyNames": {"$ref": "#/$defs/frameworkId"}
     }
   },
   "allOf": [
@@ -202,9 +199,7 @@
           "type": "object",
           "description": "The build's primary framework, stamped on every record a build of other frameworks makes (R-67). Absent from the published build's records, which are CHAI's.",
           "required": ["id"],
-          "properties": {
-            "id": {"type": "string"}
-          }
+          "properties": {"id": {"type": "string"}}
         }
       }
     },
@@ -238,23 +233,25 @@
     "supplement": {
       "type": "object",
       "properties": {
-        "enabled": {"type": "boolean", "description": "Whether the project uses it (an opt-in supplement such as OPTICA)."},
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the project uses it (an opt-in supplement such as OPTICA)."
+        },
         "answers": {
           "type": "object",
           "description": "Its answers, keyed by its item ids.",
-          "additionalProperties": {"type": "object"}
+          "additionalProperties": {"$ref": "#/$defs/answer"}
         }
       }
     },
     "chai": {
-      "description": "What the published framework's definition (app/frameworks/chai/framework.json) fixes. tests/test_export_schema.py checks each list here against the definition.",
+      "description": "What the published build fixes: CHAI's definition (app/frameworks/chai/framework.json), its model card, its one supplement (OPTICA, app/frameworks/optica/framework.json) and its metric categories. tests/test_export_schema.py checks each list here against its source, and that every export the schema before #177 refused, but for a foreign export id, this one refuses too.",
+      "required": ["model_card"],
       "properties": {
         "phase": {
           "enum": ["Intake & planning", "Design, build & assess", "Pilot", "Deployed", "Retired", "Stopped"]
         },
-        "gates": {
-          "propertyNames": {"enum": ["A", "B", "C", "D"]}
-        },
+        "gates": {"propertyNames": {"enum": ["A", "B", "C", "D"]}},
         "metrics": {
           "items": {
             "properties": {
@@ -280,6 +277,101 @@
         "scores": {
           "required": ["overall", "U", "F", "S", "T", "P"],
           "propertyNames": {"enum": ["overall", "U", "F", "S", "T", "P"]}
+        },
+        "model_card": {
+          "required": ["name", "developer", "contact", "releaseStage", "releaseDate", "version", "availability", "regulatory", "summary", "keywords", "intendedUse", "users", "howTo", "population", "outOfScope", "risks", "biases", "riskLevel", "outputs", "modelType", "foundation", "inputSource", "dataType", "devData", "biasMitigation", "maintenance", "security", "evalRefs", "trials", "pubs", "reimbursement", "consent"],
+          "propertyNames": {
+            "enum": ["name", "developer", "contact", "releaseStage", "releaseDate", "version", "availability", "regulatory", "summary", "keywords", "intendedUse", "users", "howTo", "population", "outOfScope", "risks", "biases", "riskLevel", "outputs", "modelType", "foundation", "inputSource", "dataType", "devData", "biasMitigation", "maintenance", "security", "evalRefs", "trials", "pubs", "reimbursement", "consent"]
+          }
+        },
+        "_state": {
+          "propertyNames": {
+            "enum": ["meta", "items", "gates", "metrics", "card", "access", "archived", "createdAt", "createdBy", "updatedAt", "updatedBy", "cardUpdatedAt", "optica"]
+          },
+          "properties": {
+            "items": {
+              "propertyNames": {"pattern": "^s[1-6]-[0-9]+$"},
+              "additionalProperties": {
+                "propertyNames": {"enum": ["status", "evidence", "owner", "due", "refs"]},
+                "properties": {"status": {"enum": ["met", "partial", "notmet", "na", "", null]}}
+              }
+            },
+            "gates": {"propertyNames": {"enum": ["A", "B", "C", "D"]}},
+            "metrics": {
+              "items": {
+                "properties": {
+                  "cat": {
+                    "enum": ["Usefulness, usability & efficacy", "Fairness & equity", "Safety & reliability"]
+                  }
+                }
+              }
+            },
+            "card": {
+              "propertyNames": {
+                "enum": ["name", "developer", "contact", "releaseStage", "releaseDate", "version", "availability", "regulatory", "summary", "keywords", "intendedUse", "users", "howTo", "population", "outOfScope", "risks", "biases", "riskLevel", "outputs", "modelType", "foundation", "inputSource", "dataType", "devData", "biasMitigation", "maintenance", "security", "evalRefs", "trials", "pubs", "reimbursement", "consent"]
+              }
+            },
+            "optica": {
+              "propertyNames": {"enum": ["enabled", "answers"]},
+              "properties": {
+                "answers": {
+                  "propertyNames": {"pattern": "^[1-9][0-9]*-[0-9]+$"},
+                  "additionalProperties": {
+                    "propertyNames": {"enum": ["status", "evidence", "owner", "due", "refs", "declineReason"]},
+                    "properties": {"status": {"enum": ["met", "partial", "notmet", "declined", "na", "", null]}}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "frameworkId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
+      "not": {
+        "enum": ["__proto__", "constructor", "prototype", "toString", "toLocaleString", "valueOf", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__"]
+      },
+      "description": "A framework id, as schema/framework.schema.json defines it: a supplement's record is kept under its id."
+    },
+    "answer": {
+      "type": "object",
+      "description": "One item's answer, as stored.",
+      "properties": {
+        "status": {
+          "type": ["string", "null"],
+          "description": "One of the framework's status values; '' when cleared, absent or null when never answered."
+        },
+        "evidence": {"type": "string"},
+        "owner": {"type": "string"},
+        "due": {"type": "string"},
+        "refs": {"$ref": "#/$defs/refs"}
+      },
+      "additionalProperties": {
+        "type": "string",
+        "description": "The reason a status asks for, under the field its definition names (statuses[].reasonField; OPTICA's 'declineReason')."
+      }
+    },
+    "refs": {
+      "type": "object",
+      "description": "Evidence references, keyed by reference id; a removed one is null at its id. A file is never stored, only its name, size and SHA-256.",
+      "propertyNames": {"pattern": "^r[a-z0-9]{6,24}$"},
+      "additionalProperties": {
+        "type": ["object", "null"],
+        "properties": {
+          "title": {"type": "string"},
+          "url": {"type": "string"},
+          "date": {"type": "string"},
+          "at": {"type": "string"},
+          "file": {
+            "type": ["object", "null"],
+            "properties": {
+              "name": {"type": "string"},
+              "size": {"type": "integer", "minimum": 0},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }
+          }
         }
       }
     }

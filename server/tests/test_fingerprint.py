@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 from app.routes import content_md5
@@ -29,6 +30,7 @@ from httpx import AsyncClient
 from .conftest import requires_db
 
 REPO = Path(__file__).resolve().parents[2]
+LONE = re.compile("[\ud800-\udfff]")
 FIXTURE = json.loads(
     (REPO / "tests" / "fixtures" / "fingerprint_record.json").read_text("utf-8")
 )
@@ -83,6 +85,11 @@ class TestARevisionCarriesTheRecordsFingerprint:
         record = {
             k: v for k, v in FIXTURE["record"].items() if k not in ("id", "_state")
         }
+        # Without the lone surrogates, which PostgreSQL cannot store (the server
+        # refuses such a record: TestALoneSurrogateIsRefused).
+        record = json.loads(json.dumps(record))
+        del record["meta"]["lone"]
+        record["card"] = {k: v for k, v in record["card"].items() if not LONE.search(k)}
         pid = "p-fingerprint"
         assert (await client.post(f"/api/projects/{pid}", json=record)).status_code in (
             200,
@@ -104,3 +111,74 @@ class TestARevisionCarriesTheRecordsFingerprint:
         first = (await client.get(f"/api/projects/{pid}/versions/1")).json()["doc"]
         assert versions[-1]["md5"] == content_md5({**first, "id": pid})
         assert versions[-1]["md5"] != content_md5(first)
+
+
+def test_a_lone_surrogate_is_written_as_javascript_writes_it():
+    """JSON.stringify writes a lone surrogate as its \\u escape (lowercase hex), so the
+    canonical text is ASCII there and UTF-8 can encode it. Python's json.dumps with
+    ensure_ascii=False writes the surrogate itself, which UTF-8 cannot encode: the
+    server raised UnicodeEncodeError on any such record (#177)."""
+    import hashlib
+
+    expected = '{"a\\ud800":"b\\udc00"}'
+    assert (
+        content_md5({"a\ud800": "b\udc00"})
+        == hashlib.md5(expected.encode()).hexdigest()
+    )
+    # A real pair is one character, written as itself, not escaped.
+    pair = '{"k":"\U0001f600"}'
+    assert content_md5({"k": "\U0001f600"}) == hashlib.md5(pair.encode()).hexdigest()
+
+
+@requires_db
+class TestALoneSurrogateIsRefused:
+    async def test_the_server_refuses_a_record_it_cannot_store(
+        self, client: AsyncClient
+    ):
+        """PostgreSQL's jsonb cannot hold a lone surrogate, so the record is refused
+        whole, with a 4xx the dashboard reports, not a 500 (docs/exports.md)."""
+        body = '{"meta": {"solution": "a \\ud800 b"}, "items": {}}'
+        r = await client.post(
+            "/api/projects/p-lone",
+            content=body,
+            headers={"Content-Type": "application/json"},
+        )
+        assert r.status_code == 422, r.text
+        listed = (await client.get("/api/projects")).json()
+        assert "p-lone" not in [p["id"] for p in listed]
+
+
+@requires_db
+class TestAnOlderRecordIsHashedAsStored:
+    async def test_the_revision_is_the_stored_records_fingerprint(
+        self, client: AsyncClient
+    ):
+        """A record from an older version of the dashboard lacks fields its
+        normalize() now fills (meta.chaiUseCase, access, card, a checkpoint). The
+        dashboard used to hash the filled-in copy, the server the stored one, so the
+        same record had two fingerprints. Both now hash the record as stored: the
+        dashboard's side is tests/test_export_schema.py ('an older record')."""
+        pid = "p-older"
+        older = {
+            "meta": {"solution": "An older record", "riskTier": "High"},
+            "items": {"s1-1": {"status": "met"}},
+            "gates": {"A": {"decision": "Approve"}},
+            "metrics": [],
+            "archived": False,
+            "createdAt": "2024-01-01T00:00:00.000Z",
+        }
+        assert (await client.post(f"/api/projects/{pid}", json=older)).status_code in (
+            200,
+            201,
+        )
+        versions = (await client.get(f"/api/projects/{pid}/versions")).json()
+        stored = (await client.get(f"/api/projects/{pid}/versions/1")).json()["doc"]
+        reader = load_export()
+        as_stored = reader.fingerprint({"_state": stored, "project_id": pid})["md5"]
+        assert versions[-1]["md5"] == as_stored
+        filled = json.loads(json.dumps(stored))
+        filled["meta"]["chaiUseCase"] = ""
+        filled["card"] = {}
+        filled["gates"].update({"B": {}, "C": {}, "D": {}})
+        as_filled = reader.fingerprint({"_state": filled, "project_id": pid})["md5"]
+        assert as_filled != as_stored

@@ -15,6 +15,7 @@ function stamp(extra){ return Object.assign({updatedAt:new Date().toISOString(),
 function queuePatch(pid,patch){
   if(RO) return;
   deepMerge(pending[pid]||(pending[pid]={}), patch);
+  if(S && pid===CUR && STORED.has(S)) deepMerge(STORED.get(S), patch);  // see storedRecord()
   setSaved(t("saved.saving"));
   clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid),550);
 }
@@ -154,7 +155,7 @@ function flushChanges(pid, path){
     const before = buf[key];
     delete buf[key];
     const now = key.startsWith("metrics.") ? clone(S && S.metrics) : (S ? get(key) : undefined);
-    logChange(pid, key, before, now, S);
+    logChange(pid, key, before, now, storedRecord(S));
   }
   if(!Object.keys(buf).length) delete changeBuf[pid];
 }

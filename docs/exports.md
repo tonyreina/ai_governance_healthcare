@@ -53,14 +53,23 @@ the project id) as compact canonical JSON in UTF-8: keys sorted at every level,
 by UTF-16 code unit as JavaScript sorts them (so `"10"` comes before `"9"`, and
 an emoji before a character from U+E000 to U+FFFF), with the volatile fields
 `updatedAt`, `updatedBy`, `cardUpdatedAt`, `_state`, `contentHash` and
-`generated` left out. An export from before fingerprints were added reports that
-it has none. It reads the export of a build of any framework, not only CHAI's.
+`generated` left out. Strings are written as JavaScript's `JSON.stringify` writes
+them, so a lone surrogate (half of a pair, alone, which a JavaScript string can
+hold and UTF-8 cannot encode) is written as its lowercase `\u` escape, such as
+`\ud800`. An export from before fingerprints were added reports that it has none.
+It reads the export of a build of any framework, not only CHAI's.
+
+The record is the one as stored. A record an older version of the dashboard
+saved can lack fields the dashboard now fills in to show it (such as
+`meta.chaiUseCase`); the fingerprint, and the export's `_state`, are of the
+record without them, as the server holds it.
 
 On the shared server, each revision in the version history carries the MD5 of
 the record as it was, computed by the same rule, so a revision's fingerprint is
 the one the setup page and an export showed for that record. Revisions saved
 before this rule was fixed (#177) were hashed without the project's id, and their
-fingerprints do not match.
+fingerprints do not match. The server refuses a record holding a lone surrogate,
+which PostgreSQL cannot store.
 
 On the shared server, the dashboard reports each export it produces, so it
 appears in the read trail beside the reads that fetched the data
@@ -119,18 +128,24 @@ The file holds the status, phase, next review date and flags
 as computed at export time; the project's `meta`, checkpoint decisions and metrics;
 the model card; the whole checklist with each criterion's status, evidence, owner,
 due date and `references`; the scores; and `_state`, the project as the tool
-stores it.
+stores it. A flag's `text` is English, its dates included ("Periodic review due
+Sep 5, 2026"), whatever the language of the dashboard that exported it; the
+portfolio CSV's flags are the same text.
 
 The `schema` field names the framework: `chai-review/2` for the published
 build, and the definition's own id, of the form `<id>-review/<n>`, for a
 [build of another framework](frameworks/custom.md). One schema describes every
 framework's export, because the structure is the same. Where a value comes from
-the framework's definition (item ids, statuses, categories, phases and
-checkpoints), the schema lists it for CHAI only; another framework's values are
-the ones in its definition. Every export the published build and the example
-framework's build produce, in every language, with hostile text in every typed
-field, is validated against the schema in CI, which also fails on a field the
-export writes and the schema does not describe.
+the framework's definition (item ids, statuses, categories, phases,
+checkpoints, model card fields and supplements), the schema lists it for CHAI
+only; another framework's values are the ones in its definition. Every field the
+export always writes is required. Every export the published build and the
+example framework's build produce, in every language, with hostile text in every
+typed field, is validated against the schema in CI, which also fails on a field
+the export writes and the schema does not describe, and on any field the export
+always writes that the schema does not require. An export from before the
+provenance and the fingerprint were added (#93, #150) lacks them, and the schema
+no longer describes it.
 
 Only `_state` is read back. Everything else is derived for the reader's
 convenience. **Import project JSON** on the home page reads `_state` and creates

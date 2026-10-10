@@ -47,11 +47,14 @@ CANON_SKIP = {
 def _canonical(value):
     """Keys sorted at every level, volatile fields dropped. JavaScript sorts keys by
     UTF-16 code unit, which differs from Python's code-point order for characters
-    outside the Basic Multilingual Plane, so sort by the UTF-16 bytes to match."""
+    outside the Basic Multilingual Plane, so sort by the UTF-16 bytes to match (a
+    lone surrogate, which JavaScript allows in a string, sorts by its own unit)."""
     if isinstance(value, dict):
         return {
             k: _canonical(value[k])
-            for k in sorted(value, key=lambda key: key.encode("utf-16-be"))
+            for k in sorted(
+                value, key=lambda key: key.encode("utf-16-be", "surrogatepass")
+            )
             if k not in CANON_SKIP
         }
     if isinstance(value, list):
@@ -62,12 +65,17 @@ def _canonical(value):
 def fingerprint(export: dict) -> dict:
     """The MD5 and SHA-256 the dashboard computes over this record, recomputed from
     the file alone: the project (`_state` plus its id) as compact canonical JSON in
-    UTF-8. Written from the rule, not from the dashboard's code."""
+    UTF-8. Written from the rule, not from the dashboard's code.
+
+    A lone surrogate (half of a pair, alone; JavaScript allows one in a string) is
+    written as its lowercase \\u escape, as JSON.stringify writes it, so the text
+    is UTF-8 that the dashboard hashed. UTF-8 cannot encode one, and every other
+    character encodes, so backslashreplace changes nothing else."""
     record = dict(export["_state"])
     if export.get("project_id") is not None:
         record["id"] = export["project_id"]
     text = json.dumps(_canonical(record), ensure_ascii=False, separators=(",", ":"))
-    data = text.encode("utf-8")
+    data = text.encode("utf-8", "backslashreplace")
     return {
         "md5": hashlib.md5(data).hexdigest(),
         "sha256": hashlib.sha256(data).hexdigest(),
@@ -124,6 +132,10 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     export = load(argv[1])
+    # A lone surrogate (JavaScript allows one in a string) cannot be written to a
+    # UTF-8 terminal: show it as its escape rather than fail on it.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     print(summarize(export))
     if export["schema"] != CHAI_SCHEMA:
         return 0

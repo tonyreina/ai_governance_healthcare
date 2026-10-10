@@ -32,6 +32,18 @@ gives tests/fixtures/fingerprint_record.json the digests in that file, which the
 server and load_export.py give it too (server/tests/test_fingerprint.py); and a
 new project's first history entry carries the fingerprint the setup page shows.
 
+Every field the export always writes is required: each is dropped in turn and
+must be refused. The record (_state) is described as the dashboard writes it, and
+bogus answers, references, card fields, supplements and statuses are refused. The
+schema is at least as precise as the one before #177
+(tests/fixtures/project.schema.before-177.json): every mutant of a real export
+that one refused, this one refuses, but for another framework's export id.
+
+Every sample exports the same file in every language, a dated flag included (its
+date was in the reader's language). An older record, missing fields the
+dashboard fills in, is hashed and exported as stored, as the server hashes it.
+A lone surrogate survives the trip from the downloaded file to load_export.py.
+
 The validator is shown failing: a missing field, a foreign export id, a value
 outside the published framework's lists, an undescribed field (closed only), a
 bad date.
@@ -46,6 +58,7 @@ import datetime as dt
 import importlib.util
 import json
 import re
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -60,6 +73,9 @@ FRAMEWORK_SCHEMA = ROOT / "schema" / "framework.schema.json"
 CHAI_DEF = ROOT / "app" / "frameworks" / "chai" / "framework.json"
 EXAMPLE_CONFIG = ROOT / "app" / "frameworks" / "example" / "build.json"
 GOLDEN = ROOT / "tests" / "fixtures" / "fingerprint_record.json"
+# The schema as it was before #177 (chai-review/2 only), to show the new one refuses
+# everything it refused, but for the export id it now lets other frameworks use.
+BEFORE = ROOT / "tests" / "fixtures" / "project.schema.before-177.json"
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
@@ -106,6 +122,9 @@ def closed(schema: object, path: tuple[str, ...] = ()) -> object:
 Draft202012Validator.check_schema(SCHEMA)
 OPEN = Draft202012Validator(SCHEMA, format_checker=FormatChecker())
 CLOSED = Draft202012Validator(closed(SCHEMA), format_checker=FormatChecker())
+OLD = Draft202012Validator(
+    json.loads(BEFORE.read_text(encoding="utf-8")), format_checker=FormatChecker()
+)
 
 
 def problems(export: dict) -> list[str]:
@@ -195,6 +214,7 @@ POISON = """(p) => {
   S.items[first].refs = {rpoison1: {title: p,
     url: "https://example.org/" + encodeURIComponent(p),
     date: "2026-03-04", at: "2026-03-04T00:00:00Z"}};
+  STORED.delete(S);  // written here, not saved: this copy is the record
 }"""
 
 # A link and a file, as the page stores them (D-70).
@@ -206,6 +226,7 @@ REFS = """() => {
     rfile0001: {title: "", url: "", date: "", at: "2026-03-05T10:00:00Z",
                 file: {name: "validation.pdf", size: 1048576, sha256: "ab".repeat(32)}},
   }});
+  STORED.delete(S);  // written here, not saved: this copy is the record
   return it;
 }"""
 
@@ -214,6 +235,7 @@ REFS = """() => {
 NUMERIC = """() => {
   S.card = Object.assign(S.card || {}, {"9": "nine", "10": "ten", "1": "one"});
   S.meta.solution = "Keyed by numbers \\uffff \\u{1F600}";
+  STORED.delete(S);  // written here, not saved: this copy is the record
 }"""
 
 
@@ -338,12 +360,428 @@ def chai_lists_match_definition(page) -> None:
         chai["metrics"]["items"]["properties"]["cat"]["enum"]
         == page.evaluate("METRIC_CATS"),
     )
+    check(
+        "the record's lists are stated too (_state: answers, card, supplements)",
+        "_state" in chai and "model_card" in chai,
+    )
+    if "_state" not in chai or "model_card" not in chai:
+        return
+    state = chai["_state"]["properties"]
+    answer = state["items"]["additionalProperties"]
+    check(
+        "the record's statuses: CHAI's, '' (cleared) and null",
+        answer["properties"]["status"]["enum"] == [*statuses, "", None],
+        str(answer["properties"]["status"]["enum"]),
+    )
+    fields = SCHEMA["$defs"]["answer"]["properties"]
+    reasons = [s["reasonField"] for s in d["statuses"] if "reasonField" in s]
+    check(
+        "an answer's fields: the ones the dashboard writes (CHAI asks no reason)",
+        answer["propertyNames"]["enum"] == [*fields, *reasons],
+        str(answer["propertyNames"]["enum"]),
+    )
+    check(
+        "the record's item ids fit the same pattern",
+        state["items"]["propertyNames"]["pattern"] == item["id"]["pattern"],
+    )
+    check(
+        "the record's checkpoints",
+        state["gates"]["propertyNames"]["enum"] == [g["id"] for g in d["gates"]],
+    )
+    check(
+        "the record's metric categories are the page's (the old schema's, #177)",
+        state["metrics"]["items"]["properties"]["cat"]["enum"]
+        == page.evaluate("METRIC_CATS"),
+    )
+    card = page.evaluate("CARD_FIELDS")
+    check(
+        "the record's card fields are the page's",
+        state["card"]["propertyNames"]["enum"] == card,
+    )
+    check(
+        "the model card is every card field, and only them",
+        chai["model_card"]["required"] == card
+        and chai["model_card"]["propertyNames"]["enum"] == card,
+    )
+    supplements = page.evaluate(
+        "FRAMEWORKS.filter(f => f.def && !f.primary).map(f => f.id)"
+    )
+    state_keys = chai["_state"]["propertyNames"]["enum"]
+    check(
+        "the record's keys: the ones the schema describes, and the published build's"
+        " supplements",
+        state_keys == [*SCHEMA["properties"]["_state"]["properties"], *supplements]
+        and supplements == ["optica"],
+        f"{state_keys} vs {supplements}",
+    )
+    for sid in supplements:
+        sd = json.loads(
+            (ROOT / "app" / "frameworks" / sid / "framework.json").read_text("utf-8")
+        )
+        sup = state[sid]["properties"]["answers"]
+        sanswer = sup["additionalProperties"]
+        sstat = [s["value"] for s in sd["statuses"]]
+        check(
+            f"{sid}: its statuses, '' and null",
+            sanswer["properties"]["status"]["enum"] == [*sstat, "", None],
+            str(sanswer["properties"]["status"]["enum"]),
+        )
+        sreasons = [s["reasonField"] for s in sd["statuses"] if "reasonField" in s]
+        check(
+            f"{sid}: an answer's fields, and the reason its statuses ask for",
+            sanswer["propertyNames"]["enum"] == [*fields, *sreasons],
+            str(sanswer["propertyNames"]["enum"]),
+        )
+        sids = [i["id"] for s in sd["sections"] for i in s["items"]]
+        check(
+            f"{sid}: every item id fits its id pattern",
+            all(
+                re.fullmatch(sup["propertyNames"]["pattern"].strip("^$"), i)
+                for i in sids
+            ),
+        )
+        check(
+            f"{sid}: a supplement's fields",
+            state[sid]["propertyNames"]["enum"]
+            == list(SCHEMA["$defs"]["supplement"]["properties"]),
+        )
     fw_pattern = json.loads(FRAMEWORK_SCHEMA.read_text(encoding="utf-8"))
     sid = fw_pattern["properties"]["export"]["properties"]["schemaId"]["pattern"]
     check(
         "the export id pattern is the one a definition's schemaId must match",
         SCHEMA["properties"]["schema"]["pattern"] == sid,
         f"{SCHEMA['properties']['schema']['pattern']} != {sid}",
+    )
+
+
+def refused(export: dict) -> bool:
+    """The published schema, as a reader's validator runs it, refuses this."""
+    return bool(list(OPEN.iter_errors(export)))
+
+
+def required_fields(export: dict, where: str, chai: bool) -> None:
+    """Every field projectJSON() always writes is required: an export missing any one
+    is refused, so dropping a field from the export cannot go unnoticed (#177). Each
+    is dropped in turn (mutation), at the top and inside each object it always
+    writes whole."""
+    paths: list[tuple] = [(k,) for k in export]
+    paths += [("checklist", 0, k) for k in export["checklist"][0]]
+    for obj in ("fingerprint", "storage"):
+        paths += [(obj, k) for k in export[obj]]
+    if export["flags"]:
+        paths += [("flags", 0, k) for k in export["flags"][0]]
+    # A category's score is the definition's; the schema names CHAI's.
+    paths += [("scores", k) for k in (export["scores"] if chai else ["overall"])]
+    if chai:
+        paths += [("model_card", k) for k in export["model_card"]]
+    missed = []
+    for path in paths:
+        e = copy.deepcopy(export)
+        node = e
+        for step in path[:-1]:
+            node = node[step]
+        del node[path[-1]]
+        if not refused(e):
+            missed.append("/".join(map(str, path)))
+    check(
+        f"{where}: dropping any of the {len(paths)} fields the export always writes"
+        " is refused (mutation, each in turn)",
+        not missed,
+        f"not noticed: {missed}",
+    )
+    check(
+        f"{where}: the top-level fields the schema requires are the ones written",
+        set(export) == set(SCHEMA["required"]) | ({"model_card"} if chai else set()),
+        str(sorted(set(export) ^ set(SCHEMA["required"]))),
+    )
+
+
+def mutants(base: dict, cases: list[tuple[str, str]]) -> list[tuple[str, dict]]:
+    """(name, a Python statement over `e`, a deep copy of base) -> (name, mutant)."""
+    out = []
+    for name, stmt in cases:
+        e = copy.deepcopy(base)
+        exec(stmt, {}, {"e": e})  # a fixed statement written in this file
+        out.append((name, e))
+    return out
+
+
+# What the dashboard stores for each answer, a reference and a supplement, and what
+# it refuses to be (#177): each of these must be refused in a CHAI export.
+STATE_BOGUS_CHAI = [
+    (
+        "an answer's status CHAI does not have",
+        "e['_state']['items'][I]['status'] = 'Bogus'",
+    ),
+    ("a field an answer does not have", "e['_state']['items'][I]['surprise'] = 'x'"),
+    ("an answer that is not an object", "e['_state']['items'][I] = 'met'"),
+    (
+        "an answer's evidence that is not text",
+        "e['_state']['items'][I]['evidence'] = 3",
+    ),
+    ("an answer under an id CHAI does not have", "e['_state']['items']['zz-9'] = {}"),
+    (
+        "a reference under an id the dashboard never makes",
+        "e['_state']['items'][I]['refs'] = {'notaref': {'title': 't'}}",
+    ),
+    (
+        "a reference field that is not text",
+        "e['_state']['items'][I]['refs'] = {'rlink0001': {'title': 5}}",
+    ),
+    (
+        "a field a reference does not have",
+        "e['_state']['items'][I]['refs'] = {'rlink0001': {'surprise': 'x'}}",
+    ),
+    (
+        "a reference file whose SHA-256 is not hex",
+        "e['_state']['items'][I]['refs'] = {'rfile0001': {'file': {'name': 'a',"
+        " 'size': 1, 'sha256': 'x'}}}",
+    ),
+    (
+        "a top-level key of the record that is not one CHAI's build writes",
+        "e['_state']['bogus'] = {}",
+    ),
+    ("an unknown supplement, shaped as one", "e['_state']['nist'] = {'answers': {}}"),
+    ("a card field CHAI does not have", "e['_state']['card']['surprise'] = 'x'"),
+    ("a card field that is not text", "e['_state']['card']['name'] = 5"),
+    (
+        "a checkpoint CHAI does not have, in the record",
+        "e['_state']['gates']['Z'] = {}",
+    ),
+    (
+        "a metric category CHAI does not have, in the record (regression: the old"
+        " schema refused it)",
+        "e['_state']['metrics'][0]['cat'] = 'Bogus'",
+    ),
+    ("a field a supplement does not have", "e['_state']['optica']['surprise'] = 1"),
+    (
+        "OPTICA's enabled that is not true or false",
+        "e['_state']['optica']['enabled'] = 'yes'",
+    ),
+    (
+        "an OPTICA status OPTICA does not have",
+        "e['_state']['optica']['answers'][O]['status'] = 'Bogus'",
+    ),
+    (
+        "a field an OPTICA answer does not have",
+        "e['_state']['optica']['answers'][O]['surprise'] = 'x'",
+    ),
+    (
+        "an OPTICA answer under an id OPTICA does not have",
+        "e['_state']['optica']['answers']['zz-9'] = {}",
+    ),
+    ("an access list that is not of user ids", "e['_state']['access']['owners'] = [3]"),
+    ("a field access does not have", "e['_state']['access']['surprise'] = []"),
+    ("a model card field CHAI does not have", "e['model_card']['surprise'] = 'x'"),
+]
+
+# And what the dashboard does write, which must still pass.
+STATE_GOOD_CHAI = [
+    (
+        "an OPTICA answer declined, with its reason",
+        "e['_state']['optica']['answers'][O] = {'status': 'declined',"
+        " 'declineReason': 'r'}",
+    ),
+    (
+        "a status cleared ('' is what clearing stores)",
+        "e['_state']['items'][I]['status'] = ''",
+    ),
+    (
+        "a removed reference (null at its id)",
+        "e['_state']['items'][I]['refs'] = {'rlink0001': None}",
+    ),
+]
+
+# Another framework's: its values are its definition's, but the shapes are fixed.
+STATE_BOGUS_GENERAL = [
+    ("an answer field that is not text", "e['_state']['items'][I]['surprise'] = {}"),
+    ("an answer that is not an object", "e['_state']['items'][I] = 'done'"),
+    ("a supplement that is not an object", "e['_state']['other'] = 1"),
+    ("a supplement under a key no framework id can be", "e['_state']['a.b'] = {}"),
+    ("a field a supplement does not have", "e['_state']['other'] = {'surprise': 1}"),
+    (
+        "a supplement's answer field that is not text",
+        "e['_state']['other'] = {'answers': {'x': {'surprise': {}}}}",
+    ),
+    ("a card field that is not text", "e['_state']['card']['x'] = 5"),
+]
+
+
+def state_closed(base: dict, where: str, cases: list, good: list = ()) -> None:
+    """The record (_state) is described closed: each bogus value is refused."""
+    item = next(iter(base["_state"]["items"]))
+    opt = next(iter((base["_state"].get("optica") or {}).get("answers") or {}), None)
+    head = f"I = {item!r}; O = {opt!r}; "
+    for name, broken in mutants(base, [(n, head + c) for n, c in cases]):
+        check(f"{where}: {name} is refused", bool(problems(broken)))
+    for name, fine in mutants(base, [(n, head + c) for n, c in good]):
+        check(f"{where}: {name} passes", not problems(fine), str(problems(fine)[:2]))
+
+
+def leaf_paths(value: object, path: tuple = ()):
+    """Every path in an export, taking the first element of each list and the first
+    two entries of a map keyed by ids (items, answers), which are alike."""
+    yield path
+    if isinstance(value, dict):
+        keys = list(value)
+        if len(keys) > 12 and all(isinstance(value[k], dict) for k in keys):
+            keys = keys[:2]
+        for k in keys:
+            yield from leaf_paths(value[k], (*path, k))
+    elif isinstance(value, list) and value:
+        yield from leaf_paths(value[0], (*path, 0))
+
+
+def as_precise_as_before(base: dict) -> None:
+    """D-82: the published contract is as precise as it was. Every mutant of a real
+    CHAI export that the schema before #177 refused, the schema now refuses too,
+    except a foreign export id, which it now allows on purpose (another framework's
+    export). Mutants: each path set to text, a number, null, true, an object and a
+    list, and deleted."""
+    print("As precise as it was: what the old schema refused, the new one refuses")
+    bogus = ["Bogus", 99, None, True, {}, []]
+    tried = caught = 0
+    loosened: list[str] = []
+    for path in leaf_paths(base):
+        if not path or path == ("schema",):
+            continue
+        for value in [*bogus, "<delete>"]:
+            e = copy.deepcopy(base)
+            node = e
+            for step in path[:-1]:
+                node = node[step]
+            if value == "<delete>":
+                if not isinstance(node, dict):
+                    continue
+                del node[path[-1]]
+            else:
+                node[path[-1]] = value
+            if not list(OLD.iter_errors(e)):
+                continue
+            tried += 1
+            if refused(e):
+                caught += 1
+            else:
+                loosened.append(f"{'/'.join(map(str, path))}={value!r}")
+    check(
+        f"the old schema refused {tried} mutants; the new one refuses them all",
+        tried > 50 and not loosened,
+        f"{len(loosened)} now pass: {loosened[:8]}",
+    )
+    e = copy.deepcopy(base)
+    e["schema"] = "example-review/1"
+    check(
+        "the one intended difference: another framework's export id",
+        bool(list(OLD.iter_errors(e))) and not refused(e),
+    )
+
+
+def older_record(page) -> None:
+    """A record an older dashboard wrote lacks fields normalize() now fills. The
+    dashboard hashed its filled-in copy and the server the stored record, so the
+    same record had two fingerprints (#177). It is the stored record's, everywhere
+    the dashboard shows or writes one, and the export's record is the stored one, so
+    a reader recomputes the same digest."""
+    print("An older record, missing fields the dashboard fills in")
+    pid = "p-older"
+    stored = page.evaluate(
+        """async (pid) => {
+          const doc = clone(S); delete doc.id;
+          doc.meta.solution = "An older record";
+          delete doc.meta.chaiUseCase; delete doc.access; delete doc.card;
+          delete doc.cardUpdatedAt; delete doc.createdBy;
+          for (const k of Object.keys(doc.gates).slice(1)) delete doc.gates[k];
+          await STORE.create(pid, doc);
+          return doc;
+        }""",
+        pid,
+    )
+    wait_until(page, f"PROJECTS.has({json.dumps(pid)})")
+    page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
+    settle(page)
+    want = LOADER.fingerprint({"_state": stored, "project_id": pid})
+    filled = page.evaluate("S.meta.chaiUseCase")
+    check("the dashboard fills it in to show it", filled == "", repr(filled))
+    exported = export_of(page)
+    got = {k: exported["fingerprint"][k] for k in ("md5", "sha256")}
+    check(
+        "its export's fingerprint is the stored record's, which the server's version"
+        " history gives it (regression)",
+        got == want,
+        f"{got} != {want}",
+    )
+    check(
+        "its export's record (_state) is the record as stored",
+        exported["_state"] == stored,
+        str(sorted(set(exported["_state"]) ^ set(stored))),
+    )
+    verified("load_export.py recomputes it", exported)
+    valid("it validates", exported)
+    shown = page.evaluate("changelogHTML()")
+    check(
+        "the history view shows the stored record's fingerprint",
+        want["md5"] in shown,
+        "not in the view",
+    )
+    n = page.evaluate("LOG.length")
+    page.evaluate("edit('meta.org', 'Later')")
+    wait_until(page, f"LOG.length > {n}")
+    # Saved: the save waits for typing to pause, so nothing pending is not soon.
+    wait_until(
+        page, "!Object.keys(pending).length && !Object.values(flushing).some(Boolean)"
+    )
+    after = json.loads(
+        page.evaluate(f"JSON.stringify(STORE.d.projects[{json.dumps(pid)}])")
+    )
+    want_after = LOADER.fingerprint({"_state": after, "project_id": pid})["md5"]
+    entry = page.evaluate("LOG[0].hash")
+    check(
+        "an edit's history entry carries the fingerprint of what was stored",
+        entry == want_after,
+        f"{entry} != {want_after}",
+    )
+    check(
+        "what was stored is the older record and the edit, nothing filled in",
+        "chaiUseCase" not in after["meta"] and "card" not in after,
+        str(sorted(after)),
+    )
+
+
+# A lone surrogate, which JavaScript allows in a string and UTF-8 cannot encode.
+LONE = """() => {
+  S.meta.solution = "Lone \\ud800 high, lone \\udfff low";
+  S.meta["\\udc00 a key"] = "x";
+  STORED.delete(S);  // written here, not saved: this copy is the record
+}"""
+
+
+def lone_surrogate(page) -> None:
+    """The file the dashboard downloads, read by load_export.py as a person runs it:
+    its fingerprint recomputes. load_export.py raised UnicodeEncodeError (#177)."""
+    print("A lone surrogate, end to end")
+    canon = page.evaluate("canonicalJSON({'k\\udc00': 'v\\ud800', p: '\\u{1F600}'})")
+    check(
+        "the dashboard writes a lone surrogate as its lowercase \\u escape",
+        canon == '{"k\\udc00":"v\\ud800","p":"\U0001f600"}',
+        canon,
+    )
+    page.evaluate(LONE)
+    text = page.evaluate("JSON.stringify(projectJSON(S), null, 2)")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "lone-chai-review.json"
+        path.write_text(text, encoding="utf-8")
+        run = subprocess.run(
+            [sys.executable, str(ROOT / "examples" / "load_export.py"), str(path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    check(
+        "load_export.py reads the downloaded file and its fingerprint matches"
+        " (regression)",
+        run.returncode == 0 and "matches the record" in run.stdout,
+        (run.stdout + run.stderr)[-300:],
     )
 
 
@@ -370,6 +808,7 @@ def published(browser) -> dict:
         "[...PROJECTS.values()].map(p => [p.meta.solution, p.id]).sort()"
     )
     first_export = None
+    on_exports: list[dict] = []
     for name, pid in pids:
         page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
         settle(page)
@@ -384,31 +823,74 @@ def published(browser) -> dict:
             "() => { const a = FACADES.optica.answers(S);"
             " const ids = ENGINES.optica.items.slice(0, 3).map(i => i.id);"
             " a[ids[0]] = {status: 'met', evidence: 'e'};"
-            " a[ids[1]] = {status: 'declined', declineReason: 'r'}; }"
+            " a[ids[1]] = {status: 'declined', declineReason: 'r'};"
+            # Written here, not saved: this copy is the record.
+            " STORED.delete(S); }"
         )
         on = export_of(page)
         check(
             f"{name}, OPTICA on: its record is in the export", "optica" in on["_state"]
         )
         valid(f"{name}, OPTICA on", on)
+        on_exports.append(on)
         verified(f"{name}, OPTICA on: fingerprint recomputed", on)
         n = page.evaluate("LOG.length")
         page.evaluate("setFrameworkEnabled('optica', false)")
         wait_until(page, f"LOG.length > {n}")
         settle(page)
 
-    print("Every language exports the same file")
-    pid = pids[0][1]
-    page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
-    settle(page)
-    english = without_stamp(export_of(page))
-    for loc in page.evaluate("[...LOCALE_CHOICES, Locale.PSEUDO]"):
+    print("Every language exports the same file, for every sample")
+    # A flag's text is English in the export (and the portfolio CSV): a dated flag
+    # wrote its date in the reader's language ("5. Sept. 2026"), so the German
+    # export of a project with a review due differed from the English one (#177).
+    locales = page.evaluate("[...LOCALE_CHOICES, Locale.PSEUDO]")
+    dated = 0
+    for name, pid in pids:
+        page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
+        settle(page)
+        english = without_stamp(export_of(page))
+        for f in english["flags"]:
+            if (f.get("msg") or [""])[0] in ("flag.reviewOverdue", "flag.reviewDue"):
+                dated += 1
+                check(
+                    f"{name}: a dated flag's date is written in English",
+                    bool(re.search(r"\b[A-Z][a-z]{2} \d{1,2}, \d{4}$", f["text"])),
+                    f["text"],
+                )
+        differ = []
+        for loc in locales:
+            page.evaluate(f"setLocale({json.dumps(loc)}); relocalize()")
+            other = without_stamp(export_of(page))
+            if other != english:
+                diff = [k for k in english if other.get(k) != english[k]]
+                differ.append(f"{loc}: {diff} {other.get('flags')}"[:240])
+        page.evaluate("setLocale('en'); relocalize()")
+        check(
+            f"{name}: the export is the English one in all {len(locales)} languages",
+            not differ,
+            "; ".join(differ[:2]),
+        )
+    check(
+        "a sample has a dated flag, so the languages were compared on one",
+        dated > 0,
+        "no sample has a review flag",
+    )
+    differ = []
+    english_csv = page.evaluate("exportCSV()")
+    for loc in locales:
         page.evaluate(f"setLocale({json.dumps(loc)}); relocalize()")
-        other = without_stamp(export_of(page))
-        check(f"{loc}: the export is the English one", other == english)
+        other = page.evaluate("exportCSV()")
+        if other != english_csv:
+            differ.append(f"{loc}: {other[:200]}")
     page.evaluate("setLocale('en'); relocalize()")
+    check(
+        "the portfolio CSV is the English one in every language",
+        not differ,
+        str(differ),
+    )
 
     print("An empty project, references, a hostile one, one keyed by numbers")
+    pid = pids[0][1]
     page.evaluate(
         "() => { S = normalize(blankProject('')); S.id = 'p-empty'; CUR = 'p-empty'; }"
     )
@@ -427,9 +909,9 @@ def published(browser) -> dict:
 
     hostile_problems(page, pid, "published")
 
+    # Not validated: CHAI's card has no field named "9", and the schema says so.
     page.evaluate(NUMERIC)
     numeric = export_of(page)
-    valid("a record keyed by numbers", numeric)
     verified("a record keyed by numbers: fingerprint recomputed (regression)", numeric)
 
     print("A new project's first history entry carries its fingerprint")
@@ -441,13 +923,56 @@ def published(browser) -> dict:
     page.evaluate(f"openProject({json.dumps(new_id)}, 'setup')")
     wait_until(page, "LOG.length >= 1")
     settle(page)
-    entry, shown = page.evaluate("[LOG[LOG.length - 1].hash, contentHash(S)]")
+    entry, shown = page.evaluate(
+        "[LOG[LOG.length - 1].hash, contentHash(storedRecord(S))]"
+    )
     check(
         "the 'Project created' entry's hash is the setup page's (regression)",
         entry == shown,
         f"{entry} != {shown}",
     )
     validator_fails(first_export)
+
+    print("Every field the export always writes is required")
+    with_flags = next(
+        (e for e in on_exports if e["flags"] and e["metrics"]), on_exports[0]
+    )
+    check(
+        "an export with flags and metrics to drop them from", bool(with_flags["flags"])
+    )
+    required_fields(with_flags, "published", chai=True)
+
+    print("The record (_state) is described closed")
+    rich = copy.deepcopy(with_flags)
+    first = next(iter(rich["_state"]["items"]))
+    rich["_state"]["items"][first]["refs"] = {
+        "rlink0001": {
+            "title": "t",
+            "url": "https://example.org/",
+            "date": "2026-03-04",
+            "at": "2026-03-04T10:00:00Z",
+        },
+        "rfile0001": {
+            "title": "",
+            "url": "",
+            "date": "",
+            "at": "2026-03-05T10:00:00Z",
+            "file": {"name": "a.pdf", "size": 1, "sha256": "ab" * 32},
+        },
+    }
+    rich["_state"]["card"] = {"name": "A card field"}
+    check(
+        "the record it starts from is valid",
+        not problems(rich) and bool(rich["_state"]["metrics"]),
+        str(problems(rich)[:3]),
+    )
+    state_closed(rich, "published", STATE_BOGUS_CHAI, STATE_GOOD_CHAI)
+    as_precise_as_before(rich)
+
+    older_record(page)
+    page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
+    settle(page)
+    lone_surrogate(page)
     check("the published build raised no error", not errors, "; ".join(errors[:3]))
     page.close()
     return first_export
@@ -507,6 +1032,8 @@ def example_build(browser) -> None:
                 and e["phase"] in phases,
                 json.dumps({k: e[k] for k in ("phase", "scores")}),
             )
+        required_fields(exports[0], "example", chai=False)
+        state_closed(exports[0], "example", STATE_BOGUS_GENERAL)
         with tempfile.TemporaryDirectory() as files:
             path = Path(files) / "example-review.json"
             path.write_text(json.dumps(exports[0]), encoding="utf-8")

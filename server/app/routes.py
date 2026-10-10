@@ -626,9 +626,10 @@ def _utf16(key: str) -> bytes:
 def content_md5(doc: dict[str, Any]) -> str:
     """The same fingerprint the browser computes, over the same canonical form.
 
-    ``doc`` is the record as the browser holds it, its id included (``_snapshot``
-    adds it), so a revision's fingerprint is the one the setup page and the
-    exports show for the same record.
+    ``doc`` is the record as stored, its id included (``_snapshot`` adds it). The
+    dashboard hashes the stored record too, not the copy it fills in for display
+    (an older record lacks fields it fills), so a revision's fingerprint is the
+    one the setup page and the exports show for the same record (#177).
 
     MD5 because that is what the record is labeled with; it answers "is this
     the same version?" and nothing stronger. It is not a tamper seal, and
@@ -638,7 +639,10 @@ def content_md5(doc: dict[str, Any]) -> str:
     # Not sort_keys: _canonical has put the keys in the browser's order already,
     # and sorting again would put them back in Python's.
     canon = _json.dumps(_canonical(doc), separators=(",", ":"), ensure_ascii=False)
-    return hashlib.md5(canon.encode("utf-8")).hexdigest()
+    # A lone surrogate is written as its \u escape, lowercase, as JSON.stringify
+    # writes it; UTF-8 cannot encode it, and every other character encodes, so
+    # backslashreplace touches nothing else (#177).
+    return hashlib.md5(canon.encode("utf-8", "backslashreplace")).hexdigest()
 
 
 async def _snapshot(

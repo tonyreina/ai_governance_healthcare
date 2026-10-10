@@ -1,5 +1,5 @@
 {
-  "about": "One record, and the fingerprint all three implementations must give it (#177): the dashboard (tests/test_export_schema.py), examples/load_export.py and the server (server/tests/test_fingerprint.py). Integer-like keys, keys whose order differs between UTF-16 code units and code points, every volatile field at more than one depth, and text that JSON and UTF-8 treat specially. Regenerate only if the rule changes, and say why.",
+  "about": "One record, and the fingerprint all three implementations must give it (#177): the dashboard (tests/test_export_schema.py), examples/load_export.py and the server (server/tests/test_fingerprint.py). Integer-like keys, keys whose order differs between UTF-16 code units and code points, every volatile field at more than one depth, text that JSON and UTF-8 treat specially, and lone surrogates (in a key and in a value), which JSON.stringify writes as \\u escapes. Regenerate only if the rule changes, and say why.",
   "record": {
     "id": "p-golden",
     "meta": {
@@ -7,7 +7,8 @@
       "developer": "Acme \"Health\" \\ Labs\nLine two\ttabbed",
       "scope": "Zürich;   a line separator; \u0007 a bell",
       "riskTier": "High",
-      "updatedAt": "nested volatile fields are left out too"
+      "updatedAt": "nested volatile fields are left out too",
+      "lone": "a \ud800 b \udfff c"
     },
     "items": {
       "1": {
@@ -34,7 +35,8 @@
       "￿ high in the BMP": "sorts after the emoji by UTF-16, before it by code point",
       "😀 emoji": "an astral key",
       " private use": "x",
-      "a": "plain"
+      "a": "plain",
+      "\udc00 a lone low surrogate": "sorts by its code unit, DC00"
     },
     "gates": {
       "A": {
@@ -81,6 +83,6 @@
     },
     "generated": "left out"
   },
-  "md5": "5124bf6879efce14ddb348e7e1db6bb4",
-  "sha256": "dd3c6de589f5052364a7d79b8b0886c7ea0f4d031603e881bf016b3466cb21f7"
+  "md5": "b244f1b194c72b09e0d1a07e1dc22f1a",
+  "sha256": "cdf8d1e04b91d2498460b3a914e08a2931086474bcbb30b1535ff05e6955dfd2"
 }

@@ -1748,25 +1748,49 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   (D-79) failed it. It now states the structure every export shares, with
   `schema` matching `<id>-review/<n>` (the pattern a definition's
   `export.schemaId` must match), and keeps CHAI's lists under an
-  `if schema == "chai-review/2"` condition, so the published contract is as
-  precise as it was. Another framework's definition-made values (item ids,
-  statuses, categories, phases, checkpoints) are stated by its definition, and
-  `tests/test_export_schema.py` checks the example's export against its
-  definition, and CHAI's lists in the schema against CHAI's definition.
+  `if schema == "chai-review/2"` condition, so the published contract refuses
+  everything it refused before, but for another framework's export id.
+  That is tested, not asserted: every mutant of a real CHAI export (each path
+  set to text, a number, null, true, an object and a list, and deleted) that the
+  schema before #177 refuses (`tests/fixtures/project.schema.before-177.json`),
+  the new one refuses too. The first version of this change failed it: it had
+  lost the metric categories of the record (`_state.metrics[].cat`). Another
+  framework's definition-made values (item ids, statuses, categories, phases,
+  checkpoints) are stated by its definition, and `tests/test_export_schema.py`
+  checks the example's export against its definition, and CHAI's lists in the
+  schema against CHAI's definition, OPTICA's and the page's.
 - **What the exports wrote and the schema did not say is now described, not
   removed:** `flags[].msg` (the catalog key the dashboard shows a flag with,
   exported since #80), `_state.access`, `createdBy`, `updatedBy`,
   `meta.framework` (R-67) and a supplement's record (`_state.optica`). The
   published export is unchanged, byte for byte (the snapshot shows it).
-- **The schema stays open; the test closes it.** The published schema allows
-  fields it does not name, so a reader's validator does not break when a field
-  is added. The test validates every export a second time with every described
-  object closed, so a field projectJSON() adds without describing it fails CI.
-- **The fingerprint rule is one rule.** The skip list is written in three
-  programs (the dashboard, the server, `examples/load_export.py`) and two
-  sentences (the export's `of`, `docs/exports.md`). They are kept as copies,
-  each in its own language, and `tests/test_fingerprint_skip.py` reads all of
-  them (and the dashboard's comment giving each field's reason) and fails on any
+- **Every field the export always writes is required**, at the top and inside
+  the objects it always writes whole (a checklist row, a flag, the fingerprint,
+  the provenance, CHAI's scores and model card), so dropping one from
+  projectJSON() fails CI: the test drops each in turn. An export from before
+  the provenance and the fingerprint (#93, #150) no longer validates; keeping
+  them optional for it would let the current export drop them unnoticed.
+- **The derived fields stay open; the test closes them.** The published schema
+  allows fields it does not name in the derived objects, so a reader's validator
+  does not break when one is added. The test validates every export a second
+  time with every described object closed, so a field projectJSON() adds
+  without describing it fails CI.
+- **The record (`_state`) is described as the dashboard writes it.** An answer
+  has a status, evidence, an owner, a due date, references (each a closed
+  object under a reference id) and, only where a status asks for one, a reason
+  (string-valued, under the field the definition names). A key of the record
+  that is not one the schema names is a supplement's record: it must be a
+  framework id, and a supplement has only `enabled` and `answers`. Under the
+  CHAI condition the record is closed: its keys are the ones named and
+  `optica`, its item ids CHAI's, its answers' statuses and fields CHAI's (and
+  OPTICA's, with `declineReason`), its card fields and checkpoints CHAI's. It
+  was open (`_state.items.*` any object, any key a supplement), so a bogus
+  status or an unknown key passed.
+- **The fingerprint rule is one rule.** The skip list is written in six places:
+  three programs (the dashboard, the server, `examples/load_export.py`), two
+  sentences (the export's `of`, `docs/exports.md`) and the dashboard's comment
+  giving each field's reason. They are kept as copies, each in its own
+  language, and `tests/test_fingerprint_skip.py` reads all six and fails on any
   difference, with a mutation adding and removing a field in each.
 - **Fixed by this change, each a case of the same record hashing two ways:**
   the dashboard serialized integer-like keys (`"9"`, `"10"`) in numeric order,
@@ -1782,6 +1806,38 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   digests by all three implementations. Revisions the server stored before this
   keep the hash they were stored with (history is append-only), so their
   fingerprints differ from the dashboard's.
+- **The fingerprint is of the record as stored.** The dashboard fills in what
+  an older record lacks (`meta.chaiUseCase`, `card`, `access`, a checkpoint) to
+  show it, and hashed that filled-in copy, while the server hashed the stored
+  record, so an older record had two fingerprints. The dashboard now keeps the
+  record as the store holds it beside the filled-in copy (`storedRecord`,
+  moved by every patch it sends), hashes that on the setup page, in each
+  history entry and in every export, and exports it as `_state`, so a reader
+  recomputes the server's digest. Rejected: normalizing on the server (it would
+  need each framework's `normalize()`, which is the dashboard's code, and would
+  change every stored revision's digest); writing the filled-in fields back
+  when a record is opened (a read that writes, and a reader cannot write).
+- **A lone surrogate is written as `JSON.stringify` writes it,** its lowercase
+  `\u` escape, so the canonical text is UTF-8 the dashboard can encode. Python's
+  `json.dumps` wrote the surrogate itself, which UTF-8 cannot encode, so
+  `load_export.py` and the server raised `UnicodeEncodeError` on such a record;
+  both now encode with `backslashreplace`, which changes nothing else. Rejected:
+  U+FFFD, which `TextEncoder` would substitute for a raw surrogate but never sees
+  one, since `JSON.stringify` has escaped it; Python would then disagree with
+  the browser. The server refuses such a record anyway (PostgreSQL's `jsonb`
+  cannot hold one), so it reaches only a browser-only export.
+- **The rule is stated whole where a reader reads it.** The export's `of`
+  sentence and `docs/exports.md` say the record as stored, the key order (UTF-16
+  code units) and the lone surrogate's escape, and
+  `tests/test_fingerprint_skip.py` fails if either stops saying one. A skip list
+  is read where it is written, so the test also fails if a program does
+  anything with its list but test membership (`.has()`, `in`): an `.add()`, a
+  second assignment or another module setting it would make the list the
+  program uses differ from the one the test read.
+- **A flag's text is English, its dates included.** The engine wrote a review
+  flag's date in the reader's language ("5. Sept. 2026" in a German export),
+  while the export and the portfolio CSV are documented as English; the flag's
+  `msg` carries the date for the dashboard to show in the reader's language.
 - **Not covered:** numbers that are not integers are written by JavaScript and
   Python differently in some ranges (`1e-7`, `1e21`); the dashboard stores none,
   so the rule does not specify them.

@@ -399,7 +399,6 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Status:** enforced
 - **Enforced by:**
   `.pre-commit-config.yaml::build-app`
-  `.pre-commit-config.yaml::check-app`
 
 ### C-32 A test cannot be added and quietly left out of CI
 

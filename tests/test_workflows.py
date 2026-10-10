@@ -12,7 +12,8 @@ What is asserted, and why each one earns its place:
 * every tests/test_*.py file is reachable from a pixi task, so a test cannot be
   orphaned either;
 * REQUIRE_TESTS is set, so a suite that cannot run fails instead of skipping
-  (a skip exits 0 and reads as a pass);
+  (a skip exits 0 and reads as a pass), in test.yml and in every workflow that
+  runs the prek hooks (check-app among them skips `node --check` without node);
 * nothing may `continue-on-error`, and every job has a timeout;
 * the Postgres in CI is the major version compose.yaml pins;
 * one aggregate job depends on all the others, so branch protection can require a
@@ -37,6 +38,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
 TEST_WORKFLOW = WORKFLOWS / "test.yml"
+LINT_WORKFLOW = WORKFLOWS / "lint.yml"
 
 TEST_TASK_PREFIX = "test-"
 REQUIRE_VAR = "REQUIRE_TESTS"
@@ -128,6 +130,17 @@ def skips_allowed(workflow: dict) -> list[str]:
             f"{REQUIRE_VAR} is not set at workflow level: a skip would read as a pass"
         ]
     )
+
+
+def hooks_may_skip(workflows: dict[str, dict]) -> list[str]:
+    """Every workflow that runs the prek hooks sets REQUIRE_TESTS: a hook that
+    cannot do part of its work (check-app without node) then fails, not skips."""
+    return [
+        f"{name} runs prek but {problem}"
+        for name, wf in workflows.items()
+        if any("prek run" in cmd for cmd in run_commands(wf))
+        for problem in skips_allowed(wf)
+    ]
 
 
 def swallowed_failures(workflow: dict) -> list[str]:
@@ -278,6 +291,17 @@ def main() -> int:
     )
     check("there are test files to cover", len(files) >= 10)
 
+    every = {path.name: load(path) for path in sorted(WORKFLOWS.glob("*.yml"))}
+    check(
+        "every workflow running the prek hooks sets REQUIRE_TESTS",
+        not hooks_may_skip(every),
+        "; ".join(hooks_may_skip(every)),
+    )
+    check(
+        "lint.yml runs the prek hooks (so the rule above covers it)",
+        any("prek run" in cmd for cmd in run_commands(load(LINT_WORKFLOW))),
+    )
+
     print("Every workflow file")
     for path in sorted(WORKFLOWS.glob("*.yml")):
         wf = load(path)
@@ -322,6 +346,13 @@ def main() -> int:
     check("REQUIRE_TESTS removed is noticed", bool(skips_allowed(broken)))
     broken["env"][REQUIRE_VAR] = "0"
     check("REQUIRE_TESTS set to 0 is noticed", bool(skips_allowed(broken)))
+
+    broken = copy.deepcopy(every)
+    del broken[LINT_WORKFLOW.name]["env"][REQUIRE_VAR]
+    check(
+        "REQUIRE_TESTS removed from lint.yml, which runs prek, is noticed",
+        any(LINT_WORKFLOW.name in p for p in hooks_may_skip(broken)),
+    )
 
     broken = copy.deepcopy(workflow)
     jobs(broken)["browser"]["steps"][-1]["continue-on-error"] = True

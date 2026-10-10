@@ -165,7 +165,8 @@ repos:
         pass_filenames: false
         files: '^(app/|scripts/(build_app|build_manifest|framework_enums)\.py$|docs/app/manifest\.json$)'
 
-      # Syntax and duplicate-declaration checks on the concatenated bundle.
+      # Syntax, undefined names, use before declaration and duplicate declarations,
+      # on the published page and a build of each app/frameworks/*/build.json (#176).
       - id: check-app
         name: check the built dashboard
         entry: pixi run check-app

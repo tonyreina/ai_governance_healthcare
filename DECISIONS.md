@@ -1489,5 +1489,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   statuses for one project); leaving CHAI's names in the shell behind
   `typeof` checks (a framework could still not be removed).
 - Found and left for step 2: catalog strings use CHAI's nouns for generic
-  parts ("Stage {n}" on the portfolio track, "Checkpoints", "Principle").
+  parts ("Stage {n}" on the portfolio track, "Checkpoints", "Principle"); and
+  the server is not framework-neutral, because the retention SQL
+  (`server/migrations/008_retention.sql`) decides retirement, and so when
+  disposal is due, from CHAI's own "Stop" and "Retire" decisions.
 - Source: #168; R-63.

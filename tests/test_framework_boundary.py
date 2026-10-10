@@ -56,7 +56,9 @@ ALLOWED_LITERALS = frozenset(
     }
 )
 FRAMEWORK_WORD = re.compile(r"\b(chai|optica)\b", re.I)
-STRING = re.compile(r"""(["'`])((?:\\.|(?!\1).)*)\1""")
+# The two alternatives never match the same character (a backslash only starts an
+# escape), so a run of backslashes cannot make this backtrack (CodeQL).
+STRING = re.compile(r"""(["'`])((?:\\.|(?!\1)[^\\])*)\1""")
 # Names the engine replaced: defined nowhere now (#168 PR B1).
 RETIRED = (
     "STAGES",
@@ -395,6 +397,13 @@ def main() -> int:
         bool(literals('label = "CHAI use case";')),
     )
     check("a storage key is not", not literals('localStorage.getItem("chai-ui-v2")'))
+    check(
+        "an escaped quote stays inside its string",
+        bool(literals(r'x = "say \"CHAI\" here";')),
+    )
+    t0 = time.time()
+    literals('"' + "\\a" * 5000)
+    check("a run of backslashes cannot make it crawl", time.time() - t0 < 1.0)
 
     print("A use slipped back in is noticed (mutation)")
     check("a direct call", bool(uses("const x = labelHTML(p);", names)))

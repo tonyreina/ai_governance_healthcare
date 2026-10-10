@@ -91,7 +91,13 @@ def capture() -> tuple[dict[str, str], list[str]]:
     errors: list[str] = []
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
-        page = browser.new_page(viewport={"width": 1400, "height": 1000})
+        # The clock is frozen to an instant; the zone and locale it is shown in are
+        # pinned too, or a date renders differently on a machine in another zone.
+        page = browser.new_page(
+            viewport={"width": 1400, "height": 1000},
+            timezone_id="America/New_York",
+            locale="en-US",
+        )
         page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
         page.on(
             "console",

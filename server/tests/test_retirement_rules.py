@@ -10,23 +10,37 @@ change them; that their history cannot be edited even by the owner; and that
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import re
 from pathlib import Path
 
 import asyncpg
 import pytest
+from app.config import Settings
+from app.db import MIGRATION_LOCK_ID
+from app.main import create_app
 from app.retirement import (
     ChangeSource,
     ManifestError,
+    SyncOutcome,
     load_manifest,
     parse_manifest,
+    record_framework,
     rule_set_hash,
+    sync_rules,
 )
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from . import manifests
-from .conftest import APP_ROLE_URL, DB_URL, owner_connection, requires_db
+from .conftest import (
+    APP_ROLE_URL,
+    DB_URL,
+    make_settings,
+    owner_connection,
+    requires_db,
+)
 
 MIGRATION = (
     Path(__file__).resolve().parent.parent / "migrations" / "010_retirement_rules.sql"
@@ -279,22 +293,314 @@ async def test_the_rules_history_is_append_only_even_for_the_owner(
 # --- /api/health -------------------------------------------------------------------
 
 
+async def health_rules(client: AsyncClient) -> dict:
+    client.app.state.db._rules_cache = None  # type: ignore[attr-defined]
+    return (await client.get("/api/health")).json()["retirement_rules"]
+
+
 @requires_db
 async def test_health_reports_the_rule_set_the_database_uses(
     client: AsyncClient, tmp_path: Path
 ) -> None:
     body = (await client.get("/api/health")).json()
-    assert body["retirement_rules"] == seed_hash()
+    # 010's seed alone: CHAI's rules, which no manifest has confirmed yet.
+    assert body["retirement_rules"] == {
+        "hash": seed_hash(), "primary": "chai", "synced": False,
+    }  # fmt: skip
     # Everything it reported before is still there.
     assert {"status", "events", "version", "database", "db_role",
             "idle_lock_minutes", "sign_out_url", "auth_mode"} <= set(body)  # fmt: skip
 
+    # The default build's manifest confirms the seed: same hash, now synced.
+    done = manifests.run_migrate(
+        DB_URL, RETIREMENT_MANIFEST=str(manifests.DEFAULT_MANIFEST)
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert await health_rules(client) == {
+        "hash": seed_hash(), "primary": "chai", "synced": True,
+    }  # fmt: skip
+
     path = manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
     wanted = manifests.manifest_of(path)["ruleSetHash"]
     done = manifests.run_migrate(
-        DB_URL, RETIREMENT_MANIFEST=str(path), RETIREMENT_RULES_ACK=wanted
+        DB_URL,
+        RETIREMENT_MANIFEST=str(path),
+        RETIREMENT_RULES_ACK=manifests.transition(seed_hash(), wanted),
     )
     assert done.returncode == 0, done.stdout + done.stderr
-    client.app.state.db._rules_cache = None  # type: ignore[attr-defined]
-    body = (await client.get("/api/health")).json()
-    assert body["retirement_rules"] == wanted != seed_hash()
+    assert await health_rules(client) == {
+        "hash": wanted, "primary": "acme", "synced": True,
+    }  # fmt: skip
+    assert wanted != seed_hash()
+
+
+# --- the stamp: only the active primary's (R-66) -------------------------------------
+
+BAD_STAMPS = {
+    "wrong case": {"id": "CHAI"},
+    "a supplement's id": {"id": "optica"},
+    "an unknown id": {"id": "no-such-framework"},
+    "not an object": "chai",
+    "null": None,
+    "an id that is not text": {"id": 1},
+    "an empty id": {"id": ""},
+    "another key besides the id": {"id": "chai", "version": "1"},
+}
+
+
+@requires_db
+@pytest.mark.parametrize("case", sorted(BAD_STAMPS))
+async def test_the_api_refuses_a_stamp_that_is_not_the_active_primary(
+    client: AsyncClient, case: str
+) -> None:
+    stamp = BAD_STAMPS[case]
+    created = await client.post(
+        "/api/projects/bad", json={"meta": {"solution": "x", "framework": stamp}}
+    )
+    assert created.status_code == 422, created.text
+    assert 'exactly {"id": "chai"}' in created.json()["detail"]
+    async with owner_connection() as conn:
+        assert await conn.fetchval("SELECT count(*) FROM projects") == 0
+
+    assert (await client.post("/api/projects/p", json={"meta": {}})).status_code == 201
+    patched = await client.patch("/api/projects/p", json={"meta": {"framework": stamp}})
+    assert patched.status_code == 422, patched.text
+    assert "framework" not in (await stored_doc("p")).get("meta", {})
+
+
+async def stored_doc(pid: str) -> dict:
+    async with owner_connection() as conn:
+        text = await conn.fetchval("SELECT doc::text FROM projects WHERE id = $1", pid)
+    return json.loads(text)
+
+
+@requires_db
+async def test_the_api_accepts_no_stamp_or_exactly_the_active_primarys(
+    client: AsyncClient,
+) -> None:
+    assert (
+        await client.post("/api/projects/none", json={"meta": {}})
+    ).status_code == 201
+    created = await client.post(
+        "/api/projects/ok", json={"meta": {"framework": {"id": "chai"}}}
+    )
+    assert created.status_code == 201, created.text
+    patched = await client.patch(
+        "/api/projects/none", json={"meta": {"framework": {"id": "chai"}}}
+    )
+    assert patched.status_code == 200, patched.text
+    # A patch that does not touch the stamp is not checked against it.
+    assert (
+        await client.patch("/api/projects/ok", json={"meta": {"solution": "y"}})
+    ).status_code == 200
+
+
+@requires_db
+async def test_a_stamp_follows_the_primary_the_latest_sync_recorded(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    created = await client.post(
+        "/api/projects/old", json={"meta": {"framework": {"id": "chai"}}}
+    )
+    assert created.status_code == 201
+    path = manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
+    wanted = manifests.manifest_of(path)["ruleSetHash"]
+    done = manifests.run_migrate(
+        DB_URL,
+        RETIREMENT_MANIFEST=str(path),
+        RETIREMENT_RULES_ACK=manifests.transition(seed_hash(), wanted),
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+
+    chai = await client.post(
+        "/api/projects/c", json={"meta": {"framework": {"id": "chai"}}}
+    )
+    assert chai.status_code == 422
+    assert 'exactly {"id": "acme"}' in chai.json()["detail"]
+    acme = await client.post(
+        "/api/projects/a", json={"meta": {"framework": {"id": "acme"}}}
+    )
+    assert acme.status_code == 201, acme.text
+    # A record stamped before keeps its stamp through an unrelated patch...
+    assert (
+        await client.patch("/api/projects/old", json={"meta": {"solution": "z"}})
+    ).status_code == 200
+    # ...but a patch that drops the active primary's stamp, by replacing meta,
+    # would move the record to CHAI's rules, and is refused.
+    dropped = await client.patch("/api/projects/a", json={"meta": None})
+    assert dropped.status_code == 422, dropped.text
+    assert (await stored_doc("a"))["meta"]["framework"] == {"id": "acme"}
+
+
+@requires_db
+async def test_a_correctly_stamped_record_retires(client: AsyncClient) -> None:
+    async with owner_connection() as conn:
+        date = str(await conn.fetchval("SELECT (now() - interval '7 years')::date"))
+    created = await client.post(
+        "/api/projects/stamped",
+        json={
+            "meta": {"framework": {"id": "chai"}},
+            "gates": {"D": {"decision": "Retire", "date": date}},
+        },
+    )
+    assert created.status_code == 201, created.text
+    async with owner_connection() as conn:
+        await conn.execute(
+            "UPDATE projects SET updated_at = now() - interval '7 years'"
+            " WHERE id = 'stamped'"
+        )
+        due = {r[0] for r in await conn.fetch("SELECT project_id FROM retention_due()")}
+    assert "stamped" in due
+
+
+STAMP_SHAPES = [
+    ({}, "chai"),
+    ({"meta": {"framework": {"id": "acme"}}}, "acme"),
+    ({"meta": {"framework": {"id": ""}}}, "chai"),
+    ({"meta": {"framework": None}}, "chai"),
+    ({"meta": None}, "chai"),
+    ({"meta": "text"}, "chai"),
+    ({"meta": {"framework": {"version": "1"}}}, "chai"),
+]
+
+
+def test_the_api_reads_a_stamp_as_010_does() -> None:
+    for doc, expected in STAMP_SHAPES:
+        assert record_framework(doc) == expected, doc
+
+
+@requires_db
+async def test_the_sql_reads_a_stamp_as_the_api_does(client: AsyncClient) -> None:
+    # The API compares stamps with app.retirement.record_framework(); 010 decides
+    # retirement with its own record_framework(). They must agree.
+    async with owner_connection() as conn:
+        for doc, expected in STAMP_SHAPES:
+            sql = await conn.fetchval(
+                "SELECT record_framework($1::text::jsonb)", json.dumps(doc)
+            )
+            assert sql == record_framework(doc) == expected, doc
+
+
+# --- the API's own migration path (RUN_MIGRATIONS=true) ------------------------------
+
+
+def fallback_settings(**overrides: object) -> Settings:
+    """The single-role setup: the API holds the owner's credential and migrates."""
+    return make_settings(
+        database_url=DB_URL, app_database_url="", run_migrations=True, **overrides
+    )
+
+
+async def health_of(app) -> dict:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://api.test"
+    ) as http:
+        return (await http.get("/api/health")).json()
+
+
+@requires_db
+async def test_the_api_migrating_itself_syncs_from_its_manifest(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    path = manifests.write(
+        tmp_path / "m.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
+    )
+    wanted = manifests.manifest_of(path)["ruleSetHash"]
+    ack = manifests.transition(seed_hash(), wanted)
+
+    # The same refusal as the migrate job: the API does not start.
+    app = create_app(fallback_settings(retirement_manifest=str(path)))
+    with pytest.raises(RuntimeError, match=f"RETIREMENT_RULES_ACK={ack}"):
+        async with app.router.lifespan_context(app):
+            pass
+    assert ("chai", "C", "Withdraw") not in await rules_now()
+    # A malformed manifest stops it too.
+    broken = tmp_path / "broken.json"
+    broken.write_text("{", encoding="utf-8")
+    app = create_app(fallback_settings(retirement_manifest=str(broken)))
+    with pytest.raises(RuntimeError, match="not JSON"):
+        async with app.router.lifespan_context(app):
+            pass
+    assert await changes() == 1
+
+    app = create_app(
+        fallback_settings(retirement_manifest=str(path), retirement_rules_ack=ack)
+    )
+    async with app.router.lifespan_context(app):
+        body = await health_of(app)
+    assert body["retirement_rules"] == {
+        "hash": wanted, "primary": "chai", "synced": True,
+    }  # fmt: skip
+    assert ("chai", "C", "Withdraw") in await rules_now()
+    assert await changes() == 2
+
+
+@requires_db
+async def test_the_api_migrating_itself_without_a_manifest_says_so(
+    client: AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.WARNING)
+    app = create_app(fallback_settings())
+    async with app.router.lifespan_context(app):
+        body = await health_of(app)
+    assert body["retirement_rules"]["synced"] is False
+    assert any(
+        "RETIREMENT_MANIFEST is not set" in r.getMessage()
+        and "synced=false" in r.getMessage()
+        for r in caplog.records
+    ), [r.getMessage() for r in caplog.records]
+    assert await changes() == 1
+
+
+def test_the_manifest_settings_are_read_from_the_environment(monkeypatch) -> None:
+    monkeypatch.setenv("RUN_MIGRATIONS", "true")
+    monkeypatch.delenv("APP_POSTGRES_PASSWORD", raising=False)
+    monkeypatch.delenv("APP_DATABASE_URL", raising=False)
+    monkeypatch.setenv("RETIREMENT_MANIFEST", " /app/manifest.json ")
+    monkeypatch.setenv("RETIREMENT_RULES_ACK", "ab" * 32)
+    settings = Settings.from_env()
+    assert settings.retirement_manifest == "/app/manifest.json"
+    assert settings.retirement_rules_ack == "ab" * 32
+
+
+# --- the migration lock ----------------------------------------------------------------
+
+
+@requires_db
+async def test_two_syncs_serialize_on_the_migration_lock(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    path = manifests.write(
+        tmp_path / "m.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
+    )
+    manifest = load_manifest(str(path))
+    ack = manifests.transition(seed_hash(), manifest.rule_set_hash)
+    holder = await asyncpg.connect(DB_URL)
+    syncer = await asyncpg.connect(DB_URL)
+    try:
+        # Another migrate job holds the lock (as db.migrate() and sync_rules do).
+        await holder.execute("BEGIN")
+        await holder.execute("SELECT pg_advisory_xact_lock($1)", MIGRATION_LOCK_ID)
+        task = asyncio.create_task(sync_rules(syncer, manifest, ack))
+        pid = syncer.get_server_pid()
+        waiting = False
+        for _ in range(100):
+            waiting = await holder.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid = $1"
+                " AND locktype = 'advisory' AND NOT granted)",
+                pid,
+            )
+            if waiting or task.done():
+                break
+            await asyncio.sleep(0.05)
+        # The sync waits for the lock and has changed nothing. Without the lock it
+        # would have run straight through, and this fails.
+        assert waiting and not task.done()
+        assert await changes() == 1
+        await holder.execute("COMMIT")
+        result = await asyncio.wait_for(task, 10)
+        assert result.outcome is SyncOutcome.CHANGED
+        assert await changes() == 2
+    finally:
+        await holder.close()
+        await syncer.close()

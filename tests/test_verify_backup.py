@@ -194,11 +194,33 @@ def main() -> int:
     )
     # The retirement rules (D-76): required from the migration that made them a table.
     ruled = [*good.migrations, vb.RULES_MIGRATION]
-    with_rules = {**good.counts, vb.RULES_TABLE: 4}
+    with_rules = {**good.counts, vb.RULES_TABLE: 4, vb.RULES_HISTORY: 1}
+    ruled_triggers = {**good.triggers, vb.RULES_HISTORY: 1}
     check(
         "a restored database with its retirement rules has no problems",
-        vb.problems_for(vb.Report(with_rules, good.triggers, ruled)) == [],
+        vb.problems_for(vb.Report(with_rules, ruled_triggers, ruled)) == [],
+        str(vb.problems_for(vb.Report(with_rules, ruled_triggers, ruled))),
+    )
+    check(
+        "the rules' history restored without its append-only trigger is a problem",
+        any(
+            vb.RULES_HISTORY in p and "trigger" in p
+            for p in vb.problems_for(vb.Report(with_rules, good.triggers, ruled))
+        ),
         str(vb.problems_for(vb.Report(with_rules, good.triggers, ruled))),
+    )
+    check(
+        "the rules' history missing after its migration is a problem",
+        any(
+            vb.RULES_HISTORY in p and "missing" in p
+            for p in vb.problems_for(
+                vb.Report(
+                    {k: v for k, v in with_rules.items() if k != vb.RULES_HISTORY},
+                    ruled_triggers,
+                    ruled,
+                )
+            )
+        ),
     )
     check(
         "the rules table missing after its migration is a problem",
@@ -212,7 +234,7 @@ def main() -> int:
         any(
             "empty" in p
             for p in vb.problems_for(
-                vb.Report({**with_rules, vb.RULES_TABLE: 0}, good.triggers, ruled)
+                vb.Report({**with_rules, vb.RULES_TABLE: 0}, ruled_triggers, ruled)
             )
         ),
     )
@@ -251,6 +273,11 @@ def main() -> int:
             and "retirement_rule           4 row(s)" in done.stdout,
             done.stdout,
         )
+        check(
+            "and how many records belong to a framework with no rules (none here)",
+            "no rules for              0 record(s)" in done.stdout,
+            done.stdout,
+        )
         check("the throwaway container is gone", leftovers() == [], str(leftovers()))
 
         # Every data row of the rules (and of their history) starts or holds
@@ -261,6 +288,34 @@ def main() -> int:
             "a dump whose retirement rules came back empty fails",
             empty.returncode != 0 and "retirement_rule is empty" in empty.stdout,
             empty.stdout[-400:],
+        )
+        check("and leaves nothing running", leftovers() == [], str(leftovers()))
+
+        # The rules' history, restored without its append-only trigger, fails. The
+        # source also gains a record of a framework with no rules, which the report
+        # counts.
+        psql(
+            source,
+            "INSERT INTO projects (id, doc, created_by, updated_by) VALUES ('p3', "
+            '\'{"meta":{"framework":{"id":"acme"}}}\', \'a@x\', \'a@x\')',
+        )
+        untriggered = make_dump(
+            source,
+            work / "no-trigger.sql.gz.gpg",
+            strip="retirement_rule_change_no_change",
+        )
+        lost = verify(str(untriggered))
+        check(
+            "a dump whose rules' history lost its append-only trigger fails",
+            lost.returncode != 0
+            and "retirement_rule_change was restored WITHOUT its append-only trigger"
+            in lost.stdout,
+            lost.stdout[-600:],
+        )
+        check(
+            "and the report counts the record whose framework has no rules",
+            "1 record(s) (acme: 1): never retired, so never due" in lost.stdout,
+            lost.stdout[-600:],
         )
         check("and leaves nothing running", leftovers() == [], str(leftovers()))
 

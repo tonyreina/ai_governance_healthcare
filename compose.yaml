@@ -262,8 +262,8 @@ services:
       APP_POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:-}
       # Which checkpoint decisions end a project, and so when disposal is due, come
       # from the build the proxy serves: its manifest.json, mounted below (D-76). The
-      # job adds new ones; it refuses to drop one unless RETIREMENT_RULES_ACK is the
-      # new rule set's hash, which it prints, and it fails if the file is missing.
+      # job refuses to add or drop one unless RETIREMENT_RULES_ACK acknowledges that
+      # change, with the value it prints, and it fails if the file is missing.
       RETIREMENT_MANIFEST: /etc/chai/manifest.json
       RETIREMENT_RULES_ACK: ${RETIREMENT_RULES_ACK:-}
       LOG_FORMAT: ${LOG_FORMAT:-json}

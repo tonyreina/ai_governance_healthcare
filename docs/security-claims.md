@@ -1161,21 +1161,40 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   clock (R-56), exactly when one of its checkpoints holds a decision that the
   project's framework definition, as the deployed build's manifest states it,
   gives a stop or retire class at that checkpoint. A record without a framework
-  stamp is CHAI's. The migrate job adds new ending decisions, refuses to drop one
-  without an acknowledgment naming the new rule set, and fails without a usable
-  manifest, so disposal never changes silently (R-66, D-76).
+  stamp is CHAI's. The migrate job, and the API when it migrates itself with a
+  manifest, refuses any change to the rules of the frameworks the manifest lists
+  (an added ending decision or a dropped one) unless `RETIREMENT_RULES_ACK`
+  acknowledges that transition, leaves the rules of frameworks it does not list,
+  and fails without a usable manifest, so disposal never changes silently (R-66,
+  D-76). Each guard in the SQL (the join on the record's framework, a blank stamp
+  read as CHAI's, the clock at the latest ending decision) and the migration lock
+  has a test that breaks it and fails.
+- **Gap:** the stack test proves only the default build: its rule set is
+  010's seed (the same hash), so it shows the migrate job read and confirmed the
+  manifest (`synced`), not that a different rule set reaches a running stack. That
+  a different set is loaded, refused or acknowledged is the server tests' evidence,
+  against a real PostgreSQL and the real migrate job.
 - **Asserted in:** `docs/self-hosting.md` — "loads those decisions into the database, which decides from them when a project is retired"
 - **Asserted in:** `docs/privacy.md` — "A build of another framework retires on its own decisions"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_retention.py::test_every_chai_decision_retires_exactly_when_its_class_ends_a_project`
   `server/tests/test_retention.py::test_a_stand_in_primary_retires_by_its_own_words_once_acknowledged`
-  `server/tests/test_retention.py::test_a_new_ending_decision_is_added_without_asking`
+  `server/tests/test_retention.py::test_a_new_ending_decision_is_refused_until_acknowledged`
+  `server/tests/test_retention.py::test_a_leftover_acknowledgment_never_matches_another_transition`
   `server/tests/test_retention.py::test_a_stale_manifest_cannot_undo_a_newer_one`
+  `server/tests/test_retention.py::test_a_manifest_leaves_the_rules_of_frameworks_it_does_not_list`
+  `server/tests/test_retention.py::test_a_record_follows_only_its_own_frameworks_rules`
+  `server/tests/test_retention.py::test_the_mirror_a_chai_record_never_retires_by_anothers_words`
+  `server/tests/test_retention.py::test_a_blank_stamp_is_chai`
+  `server/tests/test_retention.py::test_the_clock_starts_at_the_latest_ending_decision`
   `server/tests/test_retention.py::test_the_database_retires_by_the_table_not_by_literals`
   `server/tests/test_retirement_rules.py::test_the_migrate_job_fails_closed_without_a_usable_manifest`
   `server/tests/test_retirement_rules.py::test_a_manifest_the_server_would_misread_is_refused`
-  `tests/test_stack.py::the database retires by the served build's rule set`
+  `server/tests/test_retirement_rules.py::test_the_api_migrating_itself_syncs_from_its_manifest`
+  `server/tests/test_retirement_rules.py::test_the_api_migrating_itself_without_a_manifest_says_so`
+  `server/tests/test_retirement_rules.py::test_two_syncs_serialize_on_the_migration_lock`
+  `tests/test_stack.py::the database retires by the served build's rule set, synced from it`
 
 ### C-89 The API's role cannot change which decisions retire a project
 
@@ -1188,3 +1207,24 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_retirement_rules.py::test_the_api_role_can_read_the_rules_and_not_change_them`
   `server/tests/test_retirement_rules.py::test_the_rules_history_is_append_only_even_for_the_owner`
   `server/tests/test_roles.py`
+
+### C-90 A writer cannot choose which framework's rules retire a record
+
+- **Claim:** A record follows the retirement rules of the framework its
+  `meta.framework.id` names, so a writer who could stamp any id could keep a
+  record from ever coming due. The API refuses (422) a create or a patch that sets
+  `meta.framework` to anything but exactly `{"id": <the primary the latest sync
+  recorded>}`, and a patch that drops that stamp; a record without one is CHAI's.
+  Stamps written before this check, or by the database owner, are not re-checked,
+  and `make dispose` and `make verify-backup` count the records whose framework
+  has no rules (R-66, D-76).
+- **Asserted in:** `docs/privacy.md` — "Nor can a writer choose which framework's rules a record follows"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_retirement_rules.py::test_the_api_refuses_a_stamp_that_is_not_the_active_primary`
+  `server/tests/test_retirement_rules.py::test_the_api_accepts_no_stamp_or_exactly_the_active_primarys`
+  `server/tests/test_retirement_rules.py::test_a_stamp_follows_the_primary_the_latest_sync_recorded`
+  `server/tests/test_retirement_rules.py::test_a_correctly_stamped_record_retires`
+  `server/tests/test_retirement_rules.py::test_the_sql_reads_a_stamp_as_the_api_does`
+  `tests/test_dispose.py`
+  `tests/test_verify_backup.py`

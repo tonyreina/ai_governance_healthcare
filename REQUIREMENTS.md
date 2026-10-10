@@ -1118,22 +1118,34 @@ honest answer and is a gap worth closing; see R-19.
 - **The build is the unit.** The rules reach the database only from the manifest
   built beside the page (`docs/app/manifest.json` by default), loaded by the
   migrate job as the database owner. The API cannot change them.
-- **Never silently.** A rule a build adds is loaded. A rule the database holds and
-  a build drops is removed only when the operator acknowledges the new rule set
-  by its hash, after being shown the projects whose disposal would change. A missing
-  or malformed manifest, or a primary with no ending decision, stops the job.
-  Every change is recorded, append-only, with who and when.
+- **Never silently.** Any change to the rules of the frameworks a build lists, a
+  rule added or a rule dropped, is made only when the operator acknowledges that
+  transition (from the rule set in use to the build's), after being shown every
+  project that would become due or stop being due. An unchanged rule set needs no
+  acknowledgment. A build leaves the rules of frameworks it does not list. A missing
+  or malformed manifest, or a primary with no ending decision, stops the job, and
+  stops an API that migrates itself with a manifest. Every change is recorded,
+  append-only, with who and when.
+- **The stamp is the build's.** Through the API a record may name only the active
+  primary as its framework (`meta.framework` exactly `{"id": <primary>}`), or none.
 - Source: the owner's design v2 on #168; DECISIONS D-76. Numbered R-66 as that
   design names it ("R-66 amends R-56"), leaving R-64 and R-65 to the entries it
   assigns them.
 - Enforced by: `server/tests/test_retention.py` (real PostgreSQL and the real
   migrate job: every option of CHAI's definition and of a stand-in primary is due
-  exactly when its class ends a project; additive sync; a removal refused without
-  the acknowledgment and applied with it; a stale manifest cannot undo a newer
-  one), `server/tests/test_retirement_rules.py` (a malformed or missing manifest
-  fails the job; the API role can only read the rules; their history is
-  append-only; `/api/health` reports the rule set), `tests/test_build_config.py`
-  (the manifest is the definitions' own), `tests/test_compose_isolation.py` (the
-  page and the manifest come from one build directory) and `tests/test_stack.py`
-  (the running stack retires by the served build's rule set). Security claims
-  C-88 and C-89.
+  exactly when its class ends a project; a record follows only its own
+  framework's rules, a blank stamp is CHAI's and the clock starts at the latest
+  ending decision, each with a mutation test; an addition or a removal refused
+  without the transition's acknowledgment and applied with it; a leftover
+  acknowledgment and a stale manifest refused; unlisted frameworks' rules kept),
+  `server/tests/test_retirement_rules.py` (a malformed or missing manifest fails
+  the job; the API's own migration syncs or warns; the stamp is refused unless it
+  is the active primary's; the API role can only read the rules; their history is
+  append-only; the sync waits for the migration lock; `/api/health` reports the
+  rule set), `tests/test_dispose.py` and `tests/test_verify_backup.py` (records
+  with no rules are counted; the history keeps its trigger after a restore),
+  `tests/test_build_config.py` (the manifest is the definitions' own),
+  `tests/test_compose_isolation.py` (the page and the manifest come from one build
+  directory) and `tests/test_stack.py` (the running stack's rules are the served
+  default build's, confirmed by a sync; it cannot show a different rule set,
+  which the server tests do). Security claims C-88 to C-90.

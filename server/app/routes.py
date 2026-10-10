@@ -83,6 +83,7 @@ from .models import (
 from .principals import MAX_ID_LENGTH, MAX_LOOKUP
 from .principals import resolve as resolve_principals
 from .retention import HoldAction
+from .retirement import active_primary, record_framework, sets_stamp, stamp_problem
 from .securitylog import SecurityEvent, emit
 from .signoff import attribute_signoffs
 
@@ -308,6 +309,27 @@ def _listed_ids(value: Any) -> list[str]:
     return list(dict.fromkeys(str(v) for v in value))
 
 
+async def _check_stamp(conn: Any, document: dict[str, Any]) -> None:
+    """422 unless the document's ``meta.framework`` is exactly the active primary's
+    stamp. A writer who could stamp any id could keep a record from ever coming due
+    for disposal (R-66, D-76)."""
+    problem = stamp_problem(document, await active_primary(conn))
+    if problem:
+        raise HTTPException(422, problem)
+
+
+async def _check_unstamped(conn: Any, document: dict[str, Any]) -> None:
+    primary = await active_primary(conn)
+    if record_framework(document) != primary:
+        raise HTTPException(
+            422,
+            "this change removes the record's meta.framework, which would make it "
+            f"CHAI's record and retire it by CHAI's rules. Only {primary!r}, the "
+            "primary framework of the build this server retires by, may be set "
+            "(R-66).",
+        )
+
+
 @router.post(
     "/projects/{project_id}",
     response_model=ProjectOut,
@@ -354,6 +376,8 @@ async def create_project(
             "readers": _listed_ids(access.get("readers")),
         }
     async with db.acquire() as conn, conn.transaction():
+        if sets_stamp(doc):
+            await _check_stamp(conn, doc)
         row = await conn.fetchrow(
             """
                 INSERT INTO projects (id, doc, created_by, updated_by)
@@ -464,6 +488,13 @@ async def patch_project(
             document = merged(before, patch)
         except TooDeep as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+        # The stamp decides which rules retire the record (R-66). One the patch sets
+        # is checked as merged; one a patch drops by replacing `meta` must not move
+        # the record to rules other than the active primary's.
+        if sets_stamp(patch):
+            await _check_stamp(conn, document)
+        elif record_framework(document) != record_framework(before):
+            await _check_unstamped(conn, document)
         rev = await conn.fetchval(
             """
                 UPDATE projects

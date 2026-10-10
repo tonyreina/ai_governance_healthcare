@@ -107,6 +107,18 @@ def unit() -> None:
         "Retirement rules: NONE recorded" in text,
         text,
     )
+    check(
+        "it counts the records whose framework has no rules, even when none",
+        "Records whose framework has no retirement rules: 0." in text,
+        text,
+    )
+    text = ds.render({**report, "unruled": {"acme": 2, "zeta": 1}})
+    check(
+        "and names their frameworks when there are some (R-66)",
+        "Records whose framework has no retirement rules: 3 (acme: 2, zeta: 1). "
+        "They are never retired" in text,
+        text,
+    )
     rules = {"rule_set_hash": "ab" * 32, "framework": "chai",
              "at": "2026-10-10T00:00:00", "by": "chai"}  # fmt: skip
     text = ds.render({**report, "rules": rules})
@@ -170,6 +182,11 @@ def integration() -> None:
             out,
         )
         check(
+            "every record's framework has rules",
+            "Records whose framework has no retirement rules: 0." in out,
+            out,
+        )
+        check(
             "and changes nothing",
             tpl.psql(name, "SELECT count(*) FROM projects") == "2"
             and tpl.psql(name, "SELECT count(*) FROM disposal_run") == "0",
@@ -215,6 +232,22 @@ def integration() -> None:
             "a second report finds nothing due",
             "No project is past its retention period." in out
             and "Read trail: 0 row(s)" in out,
+            out,
+        )
+        # A record of a framework the database has no rules for: it never comes
+        # due, and the report says how many there are, by framework.
+        tpl.psql(
+            name,
+            "INSERT INTO projects (id, doc, updated_at) VALUES ('stray', "
+            '\'{"meta":{"framework":{"id":"acme"}},'
+            '"gates":{"D":{"decision":"Retire","date":"2015-01-01"}}}\', '
+            "now() - interval '9 years')",
+        )
+        code, out = run("--psql", prefix)
+        check(
+            "a record whose framework has no rules is counted, and is not due",
+            "Records whose framework has no retirement rules: 1 (acme: 1)" in out
+            and "  stray " not in out,
             out,
         )
     finally:

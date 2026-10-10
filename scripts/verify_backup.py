@@ -52,12 +52,16 @@ REPORTED_TABLES = (
     "principals",
     "access_event",
     "retirement_rule",
+    "retirement_rule_change",
 )
 # From this migration on, which decisions retire a project, and so when disposal is
 # due, is a table (D-76). A restore without its rows would treat no project as
 # retired, so it is required, and its rows are reported.
 RULES_MIGRATION = "010_retirement_rules.sql"
 RULES_TABLE = "retirement_rule"
+# Their history, append-only by trigger from the same migration: "by which rule, set
+# when and by whom" must not be rewritable in a restored copy either.
+RULES_HISTORY = "retirement_rule_change"
 
 
 @dataclass
@@ -68,6 +72,9 @@ class Report:
     triggers: dict[str, int] = field(default_factory=dict)
     migrations: list[str] = field(default_factory=list)
     rules: list[tuple[str, str, str]] = field(default_factory=list)
+    # Live records whose framework has no retirement rules, by framework: they never
+    # come due. Reported, not a failure: it may be what the deployment intends.
+    unruled: dict[str, int] = field(default_factory=dict)
 
 
 def problems_for(report: Report) -> list[str]:
@@ -93,6 +100,16 @@ def problems_for(report: Report) -> list[str]:
             problems.append(
                 f"{RULES_TABLE} is empty: the restored database would treat no "
                 "project as retired, so nothing would ever come due for disposal"
+            )
+        if RULES_HISTORY not in report.counts:
+            problems.append(
+                f"{RULES_HISTORY} is missing although {RULES_MIGRATION} was applied: "
+                "the history of the retirement rules did not come back"
+            )
+        elif report.triggers.get(RULES_HISTORY, 0) < 1:
+            problems.append(
+                f"{RULES_HISTORY} was restored WITHOUT its append-only trigger: the "
+                "history of which decisions retire a project could be rewritten"
             )
     return problems
 
@@ -230,6 +247,16 @@ def inspect(container: str) -> Report:
                 )
             )
         ]
+    if RULES_MIGRATION in report.migrations and RULES_TABLE in present:
+        report.unruled = json.loads(
+            psql_value(
+                container,
+                "SELECT coalesce(json_object_agg(f, n), '{}') FROM ("
+                " SELECT record_framework(p.doc) AS f, count(*) AS n FROM projects p"
+                f" WHERE NOT EXISTS (SELECT 1 FROM {RULES_TABLE} r"
+                "  WHERE r.framework_id = record_framework(p.doc)) GROUP BY 1) u",
+            )
+        )
     return report
 
 
@@ -309,6 +336,13 @@ def main(argv: list[str] | None = None) -> int:
     for framework, gate, decision in report.rules:
         print(
             f"  retires on         {framework}: checkpoint {gate} decided {decision!r}"
+        )
+    if RULES_MIGRATION in report.migrations:
+        unruled = sum(report.unruled.values())
+        named = ", ".join(f"{f}: {n}" for f, n in sorted(report.unruled.items()))
+        print(
+            f"  no rules for       {unruled:>8} record(s)"
+            + (f" ({named}): never retired, so never due" if unruled else "")
         )
     if report.counts and not report.counts.get("projects"):
         print(

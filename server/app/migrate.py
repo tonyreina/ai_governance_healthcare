@@ -19,12 +19,13 @@ replaces and is reported as such.
 
 After migrating it loads the build's retirement rules (``app.retirement``, D-76) from
 ``RETIREMENT_MANIFEST``, the path of the build's ``manifest.json``. That is required:
-with no manifest, an unreadable one, or one that removes a rule without
-``RETIREMENT_RULES_ACK`` set to its new rule-set hash, the job fails and provisions
-nothing, so the API (which waits for it) does not start on rules nobody chose.
+with no manifest, an unreadable one, or one that changes the rules of a framework it
+lists without ``RETIREMENT_RULES_ACK`` set to the acknowledgment of that transition
+(which the refusal prints), the job fails and provisions nothing, so the API (which
+waits for it) does not start on rules nobody chose.
 
 Exit status: 0 done, 1 an error (including a bad manifest), 2 no owner credential,
-3 a rule removal that was not acknowledged.
+3 a change of the rules that was not acknowledged.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ from .db import Database
 from .retirement import (
     ManifestError,
     RulesRefused,
-    SyncOutcome,
+    describe_sync,
     load_manifest,
     sync_rules,
 )
@@ -90,15 +91,7 @@ async def run(env: dict[str, str]) -> int:
             except RulesRefused as exc:
                 print(f"migrate: retirement rules refused: {exc}", file=sys.stderr)
                 return EXIT_REFUSED
-        print(
-            f"migrate: retirement rules {synced.outcome}"
-            + (
-                f" (+{len(synced.added)} -{len(synced.removed)})"
-                if synced.outcome is SyncOutcome.CHANGED
-                else ""
-            )
-            + f"; rule set {synced.rule_set_hash} ({manifest.primary})"
-        )
+        print(f"migrate: {describe_sync(synced, manifest)}")
         if not password:
             print(
                 "migrate: APP_POSTGRES_PASSWORD is not set, so no restricted serving "

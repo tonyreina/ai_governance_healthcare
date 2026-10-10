@@ -195,9 +195,18 @@ def main() -> int:
         (Path(__file__).resolve().parent.parent / "docs" / "app" / "manifest.json")
         .read_text(encoding="utf-8")
     )  # fmt: skip
+    # What this proves is the default build: its rule set is 010's seed (same hash),
+    # so the hash alone would match even if no sync ran. `synced` shows the migrate
+    # job read the manifest and confirmed it. That a different rule set is loaded,
+    # refused or acknowledged is server/tests' evidence (C-88).
     check(
-        "the database retires by the served build's rule set",
-        json.loads(body).get("retirement_rules") == manifest["ruleSetHash"],
+        "the database retires by the served build's rule set, synced from it",
+        json.loads(body).get("retirement_rules")
+        == {
+            "hash": manifest["ruleSetHash"],
+            "primary": manifest["primary"],
+            "synced": True,
+        },
         body,
     )
     _, served = http("/manifest.json")

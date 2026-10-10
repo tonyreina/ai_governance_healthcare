@@ -10,8 +10,8 @@
 -- So the rule is data: retirement_rule holds every (framework, checkpoint, decision)
 -- that ends a project. The migrate job (app/retirement.py) loads it from the build's
 -- manifest (docs/app/manifest.json, written by scripts/build_app.py from the same
--- definitions the page embeds), additively: a pair is never removed unless the
--- operator acknowledges the new rule set by its hash. Every change is a row in
+-- definitions the page embeds): no pair is added or removed unless the operator
+-- acknowledges that change (D-76). Every change is a row in
 -- retirement_rule_change, which is append-only.
 --
 -- This file seeds CHAI's four rows, so a database migrated before any manifest is
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS retirement_rule_change (
 COMMENT ON TABLE retirement_rule_change IS
     'Every change to retirement_rule: who, when, the rules before and after, the '
     'hash of the primary framework''s rule set and of its definition, and whether a '
-    'removal was acknowledged. Append-only. The latest row''s rule_set_hash is the '
+    'change was acknowledged. Append-only. The latest row''s rule_set_hash is the '
     'active one, which /api/health reports.';
 
 CREATE OR REPLACE FUNCTION retirement_rule_change_is_append_only() RETURNS trigger

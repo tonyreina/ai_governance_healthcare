@@ -164,7 +164,7 @@ class Database:
         self._pool: asyncpg.Pool | None = None
         self._ping_cache: tuple[float, bool] | None = None
         self._ping_lock = asyncio.Lock()
-        self._rules_cache: tuple[float, str | None] | None = None
+        self._rules_cache: tuple[float, dict | None] | None = None
         self._rules_lock = asyncio.Lock()
 
     # --- lifecycle --------------------------------------------------------
@@ -344,8 +344,11 @@ class Database:
             self._ping_cache = (time.monotonic(), alive)
             return alive
 
-    async def retirement_rules_cached(self, ttl: float = 30.0) -> str | None:
-        """The active retirement rule-set hash (D-76), at most once per ``ttl``.
+    async def retirement_rules_cached(self, ttl: float = 30.0) -> dict | None:
+        """The active retirement rules (D-76), at most once per ``ttl``: the latest
+        ``retirement_rule_change`` row's rule-set hash, its primary framework, and
+        whether a build's manifest set or confirmed them (``synced``) rather than
+        010's seed alone.
 
         For ``/api/health``, which is unauthenticated and not rate limited, so it is
         cached for the reason :meth:`ping_cached` is. The rules change only when the
@@ -359,14 +362,23 @@ class Database:
             cached = self._rules_cache
             if cached is not None and time.monotonic() - cached[0] < ttl:
                 return cached[1]
+            # Imported here: app.retirement imports this module for the lock id.
+            from .retirement import ChangeSource, active_rules
+
+            value: dict | None
             try:
                 async with self.acquire() as conn:
-                    # The latest change's hash, as retirement.active_rule_set_hash.
-                    value = await conn.fetchval(
-                        "SELECT rule_set_hash FROM retirement_rule_change"
-                        " ORDER BY id DESC LIMIT 1"
-                    )
-            except (OSError, asyncpg.PostgresError, RuntimeError) as exc:
+                    active = await active_rules(conn)
+                value = (
+                    None
+                    if active is None
+                    else {
+                        "hash": active.rule_set_hash,
+                        "primary": active.primary,
+                        "synced": active.source is ChangeSource.MANIFEST,
+                    }
+                )
+            except (OSError, asyncpg.PostgresError, RuntimeError, ValueError) as exc:
                 log.warning("cannot read the retirement rule set: %s", exc)
                 value = None
             self._rules_cache = (time.monotonic(), value)

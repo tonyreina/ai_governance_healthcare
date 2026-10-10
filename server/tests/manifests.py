@@ -10,9 +10,11 @@ words share nothing with CHAI's.
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -132,6 +134,23 @@ def run_migrate(db_url: str, **env: str) -> subprocess.CompletedProcess:
             **env,
         },
     )
+
+
+# The rule-set hash 010 records for its seed: CHAI's four rows, which is also the
+# default build's (test_retirement_rules.py holds the two equal).
+SEED_HASH = re.search(
+    r"'([0-9a-f]{64})'",
+    (SERVER / "migrations" / "010_retirement_rules.sql").read_text(encoding="utf-8"),
+).group(1)  # type: ignore[union-attr]
+
+
+def transition(old: str | None, new: str) -> str:
+    """The acknowledgment a change of retirement rules needs (D-76): SHA-256 of the
+    canonical JSON {"from": <the active rule-set hash>, "to": <the manifest's>}.
+    Written here independently of app.retirement, so the format is pinned by the
+    test rather than echoed from the code under test."""
+    text = json.dumps({"from": old, "to": new}, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def events(done: subprocess.CompletedProcess, name: str) -> list[dict]:

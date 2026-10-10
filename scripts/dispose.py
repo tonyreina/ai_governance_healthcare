@@ -7,7 +7,8 @@
 The rules are in the database (server/migrations/008_retention.sql and
 010_retirement_rules.sql), so this only asks it. Which decisions retire a project is
 the build's own definition, loaded by the migrate job into `retirement_rule` (D-76);
-the report names that rule set by its hash, the one /api/health reports.
+the report names that rule set by its hash, the one /api/health reports, and counts
+the live records whose framework has no rules, which therefore never come due.
 `retention_due()` lists the projects past their period: a retired project whose
 last change or retirement date is longer ago than the policy's `record_years`, or the
 history of a deleted one. `read_trail_due()` counts the read-trail rows older than
@@ -51,7 +52,13 @@ SELECT json_build_object(
   'rules', (SELECT json_build_object('rule_set_hash', rule_set_hash,
                                      'framework', framework_id,
                                      'at', at, 'by', changed_by)
-              FROM retirement_rule_change ORDER BY id DESC LIMIT 1))::text;
+              FROM retirement_rule_change ORDER BY id DESC LIMIT 1),
+  'unruled', coalesce((SELECT json_object_agg(f, n) FROM (
+                SELECT record_framework(p.doc) AS f, count(*) AS n
+                  FROM projects p
+                 WHERE NOT EXISTS (SELECT 1 FROM retirement_rule r
+                                    WHERE r.framework_id = record_framework(p.doc))
+                 GROUP BY 1) u), '{}'::json))::text;
 """
 
 APPLY_SQL = "SELECT row_to_json(r)::text FROM dispose_due({by}) r;"
@@ -87,6 +94,21 @@ def rules_line(rules: dict[str, Any] | None) -> str:
     )
 
 
+def unruled_line(unruled: dict[str, int] | None) -> str:
+    """How many live records belong to a framework with no retirement rules. Such a
+    record never comes due, whatever it decides, so the operator is told (R-66)."""
+    unruled = unruled or {}
+    total = sum(unruled.values())
+    line = f"Records whose framework has no retirement rules: {total}"
+    if not total:
+        return line + "."
+    named = ", ".join(f"{fid}: {n}" for fid, n in sorted(unruled.items()))
+    return (
+        f"{line} ({named}). They are never retired, so never come due, until the "
+        "rules of their framework are loaded."
+    )
+
+
 def render(report: dict[str, Any]) -> str:
     policy = report["policy"]
     trail = report["read_trail"]
@@ -96,6 +118,7 @@ def render(report: dict[str, Any]) -> str:
         f"year(s) after retirement; the read trail for {policy['read_trail_years']} "
         f"year(s). Set {day(policy['changed_at'])} by {policy['changed_by']}.",
         rules_line(report.get("rules")),
+        unruled_line(report.get("unruled")),
         "",
     ]
     due = [p for p in projects if not p["held"]]

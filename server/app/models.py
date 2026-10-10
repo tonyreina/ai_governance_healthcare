@@ -30,6 +30,32 @@ class EventDelivery(StrEnum):
     LOCAL_ONLY = "local-only"
 
 
+class RetirementRulesOut(BaseModel):
+    """What ``/api/health`` says about the retirement rules (D-76, R-66)."""
+
+    hash: str = Field(
+        description=(
+            "SHA-256 of the active rule set: the primary framework's decisions that "
+            "end a project, as the build's manifest.json states them "
+            "(ruleSetHash). The page built with the same definition carries the "
+            "same hash."
+        )
+    )
+    primary: str = Field(
+        description=(
+            "The primary framework the latest sync recorded: the only framework id "
+            "a record may be stamped with (meta.framework)."
+        )
+    )
+    synced: bool = Field(
+        description=(
+            "True once a build's manifest set or confirmed the rules. False while "
+            "the database holds only 010's seed (CHAI's rules), which is what an "
+            "API that migrates itself with no RETIREMENT_MANIFEST leaves."
+        )
+    )
+
+
 class HealthOut(BaseModel):
     """``GET /api/health`` -- unauthenticated, for load balancer probes."""
 
@@ -62,13 +88,11 @@ class HealthOut(BaseModel):
     auth_mode: str = Field(
         description="'proxy-header' in a real deployment, 'DEV-INSECURE' otherwise"
     )
-    retirement_rules: str | None = Field(
+    retirement_rules: RetirementRulesOut | None = Field(
         default=None,
         description=(
-            "SHA-256 of the retirement rule set the database decides disposal by "
-            "(D-76): the primary framework's decisions that end a project, as the "
-            "build's manifest.json states them. The page built with the same "
-            "definition carries the same hash. Null when it cannot be read."
+            "The retirement rules the database decides disposal by (D-76). Null "
+            "when they cannot be read."
         ),
     )
 

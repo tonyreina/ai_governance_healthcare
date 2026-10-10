@@ -44,6 +44,13 @@ from .db import Database
 from .emergency import EmergencyAudit
 from .events import EventBroker
 from .principals import PrincipalRecorder
+from .retirement import (
+    ManifestError,
+    RulesRefused,
+    describe_sync,
+    load_manifest,
+    sync_rules,
+)
 from .roles import DbRole
 from .routes import router
 from .securitylog import SecurityEvent, configure_logging, emit
@@ -259,6 +266,41 @@ class BodySizeLimitMiddleware:
             await self._reject(send)
 
 
+async def migrate_and_sync(db: Database, settings: Settings) -> None:
+    """``RUN_MIGRATIONS=true`` (the single-role setup): migrate, and load the
+    retirement rules the way ``python -m app.migrate`` does (D-76).
+
+    With ``RETIREMENT_MANIFEST`` set, the same sync with the same refusal: a
+    missing or malformed manifest, or a change of rules that
+    ``RETIREMENT_RULES_ACK`` does not acknowledge, stops the API from starting.
+    Without it the API still migrates, retiring by whatever the database holds
+    (010's seed is CHAI's rules), logs a warning, and ``/api/health`` reports the
+    rules as not synced (``retirement_rules.synced``) until a manifest sets them.
+    """
+    manifest = None
+    if settings.retirement_manifest:
+        try:
+            manifest = load_manifest(settings.retirement_manifest)
+        except ManifestError as exc:
+            raise RuntimeError(f"retirement rules: {exc}") from exc
+    await db.migrate()
+    if manifest is None:
+        log.warning(
+            "RUN_MIGRATIONS=true and RETIREMENT_MANIFEST is not set: the retirement "
+            "rules were not synced from the build's manifest, so the database "
+            "retires by what it holds (010's seed is CHAI's rules) and /api/health "
+            "reports retirement_rules.synced=false. Set RETIREMENT_MANIFEST to the "
+            "build's manifest.json, or run `python -m app.migrate` (D-76)."
+        )
+        return
+    async with db.acquire() as conn:
+        try:
+            synced = await sync_rules(conn, manifest, settings.retirement_rules_ack)
+        except RulesRefused as exc:
+            raise RuntimeError(f"retirement rules refused: {exc}") from exc
+    log.info("%s", describe_sync(synced, manifest))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Open the pool, migrate, start listening; tear all three down in order."""
@@ -286,7 +328,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         log.info("serving as a restricted database role (cannot disable triggers)")
     if settings.run_migrations:
-        await db.migrate()
+        try:
+            await migrate_and_sync(db, settings)
+        except BaseException:
+            await db.close()
+            raise
     else:
         log.info("RUN_MIGRATIONS=false: assuming the schema is already current")
 

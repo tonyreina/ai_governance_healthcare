@@ -1575,26 +1575,59 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   migrate service from the same directory the proxy serves (`APP_DIR`, default
   `./docs/app`; `CSP_FILE`, default `./proxy/csp.caddy`), so page and rules are
   one build. The API image stays framework-neutral.
-- **The sync is additive, with an acknowledgment.** Inside `python -m app.migrate`,
-  as the owner, in one transaction under `MIGRATION_LOCK_ID`: new pairs are
-  inserted; a pair the database holds and the manifest lacks is removed only when
-  `RETIREMENT_RULES_ACK` equals the new rule-set hash. Otherwise the job exits 3,
-  listing the removed rules and the projects whose disposal would change, and
-  changes nothing. This is also what stops an older build deployed over a newer
-  one from reverting it.
+- **Every change of the rules is acknowledged, by its transition.** Inside
+  `python -m app.migrate`, as the owner, in one transaction under
+  `MIGRATION_LOCK_ID`. A manifest governs the rules of the frameworks it lists.
+  Any change to those, a pair added or a pair removed, is made only when
+  `RETIREMENT_RULES_ACK` equals the SHA-256 of the canonical JSON
+  `{"from": <the active rule-set hash>, "to": <the manifest's>}`. Otherwise the
+  job exits 3, listing the rules added and removed and every live project that
+  would become due or stop being due, prints the exact value to set, and changes
+  nothing. An unchanged set needs no acknowledgment, so the default build on a
+  fresh database (whose seed is its rule set) starts without one. Because the
+  value names the transition, an acknowledgment left set from one deploy never
+  accepts another: a stale manifest reverting an acknowledged change, or a later
+  build changing something else, is refused. Additions need it too: a stale or
+  mistaken build that adds a rule can make records due at once.
+- **A manifest governs only what it lists.** Rows of a framework the manifest
+  does not list (the primary of an earlier build) are left as they are, so that
+  framework's records keep retiring by their own rules; the job reports them,
+  and the change event names them (`unlisted`).
+- **Confirmed, and reported.** The first manifest to find the database holding
+  exactly its rules (010's seed, for the default build) records a `manifest` row
+  confirming them; a new primary whose rules the database already holds is
+  recorded the same way. `/api/health` reports `retirement_rules` as `hash`,
+  `primary` (the latest row's framework) and `synced` (that row came from a
+  manifest, not 010's seed).
+- **The stamp is checked.** A record follows the rules of its
+  `meta.framework.id`, so a writer who could stamp any id could keep a record
+  from ever coming due. The API refuses (422) a create or patch that sets
+  `meta.framework` to anything but exactly `{"id": <the active primary>}` (the
+  primary of the latest change row), and a patch that drops that stamp. A record
+  with no stamp stays valid and is CHAI's. Stamps written before this check, or
+  by the owner directly, are not re-checked; `make dispose` and
+  `make verify-backup` count the records whose framework has no rules, which
+  never come due.
+- **The API's own migration path syncs too.** With `RUN_MIGRATIONS=true` (the
+  single-role setup) and `RETIREMENT_MANIFEST` set, the API runs the same sync
+  with the same refusal before it serves; a refusal or a bad manifest stops it
+  starting. Without a manifest it migrates, logs a warning, and `/api/health`
+  reports `synced: false`.
 - **Fail closed.** No `RETIREMENT_MANIFEST`, an unreadable or malformed manifest
   (strict: unknown keys, bad ids, a supplement with pairs, a hash that does not
   match its pairs), or a primary with no ending decision exits 1 before anything
   is changed or provisioned, so the API, which waits for the job, does not start.
   No fallback to CHAI's rules or to whatever the table holds.
 - **Recorded.** Each change appends to `retirement_rule_change` (who, when, the
-  rules before and after, the rule-set and definition hashes, whether a removal
-  was acknowledged), append-only by trigger; migration 011 adds its
+  rules before and after, the rule-set and definition hashes, whether the change
+  was acknowledged), append-only by trigger, which `make verify-backup` requires
+  after a restore; migration 011 adds its
   `changed_by` to `principal_referenced` (R-54). Each change or refusal is a
   security event (`retirement.rules_changed`, `retirement.rules_refused`). The
-  latest row's hash is the active rule set; `/api/health` reports it as
-  `retirement_rules`, and `make dispose` and `make verify-backup` print the
-  rules they found. The API's role has SELECT only on both tables.
+  latest row's hash is the active rule set and its framework the active
+  primary; `/api/health` reports both as `retirement_rules`, and
+  `make dispose` and `make verify-backup` print the rules they found. The
+  API's role has SELECT only on both tables.
 - **Rejected:** the client recording a retirement date in the document (the
   server would trust a value any writer can set, and records written before it
   would never retire); the server reading the definitions from the image (the
@@ -1602,16 +1635,38 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   a rebuild of the image would split them); a sync that mirrors the manifest
   exactly (a stale or wrong build would silently stop disposal of every record it
   does not know); falling back to CHAI's rules when the manifest is missing (a
-  custom build would dispose by words it does not use).
+  custom build would dispose by words it does not use); an acknowledgment equal
+  to the new rule-set hash (a value left set after one change let a stale manifest
+  revert to that set later, and it named a destination, not a change); additive
+  sync without an acknowledgment (a stale or mistaken build could make records due
+  at once, silently); a manifest removing the rules of frameworks it does not list
+  (switching primary would stop the earlier primary's records ever coming due).
+- **Limit, stated:** the acknowledgment is for a transition between two rule-set
+  hashes, and the hash is of the primary's rules. Two different changes between
+  the same pair of hashes share an acknowledgment: repeating a transition already
+  made once (from one set to another, back, then forward again with the first
+  value still set) or, when the primary is unchanged, changing only the rows of
+  a listed supplement left from an earlier primary. Clearing the variable after
+  each deploy, as the docs say, closes both.
 - **Not done here:** the dashboard's banner when its embedded hash differs from
-  `/api/health` (the client side of #168, another change); a tested recipe for
-  delivering the manifest to a cloud migrate job (docs/deploy.md says what it
-  needs). The API's own `RUN_MIGRATIONS=true` path (the single-role setup)
-  migrates but does not sync, so it retires by the seeded CHAI rows, which
-  `/api/health` shows.
-- **Found:** the engine's `phase()` looks a decision's class up by its value across
-  all checkpoints, while the rules here are per checkpoint. A stored decision its
-  own checkpoint does not offer (only by an import or a direct edit), but another
-  checkpoint offers as stop or retire, ends the project on screen and not in the
-  database, which keeps it longer. Left for the engine's owners (#168).
+  `/api/health`, or when `synced` is false (the client side of #168, another
+  change); a tested recipe for delivering the manifest to a cloud migrate job
+  (docs/deploy.md says what it needs).
+- **Resolved:** the engine's `phase()` used to look a decision's class up by its
+  value across all checkpoints, while the rules here are per checkpoint. The
+  engine change on #168 classes a decision by its own checkpoint's options (D
+  decided "Stop" ends nothing), which is what the rules here do. That change is
+  outside this one, which does not touch `app/js/`.
+- **Enforced by:** `server/tests/test_retention.py` (real PostgreSQL and the real
+  migrate job: every option of a definition is due exactly when its class ends a
+  project; additions and removals refused without the transition's
+  acknowledgment, the value printed and the projects listed both ways; a leftover
+  acknowledgment and a stale manifest refused; unlisted frameworks' rows kept;
+  mutation tests that drop the framework join, the blank-stamp `nullif` and the
+  latest-decision clock and see the result change),
+  `server/tests/test_retirement_rules.py` (the stamp checks, the API's own sync
+  and its warning, `/api/health`, the migration lock, by holding it and watching
+  the sync wait), `tests/test_dispose.py` and `tests/test_verify_backup.py` (the
+  count of records with no rules; the history's trigger after a restore). Claims
+  C-88 to C-90.
 - Source: #168 (design v2); R-56, R-63, R-66.

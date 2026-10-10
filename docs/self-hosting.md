@@ -93,20 +93,33 @@ service reads the manifest beside the page the proxy serves and loads those
 decisions into the database, which decides from them when a project is retired
 and so when it comes due for disposal ([Privacy and retention](privacy.md#disposal-at-the-end-of-the-period)).
 
-- A decision the build adds is loaded without asking.
-- A decision the database retires on today and the build no longer has is
-  **not** dropped silently. `migrate` refuses, lists the projects whose disposal
-  would change, prints the new rule set's hash, and exits non-zero, so the API
-  does not start. If the change is intended, set `RETIREMENT_RULES_ACK` in `.env`
-  to that hash and run `docker compose up -d` again; then clear it. An older
-  build deployed over a newer one is refused the same way.
+- Nothing about disposal changes silently. When the build adds a decision that
+  ends a project, or no longer has one the database retires on today, `migrate`
+  refuses: it lists the decisions added and removed and every project that would
+  become due, or stop being due, for disposal, prints the value to set, and exits
+  non-zero, so the API does not start. If the change is intended, set
+  `RETIREMENT_RULES_ACK` in `.env` to that value and run `docker compose up -d`
+  again; then clear it. The value acknowledges that one change (from the rule set
+  in use to the build's), so one left set from an earlier deploy accepts nothing
+  else, and an older build deployed over a newer one is refused the same way.
+- A build with the same rules as the database needs nothing: the published build
+  on a new database starts without an acknowledgment.
+- A build governs only the frameworks it lists. The rules of a framework it does
+  not list, such as the primary of an earlier build, are left in place, so that
+  framework's records keep retiring by them, and `migrate` says so.
 - A missing or unreadable manifest also stops `migrate`. There is no fallback.
 
 Every change is recorded in the append-only `retirement_rule_change` table (who,
 when, the rules before and after) and as a `retirement.rules_changed` security
-event. `GET /api/health` reports the hash of the rule set in use as
-`retirement_rules`, which equals `ruleSetHash` in the manifest of the build that
-set it.
+event. `GET /api/health` reports the rule set in use as `retirement_rules`: its
+`hash`, which equals `ruleSetHash` in the manifest of the build that set it, its
+`primary` framework, and `synced`, which is `false` until a build's manifest has
+set or confirmed the rules.
+
+A record's framework is its `meta.framework.id`. The API accepts a record that
+sets it only when it is exactly `{"id": "<primary>"}`, the primary of the build
+the rules were loaded from, because the stamp decides when a record can be
+disposed of. A record without one is CHAI's.
 
 ### Identity comes from the proxy
 

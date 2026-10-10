@@ -9,11 +9,18 @@ here, as the database owner, under the migration lock (D-76).
 
 The sync never changes disposal silently:
 
-* a pair the manifest adds is inserted;
-* a pair the manifest no longer has is removed only when ``RETIREMENT_RULES_ACK``
-  equals the new rule set's hash. Otherwise the job refuses, names the projects
-  whose disposal would change, and exits non-zero, so an older manifest cannot
-  quietly undo a newer one;
+* a manifest governs only the frameworks it lists. Rules of a framework it does not
+  list are left as they are, so the records of an earlier primary keep retiring by
+  their own rules, and the job reports them;
+* any change to the rules it governs, a pair added or a pair removed, is made only
+  when ``RETIREMENT_RULES_ACK`` equals :func:`transition_ack` of the active rule
+  set's hash and the manifest's. Otherwise the job refuses, names every project whose
+  disposal would start or stop being due, prints the value to set, and exits
+  non-zero. The acknowledgment names the transition, so one left set from an earlier
+  deploy never accepts another change, and a stale manifest cannot quietly undo a
+  newer one;
+* an unchanged rule set needs no acknowledgment, so the default build on a fresh
+  database (whose seed is that build's rule set) starts without one;
 * a missing or malformed manifest, or a primary with nothing that ends a project,
   fails the job. There is no fallback to CHAI's rules or to the table as it stands.
 
@@ -46,7 +53,6 @@ _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 MAX_DECISION = 200
-MAX_LISTED = 50
 
 log = logging.getLogger("chai.retirement")
 
@@ -67,7 +73,12 @@ class ChangeSource(StrEnum):
 
 
 class SyncOutcome(StrEnum):
+    # Nothing to do: the latest manifest sync recorded this rule set and primary.
     UNCHANGED = "unchanged"
+    # No rule changed, but a row was recorded: the first manifest to confirm 010's
+    # seed, or a new primary whose rules the database already held.
+    CONFIRMED = "confirmed"
+    # Rules were added or removed, as acknowledged.
     CHANGED = "changed"
 
 
@@ -76,7 +87,7 @@ class ManifestError(ValueError):
 
 
 class RulesRefused(RuntimeError):
-    """The manifest removes a rule and the removal was not acknowledged."""
+    """The manifest changes the rules and the transition was not acknowledged."""
 
 
 class Rule(NamedTuple):
@@ -118,6 +129,9 @@ class SyncResult:
     added: frozenset[Rule]
     removed: frozenset[Rule]
     rule_set_hash: str
+    # Rules of frameworks the manifest does not list, left as they were.
+    kept: frozenset[Rule] = frozenset()
+    unlisted: tuple[str, ...] = ()
 
 
 def canonical_json(value: object) -> bytes:
@@ -287,47 +301,155 @@ async def affected_projects(
     )
 
 
-def _refusal(removed: frozenset[Rule], manifest: Manifest, affected: list) -> str:
+def transition_ack(old: str | None, new: str) -> str:
+    """The value ``RETIREMENT_RULES_ACK`` must hold to change the rules from the rule
+    set ``old`` (the active one) to ``new`` (the manifest's): SHA-256 of the canonical
+    JSON ``{"from": old, "to": new}``.
+
+    It names the transition, not the destination, so an acknowledgment left set from
+    one deploy never accepts a different change: a stale manifest that reverts an
+    acknowledged change, or a later build that changes something else, needs its own.
+    """
+    return hashlib.sha256(canonical_json({"from": old, "to": new})).hexdigest()
+
+
+def _refusal(
+    added: frozenset[Rule],
+    removed: frozenset[Rule],
+    needed: str,
+    affected: list,
+) -> str:
     due_changes = [r for r in affected if r["due_before"] != r["due_after"]]
     lines = [
-        "the manifest removes retirement rule(s) the database holds:",
+        "the manifest changes the retirement rules the database holds:",
         *(
-            f"  {r.framework_id}: checkpoint {r.gate_id} decided {r.decision!r}"
-            for r in sorted(removed)
+            f"  {r.framework_id}: checkpoint {r.gate_id} decided {r.decision!r} "
+            f"({word})"
+            for rules, word in ((added, "added"), (removed, "removed"))
+            for r in sorted(rules)
         ),
         f"{len(affected)} live project(s) would change when they retire; "
         f"{len(due_changes)} would change whether disposal is due now:",
         *(
-            f"  {r['project_id']}: due now {r['due_before']} -> {r['due_after']}"
-            for r in due_changes[:MAX_LISTED]
+            f"  {r['project_id']}: "
+            f"{'becomes due' if r['due_after'] else 'stops being due'} "
+            f"(due now {r['due_before']} -> {r['due_after']})"
+            for r in due_changes
         ),
+        "Nothing was changed. If this build is meant to change which decisions end a "
+        "project, run the migrate job again with "
+        f"RETIREMENT_RULES_ACK={needed}",
     ]
-    if len(due_changes) > MAX_LISTED:
-        lines.append(f"  ... and {len(due_changes) - MAX_LISTED} more")
-    lines.append(
-        "Nothing was changed. If this build is meant to stop retiring on those "
-        "decisions, run the migrate job again with "
-        f"RETIREMENT_RULES_ACK={manifest.rule_set_hash}"
-    )
     return "\n".join(lines)
 
 
-async def active_rule_set_hash(conn: asyncpg.Connection) -> str | None:
-    """The rule-set hash of the latest change: what the database retires by."""
-    return await conn.fetchval(
-        "SELECT rule_set_hash FROM retirement_rule_change ORDER BY id DESC LIMIT 1"
+class ActiveRules(NamedTuple):
+    """The latest ``retirement_rule_change``: what the database retires by."""
+
+    rule_set_hash: str
+    primary: str
+    source: ChangeSource
+
+
+async def active_rules(conn: asyncpg.Connection) -> ActiveRules | None:
+    """The latest change, or ``None`` before 010's seed (never, once migrated)."""
+    row = await conn.fetchrow(
+        "SELECT rule_set_hash, framework_id, source FROM retirement_rule_change"
+        " ORDER BY id DESC LIMIT 1"
     )
+    if row is None:
+        return None
+    return ActiveRules(row[0], row[1], ChangeSource(row[2]))
+
+
+async def active_rule_set_hash(conn: asyncpg.Connection) -> str | None:
+    """The rule-set hash of the latest change."""
+    active = await active_rules(conn)
+    return active.rule_set_hash if active else None
+
+
+async def active_primary(conn: asyncpg.Connection) -> str:
+    """The primary framework the latest sync recorded (010's seed: CHAI). The only
+    framework a record may be stamped with through the API (R-66)."""
+    active = await active_rules(conn)
+    return active.primary if active else UNSTAMPED_FRAMEWORK
+
+
+# --- the record's stamp (meta.framework) -----------------------------------------
+# Whose rules a record follows is its stamp, so the stamp decides when it can be
+# disposed of. A writer who could stamp any id could stamp one with no rules and keep
+# a record forever, so the API accepts only the active primary's (R-66).
+
+META_KEY = "meta"
+STAMP_KEY = "framework"
+STAMP_ID_KEY = "id"
+
+
+def record_framework(doc: Any) -> str:
+    """The framework whose rules a stored document follows, as 010's
+    ``record_framework()`` reads it: ``meta.framework.id`` as text, or CHAI's when
+    it is absent, null or empty."""
+    meta = doc.get(META_KEY) if isinstance(doc, dict) else None
+    stamp = meta.get(STAMP_KEY) if isinstance(meta, dict) else None
+    value = stamp.get(STAMP_ID_KEY) if isinstance(stamp, dict) else None
+    if value is None:
+        return UNSTAMPED_FRAMEWORK
+    text = value if isinstance(value, str) else json.dumps(value)
+    return text or UNSTAMPED_FRAMEWORK
+
+
+def sets_stamp(body: Any) -> bool:
+    """Does a create or patch body set ``meta.framework`` (to anything, null too)?"""
+    meta = body.get(META_KEY) if isinstance(body, dict) else None
+    return isinstance(meta, dict) and STAMP_KEY in meta
+
+
+def stamp_problem(document: Any, primary: str) -> str | None:
+    """Why a document's stamp is not acceptable, or ``None`` when it is exactly
+    ``{"id": <primary>}``."""
+    stamp = document[META_KEY][STAMP_KEY]
+    if isinstance(stamp, dict) and stamp == {STAMP_ID_KEY: primary}:
+        return None
+    return (
+        f'meta.framework, when set, must be exactly {{"id": "{primary}"}}: the '
+        "primary framework of the build this server retires by (R-66). It decides "
+        "which decisions retire the record, and so when it can be disposed of. "
+        "Leave it out and the record is CHAI's."
+    )
+
+
+def describe_sync(synced: SyncResult, manifest: Manifest) -> str:
+    """One line for the job's output (and the API's fallback log): what the sync did,
+    and whose rules it left alone."""
+    text = f"retirement rules {synced.outcome}"
+    if synced.outcome is SyncOutcome.CHANGED:
+        text += f" (+{len(synced.added)} -{len(synced.removed)}, acknowledged)"
+    text += f"; rule set {synced.rule_set_hash} ({manifest.primary})"
+    if synced.unlisted:
+        counts = ", ".join(
+            f"{fid} ({sum(r.framework_id == fid for r in synced.kept)} rule(s))"
+            for fid in synced.unlisted
+        )
+        text += (
+            "; rules of frameworks not listed by this manifest, left as they are: "
+            f"{counts}. Their records keep retiring by them."
+        )
+    return text
 
 
 async def sync_rules(
     conn: asyncpg.Connection, manifest: Manifest, ack: str = ""
 ) -> SyncResult:
-    """Make ``retirement_rule`` say what the manifest says, additively.
+    """Make the rules of the frameworks the manifest lists say what it says.
 
     Runs as the owner in one transaction under the migration lock, so two migrate
-    jobs cannot interleave and a refused sync changes nothing.
+    jobs cannot interleave and a refused sync changes nothing. A manifest governs
+    only the frameworks it lists: rows of any other framework are left as they are
+    (records of an earlier primary keep retiring by their own rules) and reported in
+    ``SyncResult.unlisted``. Any change to the governed rows, an added pair or a
+    removed one, is refused unless ``ack`` is :func:`transition_ack` of the active
+    rule set and the manifest's.
     """
-    acknowledged = bool(ack) and ack == manifest.rule_set_hash
     async with conn.transaction():
         await conn.execute("SELECT pg_advisory_xact_lock($1)", MIGRATION_LOCK_ID)
         current = frozenset(
@@ -336,24 +458,43 @@ async def sync_rules(
                 "SELECT framework_id, gate_id, decision FROM retirement_rule"
             )
         )
+        listed = {f.id for f in manifest.frameworks}
+        governed = frozenset(r for r in current if r.framework_id in listed)
+        kept = current - governed
         desired = manifest.rules()
-        added, removed = desired - current, current - desired
-        if removed and not acknowledged:
-            affected = await affected_projects(conn, current, desired)
-            message = _refusal(removed, manifest, affected)
+        added, removed = desired - governed, governed - desired
+        after = kept | desired
+        active = await active_rules(conn)
+        old_hash = active.rule_set_hash if active else None
+        needed = transition_ack(old_hash, manifest.rule_set_hash)
+        changes = bool(added or removed)
+        if changes and ack != needed:
+            affected = await affected_projects(conn, current, after)
             emit(
                 SecurityEvent.RETIREMENT_RULES_REFUSED,
-                f"retirement rules not changed: {len(removed)} removal(s) "
-                "not acknowledged",
+                f"retirement rules not changed: {len(added)} addition(s) and "
+                f"{len(removed)} removal(s) not acknowledged",
                 framework=manifest.primary,
+                added=_as_json(added),
                 removed=_as_json(removed),
                 projects=len(affected),
                 rule_set_hash=manifest.rule_set_hash,
+                active_rule_set_hash=old_hash,
             )
-            raise RulesRefused(message)
-        latest = await active_rule_set_hash(conn)
-        if not added and not removed and latest == manifest.rule_set_hash:
-            return SyncResult(SyncOutcome.UNCHANGED, added, removed, latest)
+            raise RulesRefused(_refusal(added, removed, needed, affected))
+        unlisted = tuple(sorted({r.framework_id for r in kept}))
+        same_active = (
+            active is not None
+            and active.rule_set_hash == manifest.rule_set_hash
+            and active.primary == manifest.primary
+        )
+        if not changes and same_active and active.source is ChangeSource.MANIFEST:
+            return SyncResult(
+                SyncOutcome.UNCHANGED, added, removed, old_hash or "", kept, unlisted
+            )
+        # Otherwise there is something to record: a change (acknowledged above); a
+        # new primary whose rules the database already held; or the first manifest
+        # to confirm the seed, after which /api/health says the rules are synced.
         for r in removed:
             await conn.execute(
                 "DELETE FROM retirement_rule"
@@ -373,18 +514,21 @@ async def sync_rules(
             ChangeSource.MANIFEST.value,
             manifest.primary,
             json.dumps(_as_json(current)),
-            json.dumps(_as_json(desired)),
+            json.dumps(_as_json(after)),
             manifest.rule_set_hash,
             manifest.primary_entry.sha256,
-            bool(removed) and acknowledged,
+            changes,
         )
+    outcome = SyncOutcome.CHANGED if changes else SyncOutcome.CONFIRMED
     emit(
         SecurityEvent.RETIREMENT_RULES_CHANGED,
-        f"retirement rules changed: {len(added)} added, {len(removed)} removed",
+        f"retirement rules {outcome}: {len(added)} added, {len(removed)} removed",
         framework=manifest.primary,
         added=_as_json(added),
         removed=_as_json(removed),
-        acknowledged=bool(removed) and acknowledged,
+        unlisted=list(unlisted),
+        acknowledged=changes,
         rule_set_hash=manifest.rule_set_hash,
+        active_rule_set_hash=old_hash,
     )
-    return SyncResult(SyncOutcome.CHANGED, added, removed, manifest.rule_set_hash)
+    return SyncResult(outcome, added, removed, manifest.rule_set_hash, kept, unlisted)

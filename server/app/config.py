@@ -275,6 +275,12 @@ class Settings:
     db_pool_max: int = 10
     db_connect_timeout: float = 10.0
     run_migrations: bool = True
+    # Only when run_migrations: the build's manifest.json and the acknowledgment of
+    # a change of retirement rules, as the migrate job reads them (D-76). With no
+    # manifest the API migrates without syncing the rules, says so in its log, and
+    # /api/health reports them as not synced.
+    retirement_manifest: str = ""
+    retirement_rules_ack: str = ""
 
     # --- identity ---------------------------------------------------------
     identity_mode: str = "proxy"
@@ -499,6 +505,8 @@ class Settings:
             db_pool_max=_int("DB_POOL_MAX", 10),
             db_connect_timeout=float(_int("DB_CONNECT_TIMEOUT", 10)),
             run_migrations=_bool("RUN_MIGRATIONS", True),
+            retirement_manifest=_str("RETIREMENT_MANIFEST"),
+            retirement_rules_ack=_str("RETIREMENT_RULES_ACK"),
             identity_mode=mode,
             identity_header=_alias(
                 "IDENTITY_HEADER", "AUTH_HEADER_EMAIL", preset.header

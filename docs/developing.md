@@ -73,17 +73,28 @@ every name through its scopes, and fails on:
   test of that name guards, as in
   `if (typeof chaiCardMarkdown === "function") return chaiCardMarkdown(ctx);`
   (the consequent of an `if` or `?:`, or the right of `&&`, tested with
-  `=== "function"` or another type, or `!== "undefined"`). Nothing wider: not the
-  else branch, not code after `if (typeof x !== "function") return;`, not a `||`
-  form. A new browser global goes in `BROWSER_GLOBALS` in
+  `=== "function"` or another type, or `!== "undefined"`, either way round, with
+  `==` and `!=` counting the same). The other side must be a string literal
+  whose value is one `typeof` returns (`"undefined"`, `"object"`, `"boolean"`,
+  `"number"`, `"bigint"`, `"string"`, `"symbol"`, `"function"`); escapes are
+  decoded, so `"undefin\x65d"` is `"undefined"`. Nothing wider: not the else
+  branch, not code after `if (typeof x !== "function") return;`, not a `||`
+  form, not a comparison with a variable or a template literal. A new browser
+  global goes in `BROWSER_GLOBALS` in
   `scripts/check_app.py`, and `pixi run test-check-app` must find it in each
   browser engine;
 - a `const`, `let` or `class` read before its declaration has run: earlier in
-  the same code (top level, an IIFE, a static block, the right-hand side of
-  `for (const a of ...)`), or in a function that top-level code calls before the
-  declaration;
+  the same code (top level, an IIFE or `new function(){...}`, a static block, a
+  computed key `[k]` of a class or object member, the right-hand side of
+  `for (const a of ...)`, a destructuring default reading a name bound later in
+  the same pattern), or in a function that top-level code calls before the
+  declaration (`new K()` runs K's constructor and instance field initializers,
+  not a function a field holds; calling a generator runs none of its body);
 - a name two modules declare at top level, including a function declared in a
-  top-level block that replaces another module's function;
+  top-level block that replaces another module's function or var. As in Annex
+  B, a block function whose name a top-level `let`, `const` or `class` also
+  declares (before or after it) binds nothing at top level, so is not reported,
+  and neither are two block functions of one name;
 - a syntax error, from the parse and from `node --check`. Without node the
   check says it skipped `node --check`, which `REQUIRE_TESTS=1` makes a failure
   (CI's lint and test workflows both set it).

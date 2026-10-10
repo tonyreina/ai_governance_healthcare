@@ -19,8 +19,14 @@ built shows up the same way. This checks, for every page it is given:
    inside the branch a typeof test of that same name guards, which is the
    consequent of an `if` or `?:`, or the right operand of `&&`, whose condition
    is (or has as an `&&` operand) `typeof x === "function"` or any other type,
-   or `typeof x !== "undefined"`. Nothing wider: the else branch, code after
-   `if (typeof x !== "function") return;`, and a `||` form are still reported.
+   or `typeof x !== "undefined"`, either way round (`"function" === typeof x`),
+   with `==` and `!=` counting as `===` and `!==`. The other side must be a
+   string literal, read for its value (`"undefin\\x65d"` is "undefined"), that
+   `typeof` can return: "undefined", "object", "boolean", "number", "bigint",
+   "string", "symbol" or "function". Anything else (another string, a variable,
+   a template literal, another operator) is not a guard. Nothing wider: the else
+   branch, code after `if (typeof x !== "function") return;`, and a `||` form
+   are still reported.
    The resolution is exact, scope analysis on a real parse, not a pattern. What
    it cannot see: a name the app means to declare that is also a browser global
    (`open`, `close`, `print`, `origin`, `history`, `Image`, `Option`, ...) passes
@@ -31,34 +37,50 @@ built shows up the same way. This checks, for every page it is given:
    declaration has run throws a ReferenceError (the temporal dead zone), and
    `typeof` does not protect it. Reported:
    * a read in the same execution context as the declaration (no function boundary
-     between them, or only immediately run ones: an IIFE, a class static block, a
-     static field) that comes earlier in the text, including the right-hand side
-     of `for (const a of ...)`, which runs with `a` already in its dead zone.
-     Exact: that code throws whenever it runs, which for top-level code is always,
-     on load. One heuristic narrows it: code after the first `await` of an async
+     between them, or only immediately run ones: an IIFE, `new function(){...}`,
+     a class static block, a static field, a computed key `[k]` of a class or
+     object member) that comes earlier in the text, including the right-hand side
+     of `for (const a of ...)`, which runs with `a` already in its dead zone. In
+     a destructuring pattern each name is ready once its own element has been
+     destructured, so `const {y, x = y} = o` passes and `const {x = y, y} = o`
+     does not. `delete x` reads nothing and is not reported. A generator's body
+     does not run when it is called, so a generator called where it is written
+     is not an IIFE. Exact: that code throws whenever it runs, which for
+     top-level code is always, on load. One heuristic narrows it: code after the
+     first `await` of an async
      function (an async IIFE, like the boot module's) runs after the script has
      finished loading, so a read there of a name declared outside that function
      is not reported. "First" is first in the text, so an `await` on a branch
      that is not taken, or in a loop that runs no times, hides a read that does
-     run during load.
+     run during load. (tree-sitter parses `await (p)()` in an async function as
+     a call of a function named `await`, and `await (p)` outside one as an
+     await; both are read here as JavaScript reads them.)
    * a read inside a function that top-level code calls, directly or through other
      functions, before the declaration. The call graph is followed only through
      calls of a plain name bound to a function (`f()`, `new K()`), and every path
      through a function is assumed to run, except what follows its first `await`
-     (as above). So it misses a call made another way (a method call, a callback,
-     an event handler) and could report a read on a branch that never runs during
-     load. A read in a function body that is not called during load is,
-     correctly, never reported: it runs after every module has loaded.
+     (as above). `new K()` runs K's constructor and its instance field
+     initializers, but not the body of a function a field holds. A generator's
+     body is not followed: it runs on `.next()`, a method call. So it misses a
+     call made another way (a method call, a callback, an event handler) and
+     could report a read on a branch that never runs during load. A read in a
+     function body that is not called during load is, correctly, never
+     reported: it runs after every module has loaded.
 4. Duplicate top-level declarations: two modules defining one name, including a
    function declared in a top-level block (`{ function f(){} }`), which replaces
-   a top-level function or var of that name when the block runs.
+   a top-level function or var of that name when the block runs (Annex B). As
+   in Annex B, a block function makes no top-level binding at all when a `let`,
+   `const` or `class` of its name is declared at top level (before or after it)
+   or in a block around it, so that is not a duplicate. Two block functions of
+   one name are not reported either: node accepts them, and the two blocks are
+   usually exclusive branches.
 
 Parsing is tree-sitter's JavaScript grammar (tree-sitter and
 tree-sitter-javascript, locked in pixi.lock), so it runs offline, without node,
 and understands the syntax the app is written in. The scope analysis on top of it
 is this file. What it does not model: `with` and direct `eval` (the app uses
-neither, and check_injection forbids eval), and a `switch` that jumps past a
-`let` in another case.
+neither, and check_injection forbids eval), a `switch` that jumps past a
+`let` in another case, and a parameter's default reading a later parameter.
 
     pixi run check-app                  the published page, and a build of every
                                         app/frameworks/*/build.json into a temp dir
@@ -135,9 +157,15 @@ class T(StrEnum):
     TERNARY_EXPRESSION = "ternary_expression"
     BINARY_EXPRESSION = "binary_expression"
     STRING = "string"
+    STRING_FRAGMENT = "string_fragment"
+    ESCAPE_SEQUENCE = "escape_sequence"
+    MEMBER_EXPRESSION = "member_expression"
+    SUBSCRIPT_EXPRESSION = "subscript_expression"
+    COMPUTED_PROPERTY_NAME = "computed_property_name"
     AWAIT_EXPRESSION = "await_expression"
     # Anonymous tokens: keywords that say which declaration or operator this is.
     TYPEOF = "typeof"
+    DELETE = "delete"
     CONST = "const"
     LET = "let"
     VAR = "var"
@@ -174,6 +202,8 @@ FUNCTION_DECLARATIONS = frozenset(
 FUNCTION_VALUES = frozenset(
     {T.FUNCTION_EXPRESSION, T.GENERATOR_FUNCTION, T.ARROW_FUNCTION}
 )
+# Calling one of these returns a generator object and runs none of its body.
+GENERATORS = frozenset({T.GENERATOR_FUNCTION_DECLARATION, T.GENERATOR_FUNCTION})
 CLASSES = frozenset({T.CLASS_DECLARATION, T.CLASS})
 REFERENCES = frozenset(
     {
@@ -189,9 +219,17 @@ NOT_EQUALS = frozenset({T.NE, T.STRICT_NE})
 
 
 class TypeofResult(StrEnum):
-    """What `typeof` evaluates to, as far as a guard asks: is the name defined?"""
+    """Every string `typeof` can evaluate to (ECMA-262, the typeof operator). A
+    comparison with any other string is not a guard: it is never true."""
 
     UNDEFINED = "undefined"
+    OBJECT = "object"
+    BOOLEAN = "boolean"
+    NUMBER = "number"
+    BIGINT = "bigint"
+    STRING = "string"
+    SYMBOL = "symbol"
+    FUNCTION = "function"
 
 
 class ScopeKind(StrEnum):
@@ -302,6 +340,10 @@ class Binding:
     # A function declared in a block that Annex B also binds in the enclosing
     # function (or the program): `{ function f(){} }`.
     annex_b: bool = False
+    # For a let or const declared by a destructuring pattern, the pattern: a read
+    # inside it (a default value, a computed key) runs while the pattern is
+    # destructured, so the binding is ready once its own element has been.
+    pattern: Node | None = None
 
 
 @dataclass(eq=False)
@@ -339,10 +381,15 @@ class Analysis:
         self.duplicates: list[tuple[Binding, Binding]] = []
         self.references: list[Reference] = []
         self._awaits: dict[int, int | None] = {}
+        # Functions declared in blocks: (name, function, block). Whether Annex B
+        # also binds one in the enclosing function depends on every declaration
+        # there, including later ones, so it is decided after pass 1.
+        self._block_functions: list[tuple[Node, Node, Scope]] = []
         limit = sys.getrecursionlimit()
         sys.setrecursionlimit(max(limit, 20000))
         try:
             self._declare_children(self.root, self.program)
+            self._hoist_block_functions()
             self._resolve(self.root, self.program)
         finally:
             sys.setrecursionlimit(limit)
@@ -357,34 +404,45 @@ class Analysis:
         ready: int = -1,
         value: Node | None = None,
         quiet: bool = False,
+        pattern: Node | None = None,
     ) -> None:
         self.binding_nodes.add(name_node.id)
         name = name_node.text.decode("utf-8")
-        binding = Binding(name, bkind, scope, name_node, ready, value, annex_b=quiet)
+        binding = Binding(
+            name, bkind, scope, name_node, ready, value, annex_b=quiet, pattern=pattern
+        )
         old = scope.names.get(name)
         if old is not None:
             # A block function at top level overwrites a top-level function or var
-            # of the same name when its block runs (Annex B): a duplicate too. Two
-            # block functions of one name are left alone (only one block may run).
-            overrides = old.kind in (BindingKind.FUNCTION, BindingKind.VAR)
-            if scope is self.program and (not quiet or (overrides and not old.annex_b)):
+            # of the same name when its block runs (Annex B): a duplicate too. (A
+            # top-level let, const or class of its name means no Annex B binding
+            # is made: _hoist_block_functions.) Two block functions of one name
+            # are left alone (only one block may run).
+            if scope is self.program and (not quiet or not old.annex_b):
                 self.duplicates.append((old, binding))
             if bkind is BindingKind.VAR or quiet:
                 return  # `var x` again, or Annex B: the first binding stands
         scope.names[name] = binding
 
     def _bind_pattern(
-        self, node: Node, bkind: BindingKind, scope: Scope, ready: int = -1
+        self,
+        node: Node,
+        bkind: BindingKind,
+        scope: Scope,
+        ready: int = -1,
+        pattern: Node | None = None,
     ) -> None:
         """Bind every name a pattern declares. Default values are expressions,
-        resolved in pass 2; keys of `{key: name}` are not bindings."""
+        resolved in pass 2; keys of `{key: name}` are not bindings. `pattern`,
+        for a let or const, is the whole pattern (see Binding.pattern)."""
         k = kind(node)
+        args = (bkind, scope, ready, pattern)
         if k in BINDING_LEAVES:
-            self._bind(node, bkind, scope, ready)
+            self._bind(node, bkind, scope, ready, pattern=pattern)
         elif k in (T.ASSIGNMENT_PATTERN, T.OBJECT_ASSIGNMENT_PATTERN):
-            self._bind_pattern(node.child_by_field_name("left"), bkind, scope, ready)
+            self._bind_pattern(node.child_by_field_name("left"), *args)
         elif k is T.PAIR_PATTERN:
-            self._bind_pattern(node.child_by_field_name("value"), bkind, scope, ready)
+            self._bind_pattern(node.child_by_field_name("value"), *args)
         elif k in (
             T.OBJECT_PATTERN,
             T.ARRAY_PATTERN,
@@ -392,7 +450,7 @@ class Analysis:
             T.FORMAL_PARAMETERS,
         ):
             for child in node.named_children:
-                self._bind_pattern(child, bkind, scope, ready)
+                self._bind_pattern(child, *args)
         # Anything else in a pattern position (a member expression in a for-in
         # head that assigns) declares nothing.
 
@@ -418,13 +476,16 @@ class Analysis:
             self._declare_children(body, inner)
         elif k is T.FIELD_DEFINITION:
             # A field's initializer runs like a method body: at construction, or,
-            # for a static field, when the class is defined.
+            # for a static field, when the class is defined. Its scope is the
+            # field's (a function value is a scope of its own inside it, whose
+            # body runs only when called); its key, `[k] = 1`, is evaluated with
+            # the class, outside it.
             static = any(kind(c) is T.STATIC for c in node.children)
+            value = node.child_by_field_name("value")
             for child in node.children:
-                if child == node.child_by_field_name("value"):
-                    inner = self._scope(
-                        child, ScopeKind.FUNCTION, scope, immediate=static
-                    )
+                if child == value:
+                    inner = Scope(ScopeKind.FUNCTION, scope, node, immediate=static)
+                    self.scopes[child.id] = inner
                     self._declare(child, inner)
                 else:
                     self._declare(child, scope)
@@ -443,7 +504,9 @@ class Analysis:
                 # The right-hand side is evaluated with these bindings already in
                 # scope and not yet initialized: `for (const a of a)` throws.
                 right = node.child_by_field_name("right")
-                self._bind_pattern(left, DECLARATION_KIND[decl], inner, right.end_byte)
+                pattern = None if kind(left) is T.IDENTIFIER else left
+                bkind = DECLARATION_KIND[decl]
+                self._bind_pattern(left, bkind, inner, right.end_byte, pattern)
             self._declare_children(node, inner)
         elif k is T.CATCH_CLAUSE:
             inner = self._scope(node, ScopeKind.BLOCK, scope)
@@ -475,7 +538,8 @@ class Analysis:
             fn = value if kind(value) in FUNCTION_VALUES | CLASSES else None
             self._bind(name, bkind, scope, ready, fn)
         else:
-            self._bind_pattern(name, bkind, scope, ready)
+            pattern = name if bkind in LEXICAL else None
+            self._bind_pattern(name, bkind, scope, ready, pattern)
 
     def _declare_function(self, node: Node, scope: Scope, k: T) -> None:
         name = node.child_by_field_name("name")
@@ -483,11 +547,7 @@ class Analysis:
         if k in FUNCTION_DECLARATIONS:
             self._bind(name, BindingKind.FUNCTION, scope, value=node)
             if scope.kind is not ScopeKind.PROGRAM and scope is not scope.function:
-                # Annex B: in a script, a function declared in a block is also a
-                # var of the enclosing function.
-                self._bind(
-                    name, BindingKind.FUNCTION, scope.function, value=node, quiet=True
-                )
+                self._block_functions.append((name, node, scope))
         elif name is not None and k is not T.METHOD_DEFINITION:
             self._bind(name, BindingKind.FUNCTION, inner, value=node)
         if k is not T.ARROW_FUNCTION:
@@ -503,8 +563,37 @@ class Analysis:
         if body is not None and kind(body) is T.STATEMENT_BLOCK:
             self.scopes[body.id] = inner
         for child in node.children:
-            if child != name or k is T.METHOD_DEFINITION:
+            if child == name and kind(name) is T.COMPUTED_PROPERTY_NAME:
+                # A method's computed key, `[k]() {}`, is evaluated where the
+                # method is defined, not when it is called.
+                self.scopes[name.id] = scope
+                self._declare(name, scope)
+            elif child != name or k is T.METHOD_DEFINITION:
                 self._declare(child, inner)
+
+    def _hoist_block_functions(self) -> None:
+        """Annex B (B.3.2): in a script, a function declared in a block is also
+        bound as a var of the enclosing function or the program, unless a `var`
+        of that name there would be an early error: a `let`, `const` or `class`
+        of that name in the enclosing function (or program), or any lexical
+        declaration of it in a block between, whichever comes first in the text.
+        A catch parameter allows it (B.3.4). (So does nothing here for a
+        parameter of that name: the parameter's binding stands either way.)"""
+        for name_node, fn, block in self._block_functions:
+            name = name_node.text.decode("utf-8")
+            target = block.function
+            s, blocked = block.parent, False
+            while not blocked:
+                b = s.names.get(name)
+                if s is target:
+                    blocked = b is not None and b.kind in LEXICAL
+                    break
+                blocked = b is not None and b.kind is not BindingKind.CATCH
+                s = s.parent
+            if not blocked:
+                self._bind(
+                    name_node, BindingKind.FUNCTION, target, value=fn, quiet=True
+                )
 
     def _declare_class(self, node: Node, scope: Scope, k: T) -> None:
         name = node.child_by_field_name("name")
@@ -529,7 +618,11 @@ class Analysis:
 
     def _resolve(self, node: Node, scope: Scope) -> None:
         scope = self.scopes.get(node.id, scope)
-        if kind(node) in REFERENCES and node.id not in self.binding_nodes:
+        if (
+            kind(node) in REFERENCES
+            and node.id not in self.binding_nodes
+            and not _misparsed_await(node)
+        ) or _await_as_name(node):
             self.references.append(
                 Reference(
                     node,
@@ -602,7 +695,7 @@ class Analysis:
             if (
                 b is not None
                 and b.kind in LEXICAL
-                and ref.node.start_byte < b.ready
+                and _unready(ref.node, b)
                 and ref.scope.context is b.scope.context
                 and not self._after_await(ref, b.scope.function)
             ):
@@ -625,7 +718,7 @@ class Analysis:
                         b is not None
                         and b.scope is self.program
                         and b.kind in LEXICAL
-                        and at < b.ready
+                        and _unready(ref.node, b)
                         and not self._after_await(inner)
                     ):
                         report(
@@ -658,10 +751,7 @@ class Analysis:
         """Where an async function's code first suspends: the end of its first
         `await` (its operand is evaluated before it suspends), or None."""
         if fn.id not in self._awaits:
-            async_ = kind(fn) in FUNCTIONS and any(
-                kind(c) is T.ASYNC for c in fn.children
-            )
-            body = fn.child_by_field_name("body") if async_ else None
+            body = fn.child_by_field_name("body") if _is_async(fn) else None
             self._awaits[fn.id] = None if body is None else _first_await(body)
         return self._awaits[fn.id]
 
@@ -683,15 +773,18 @@ class Analysis:
         return False
 
     def duplicate_declarations(self) -> list[Problem]:
-        return [
-            Problem(
-                f"duplicate top-level declaration {new.name!r} (first at {{0}}) "
-                "- two modules define it",
-                new.node.start_byte,
-                (old.node.start_byte,),
+        problems = []
+        for pair in self.duplicates:
+            first, second = sorted(pair, key=lambda b: b.node.start_byte)
+            problems.append(
+                Problem(
+                    f"duplicate top-level declaration {second.name!r} (first at "
+                    "{0}) - two modules define it",
+                    second.node.start_byte,
+                    (first.node.start_byte,),
+                )
             )
-            for old, new in self.duplicates
-        ]
+        return problems
 
 
 def lookup(scope: Scope | None, name: str) -> Binding | None:
@@ -702,12 +795,98 @@ def lookup(scope: Scope | None, name: str) -> Binding | None:
     return None
 
 
+def _unready(at: Node, b: Binding) -> bool:
+    """Whether code at `at` runs before the let, const or class `b` is ready.
+    Outside a destructuring pattern, that is before the end of its declaration
+    (for `for (const x of ...)`, of the right-hand side). Inside one, the pattern
+    is destructured in order, so `const {y, x = y} = o` reads `y` once it is
+    bound, while `const {x = y, y} = o` and `const {y = y} = o` do not."""
+    if _operand_of(at, T.DELETE):
+        return False  # `delete x` of a declared name is false, and reads nothing
+    p = b.pattern
+    if p is not None and p.start_byte <= at.start_byte < p.end_byte:
+        return _pattern_order(at, p) < _pattern_order(b.node, p)
+    return at.start_byte < b.ready
+
+
+def _pattern_order(node: Node, root: Node) -> list[int]:
+    """Where `node` comes in the order a pattern is evaluated: elements in turn,
+    but in `target = default` the default first (it decides what is bound)."""
+    path = []
+    while node != root:
+        parent = node.parent
+        if kind(parent) in (T.ASSIGNMENT_PATTERN, T.OBJECT_ASSIGNMENT_PATTERN):
+            path.append(0 if parent.child_by_field_name("right") == node else 1)
+        else:
+            path.append(next(i for i, c in enumerate(parent.children) if c == node))
+        node = parent
+    return path[::-1]
+
+
+def _is_async(fn: Node | None) -> bool:
+    return kind(fn) in FUNCTIONS and any(kind(c) is T.ASYNC for c in fn.children)
+
+
+def _misparsed_await(node: Node) -> bool:
+    """tree-sitter parses `await (p)()` and `await (p).then()`, in an async
+    function, as a call of a function named `await` (in other code `await` is
+    an ordinary name, and that reading is right). This is that `await`: not a
+    reference but the keyword, whose operand is _await_extent's."""
+    if kind(node) is not T.IDENTIFIER or node.text.decode("utf-8") != T.AWAIT:
+        return False
+    parent = node.parent
+    if not (
+        kind(parent) is T.CALL_EXPRESSION
+        and parent.child_by_field_name("function") == node
+    ):
+        return False
+    fn = parent
+    while fn is not None and kind(fn) not in FUNCTIONS:
+        fn = fn.parent
+    return _is_async(fn)
+
+
+def _await_as_name(node: Node) -> bool:
+    """The other way round: outside an async function, tree-sitter parses
+    `await (x)` as an await expression, where it is a call of a function named
+    `await` (and `await x` a syntax error, which node --check reports). This is
+    that `await` token: a reference to the name."""
+    if not (kind(node) is T.AWAIT and kind(node.parent) is T.AWAIT_EXPRESSION):
+        return False
+    fn = node.parent
+    while fn is not None and kind(fn) not in FUNCTIONS:
+        fn = fn.parent
+    return not _is_async(fn)
+
+
+def _await_extent(node: Node) -> Node:
+    """The whole await expression a misparsed `await` begins: `await` binds
+    looser than calls and member accesses, so out through every call, `.x` and
+    `[x]` that has it on the left."""
+    while True:
+        parent = node.parent
+        k = kind(parent)
+        if (
+            k is T.CALL_EXPRESSION and parent.child_by_field_name("function") == node
+        ) or (
+            k in (T.MEMBER_EXPRESSION, T.SUBSCRIPT_EXPRESSION)
+            and parent.child_by_field_name("object") == node
+        ):
+            node = parent
+        else:
+            return node
+
+
 def _in_typeof(node: Node) -> bool:
     """The operand of `typeof`, `typeof x` or `typeof (x)`."""
+    return _operand_of(node, T.TYPEOF)
+
+
+def _operand_of(node: Node, operator: T) -> bool:
     parent = _unparen(node).parent
     return (
         kind(parent) is T.UNARY_EXPRESSION
-        and kind(parent.child_by_field_name("operator")) is T.TYPEOF
+        and kind(parent.child_by_field_name("operator")) is operator
     )
 
 
@@ -739,8 +918,10 @@ def _typeof_of(node: Node | None) -> str | None:
 
 def _says_defined(cond: Node | None, name: str) -> bool:
     """Whether `cond` being true means `name` is defined: it is, or has as an
-    `&&` operand, `typeof name === "<anything but undefined>"` or
-    `typeof name !== "undefined"` (either way round, `==` and `!=` too)."""
+    `&&` operand, `typeof name === "<a type but undefined>"` or
+    `typeof name !== "undefined"` (either way round, `==` and `!=` too). The
+    string is a string literal, read for its value (escapes decoded), and must
+    be one `typeof` can return (TypeofResult); anything else is not a guard."""
     cond = _inner(cond)
     if kind(cond) is not T.BINARY_EXPRESSION:
         return False
@@ -751,11 +932,56 @@ def _says_defined(cond: Node | None, name: str) -> bool:
     if op not in EQUALS | NOT_EQUALS:
         return False
     for asked, other in ((left, right), (right, left)):
-        other = _inner(other)
-        if _typeof_of(asked) == name and kind(other) is T.STRING:
-            undefined = other.text[1:-1].decode("utf-8") == TypeofResult.UNDEFINED
-            return (op in EQUALS) is not undefined
+        if _typeof_of(asked) != name:
+            continue
+        try:
+            result = TypeofResult(_string_value(_inner(other)))
+        except ValueError:
+            return False
+        return (op in EQUALS) is not (result is TypeofResult.UNDEFINED)
     return False
+
+
+SIMPLE_ESCAPES = {"b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
+LINE_TERMINATORS = "\n\r\u2028\u2029"
+
+
+def _string_value(node: Node | None) -> str | None:
+    """The value of a string literal, escapes decoded, or None if `node` is not
+    a string literal."""
+    if kind(node) is not T.STRING:
+        return None
+    parts = []
+    for child in node.named_children:
+        k, text = kind(child), child.text.decode("utf-8")
+        if k is T.STRING_FRAGMENT:
+            parts.append(text)
+        elif k is T.ESCAPE_SEQUENCE:
+            value = _unescape(text)
+            if value is None:
+                return None
+            parts.append(value)
+        else:
+            return None
+    return "".join(parts)
+
+
+def _unescape(escape: str) -> str | None:
+    """One escape sequence of a string literal, `\\x65` to `e`."""
+    body = escape[1:]
+    try:
+        if body[0] in LINE_TERMINATORS:
+            return ""  # a line continuation
+        if body[0] == "x":
+            return chr(int(body[1:3], 16))
+        if body[0] == "u":
+            return chr(int(body[2:-1] if body[1] == "{" else body[1:5], 16))
+    except (ValueError, IndexError):
+        return None
+    if body.isdigit():
+        # \0, a legacy octal escape (\165 is "u"), or \8 and \9 (themselves)
+        return body if body[0] in "89" else chr(int(body, 8))
+    return SIMPLE_ESCAPES.get(body, body)
 
 
 def _guarded(node: Node, name: str) -> bool:
@@ -792,6 +1018,8 @@ def _first_await(node: Node) -> int | None:
         k = kind(n)
         if k is T.AWAIT_EXPRESSION:
             return n.end_byte
+        if _misparsed_await(n):
+            return _await_extent(n).end_byte
         if k in FUNCTIONS:
             continue
         if k is T.FOR_IN_STATEMENT and any(kind(c) is T.AWAIT for c in n.children):
@@ -803,14 +1031,23 @@ def _first_await(node: Node) -> int | None:
 
 
 def _iife(fn: Node) -> bool:
-    """A function expression called where it is written: `(() => ...)()`."""
+    """A function expression whose body runs where it is written:
+    `(() => ...)()`, `new function(){ ... }`, `new (function(){ ... })()`. Not a
+    generator, whose call runs none of its body."""
+    k = kind(fn)
     outer = _unparen(fn)
     parent = outer.parent
-    return (
-        kind(fn) in FUNCTION_VALUES
-        and kind(parent) is T.CALL_EXPRESSION
-        and parent.child_by_field_name("function") == outer
-    )
+    pk = kind(parent)
+    if pk is T.CALL_EXPRESSION:
+        return k in FUNCTION_VALUES - GENERATORS and (
+            parent.child_by_field_name("function") == outer
+        )
+    if pk is T.NEW_EXPRESSION:
+        # An arrow function is not a constructor: `new` throws before its body.
+        return k is T.FUNCTION_EXPRESSION and (
+            parent.child_by_field_name("constructor") == outer
+        )
+    return False
 
 
 def _called(ref: Reference) -> Binding | None:
@@ -831,9 +1068,12 @@ def _called(ref: Reference) -> Binding | None:
 
 
 def _bodies(binding: Binding) -> Iterator[Node]:
-    """The function nodes that run when a binding is called: the function itself,
-    or for a class its constructor and instance field initializers."""
+    """The nodes whose code runs when a binding is called: the function itself,
+    or for a class its constructor and its fields (an instance field's
+    initializer runs at construction)."""
     value = binding.value
+    if kind(value) in GENERATORS:
+        return  # a generator's body runs on .next(), a method call
     if kind(value) in FUNCTIONS:
         yield value
         return
@@ -846,11 +1086,11 @@ def _bodies(binding: Binding) -> Iterator[Node]:
                 if name is not None and name.text == b"constructor":
                     yield member
             elif mk is T.FIELD_DEFINITION:
-                v = member.child_by_field_name("value")
-                if v is not None and not any(
-                    kind(c) is T.STATIC for c in member.children
-                ):
-                    yield v
+                # The field's own scope (see _declare): its initializer runs at
+                # construction, but not the body of a function it holds. A
+                # static field's scope is run immediately, with the class, so
+                # no reference has it as its context and it adds nothing here.
+                yield member
 
 
 # -- a built page ---------------------------------------------------------------

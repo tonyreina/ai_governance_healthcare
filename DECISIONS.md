@@ -1671,10 +1671,16 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   into a temporary directory, and resolves every identifier through its scopes.
   It fails on a name nothing declares that is not an ECMAScript or browser
   global, on a `const`, `let` or `class` read before its declaration has run
-  (directly, in an IIFE or static block, in the right-hand side of a
-  `for (const a of ...)` reading `a`, or in a function that top-level code
-  calls by name before the declaration), and on a name declared twice at top
-  level (a function in a top-level block that replaces another counts).
+  (directly, in an IIFE, `new function(){...}` or static block, in a computed
+  key of a class or object member, in the right-hand side of a
+  `for (const a of ...)` reading `a`, in a destructuring default reading a name
+  the same pattern binds later, or in a function that top-level code calls by
+  name before the declaration; a generator's body is not run by its call, nor a
+  function held by an instance field by `new`), and on a name declared twice at
+  top level (a function in a top-level block that replaces another function or
+  var counts; as in Annex B, one whose name a top-level `let`, `const` or
+  `class` declares binds nothing there and does not, and two block functions
+  of one name do not).
   `node --check` still runs, and its absence is a failure under
   `REQUIRE_TESTS`, which both the lint and the test workflows set.
 - **The parser is tree-sitter's JavaScript grammar**, two PyPI wheels locked
@@ -1686,8 +1692,10 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   out) only behind `typeof name`, which the check accepts as the question "was
   this built?": the operand of `typeof` itself, and a use inside the branch a
   typeof test of the same name guards (the consequent of an `if` or `?:`, or
-  the right of `&&`, tested `=== "<a type>"` or `!== "undefined"`), and nothing
-  wider (not the else branch, not code after an early return, not `||`). A new
+  the right of `&&`, tested `=== "<a type>"` or `!== "undefined"`, either way
+  round, `==` and `!=` alike, against a string literal whose decoded value is
+  one `typeof` returns), and nothing wider (not the else branch, not code after
+  an early return, not `||`, not a variable or template literal). A new
   browser global the app uses goes in `BROWSER_GLOBALS`, and
   `tests/test_check_app.py` must find it in Chromium, Firefox and WebKit.
 - **Its limits, stated in the script and in `docs/developing.md`:** the call

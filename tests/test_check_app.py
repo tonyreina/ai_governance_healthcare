@@ -8,11 +8,15 @@ dangling reference would show only as a blank page. A check that has never been
 seen to fail is a claim, not a control, so each rule is shown failing here:
 
 * unit: synthetic scripts with an undefined name, a read in the temporal dead
-  zone (directly, in an IIFE, in a for-of head, before an `await`, and through
-  functions called during load), a duplicate, and the legitimate shapes next to
-  them (a function body that runs later, code after an `await`, `typeof` of an
-  optional name and the branch it guards, browser globals, shadowing,
-  patterns), which must pass;
+  zone (directly, in an IIFE or `new function`, in a for-of head, in a computed
+  key, in a destructuring default, before an `await`, and through functions
+  called during load), a duplicate (Annex B in both orders), and the legitimate
+  shapes next to them (a function body that runs later, a generator, a function
+  held by a field, code after an `await` including the `await (p)()` tree-sitter
+  misreads, `typeof` of an optional name and the branch it guards, with the
+  guard's string read for its value, browser globals, shadowing, patterns),
+  which must pass; each case pins a behavior a mutation of the check would
+  break;
 * integration: the published page and a build of the example framework pass;
   the browser globals the check accepts all exist in a real browser engine;
 * mutation: a copy of app/ with a definition deleted, with the boot module sorted
@@ -80,6 +84,16 @@ def problems(js: str) -> list[str]:
 def flags(js: str, *needles: str) -> bool:
     found = problems(js)
     return bool(found) and all(any(n in p for p in found) for n in needles)
+
+
+def passes(name: str, js: str) -> None:
+    """A check that this script has no problem at all."""
+    check(name, problems(js) == [], problems(js))
+
+
+def reported(name: str, js: str, *needles: str) -> None:
+    """A check that this script is reported, each needle in some problem."""
+    check(name, flags(js, *needles), problems(js))
 
 
 def unit() -> None:
@@ -178,6 +192,78 @@ def unit() -> None:
             "'later' is used before",
         ),
     )
+    undefined_zz = "undefined name 'zz'"
+    reported(
+        "`typeof x === ... || x()` is not a guard: the right runs when it is false",
+        'typeof zz === "function" || zz();',
+        undefined_zz,
+    )
+    reported(
+        "only the right of `&&` is guarded, not its left",
+        'zz() && typeof zz === "function";',
+        undefined_zz,
+    )
+    reported(
+        "... even when that left is an `&&` whose own right is a guard",
+        '(zz.y && typeof zz === "function") && 1;',
+        undefined_zz,
+    )
+    passes(
+        'the string may be on the left: `"function" === typeof x`',
+        'if ("function" === typeof zz) zz();\nif ("undefined" !== typeof yy) yy();',
+    )
+    passes(
+        "`==` and `!=` count as `===` and `!==`",
+        'if (typeof zz != "undefined") zz();\nif (typeof yy == "object") yy.a;',
+    )
+    reported(
+        "a comparison with a variable, not a string literal, is not a guard",
+        'var u = "undefined"; if (typeof zz !== u) zz();',
+        undefined_zz,
+    )
+    reported(
+        "a template literal is not read as a guard",
+        "if (typeof zz !== `undefined`) zz();",
+        undefined_zz,
+    )
+    reported(
+        "only equality operators make a guard (`<` does not)",
+        'if (typeof zz < "undefined") zz();',
+        undefined_zz,
+    )
+    print("typeof guards: the string is read for its value")
+    for spelled in (
+        "undefin\\x65d",
+        "undefin\\u0065d",
+        "undefin\\u{65}d",
+        "undefi\\\nned",
+        "\\165ndefined",
+    ):
+        shown = spelled.replace("\n", "<newline>")
+        reported(
+            f'`typeof x === "{shown}"` is "undefined": not a guard',
+            f'if (typeof zz === "{spelled}") zz();',
+            undefined_zz,
+        )
+        passes(
+            f'`typeof x !== "{shown}"` is `!== "undefined"`: a guard',
+            f'if (typeof zz !== "{spelled}") zz();',
+        )
+    passes(
+        "an escape spelling another type is read too",
+        "if (typeof zz === 'func\\x74ion') zz();",
+    )
+    for bogus in ("undefinedx", "func", "Function", "func\\tion", ""):
+        reported(
+            f'"{bogus}" is not a string typeof returns: not a guard',
+            f'if (typeof zz === "{bogus}") zz();',
+            undefined_zz,
+        )
+    reported(
+        '... nor with `!==`: `typeof x !== "func"` is always true',
+        'if (typeof zz !== "func") zz();',
+        undefined_zz,
+    )
 
     ok = """
         const f0 = 1, { a, b: [c, ...d], e = f0 } = window.cfg;
@@ -228,6 +314,11 @@ def unit() -> None:
         "a read in a static block runs when the class is defined: reported",
         flags("class A { static { later; } }\nlet later = 1;", "'later'"),
     )
+    reported(
+        "a static field's initializer runs when the class is defined: reported",
+        "class A { static x = later; }\nlet later = 1;",
+        "'later' is used before",
+    )
     check(
         "a function called during load that reads a later const is reported",
         flags(
@@ -242,6 +333,16 @@ def unit() -> None:
     check(
         "a constructor called during load that reads a later const is reported",
         flags("class A { x = LIMIT; }\nnew A();\nconst LIMIT = 1;", "'LIMIT'"),
+    )
+    reported(
+        "... in the constructor's own body too",
+        "class A { constructor(){ this.x = LIMIT; } }\nnew A();\nconst LIMIT = 1;",
+        "'LIMIT' is used before",
+        "via A()",
+    )
+    passes(
+        "... but not a method's body, which `new` does not run",
+        "class A { m(){ return LIMIT; } }\nnew A();\nconst LIMIT = 1;",
     )
     check(
         "a read in a block before a let in that block is reported",
@@ -263,6 +364,109 @@ def unit() -> None:
     check(
         "a for-in reading its own binding on the right-hand side is reported",
         flags("for (let k in k) {}", "'k' is used before"),
+    )
+    print("Destructuring: each name is ready once its own element is")
+    passes(
+        "a default reading an earlier name of the same pattern passes",
+        "const {y, x = y} = {y: 1};\n"
+        "let [p, q = p] = [1];\n"
+        "const {o: {w}, v = w} = {o: {w: 1}};\n"
+        "const {k: {m, n = m} = {m: 1}} = {};\n"
+        "const [{a = 1, b = a} = {}, c = b] = [];\n"
+        "const {s, [s]: t} = {s: 'k'};\n"
+        "for (const {y2, x2 = y2} of [{y2: 1}]) {}",
+    )
+    for js, name in (
+        ("const {y = y} = {};", "y"),
+        ("const [p = p] = [];", "p"),
+        ("const {x = y, y} = {};", "y"),
+        ("const {k: {q} = q} = {};", "q"),
+        ("const {[y]: z, y} = {};", "y"),
+        ("const {y} = {y: y};", "y"),
+        ("for (const {k: {q} = q} of [{}]) {}", "q"),
+    ):
+        reported(
+            f"a pattern reading a name before its element: {js}",
+            js,
+            f"'{name}' is used before",
+        )
+    passes(
+        "a function called from a default, after the name it reads is bound, passes",
+        "function g(){ return y; } const {y, x = g()} = {y: 1};",
+    )
+    reported(
+        "... and before it is bound, is reported",
+        "function g(){ return y; } const {x = g(), y} = {y: 1};",
+        "'y' is used before",
+        "via g()",
+    )
+    print("Computed keys are evaluated where the class or object is defined")
+    for js in (
+        "class K { [a]() {} }",
+        "class K { static [a]() {} }",
+        "class K { get [a]() { return 1; } }",
+        "class K { set [a](v) {} }",
+        "class K { [a] = 1; }",
+        "const o = { [a]() {} };",
+        "const o = { get [a]() { return 1; } };",
+    ):
+        reported(
+            f"a computed key read before its declaration: {js}",
+            js + '\nconst a = "x";',
+            "'a' is used before",
+        )
+    passes(
+        "a method body (not its key) reading a later const passes",
+        "class K { [Symbol.iterator]() { return a; } }\nconst a = 1;",
+    )
+    reported(
+        "a computed key in a class built by a function called during load",
+        'function f(){ return class { [a]() {} }; }\nf();\nconst a = "x";',
+        "'a' is used before",
+        "via f()",
+    )
+    print("Class fields: the initializer runs at construction, a function in it later")
+    passes(
+        "an instance field holding a function that reads a later const passes",
+        "class K { f = () => a; g = function(){ return a; }; }\nnew K();\nconst a = 1;",
+    )
+    passes(
+        "a static field holding a function that reads a later const passes",
+        "class K { static f = () => a; }\nconst a = 1;",
+    )
+    reported(
+        "an instance field whose initializer calls a function reading it is reported",
+        "class K { f = (() => a)(); }\nnew K();\nconst a = 1;",
+        "'a' is used before",
+    )
+    print("What runs immediately, and what does not")
+    reported(
+        "`new function(){ ... }` runs its body: reported",
+        "new function(){ a; };\nconst a = 1;",
+        "'a' is used before",
+    )
+    reported(
+        "`new (function(){ ... })()` runs its body: reported",
+        "new (function(x){ a; })(1);\nconst a = 1;",
+        "'a' is used before",
+    )
+    passes(
+        "`new` of an arrow throws before its body runs: not an IIFE",
+        "try { new (() => a)(); } catch (e) {}\nconst a = 1;",
+    )
+    passes(
+        "calling a generator runs none of its body: not reported",
+        "(function*(){ a; })();\n"
+        "(async function*(){ a; })();\n"
+        "function* g(){ yield a; }\n"
+        "async function* h(){ a; }\n"
+        "const k = function*(){ yield a; };\n"
+        "g(); h(); k();\n"
+        "const a = 1;",
+    )
+    passes(
+        "`delete x` of a let before its declaration reads nothing, and passes",
+        "delete a;\nlet a;",
     )
     print("Async code: what runs after the first await runs after load")
     check(
@@ -323,6 +527,67 @@ def unit() -> None:
             "via boot() -> render()",
         ),
     )
+    passes(
+        "a call from top-level code after the first await passes",
+        "function g(){ return a; }\n(async () => { await 0; g(); })();\nconst a = 1;",
+    )
+    passes(
+        "a sync IIFE nested after the first await passes",
+        "(async () => { await 0; (() => a)(); })();\nconst a = 1;",
+    )
+    passes(
+        "the first await counts, not the last",
+        "(async () => { await 0; a; await 1; })();\nconst a = 1;",
+    )
+    passes(
+        "`for await` suspends: a read after it passes",
+        "(async () => { for await (const x of [1]) {} a; })();\nconst a = 1;",
+    )
+    reported(
+        "... but only after its right-hand side, which is read during load",
+        "(async () => { for await (const x of a) {} })();\nconst a = [];",
+        "'a' is used before",
+    )
+    reported(
+        "`await(0)` in a function that is not async is a call, not a suspension",
+        "function await(x){}\nfunction f(){ await(0); a; }\nf();\nconst a = 1;",
+        "'a' is used before",
+        "via f()",
+    )
+    print("`await (p)()`, which tree-sitter parses as a call of `await`")
+    passes(
+        "in an async function it is an await: no undefined name 'await', and a "
+        "read after it passes",
+        "(async () => { await (Promise.resolve)(); a; })();\n"
+        "(async () => { await (Promise.resolve()).then(); a; })();\n"
+        "const f = async () => await (Promise.resolve)();\n"
+        "const a = 1;",
+    )
+    reported(
+        "... its operand is read before it suspends",
+        "(async () => { await (a)(); })();\nconst a = () => 1;",
+        "'a' is used before",
+    )
+    for js in (
+        "(async () => { await (Promise.resolve()).then(a); })();",
+        "(async () => { await ([1])[a]; })();",
+    ):
+        reported(
+            f"... all of it, through `.x(...)` and `[x]`: {js}",
+            js + "\nconst a = 0;",
+            "'a' is used before",
+        )
+    for js in ("await (1);", "function f(){ return await (g)(); }\nconst g = 1;"):
+        reported(
+            f"outside an async function, `await (x)` calls a function named await: "
+            f"{js!r}",
+            js,
+            "undefined name 'await'",
+        )
+    passes(
+        "... which passes when one is declared",
+        "function await(x){ return x; }\nawait (1);",
+    )
     legit = """
         function render(){ return CONFIG.x + later(); }
         const handler = () => CONFIG.x;
@@ -369,6 +634,48 @@ def unit() -> None:
             "function f(){}\n{ function f(){} }", "duplicate top-level declaration 'f'"
         ),
         problems("function f(){}\n{ function f(){} }"),
+    )
+    found = problems("{ function f(){} }\nfunction f(){}")
+    check(
+        "... in either order, naming the later one, first at the earlier",
+        len(found) == 1
+        and found[0].startswith("script line 2: duplicate top-level declaration 'f'")
+        and "(first at script line 1)" in found[0],
+        found,
+    )
+    reported(
+        "a block function that overrides a top-level var is reported",
+        "var f = 1;\n{ function f(){} }",
+        "duplicate top-level declaration 'f'",
+    )
+    passes(
+        "two block functions of one name are not reported (only the block that "
+        "runs last binds it, and node accepts it)",
+        "{ function f(){} }\n{ function f(){} }",
+    )
+    for js in (
+        "let f;\n{ function f(){} }",
+        "{ function f(){} }\nconst f = 1;",
+        "{ function f(){} }\nclass f {}",
+        "function g(f){ { function f(){} } return f; }\ng(1);",
+    ):
+        passes(
+            "a block function where a lexical declaration or parameter of its name "
+            f"blocks Annex B creates no var, in either order: {js!r}",
+            js,
+        )
+    passes(
+        "... and the name then resolves to the let, not the block function",
+        "{ function f(){} }\nlet f = 1;\nf;",
+    )
+    reported(
+        "a let in a block between blocks it too: the name is not hoisted out",
+        "{ let f; { function f(){} } }\nf;",
+        "undefined name 'f'",
+    )
+    passes(
+        "a catch parameter does not block it (B.3.4)",
+        "try { throw 0; } catch (f) { { function f(){} } }\nf;",
     )
     check(
         "the same name declared in two functions is not a duplicate",

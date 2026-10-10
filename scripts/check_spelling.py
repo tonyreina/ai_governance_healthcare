@@ -6,51 +6,90 @@ non-profit, and aimed at US health systems, so British spellings read as
 inconsistent with the subject matter. The slips are easy to miss in review
 because words like "behavior" and "defense" look unremarkable.
 
-Deliberately conservative. Only words whose American form is unambiguous are
-listed, and anything that is a word in both -- "specialist", "analysis",
-"practice" as a noun -- is left out, because a checker that cries wolf gets
-switched off. Left out on purpose, because they are standard or common American
-spellings too: "dialogue", "analogue", "monologue", "prologue" and the other
--ogue words except "catalogue" (CLAUDE.md names "catalog"); "burnt", "dreamt",
-"spelt"; "glamour"; "fulfilled", "enrolled" (the American past tense doubles
-the l); "analyses" (the plural of "analysis"); "aesthetic", "archaeology",
-"amoeba"; and the name "Caesar" (only "caesarean" and "caesarian" are caught).
+Nothing is ever written. The check reports; --fix (pixi run fix-spelling)
+prints a patch of suggestions for a person to review and apply, and a list of
+the hits it has no suggestion for. Five rounds of review showed that a tool
+rewriting the owner's files by heuristics keeps corrupting text it misreads
+(a genus in emphasis, a link's label, <pre> and <script>, front matter,
+templates, package names, French, quotations), so no path writes a file.
 
-The list is of roots, not of words: each root's inflections (plurals, -ed,
--ing, -er, the -isation family, un-, re- and the like) are generated from it,
-because a list of exact forms missed "judgements" while it listed "judgement"
-(#169). The British medical spellings are roots too (MEDICAL: "haemorrhag-",
-"oedem-", "oesophag-", the -aemia words and the rest), each with a closed set of
-English endings and a few known prefixes. A listed word is matched whole, so
-"phytoestrogen" and "proestrus" are not touched, and no listed form has a Latin
-ending, so "faecalis" is never listed.
+What is reported
+----------------
 
-Beyond the list, a lowercase word is also reported by its shape: one that
-starts with a British medical segment (haem-, oesophag-, oestr-, foeto-, paed-,
-anaes-, gynae-) or ends with one (-aemia, -aemic, -rrhoea, -pnoea, -litre and
-their plurals), unless it has a Latin ending or is one of SHAPE_EXCEPTIONS. See
-by_shape(). A shape is never rewritten.
+Reporting is broad: a false report costs a ``spelling-ok`` marker, and a missed
+one costs the rule. Every hit is reported, whatever word stands before it.
+
+* A listed word, in any case. The list is of roots, not of words: each root's
+  inflections (plurals, -ed, -ing, -er, the -isation family, un-, re- and the
+  like) are generated from it, because a list of exact forms missed
+  "judgements" while it listed "judgement" (#169). The British medical
+  spellings are roots too (MEDICAL: "haemorrhag-", "oedem-", "oesophag-", the
+  -aemia words and the rest), each with a closed set of English endings and a
+  few known prefixes. A listed word is matched whole, so "phytoestrogen" and
+  "proestrus" are not touched, and no listed form has a Latin ending, so
+  "faecalis" is never listed.
+* A lowercase word by its shape: it holds a British medical segment anywhere
+  in it (SHAPES: haem, oedem, oesophag, oestr, foet, faec, caec, paed, aesthe
+  (which every anaes- word holds), gynae, leuco, aetio, palaeo, praecord,
+  pharmacopoei, spirochaet, sulph, tumour, -rrhoe-, -pnoe-, -aemia and -aemic;
+  and -litre and -gramme at its end), and is longer than the segment. See
+  by_shape(). A segment that an American word can hold by accident is
+  narrowed: oe- segments count only at
+  the start or after a vowel other than "e" ("videoedema" and "phytoestrogen"
+  are American), "haem" inside a word only before "a" or "o"
+  ("alphaemission"), "foet" only before an English ending ("infoetl"),
+  "aesthe" never at the start ("aesthetic").
+
+A word found by its shape is not reported when:
+
+* it is spelled with the letters a-f alone (hex: "#faecab");
+* it has a Latin ending (-us but not -ous, -ae, -ii, -alis, -icus, -ica, -icum,
+  -ensis) or is one of LATIN_EPITHETS, Latin epithets whose ending looks
+  English ("faecium", "haematobium");
+* it contains one of SHAPE_EXCEPTIONS, words American biology spells this way
+  ("caecilian", "leucovorin", "paedomorphosis"), or is one of DICTIONARY_WORDS,
+  which the en_US dictionary accepts as American ("leucotomy",
+  "pharmacopoeia").
+
+And no word, listed or found by its shape, is reported when it is the epithet
+of a binomial (see binomial()): it ends in a Latin form (-a, -ae, -i, -ii, -is,
+-um, -us but not -ous, -ensis), and the word before it, past markup such as
+"*", "_" and HTML tags, and on the line before if it is first on its line, is
+one of GENERA or an abbreviated genus such as "E.". So "Tritrichomonas foetus"
+and "T. foetus" pass, and "Severe foetus" does not.
 
 A British word that neither the list nor a shape covers passes
 (tests/fixtures/spelling_corpus/unlisted.txt keeps a few), and so does a
 commit message, which the check does not read. A word with an accented letter
 is not English and is not read ("décentre").
 
-Not prose, so neither reported nor rewritten: a URL (with "://", or one of the
-schemes written without it, such as mailto:, urn:, doi: and data:, starting
-after anything but a letter or digit), an email address, a domain, a file name
-with a known extension, a path, a digest ("sha384-..."), and a run of 16 or
-more characters that looks like encoded data (see looks_encoded()). Hex needs
-no rule: a word is a run of letters, and no British word is spelled with the
-letters a-f alone.
+Not prose, so not reported: a URL (with "://", or one of the schemes written
+without it, such as mailto:, urn:, doi: and data:, starting after anything but
+a letter or digit), an email address, a domain, a file name with a known
+extension, a path, a digest ("sha384-..."), and a run of 16 or more characters
+that looks like encoded data (see looks_encoded()). An abbreviation written
+with dots ("e.g.", "i.e.") is not a file extension, so "oedema/e.g." is prose.
 
-Every hit is reported. --fix rewrites a hit only where it cannot be wrong, since
-a false report costs a ``spelling-ok`` marker and a wrong rewrite corrupts the
-owner's file. It rewrites a word only when all of these hold (left_by()):
+Words are read the way code writes them, so the parts of an identifier
+(``colourPicker``, ``MAX_COLOURS``, ``data-colour-id``) are reported too, in any
+case, and the ligatures "œ" and "æ" are read as "oe" and "ae".
+
+The suggestion patch
+--------------------
+
+--fix never writes a file; there is no flag that makes it. It prints to stdout
+a unified diff, which ``git apply`` takes, of suggested respellings, under a
+header saying the patch is a suggestion to review before applying. Paths are
+relative to the repository root (a file outside it is named as given). It
+prints to stderr every other hit, for a person to fix by hand, with the reason
+it is not in the patch, and exits 1 when there is any hit or a file it cannot
+read.
+
+A hit is suggested in the patch only when all of these hold (left_by()); its
+imperfection is harmless, because a person reviews each hunk:
 
 * it is listed, not found by its shape;
-* it is all lowercase (a capitalized word may be a name: a journal, a company,
-  a place, a genus);
+* it is all lowercase (a capitalized word may be a name);
 * the file is Markdown, reStructuredText or plain text (.md, .rst, .txt), or
   it is in a value of app/i18n/en.json; never code, configuration or data;
 * it is not in code: a fenced or indented Markdown block, a reStructuredText
@@ -58,24 +97,14 @@ owner's file. It rewrites a word only when all of these hold (left_by()):
   with "import ", "from ... import ", "$ ", ">>> " or "... ", or the word after
   "import", "require" or "library";
 * between it and the whitespace (or line end) around it there is nothing but,
-  before, any of ``( [ " ' *`` and, after, any of ``) ] " ' * , ; : . ! ?``. Any
-  other character next to it (a letter, accented ones too, a digit, "_", "-",
-  "/", "@", "=", "`" and the rest, or "." or ":" before it) leaves it;
-* the word before it (on the line before, if it is first on its line, unless a
-  blank line separates them) is not a capitalized word of letters alone that
-  is not a common sentence opener, nor an abbreviated genus such as "E.": the
-  word may be an epithet ("Tritrichomonas foetus").
+  before, any of ``( [ " ' *`` and, after, any of ``) ] " ' * , ; : . ! ?``.
 
---fix lists each hit it leaves, with the reason, and exits 1; the check's
-report says the same of each.
+Known limits: the patch can still be wrong (a lowercase listed word in a
+quotation, a name written in lowercase), which is why it is a suggestion; and
+the check reads only what is listed or has a listed shape.
 
-Words are read the way code writes them, so the parts of an identifier
-(``colourPicker``, ``MAX_COLOURS``, ``data-colour-id``) are reported too, in any
-case, and the ligatures "œ" and "æ" are read as "oe" and "ae".
-tests/test_check_spelling.py pins all of this, against a corpus a verifier
-built (tests/fixtures/spelling_corpus/).
-
-Quoting a source that spells a word the British way is legitimate. Two escapes:
+Quoting a source that spells a word the British way is legitimate (R-17), and
+nothing here rewrites it. The check still reports it, so mark it:
 
 * Put ``spelling-ok``, in lowercase, in a comment on the same line; that line is
   skipped.
@@ -95,11 +124,16 @@ a shell script, a .caddy file, .env.example and .gitignore as well as code and
 documentation. Symbolic links are not read (pre-commit does not pass them; the
 target is read on its own), nor anything under SKIP_DIRS.
 
-Run via: pixi run check-spelling
+tests/test_check_spelling.py pins all of this, against a corpus a verifier
+built (tests/fixtures/spelling_corpus/).
+
+Run via: pixi run check-spelling  (suggestions: pixi run fix-spelling)
 """
 
 from __future__ import annotations
 
+import difflib
+import os
 import re
 import sys
 from enum import StrEnum
@@ -130,15 +164,13 @@ SKIP_DIRS = {
     ".ruff_cache",
     ".mypy_cache",
 }
-# This file IS the word list. Scanning it would flag every British key, and
-# --fix would rewrite the keys to match their values, quietly turning the
-# dictionary into identity mappings and disabling the check.
+# This file IS the word list. Scanning it would flag every British key.
 SELF = Path(__file__).resolve()
 
 # Files that reproduce third-party text verbatim. CHAI's Testing & Evaluation
 # content is CC BY 4.0 and quoted exactly; "correcting" its spelling would
 # misquote the source, which is worse than an inconsistent spelling. These are
-# generated from upstream, so a fix here would be overwritten anyway.
+# generated from upstream, so a respelling here would be overwritten anyway.
 QUOTED_VERBATIM = {
     "data/chai_te_metrics.json",
     "docs/frameworks/chai-metrics.md",
@@ -329,8 +361,11 @@ FAMILIES: dict[str, Family] = {
             # "anesthet": the American stem with the British ending. The
             # British stem ("anaesthetise") is in MEDICAL.
             "aerosol",
+            "alkalin",
             "anesthet",
             "anonym",
+            "canal",
+            "catastroph",
             "apolog",
             "author",
             "capital",
@@ -339,6 +374,7 @@ FAMILIES: dict[str, Family] = {
             "cauter",
             "central",
             "character",
+            "cicatr",
             "civil",
             "colon",
             "commercial",
@@ -348,12 +384,15 @@ FAMILIES: dict[str, Family] = {
             "critic",
             "crystall",
             "custom",
+            "dichotom",
             "digit",
             "emphas",
             "energ",
             "epithelial",
             "equal",
+            "external",
             "familiar",
+            "femin",
             "fantas",
             "fertil",
             "final",
@@ -363,6 +402,7 @@ FAMILIES: dict[str, Family] = {
             "harmon",
             "heparin",
             "homogen",
+            "hyalin",
             "hospital",
             "human",
             "hybrid",
@@ -371,22 +411,28 @@ FAMILIES: dict[str, Family] = {
             "ideal",
             "immun",
             "incentiv",
+            "infantil",
             "initial",
             "institutional",
             "internal",
+            "isomer",
             "ion",
             "item",
+            "keratin",
             "jeopard",
             "lateral",
             "legal",
             "legitim",
             "local",
+            "lutein",
             "lyophil",
             "marginal",
+            "masculin",
             "material",
             "maxim",
             "medical",
             "memor",
+            "mental",
             "metabol",
             "metastas",
             "mineral",
@@ -406,6 +452,7 @@ FAMILIES: dict[str, Family] = {
             "oxid",
             "parameter",
             "parametr",
+            "patholog",
             "pasteur",
             "patron",
             "penal",
@@ -422,11 +469,13 @@ FAMILIES: dict[str, Family] = {
             "rational",
             "real",
             "recogn",
+            "regular",
             "sanit",
             "scrutin",
             "sensit",
             "serial",
             "social",
+            "somat",
             "solubil",
             "special",
             "stabil",
@@ -447,7 +496,9 @@ FAMILIES: dict[str, Family] = {
             "vapor",
             "vascular",
             "victim",
+            "viril",
             "virtual",
+            "vital",
             "visual",
             "weapon",
         ),
@@ -462,7 +513,18 @@ FAMILIES: dict[str, Family] = {
             ("ysers", "yzers"),
         ),
         ("", "re", "over", "psycho"),
-        ("anal", "autol", "catal", "dial", "electrol", "hydrol", "paral"),
+        (
+            "anal",
+            "autol",
+            "catal",
+            "cytol",
+            "dial",
+            "electrol",
+            "hydrol",
+            "paral",
+            "plasmol",
+            "thrombol",
+        ),
     ),
     # travelled -> traveled. Only the forms that double the l in British and not
     # in American; "cancellation", "excelled", "controlled" are American too.
@@ -670,6 +732,15 @@ EXPLICIT: dict[str, str] = {
     "fibreoptic": "fiberoptic",
     "fibreoptics": "fiberoptics",
     "fibreglass": "fiberglass",
+    "fibrescope": "fiberscope",
+    "fibrescopes": "fiberscopes",
+    # Built on "sensitise" with a prefix the -ise family does not take.
+    "hyposensitise": "hyposensitize",
+    "hyposensitised": "hyposensitized",
+    "hyposensitisation": "hyposensitization",
+    # The unit alone; a word that ends in it ("milligramme") is a shape.
+    "gramme": "gram",
+    "grammes": "grams",
     # "tumour" is in the -our family; these are built on it with no ending of
     # that family's.
     "tumourigenic": "tumorigenic",
@@ -758,7 +829,7 @@ MEDICAL: tuple[Medical, ...] = (
         "oedem",
         "edem",
         ("a", "as", "ata", "atous"),
-        ("", "non", "myx", "lymph", "angio", "papill"),
+        ("", "non", "myx", "lymph", "angio", "papill", "pseudopapill", "lip"),
     ),
     (
         "oesophag",
@@ -866,7 +937,7 @@ MEDICAL: tuple[Medical, ...] = (
     ("orthopaed", "orthoped", ("ic", "ics", "ist", "ists", "ically"), ("",)),
     ("paedophil", "pedophil", ("e", "es", "ia", "iac", "iacs", "ic"), ("",)),
     ("encyclopaedi", "encyclopedi", ("a", "as", "c", "st", "sts"), ("",)),
-    ("coeliac", "celiac", ("", "s"), ("",)),
+    ("coeliac", "celiac", ("", "s"), ("", "non")),
     ("palaeontolog", "paleontolog", ("y", "ical", "ist", "ists"), ("",)),
     ("caesar", "cesar", ("ean", "eans", "ian", "ians"), ("",)),
     ("aetiolog", "etiolog", ("y", "ies", "ic", "ical", "ically"), ("",)),
@@ -951,46 +1022,90 @@ def american(word: str) -> str | None:
 
 
 # British spellings found by their shape, not by the list: a lowercase word that
-# starts or ends with a British medical segment ("haematoxylin", "acidaemia",
-# "otorrhoea"). These are reported, never rewritten: a shape is a guess, and its
-# American form (which the report suggests) is a guess too. A capitalized word is
-# never matched by shape, so "Haemonetics", "Oestreich" and "Haemophilus" pass;
-# nor is a word with a Latin ending, so "haemolyticus" and "haemophysalis" pass;
-# nor a word in SHAPE_EXCEPTIONS, which American biology spells this way too;
-# nor a lowercase word after what may be its genus (see hits()).
-SHAPE_PREFIXES = ("haem", "oesophag", "oestr", "foeto", "paed", "anaes", "gynae")
-SHAPE_SUFFIXES = (
-    "aemia",
-    "aemias",
-    "aemic",
-    "aemics",
-    "rrhoea",
-    "rrhoeal",
-    "pnoea",
-    "pnoeas",
-    "litre",
-    "litres",
+# holds a British medical segment ("methaemoglobin", "acidaemia", "otorrhoeas").
+# These are reported, and never suggested in the patch: a shape is a guess, and
+# its American form (which the report names) is a guess too. Each pattern is
+# searched for in the word, and the match must be shorter than the word, so a
+# segment alone ("haem" in a hash or an identifier) is not a shape. Where an
+# American word can hold a segment's letters by accident, the pattern is
+# narrowed, and the en_US dictionary test holds every pattern to it:
+SHAPES = (
+    # "haem" inside a word only before "a" or "o": "alphaemission" is not.
+    r"^haem|haem(?=[ao])",
+    # An oe- segment only at the start or after a vowel other than "e": an
+    # American prefix ending in "o" before "edema" or "estrogen" makes the same
+    # letters ("videoedema", "phytoestrogen", "shoestring").
+    r"(?:^|(?<=[aiouy]))oedem",
+    r"(?:^|(?<=[aiouy]))oesophag",
+    r"(?:^|(?<=[aiouy]))oestr",
+    # "foet" only before an English ending: "infoetl" is not.
+    r"foet(?=al|us|id|o|icid)",
+    r"faec",
+    r"caec",
+    r"paed",
+    # Never at the start: "aesthetic" is American. Every British "anaes-" word
+    # holds it ("anaesthesia", "unanaesthetised").
+    r"(?<=.)aesthe",
+    r"gynae",
+    r"leuco",
+    r"aetio",
+    r"palaeo",
+    r"praecord",
+    r"pharmacopoei",
+    r"spirochaet",
+    r"sulph",
+    r"tumour",
+    r"rrhoea?",
+    r"pnoea?",
+    r"aemi[ac]",
+    # Only at the end: "programmed" holds "gramme".
+    r"litres?$",
+    r"grammes?$",
 )
-SHAPE_EXCEPTIONS = ("paedomorph", "paedogen")
-# A word that is all segment: a prefix or suffix alone is not a shape ("haem" is
-# in a hash or an identifier as often as in prose), except these.
+SHAPE = re.compile("|".join(SHAPES))
+# A word that is all segment and still a shape.
 SHAPE_WORDS = ("gynae",)
-# Not "-um" or "-ous": "haemoperitoneum" and "haematogenous" are English.
+# American spellings that hold a segment, as parts of words.
+SHAPE_EXCEPTIONS = ("paedomorph", "paedogen", "caecilian", "leucovorin", "unaesthe")
+# Whole words the en_US dictionary accepts as American spellings: not reported,
+# though their derivatives the dictionary does not list ("pharmacopoeial") are.
+DICTIONARY_WORDS = ("leucotomy", "leucotomies", "pharmacopoeia", "pharmacopoeias")
+# Not "-um", "-ium" or "-ous": "haemoperitoneum", "praecordium" and
+# "haematogenous" are English.
 LATIN_ENDINGS = ("us", "ae", "ii", "alis", "icus", "ica", "icum", "ensis")
 NOT_LATIN = ("ous",)
-# The suggestion: each British segment, respelled wherever it is in the word.
+# Latin epithets whose ending looks English, so LATIN_ENDINGS does not cover
+# them. Each is not reported wherever it stands; after its genus, binomial()
+# would skip it anyway.
+LATIN_EPITHETS = ("faecium", "haematobium", "haemominutum", "haemofelis", "haemocanis")
+# A word of the letters a-f alone is hex ("#faecab"), not a word.
+HEX = re.compile("[a-f]+")
+# The suggestion: each British segment, respelled wherever it is in the word,
+# in this order ("haem" before "aemi").
 SHAPE_RESPELL = (
     ("oesophag", "esophag"),
     ("haem", "hem"),
+    ("oedem", "edem"),
     ("oestr", "estr"),
     ("foet", "fet"),
+    ("faec", "fec"),
+    ("caec", "cec"),
     ("paed", "ped"),
-    ("anaes", "anes"),
+    ("aesthe", "esthe"),
     ("gynae", "gyne"),
+    ("leuco", "leuko"),
+    ("aetio", "etio"),
+    ("palaeo", "paleo"),
+    ("praecord", "precord"),
+    ("pharmacopoei", "pharmacopei"),
+    ("spirochaet", "spirochet"),
+    ("sulph", "sulf"),
+    ("tumour", "tumor"),
     ("aemi", "emi"),
     ("rrhoe", "rrhe"),
     ("pnoe", "pne"),
     ("litre", "liter"),
+    ("gramme", "gram"),
 )
 
 
@@ -1000,21 +1115,71 @@ def by_shape(word: str) -> str | None:
         return None
     key = word.translate(LIGATURES)
     if key not in SHAPE_WORDS:
-        latin = key.endswith(LATIN_ENDINGS) and not key.endswith(NOT_LATIN)
-        if latin or key.startswith(SHAPE_EXCEPTIONS):
+        match = SHAPE.search(key)
+        if match is None or match.group(0) == key:
             return None
-        prefixed = any(
-            key.startswith(prefix) and len(key) > len(prefix)
-            for prefix in SHAPE_PREFIXES
-        )
-        suffixed = any(
-            key.endswith(suffix) and len(key) > len(suffix) for suffix in SHAPE_SUFFIXES
-        )
-        if not (prefixed or suffixed):
+        latin = key.endswith(LATIN_ENDINGS) and not key.endswith(NOT_LATIN)
+        if (
+            latin
+            or key in LATIN_EPITHETS
+            or key in DICTIONARY_WORDS
+            or any(exception in key for exception in SHAPE_EXCEPTIONS)
+            or HEX.fullmatch(key)
+        ):
             return None
     for british, respelled in SHAPE_RESPELL:
         key = key.replace(british, respelled)
     return key
+
+
+# The epithet of a binomial, which is Latin, not English: "Tritrichomonas
+# foetus", "T. foetus", "*Schistosoma* *haematobium*". Neither a listed word
+# nor a shape is reported there. The epithet must end in a Latin form, and the
+# genus must be one of GENERA or a capital and a period. Any other capitalized
+# word before it ("Severe", "NHS", "Paediatric") is no genus, so a British word
+# after it is reported.
+GENERA = frozenset(
+    {
+        "Arcanobacterium",
+        "Bibersteinia",
+        "Campylobacter",
+        "Clostridium",
+        "Enterococcus",
+        "Gemella",
+        "Haemophilus",
+        "Mannheimia",
+        "Mycoplasma",
+        "Neisseria",
+        "Pasteurella",
+        "Schistosoma",
+        "Staphylococcus",
+        "Streptococcus",
+        "Tritrichomonas",
+    }
+)
+EPITHET_ENDINGS = ("a", "ae", "i", "ii", "is", "um", "us", "ensis")
+# Markup between a genus and its epithet: an HTML tag or a non-breaking space.
+MARKUP = re.compile(r"<[^>]*>|&nbsp;")
+# The genus at the end of the text before an epithet, past emphasis, quotes and
+# brackets: a name (group 1) or an abbreviation (group 2).
+GENUS = re.compile(r"(?<![A-Za-z])(?:([A-Z][a-z]+)|([A-Z])\.)[\s*_\"'()\[\]]*$")
+
+
+def binomial(word: str, before: str, previous: str) -> bool:
+    """Whether `word` is the epithet of a binomial: it is lowercase with a Latin
+    ending, and `before` (the text before it on its line) ends in its genus. If
+    nothing but markup is before it, the genus may end `previous`, the line
+    before (empty after a blank line)."""
+    key = word.translate(LIGATURES)
+    if not word.islower() or not key.endswith(EPITHET_ENDINGS):
+        return False
+    if key.endswith(NOT_LATIN):
+        return False
+    text = MARKUP.sub(" ", before)
+    if not re.search(r"[A-Za-z0-9]", text):
+        text = MARKUP.sub(" ", previous) + " " + text
+    genus = GENUS.search(text)
+    return bool(genus) and (genus.group(2) is not None or genus.group(1) in GENERA)
 
 
 MARKER = "spelling-ok"
@@ -1067,6 +1232,9 @@ FILE_NAME = re.compile(
 # every character a run is made of can start one), so no lookbehind is needed.
 SLASHED = re.compile(r"[\w.~-]*/[\w./~-]*")
 EXTENSION = re.compile(r"\w\.[A-Za-z0-9]+$")
+# An abbreviation written with dots ("e.g", "i.e", once a trailing period is
+# dropped) is not a file name with an extension: "oedema/e.g. swelling" is prose.
+DOTTED = re.compile(r"(?:[A-Za-z]\.)+[A-Za-z]")
 # A digest named by its algorithm (an SRI hash, a Docker digest).
 DIGEST = re.compile(r"\b(?:sha1|sha224|sha256|sha384|sha512|md5)[-:]\S+", re.I)
 # Hex needs no pattern: a word is a run of letters, so "#faec00" or a hash is
@@ -1084,7 +1252,8 @@ def blank_path(match: re.Match[str]) -> str:
     run = match.group(0)
     path = run.rstrip(".")
     if path.startswith(("./", "../", "~/", "/")) or any(
-        EXTENSION.search(segment) for segment in path.split("/")
+        EXTENSION.search(segment) and not DOTTED.fullmatch(segment)
+        for segment in path.split("/")
     ):
         return " " * len(run)
     return run
@@ -1171,24 +1340,24 @@ def find(line: str, allow: list[str]) -> list[Found]:
     return found
 
 
-# What --fix may rewrite. It rewrites a hit only when every one of these is
-# false, and the report names the first that is true, so a person knows why it
-# was left. A false report costs a `spelling-ok` marker; a wrong rewrite
-# corrupts the owner's file, so --fix rewrites only where it cannot be wrong.
+# Why a hit is not suggested in the --fix patch. It is suggested only when every
+# one of these is false, and the report names the first that is true, so a
+# person knows why it is theirs to fix. Nothing is written either way: the
+# patch is for a person to review, so these only keep the obvious misreadings
+# out of it.
 class Left(StrEnum):
     SHAPE = "found by its shape, not listed, so its respelling is a guess"
     CAPITALIZED = "capitalized, so it may be a name"
     NOT_PROSE = (
-        "not prose: --fix rewrites only .md, .txt and .rst files and the "
+        "not prose: the patch suggests only in .md, .txt and .rst files and the "
         "values of app/i18n/en.json"
     )
     CODE = "in code"
     JOINED = "joined to other text, so it may be part of a name, a path or code"
-    AFTER_NAME = "after a capitalized word, so it may be part of a name"
 
 
-# The kinds of file --fix may rewrite, by suffix; every other file is reported
-# only. app/i18n/en.json is prose in its values (CATALOG).
+# The kinds of file the patch suggests in, by suffix; every other file is
+# reported only. app/i18n/en.json is prose in its values (CATALOG).
 class Kind(StrEnum):
     MARKDOWN = "markdown"
     RST = "rst"
@@ -1202,7 +1371,7 @@ CATALOG = f"app/i18n/{Locale.EN}.json"
 # The whole line, `"key": "value",`; the value is group 1.
 CATALOG_VALUE = re.compile(r'^\s*"(?:[^"\\]|\\.)*"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,?\s*$')
 
-# What may stand next to a word --fix rewrites, between it and the whitespace
+# What may stand next to a word the patch suggests, between it and the whitespace
 # (or the start or end of the line) around it. Before: an opening bracket, a
 # quotation mark or Markdown's asterisk. After: those that close, and the
 # sentence's punctuation, "." and ":" among them. Nothing else: a letter
@@ -1231,35 +1400,8 @@ CODE_LINE = re.compile(
     r"\s*(?:[-*+>]\s+)*(?:import\s|from\s+\S+\s+import\s|\$\s|>>>\s|\.\.\.\s)"
 )
 
-# Capitalized words that open sentences. A lowercase British word after any
-# other capitalized word may be a species epithet ("Tritrichomonas foetus") or
-# part of a name, so --fix leaves it.
-OPENING_WORDS = """
-    a about after all also an and any are as at be because before both but by
-    can do each either every few for from had has have he her here his how i if
-    in into is it its many may more most much must my neither no nor not note of
-    on once one only or other our over per see she should since so some such
-    than that the their them then there these they this those though through to
-    two under unless until use was we were what when where whether which while
-    who why will with within without would yet you your
-"""
-OPENERS = frozenset(OPENING_WORDS.split())
 # Words after which a word is a module's name, not prose: "import colour".
 CODE_WORDS = frozenset({"import", "require", "library"})
-# An abbreviated genus: "E." in "E. faecalis".
-ABBREVIATION = re.compile(r"[(\[\"'*_]*[A-Z]\.")
-
-
-def names(token: str) -> bool:
-    """Whether a lowercase word after `token` may be part of a name: `token` is
-    an abbreviated genus, or a capitalized word of letters alone (no digit, and
-    no punctuation closing it) that is not a common opener of a sentence."""
-    if ABBREVIATION.fullmatch(token):
-        return True
-    core = token.lstrip("([\"'*_")
-    if not core.isalpha() or not core[0].isupper():
-        return False
-    return core.lower() not in OPENERS
 
 
 class Code:
@@ -1302,11 +1444,11 @@ def lead_of(line: str, start: int) -> str:
     return LEAD.search(line[:start]).group(0)
 
 
-def word_before(line: str, start: int, previous: str) -> str:
-    """The whitespace-separated word before the one at column `start`, or
-    `previous` (the last word of the line before) if it is first on its line."""
+def word_before(line: str, start: int) -> str:
+    """The whitespace-separated word before the one at column `start` on its
+    line, or "" if it is first on its line."""
     before = line[: start - len(lead_of(line, start))].split()
-    return before[-1] if before else previous
+    return before[-1] if before else ""
 
 
 def in_code(line: str, start: int) -> bool:
@@ -1318,22 +1460,14 @@ def in_code(line: str, start: int) -> bool:
     return any(span.start() <= start < span.end() for span in spans)
 
 
-def left_by(
-    line: str,
-    found: Found,
-    kind: Kind,
-    code: bool,
-    previous: str,
-) -> Left | None:
-    """Why --fix leaves `found` in `line`, or None if it rewrites it.
+def left_by(line: str, found: Found, kind: Kind, code: bool) -> Left | None:
+    """Why the --fix patch does not suggest `found` in `line`, or None if it does.
 
-    It rewrites a word only when the word is listed (not found by its shape), is
+    It suggests a word only when the word is listed (not found by its shape), is
     all lowercase, is in a prose file (Markdown, reStructuredText, plain text) or
-    a value of the English catalog, is not in code, stands alone between
-    whitespace with only BEFORE before it and AFTER after it, and does not follow
-    a capitalized word that may begin a name. `code` says the line is code
-    throughout; `previous` is the last word of the line before, for a name
-    broken across lines.
+    a value of the English catalog, is not in code, and stands alone between
+    whitespace with only BEFORE before it and AFTER after it. `code` says the
+    line is code throughout.
     """
     start, word, _, listed = found
     end = start + len(word)
@@ -1353,15 +1487,12 @@ def left_by(
     trail = TRAIL.match(line, end).group(0)
     if not BEFORE.issuperset(lead) or not AFTER.issuperset(trail):
         return Left.JOINED
-    token = word_before(line, start, previous)
-    if token.strip("([\"'*") in CODE_WORDS:
+    if word_before(line, start).strip("([\"'*") in CODE_WORDS:
         return Left.CODE
-    if names(token):
-        return Left.AFTER_NAME
     return None
 
 
-# A hit: (column, British word, American word, why --fix leaves it or None).
+# A hit: (column, British word, American word, why the patch leaves it or None).
 Hit = tuple[int, str, str, Left | None]
 
 
@@ -1373,7 +1504,8 @@ def kind_of(path: Path) -> Kind:
 
 def hits(path: Path, text: str, allow: list[Allow]) -> list[tuple[int, str, list[Hit]]]:
     """Each line of `text`, the text of `path`, with its hits: (line number, the
-    line with its ending, hits)."""
+    line with its ending, hits). Every listed word and every shape is a hit,
+    whatever stands before it, except the epithet of a binomial."""
     kind = kind_of(path)
     phrases = allowed_in(path, allow)
     code = Code(kind)
@@ -1382,15 +1514,12 @@ def hits(path: Path, text: str, allow: list[Allow]) -> list[tuple[int, str, list
     for number, line in enumerate(text.splitlines(keepends=True), 1):
         whole = code.whole_line(line)
         line_hits = [
-            (found[0], found[1], found[2], left_by(line, found, kind, whole, previous))
+            (found[0], found[1], found[2], left_by(line, found, kind, whole))
             for found in find(line, phrases)
-            # A word found by its shape after what may be its genus is taken
-            # for a species epithet ("Schistosoma haematobium"), not reported.
-            if found[3] or not names(word_before(line, found[0], previous))
+            if not binomial(found[1], line[: found[0]], previous)
         ]
         out.append((number, line, line_hits))
-        words = line.split()
-        previous = words[-1] if words else ""
+        previous = line
     return out
 
 
@@ -1475,12 +1604,13 @@ def allowed_in(path: Path, allow: list[Allow]) -> list[str]:
 
 
 def read(path: Path) -> str:
-    """The file's text. Raises UnicodeDecodeError or OSError if it cannot be read."""
-    return path.read_text(encoding="utf-8")
+    """The file's text, its line endings as they are (a patch must match them).
+    Raises UnicodeDecodeError or OSError if it cannot be read."""
+    return path.read_bytes().decode("utf-8")
 
 
-# Said of a hit --fix will not rewrite, with the reason (a Left).
-LEFT_FOR_A_HUMAN = "--fix leaves it to you"
+# Said of a hit the --fix patch does not suggest, with the reason (a Left).
+LEFT_FOR_A_HUMAN = "not in the suggestion patch, so fix it by hand"
 
 
 def left_note(reason: Left | None) -> str:
@@ -1531,21 +1661,21 @@ def targets(argv: list[str]) -> list[Path]:
     ]
 
 
-def fix(path: Path, allow: list[Allow]) -> tuple[int, list[str]]:
-    """Rewrite British spellings in place. Returns how many were changed, and
+def suggest(path: Path, allow: list[Allow]) -> tuple[str, str, list[str]]:
+    """The text of `path`, the text the suggestion patch would make of it, and
     the hits left for a person (each as "line:column: 'word' -- 'american'
-    (why)").
+    (why)"). Writes nothing.
 
-    Uses the same scan as check(), so it never touches what check() does not
+    Uses the same scan as check(), so it never suggests what check() does not
     report: an exempt line, an allowed phrase, a URL, an email address, a
     domain, a file name, a path, a digest or encoded data. Of what it reports,
-    it rewrites only what left_by() allows. A file that cannot be read raises,
+    it suggests only what left_by() allows. A file that cannot be read raises,
     so the caller reports it.
     """
-    changed = 0
+    text = read(path)
     left = []
     out = []
-    for number, line, found in hits(path, read(path), allow):
+    for number, line, found in hits(path, text, allow):
         # Right to left, so an earlier column is not moved by a later change.
         for column, word, respelled, reason in reversed(found):
             if reason is not None:
@@ -1554,12 +1684,50 @@ def fix(path: Path, allow: list[Allow]) -> tuple[int, list[str]]:
                 )
                 continue
             line = line[:column] + respelled + line[column + len(word) :]
-            changed += 1
         out.append(line)
+    hand = [f"{n}:{c + 1}: {what}" for n, c, what in sorted(left)]
+    return text, "".join(out), hand
 
-    if changed:
-        path.write_text("".join(out), encoding="utf-8")
-    return changed, [f"{n}:{c + 1}: {what}" for n, c, what in sorted(left)]
+
+# Lines as git reads them: split after each "\n" only, so a form feed or a
+# carriage return inside a line stays in it.
+GIT_LINE = re.compile(r"[^\n]*\n|[^\n]+$")
+NO_NEWLINE = "\\ No newline at end of file\n"
+
+
+def unified(name: str, before: str, after: str) -> str:
+    """A unified diff from `before` to `after`, for the file at `name` (a path
+    relative to where `git apply` runs), that `git apply` takes."""
+    diff = difflib.unified_diff(
+        GIT_LINE.findall(before),
+        GIT_LINE.findall(after),
+        f"a/{name}",
+        f"b/{name}",
+    )
+    body = "".join(
+        line if line.endswith("\n") else f"{line}\n{NO_NEWLINE}" for line in diff
+    )
+    return f"diff --git a/{name} b/{name}\n{body}"
+
+
+def patch_name(path: Path) -> str:
+    """The path the patch names: from the repository root, or, for a file
+    outside it, as given (relative to the current directory if it can be)."""
+    try:
+        return path.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        try:
+            return Path(os.path.relpath(path)).as_posix()
+        except ValueError:
+            return path.as_posix().lstrip("/")
+
+
+PATCH_HEADER = """\
+# British spellings: SUGGESTED respellings from `pixi run fix-spelling`.
+# This is a suggestion to review, not a fix: nothing has been written. Read
+# every hunk (a quotation, a name or code may be among them), drop what is
+# wrong, then apply the rest from the repository root with `git apply`.
+"""
 
 
 def main(argv: list[str]) -> int:
@@ -1572,35 +1740,35 @@ def main(argv: list[str]) -> int:
         return 1
 
     if do_fix:
-        total = 0
+        patches = []
+        hand = []
         unread = 0
-        unfixed = 0
+        suggested = 0
         for path in targets(argv):
             if path.is_file() and not skip(path):
                 try:
-                    n, left = fix(path, allow)
+                    before, after, left = suggest(path, allow)
                 except (UnicodeDecodeError, OSError) as error:
                     print(f"  could not read {path}: {error}", file=sys.stderr)
                     unread += 1
                     continue
-                try:
-                    shown = path.resolve().relative_to(ROOT)
-                except ValueError:
-                    shown = path
-                if n:
-                    print(f"  {n:3d}  {shown}")
-                    total += n
-                for hit in left:
-                    print(f"  {shown}:{hit}", file=sys.stderr)
-                unfixed += len(left)
-        print(f"\n{total} spelling(s) corrected")
-        if unfixed:
-            print(
-                f"{unfixed} left for you: respell each, or mark the line "
-                "`spelling-ok` if it is a name or a quotation.",
-                file=sys.stderr,
-            )
-        return 1 if unread or unfixed else 0
+                name = patch_name(path)
+                if after != before:
+                    patches.append(unified(name, before, after))
+                    suggested += 1
+                hand.extend(f"  {name}:{hit}" for hit in left)
+        if patches:
+            print(PATCH_HEADER + "".join(patches), end="")
+        for line in hand:
+            print(line, file=sys.stderr)
+        print(
+            f"\n{suggested} file(s) with suggestions in the patch on stdout "
+            "(review it; nothing was written), "
+            f"{len(hand)} hit(s) to fix by hand: respell each, or mark the "
+            "line `spelling-ok` if it is a name or a quotation.",
+            file=sys.stderr,
+        )
+        return 1 if unread or patches or hand else 0
 
     problems = [
         msg

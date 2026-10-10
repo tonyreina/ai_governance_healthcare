@@ -390,23 +390,26 @@ In short:
 - **American English** everywhere, checked by `pixi run check-spelling`. It
   lists British roots, medical ones among them, generates their inflections,
   and matches listed words only whole, reading identifiers word by word
-  (camelCase and SHOUTING_CASE). It also reports a lowercase word by a British
-  medical shape, a prefix or a suffix such as
-  haem- or -aemia. <!-- spelling-ok -->
-  Words with an accented letter, URLs, email addresses, domains, file names,
-  paths and encoded data are skipped. `pixi run fix-spelling` rewrites a hit
-  only when it is listed (not a shape), all lowercase, in a `.md`, `.rst` or
-  `.txt` file or a value of `app/i18n/en.json`, not in code (a fenced, indented
-  or literal block, backticks, an import or a shell prompt), with only
-  whitespace, an opening bracket, a quotation mark or `*` before it and only
-  whitespace, a closing one, `*` or `,;:.!?` after it, and not after a
-  capitalized word that may begin a name. Everything else it lists, with the
-  reason, for you to respell, and exits 1. A quotation or a name keeps its
-  spelling with `spelling-ok` on the line, or with a `glob: phrase` entry in
-  `.spelling-allow`, which exempts that exact phrase only in the files the glob
-  matches, and not the rest of its line. Run with no arguments, it reads every
-  text file, as the pre-commit hook does. `pixi run test-check-spelling` shows
-  the checker failing.
+  (camelCase and SHOUTING_CASE). It also reports a lowercase word that holds a
+  British medical segment anywhere in it, such as
+  haem, oedem or -aemia. <!-- spelling-ok -->
+  It reports every hit whatever word stands before it, except the Latin epithet
+  of a binomial after its genus. Words with an accented letter, URLs, email
+  addresses, domains, file names, paths and encoded data are skipped.
+  **Nothing rewrites your files.** `pixi run fix-spelling` prints a patch of
+  suggested respellings on stdout, under a header saying it is a suggestion,
+  and lists on stderr every other hit for you to fix by hand, with the reason
+  it has no suggestion; it exits 1 when there is any hit. Read every hunk, drop
+  what is wrong, and apply the rest from the repository root with
+  `pixi run fix-spelling > spelling.patch` and `git apply spelling.patch`. The
+  patch suggests only a listed, all-lowercase word in a `.md`, `.rst` or `.txt`
+  file or a value of `app/i18n/en.json`, outside code, standing alone between
+  whitespace and punctuation, so its misreadings are rare, but it is still a
+  suggestion. A quotation or a name keeps its spelling with `spelling-ok` on
+  the line, or with a `glob: phrase` entry in `.spelling-allow`, which exempts
+  that exact phrase only in the files the glob matches, and not the rest of its
+  line. Run with no arguments, it reads every text file, as the pre-commit hook
+  does. `pixi run test-check-spelling` shows the checker failing.
 
 ## The documentation site
 

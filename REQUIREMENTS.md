@@ -943,20 +943,21 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `pixi run check-spelling` (pre-commit, and CI through the lint
   workflow's `prek run --all-files`), which generates each listed root's
   inflections, the British medical roots among them, matches listed words only
-  whole, and also reports a lowercase word by a British medical shape (D-81).
-  `pixi run fix-spelling` rewrites a hit only when it is listed, all lowercase,
-  in a `.md`, `.rst` or `.txt` file or a value of `app/i18n/en.json`, not in
-  code, bounded by whitespace with only an opening bracket, a quotation mark or
-  `*` before it and only a closing one, `*` or `,;:.!?` after it, and not after
-  a capitalized word that may begin a name; everything else it reports and
-  leaves for a person, and exits 1. The checker is itself tested by `pixi run
-  test-check-spelling` (CI and pre-commit), including a verifier's corpus, the
-  en_US dictionary and mutation tests (#169).
+  whole, and also reports a lowercase word that holds a British medical segment
+  anywhere in it, whatever word stands before it, except a binomial's Latin
+  epithet after its genus (D-81). Nothing rewrites a file: `pixi run
+  fix-spelling` prints a patch of suggested respellings for a person to review
+  and `git apply`, and lists every other hit to fix by hand. So quoted material
+  is never respelled by a tool; the check still reports a quoted British word,
+  which needs `spelling-ok` on its line or a scoped `.spelling-allow` entry. The
+  checker is itself tested by `pixi run test-check-spelling` (CI and
+  pre-commit), including a verifier's corpus, the en_US dictionary, that
+  `--fix` writes nothing, that its patch applies, and mutation tests (#169).
 - Not enforced: commit messages (the check reads files, not messages); any
   British word whose root is not on the list and whose shape is not a rule;
-  and every hit `--fix` leaves (a capitalized word, a word in code or joined to
-  other text, a word after a name), which the check reports but a person must
-  respell or mark. These rest on review.
+  "leucotomy" and "pharmacopoeia", which the en_US dictionary accepts; and the
+  respelling of every hit, which rests on a person (applying the patch, or
+  fixing the listed hits by hand). These rest on review.
 
 ### R-18 A closed set of values has an enumerated type
 

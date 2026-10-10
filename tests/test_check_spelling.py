@@ -18,11 +18,19 @@ What is pinned, both ways:
   leaves a row uncaught; no EXPLICIT word may also be generated, so dropping one
   is always noticed; no MEDICAL form has a Latin ending, and no British word is
   spelled with the letters a-f alone;
-* a lowercase word with a British medical prefix or suffix that is not listed
-  is reported by its shape, and never rewritten (SHAPED lists them); a
-  capitalized word, a Latin epithet and the American "paedomorphosis" are not;
+* a lowercase word holding a British medical segment anywhere is reported by
+  its shape (SHAPED, and the verifier's 131 medical words in
+  spelling_corpus/medical.txt), after any capitalized word (the verifier's 132
+  sentence openers), and never suggested in the patch; each pattern alone
+  catches a word, and each narrowing keeps an American word clean; a
+  capitalized word, hex, a Latin ending or epithet, an exception and a word the
+  dictionary accepts are not;
+* the epithet of a binomial is not reported after a genus in GENERA or an
+  abbreviated one, past markup and across a line, and is reported after any
+  other word or with an English ending;
 * no rule matches a lowercase word of the en_US Hunspell dictionary (pinned in
-  pixi.toml), except the two in CAUGHT_ON_PURPOSE, which CLAUDE.md rules out;
+  pixi.toml), read as the checker reads words, except the two in
+  CAUGHT_ON_PURPOSE, which CLAUDE.md rules out;
 * a British word written with a ligature ("oe" or "ae" as one letter) is caught,
   and a word with an accented letter ("décentre", "réanalyse") is not English
   and is not read;
@@ -31,24 +39,29 @@ What is pinned, both ways:
   flagged;
 * the verifier's corpus (tests/fixtures/spelling_corpus/): every clean line
   (organisms, drugs, places, titles, names, code, URLs, hex, encoded data, the
-  binomial wrapped across lines) produces no finding; no line of names is
-  rewritten by --fix; every British line is found, and fixed exactly where it
-  may be; Python's own spelling passes in a .py file; and the --fix
-  demonstration that corrupted the first version is left as written;
-* --fix rewrites a hit only when it is listed, all lowercase, in a Markdown,
-  reStructuredText or plain-text file or a value of app/i18n/en.json, not in
-  code, standing alone between whitespace with only an opening bracket, a quote
-  or "*" before it and only those that close, "*" or ",;:.!?" after it, and not
-  after a capitalized word that may begin a name; FIX_CASES pins every boundary
-  character both ways, every kind of file, every kind of code, and each of the
-  verifier's cases (a genus in italics, a citation key, a database prefix, an
-  import, an R aesthetic, a method call, an epithet after its genus, a French
-  word); the report says, of each hit --fix leaves, why;
-* --fix leaves alone every file skip() skips;
+  binomial wrapped across lines) produces no finding; no line of names is in
+  the suggestion patch; every British line is found, and suggested exactly
+  where it may be; Python's own spelling passes in a .py file; and the
+  demonstration that the first version corrupted produces no suggestion;
+* --fix never writes: no file's bytes or modification time change, for every
+  kind of file and for the whole corpus, named or found by a whole-repository
+  run. It prints a patch, under a header that says it is a suggestion, that
+  `git apply --check` accepts on a copy and that makes exactly the expected
+  text (a last line with no newline, CRLF endings, a form feed, the English
+  catalog, several files); and it lists the rest for a person;
+* the patch suggests a hit only when it is listed, all lowercase, in a
+  Markdown, reStructuredText or plain-text file or a value of app/i18n/en.json,
+  not in code, and standing alone between whitespace with only an opening
+  bracket, a quote or "*" before it and only those that close, "*" or ",;:.!?"
+  after it; FIX_CASES pins every boundary character both ways, every kind of
+  file, every kind of code, and each of the verifier's cases; the report says,
+  of each hit the patch leaves, why;
+* the patch never names a file skip() skips;
 * URLs of every listed scheme, also after "_" and not inside a longer word,
   email and git addresses, domains, file names, paths (with ./, ../, ~/ or /,
   or an extension), digests and encoded data from 16 characters are neither
-  reported nor rewritten, while an identifier with a digit is still read;
+  reported nor suggested, while an identifier with a digit is still read, and
+  an abbreviation with dots ("e.g.") is no file extension;
 * `.cancelled()` is exempt only as a method call in a .py file;
 * a slash in prose (two words joined by "/") is not a path, while a URL, ./, ../, an
   absolute path and a path with a file extension are; a URL needs "://" or a
@@ -70,8 +83,7 @@ What is pinned, both ways:
   1024 bytes are read to decide, and a file that cannot be opened counts as
   text;
 * the command exits nonzero on a hit, or a file it cannot read, and zero on
-  clean input; --fix exits nonzero when it could not read a file or left a hit
-  for a person.
+  clean input; so does --fix.
 
 Then the checker is broken on purpose, at least once for each property above
 (MUTATIONS lists them), and the same assertions must notice. A check never
@@ -79,6 +91,10 @@ shown to fail is a claim, not a control. One mutation proposed in review is not
 here because it changes nothing: removing a lookbehind from the slash pattern,
 which matched from the leftmost character anyway, so the lookbehind was
 deleted instead.
+
+The tests of the in-place rewrite that --fix used to do were deleted with it,
+not weakened: what they pinned (where a rewrite may happen) is now pinned as
+what the patch suggests.
 
 The British words below are test data, so their lines carry `spelling-ok`.
 
@@ -90,7 +106,9 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -282,6 +300,13 @@ centrelines centerlines  spelling-ok
 fibreoptic fiberoptic  spelling-ok
 fibreoptics fiberoptics  spelling-ok
 fibreglass fiberglass  spelling-ok
+fibrescope fiberscope  spelling-ok
+fibrescopes fiberscopes  spelling-ok
+hyposensitise hyposensitize  spelling-ok
+hyposensitised hyposensitized  spelling-ok
+hyposensitisation hyposensitization  spelling-ok
+gramme gram  spelling-ok
+grammes grams  spelling-ok
 tumourigenic tumorigenic  spelling-ok
 tumourigenicity tumorigenicity  spelling-ok
 tumourigenesis tumorigenesis  spelling-ok
@@ -484,6 +509,34 @@ unrecognised unrecognized  spelling-ok
 sanitiser sanitizer  spelling-ok
 scrutinise scrutinize  spelling-ok
 sensitise sensitize  spelling-ok
+alkalinise alkalinize  spelling-ok
+alkalinisation alkalinization  spelling-ok
+recanalise recanalize  spelling-ok
+recanalisation recanalization  spelling-ok
+catastrophising catastrophizing  spelling-ok
+cicatrisation cicatrization  spelling-ok
+dichotomise dichotomize  spelling-ok
+dichotomised dichotomized  spelling-ok
+externalising externalizing  spelling-ok
+feminisation feminization  spelling-ok
+hyalinisation hyalinization  spelling-ok
+infantilise infantilize  spelling-ok
+isomerisation isomerization  spelling-ok
+keratinisation keratinization  spelling-ok
+luteinise luteinize  spelling-ok
+luteinising luteinizing  spelling-ok
+luteinisation luteinization  spelling-ok
+masculinisation masculinization  spelling-ok
+mentalisation mentalization  spelling-ok
+pathologise pathologize  spelling-ok
+pathologising pathologizing  spelling-ok
+regularisation regularization  spelling-ok
+somatisation somatization  spelling-ok
+somatising somatizing  spelling-ok
+virilisation virilization  spelling-ok
+virilising virilizing  spelling-ok
+devitalised devitalized  spelling-ok
+revitalise revitalize  spelling-ok
 serialiser serializer  spelling-ok
 deserialise deserialize  spelling-ok
 deserialised deserialized  spelling-ok
@@ -566,6 +619,11 @@ reanalysed reanalyzed  spelling-ok
 overanalyse overanalyze  spelling-ok
 psychoanalyse psychoanalyze  spelling-ok
 catalyse catalyze  spelling-ok
+cytolysed cytolyzed  spelling-ok
+plasmolyse plasmolyze  spelling-ok
+thrombolyse thrombolyze  spelling-ok
+thrombolysed thrombolyzed  spelling-ok
+thrombolysing thrombolyzing  spelling-ok
 dialyse dialyze  spelling-ok
 electrolyse electrolyze  spelling-ok
 hydrolysed hydrolyzed  spelling-ok
@@ -682,6 +740,7 @@ gynaecology gynecology  spelling-ok
 gynaecologic gynecologic  spelling-ok
 gynaecologist gynecologist  spelling-ok
 coeliac celiac  spelling-ok
+noncoeliac nonceliac  spelling-ok
 faeces feces  spelling-ok
 faecal fecal  spelling-ok
 aetiology etiology  spelling-ok
@@ -744,6 +803,8 @@ myxoedema myxedema  spelling-ok
 lymphoedema lymphedema  spelling-ok
 angiooedema angioedema  spelling-ok
 papilloedema papilledema  spelling-ok
+lipoedema lipedema  spelling-ok
+pseudopapilloedema pseudopapilledema  spelling-ok
 gastrooesophageal gastroesophageal  spelling-ok
 transoesophageal transesophageal  spelling-ok
 anoestrus anestrus  spelling-ok
@@ -844,8 +905,8 @@ pressure moisture crystalline fertility oxide mineral centerpiece fiberglass
 paedomorphosis paedomorphic paedogenesis paedogenetic Caesarea Aemilia Aemilius
 """
 
-# Capitalized British words, which may be names: reported, and left as written
-# by --fix. Each row is (line, the words reported).
+# Capitalized British words, which may be names: reported, and not in the
+# suggestion patch. Each row is (line, the words reported).
 CAPITALIZED = [
     ("Haemorrhage was noted.", ["Haemorrhage"]),  # spelling-ok
     ("Paediatric Care", ["Paediatric"]),  # spelling-ok
@@ -859,7 +920,8 @@ CAPITALIZED = [
     ("Haemonetics Corporation", []),  # spelling-ok
 ]
 # A British word inside an identifier: reported, with its American form, and
-# left by --fix, which never rewrites code (it may be a third party's name).
+# not in the suggestion patch, which never suggests in code (it may be a third
+# party's name).
 IDENTIFIERS = [
     ("getColourValue()", "Color"),  # spelling-ok
     ("MAX_COLOURS = 3", "COLORS"),  # spelling-ok
@@ -984,14 +1046,21 @@ def scan(
     return found
 
 
-def fixed(
-    mod: ModuleType, text: str, allow: list[tuple[str, str]] | None = None
+def suggested(
+    mod: ModuleType,
+    text: str,
+    allow: list[tuple[str, str]] | None = None,
+    name: str = "sample.md",
 ) -> str:
+    """The text the --fix patch would make of a file of `text`. The file itself
+    must be left as written, or the result says so."""
     with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / "sample.md"
-        path.write_text(text, encoding="utf-8")
-        mod.fix(path, allow or [])
-        return path.read_text(encoding="utf-8")
+        path = Path(tmp) / name
+        path.write_bytes(text.encode("utf-8"))
+        after = mod.suggest(path, allow or [])[1]
+        if path.read_bytes() != text.encode("utf-8"):
+            return "suggest() wrote the file"
+        return after
 
 
 def cased(word: str, like: str) -> str:
@@ -1061,9 +1130,9 @@ def ligatures(mod: ModuleType) -> list[str]:
     want = {n: [row] for n, row in enumerate(LIGATURE_ROWS, 1)}
     bad = [] if found == want else [f"ligatures are caught ({found})"]
     text = "A manœuvre and an œdema.\n"  # spelling-ok
-    got = fixed(mod, text)
+    got = suggested(mod, text)
     if got != "A maneuver and an edema.\n":
-        bad.append(f"--fix respells a ligature ({got!r})")
+        bad.append(f"the patch respells a ligature ({got!r})")
     return bad
 
 
@@ -1084,17 +1153,17 @@ def capitalized(mod: ModuleType) -> list[str]:
     if got != want:
         bad.append(f"a capitalized word is reported ({got})")
     text = "\n".join(line for line, _ in CAPITALIZED) + "\n"
-    if fixed(mod, text) != text:
-        bad.append(f"--fix leaves a capitalized word ({fixed(mod, text)!r})")
+    if suggested(mod, text) != text:
+        bad.append(f"the patch leaves a capitalized word ({suggested(mod, text)!r})")
     found = scan(mod, [line for line, _ in IDENTIFIERS])
     got = {n: [a for _, a in hits] for n, hits in found.items()}
     want = {n: [a] for n, (_, a) in enumerate(IDENTIFIERS, 1)}
     if got != want:
         bad.append(f"an identifier's part is reported ({got})")
     text = "\n".join(line for line, _ in IDENTIFIERS) + "\n"
-    if fixed(mod, text) != text:
-        bad.append(f"--fix leaves an identifier ({fixed(mod, text)!r})")
-    # The report says which hits --fix leaves, why, and only those.
+    if suggested(mod, text) != text:
+        bad.append(f"the patch leaves an identifier ({suggested(mod, text)!r})")
+    # The report says which hits the patch leaves, why, and only those.
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "a.md"
         text = "Haemorrhage here.\nthe colour here.\n"  # spelling-ok
@@ -1107,7 +1176,7 @@ def capitalized(mod: ModuleType) -> list[str]:
         or named != [True, False]
         or "may be a name" not in mod.Left.CAPITALIZED
     ):
-        bad.append(f"the report says what --fix leaves, and why ({messages})")
+        bad.append(f"the report says what the patch leaves, and why ({messages})")
     return bad
 
 
@@ -1119,8 +1188,8 @@ def not_prose(mod: ModuleType) -> list[str]:
     if found:
         bad.append(f"text that is not prose is left alone ({found})")
     text = "\n".join(NOT_PROSE) + "\n"
-    if fixed(mod, text) != text:
-        bad.append("--fix leaves text that is not prose")
+    if suggested(mod, text) != text:
+        bad.append("the patch leaves text that is not prose")
     return bad
 
 
@@ -1135,7 +1204,8 @@ def corpus_lines(name: str) -> list[str]:
 def corpus(mod: ModuleType) -> list[str]:
     """The verifier's corpus (#169): American words, organisms, places, titles,
     names, code and hex produce no finding; names with a capitalized British
-    word are not rewritten; every British line is found and fixed exactly."""
+    word are not in the patch; every British line is found, and suggested
+    exactly; every medical word and every word after an opener is found."""
     bad = []
     clean = corpus_lines("clean.txt") + corpus_lines("unlisted.txt")
     found = scan(mod, clean)
@@ -1151,14 +1221,14 @@ def corpus(mod: ModuleType) -> list[str]:
             bad.append("a binomial wrapped across lines is left alone")
 
     names = "\n".join(corpus_lines("names.txt")) + "\n"
-    got = fixed(mod, names)
+    got = suggested(mod, names)
     if got != names:
         changed = [
             (a, b)
             for a, b in zip(names.splitlines(), got.splitlines(), strict=True)
             if a != b
         ]
-        bad.append(f"--fix leaves the corpus's names alone ({changed[:5]})")
+        bad.append(f"the patch leaves the corpus's names alone ({changed[:5]})")
 
     rows = [line.split("  =>  ") for line in corpus_lines("british.txt")]
     found = scan(mod, [british for british, _ in rows])
@@ -1167,8 +1237,27 @@ def corpus(mod: ModuleType) -> list[str]:
         bad.append(f"the corpus's British lines are found (missed {missed})")
     text = "\n".join(british for british, _ in rows) + "\n"
     want = "\n".join(american for _, american in rows) + "\n"
-    if fixed(mod, text) != want:
-        bad.append(f"--fix fixes the corpus's British lines ({fixed(mod, text)!r})")
+    got = suggested(mod, text)
+    if got != want:
+        wrong = [
+            (a, b)
+            for a, b in zip(want.splitlines(), got.splitlines(), strict=False)
+            if a != b
+        ]
+        bad.append(f"the patch suggests the corpus's British lines ({wrong[:5]})")
+
+    words = corpus_lines("medical.txt")
+    found = scan(mod, [f"The patient had {w} noted today." for w in words])
+    missed = [
+        w for n, w in enumerate(words, 1) if [h for h, _ in found.get(n, [])] != [w]
+    ]
+    if missed:
+        bad.append(f"every medical word is reported (missed {missed[:10]})")
+    openers = corpus_lines("openers.txt")
+    found = scan(mod, openers)
+    missed = [line for n, line in enumerate(openers, 1) if n not in found]
+    if missed:
+        bad.append(f"a word after any capitalized word is reported ({missed[:10]})")
 
     python = corpus_lines("python.txt")
     found = scan(mod, python, mod.load_allowlist(), name="corpus.py")
@@ -1176,14 +1265,15 @@ def corpus(mod: ModuleType) -> list[str]:
         bad.append(f"Python's own spelling is left alone in a .py file ({found})")
 
     # The verifier's --fix demonstration: a CSS and a Markdown file, which the
-    # first version of this checker corrupted.
+    # first version of this checker corrupted. Now nothing is suggested: each
+    # hit is a capitalized name.
     demo = (CORPUS / "fixdemo.txt").read_text(encoding="utf-8")
     with tempfile.TemporaryDirectory() as tmp:
         paths = [Path(tmp) / "a.css", Path(tmp) / "a.md"]
         for path in paths:
             path.write_text(demo, encoding="utf-8")
         with (
-            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stdout(io.StringIO()) as out,
             contextlib.redirect_stderr(io.StringIO()) as err,
         ):
             code = mod.main(["--fix", *map(str, paths)])
@@ -1196,8 +1286,10 @@ def corpus(mod: ModuleType) -> list[str]:
         ]
     if after != [demo, demo]:
         bad.append(f"--fix leaves the demonstration as written ({after})")
+    if out.getvalue():
+        bad.append(f"the demonstration's names are not in the patch ({out.getvalue()})")
     if code != 1 or err.getvalue().count(mod.LEFT_FOR_A_HUMAN) != 4:
-        bad.append(f"--fix says what it left, and exits 1 ({code}, {err.getvalue()})")
+        bad.append(f"--fix lists each hit by hand, exits 1 ({code}, {err.getvalue()})")
     names = ("Haematology", "Sulphur")  # spelling-ok
     want_reported = [(names[0], "Hematology"), (names[1], "Sulfur")] * 2
     if reported != want_reported:
@@ -1254,9 +1346,11 @@ def skip_dirs(mod: ModuleType) -> list[str]:
 
 
 def fix_exit_codes(mod: ModuleType) -> list[str]:
-    """main() with --fix: 0 when everything was fixed, 1 when a file could not be
-    read or a hit was left for a human."""
+    """main() with --fix: 0 when there is no hit, 1 when there is a suggestion,
+    a hit to fix by hand, or a file it could not read."""
     with tempfile.TemporaryDirectory() as tmp:
+        clean = Path(tmp) / "clean.md"
+        clean.write_text("the color\n", encoding="utf-8")
         good = Path(tmp) / "good.md"
         good.write_text("the colour\n", encoding="utf-8")  # spelling-ok
         latin = Path(tmp) / "latin1.md"
@@ -1264,13 +1358,13 @@ def fix_exit_codes(mod: ModuleType) -> list[str]:
         name = Path(tmp) / "name.md"
         name.write_text("Colour Springs\n", encoding="utf-8")  # spelling-ok
         codes = []
-        for path in (good, latin, name):
+        for path in (clean, good, latin, name):
             with (
                 contextlib.redirect_stdout(io.StringIO()),
                 contextlib.redirect_stderr(io.StringIO()),
             ):
                 codes.append(mod.main(["--fix", str(path)]))
-    return [] if codes == [0, 1, 1] else [f"--fix exits 0, 1, 1 ({codes})"]
+    return [] if codes == [0, 1, 1, 1] else [f"--fix exits 0, 1, 1, 1 ({codes})"]
 
 
 def unopenable_is_text(mod: ModuleType) -> list[str]:
@@ -1438,9 +1532,9 @@ def unreadable(mod: ModuleType) -> list[str]:
 
 
 def fixes(mod: ModuleType) -> list[str]:
-    # A capitalized word may be a name, an identifier may be someone else's,
-    # and a lowercase word after a capitalized one may be an epithet: --fix
-    # leaves each.
+    # A capitalized word may be a name and an identifier may be someone else's:
+    # the patch leaves each. A lowercase word after a capitalized one that is no
+    # genus is suggested.
     text = (
         "Behaviour, BEHAVIOUR and behaviour;\n"  # spelling-ok
         "a colourPicker and MAX_COLOURS.\n"  # spelling-ok
@@ -1458,11 +1552,11 @@ def fixes(mod: ModuleType) -> list[str]:
         "See https://example.org/colour for it.\n"  # spelling-ok
         f"Keep {PHRASE} but fix the center.\n"
         "Our judgments, unrecognized.\n"
-        "Haemorrhagic oedematous fetuses.\n"  # spelling-ok
+        "Haemorrhagic edematous fetuses.\n"  # spelling-ok
         "the color, the gray and the center.\n"
     )
-    got = fixed(mod, text, [("*.md", PHRASE)])
-    return [] if got == want else [f"--fix keeps case and exemptions ({got!r})"]
+    got = suggested(mod, text, [("*.md", PHRASE)])
+    return [] if got == want else [f"the patch keeps case and exemptions ({got!r})"]
 
 
 # Files of every kind the checker must read, each with a British word in it:
@@ -1609,16 +1703,18 @@ def translations(mod: ModuleType) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# What --fix rewrites, and what it leaves for a person (D-81).
+# What the --fix patch suggests, what it leaves for a person, and that nothing
+# is ever written (D-81).
 # ---------------------------------------------------------------------------
 
 W = "colour"  # spelling-ok
-# Each row is (line, the line --fix makes of it in a Markdown file, the name of
-# the Left member it is reported with, or None when --fix rewrites it).
+# Each row is (line, the line the suggestion patch makes of it in a Markdown
+# file, the name of the Left member it is reported with, or None when the patch
+# suggests it).
 FIX_CASES: list[tuple[str, str, str | None]] = [
     (f"the {W} here", "the color here", None),
     (W, "color", None),
-    # What may stand next to a word --fix rewrites.
+    # What may stand next to a word the patch suggests.
     *[(f"the {c}{W} here", f"the {c}color here", None) for c in "([\"'*"],
     *[(f"the {W}{c} here", f"the color{c} here", None) for c in ")]\"'*,;:.!?"],
     (f"the **{W}**.", "the **color**.", None),
@@ -1657,12 +1753,10 @@ FIX_CASES: list[tuple[str, str, str | None]] = [
     ("@behaviour GenServer", "", "JOINED"),  # spelling-ok
     ("pip install colour-science", "", "JOINED"),  # spelling-ok
     ("if task.cancelled():", "", "JOINED"),  # spelling-ok
-    ("Tritrichomonas foetus", "", "AFTER_NAME"),  # spelling-ok
-    ("*Tritrichomonas foetus* in cattle", "", "AFTER_NAME"),  # spelling-ok
-    ("T. foetus in cattle", "", "AFTER_NAME"),  # spelling-ok
-    ("in Boston grey skies", "", "AFTER_NAME"),  # spelling-ok
-    # A capitalized word that opens a sentence, or that punctuation closes, or
-    # that has a digit, is not a name's start.
+    # Whatever capitalized word stands before it, a listed lowercase word is
+    # suggested: only a binomial's epithet is skipped (BINOMIALS).
+    ("in Boston grey skies", "in Boston gray skies", None),  # spelling-ok
+    ("Severe oedema", "Severe edema", None),  # spelling-ok
     ("The foetus grew.", "The fetus grew.", None),  # spelling-ok
     ("In Boston, grey skies", "In Boston, gray skies", None),  # spelling-ok
     ("HbA1c grey", "HbA1c gray", None),  # spelling-ok
@@ -1686,14 +1780,14 @@ NOT_READ = [
 
 
 def fix_cases(mod: ModuleType) -> list[str]:
-    """Each row of FIX_CASES, in a Markdown file: what --fix makes of it, and why
-    the report says it was left."""
+    """Each row of FIX_CASES, in a Markdown file: what the patch makes of it,
+    and why the report says it was left."""
     bad = []
     for line, want, reason in FIX_CASES:
         want = want or line
-        got = fixed(mod, line + "\n")
+        got = suggested(mod, line + "\n")
         if got != want + "\n":
-            bad.append(f"--fix makes {want!r} of {line!r} ({got!r})")
+            bad.append(f"the patch makes {want!r} of {line!r} ({got!r})")
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "a.md"
             path.write_text(line + "\n", encoding="utf-8")
@@ -1703,20 +1797,51 @@ def fix_cases(mod: ModuleType) -> list[str]:
             note in messages[0] if reason else mod.LEFT_FOR_A_HUMAN not in messages[0]
         )
         if not ok:
-            bad.append(f"{line!r} is reported once, {reason or 'fixable'} ({messages})")
+            bad.append(
+                f"{line!r} is reported once, {reason or 'suggested'} ({messages})"
+            )
     for line in NOT_READ:
-        if scan(mod, [line]) or fixed(mod, line + "\n") != line + "\n":
-            bad.append(f"{line!r} is neither reported nor rewritten")
+        if scan(mod, [line]) or suggested(mod, line + "\n") != line + "\n":
+            bad.append(f"{line!r} is neither reported nor suggested")
     return bad
 
 
+# The epithet of a binomial is skipped, listed or by its shape, after a genus
+# in GENERA or an abbreviated one; after any other word, or with an English
+# ending, it is reported. Each row is (line, the words reported).
+BINOMIALS = [
+    ("Tritrichomonas foetus", []),  # spelling-ok
+    ("*Tritrichomonas foetus* in cattle", []),  # spelling-ok
+    ("*Tritrichomonas* *foetus* in cattle", []),  # spelling-ok
+    ("<i>Tritrichomonas</i> <i>foetus</i>", []),  # spelling-ok
+    ("Tritrichomonas&nbsp;foetus", []),  # spelling-ok
+    ("T. foetus in cattle", []),  # spelling-ok
+    ("Campylobacter foetus subsp. venerealis", []),  # spelling-ok
+    ("_Schistosoma haemobium_ eggs", []),  # spelling-ok
+    ("Enterococcus (E.) haemobium", []),  # spelling-ok
+    ("Severe foetus", ["foetus"]),  # spelling-ok
+    ("Tritrichomonas, foetus", ["foetus"]),  # spelling-ok
+    ("Enterococcus faecal contamination", ["faecal"]),  # spelling-ok
+    ("Streptococcus haematogenous spread", ["haematogenous"]),  # spelling-ok
+    ("the foetus", ["foetus"]),  # spelling-ok
+]
+
+
+def binomials(mod: ModuleType) -> list[str]:
+    found = scan(mod, [line for line, _ in BINOMIALS])
+    got = {n: [w for w, _ in hits] for n, hits in found.items()}
+    want = {n: words for n, (_, words) in enumerate(BINOMIALS, 1) if words}
+    return [] if got == want else [f"a binomial's epithet is skipped ({got})"]
+
+
 def fix_lines(mod: ModuleType) -> list[str]:
-    """Across lines: a name broken at the end of a line, fenced, indented and
+    """Across lines: a binomial broken at the end of a line, fenced, indented and
     literal blocks, the first column, and a last line with no newline."""
     bad = []
     g, a = "the grey", "the gray"  # spelling-ok
     cases = [
         ("a.md", "Tritrichomonas\nfoetus here\n", None),  # spelling-ok
+        ("a.md", "<i>Tritrichomonas</i>\n<i>foetus</i> here\n", None),  # spelling-ok
         (
             "a.md",
             "Tritrichomonas\n\nfoetus here\n",  # spelling-ok
@@ -1738,18 +1863,14 @@ def fix_lines(mod: ModuleType) -> list[str]:
     ]
     for name, text, want in cases:
         want = text if want is None else want
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / name
-            path.write_text(text, encoding="utf-8")
-            mod.fix(path, [])
-            got = path.read_text(encoding="utf-8")
+        got = suggested(mod, text, name=name)
         if got != want:
-            bad.append(f"--fix makes {want!r} of {text!r} in {name} ({got!r})")
+            bad.append(f"the patch makes {want!r} of {text!r} in {name} ({got!r})")
     return bad
 
 
-# Files of every kind: only Markdown, reStructuredText and plain text are
-# rewritten (and the English catalog's values, below).
+# Files of every kind: the patch suggests only in Markdown, reStructuredText
+# and plain text (and the English catalog's values, below).
 FILE_KINDS = [
     ("a.md", True),
     ("a.MD", True),
@@ -1771,37 +1892,38 @@ FILE_KINDS = [
 def file_kinds(mod: ModuleType) -> list[str]:
     bad = []
     line = f"the {W} here\n"
-    for name, rewritten in FILE_KINDS:
+    for name, suggests in FILE_KINDS:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / name
             path.write_text(line, encoding="utf-8")
             reported = mod.check(path, [])
-            mod.fix(path, [])
-            got = path.read_text(encoding="utf-8")
-        if (got != line) != rewritten or len(reported) != 1:
-            bad.append(f"{name} is {'' if rewritten else 'not '}rewritten ({got!r})")
-        if not rewritten and mod.Left.NOT_PROSE not in reported[0]:
+        got = suggested(mod, line, name=name)
+        if (got != line) != suggests or len(reported) != 1:
+            bad.append(f"{name} is {'' if suggests else 'not '}suggested ({got!r})")
+        if not suggests and mod.Left.NOT_PROSE not in reported[0]:
             bad.append(f"{name}: the report says it is not prose ({reported})")
     return bad
 
 
+CATALOG_TEXT = (
+    "{\n"
+    '  "@meta": {"safety": ["colour"]},\n'  # spelling-ok
+    '  "colour": "the colour",\n'  # spelling-ok
+    '  "pick": "Pick a colour or a {colour}"\n'  # spelling-ok
+    "}\n"
+)
+CATALOG_WANT = (
+    "{\n"
+    '  "@meta": {"safety": ["colour"]},\n'  # spelling-ok
+    '  "colour": "the color",\n'  # spelling-ok
+    '  "pick": "Pick a color or a {colour}"\n'  # spelling-ok
+    "}\n"
+)
+
+
 def catalog(mod: ModuleType) -> list[str]:
-    """In app/i18n/en.json, only a value is rewritten: not a key, an array's
+    """In app/i18n/en.json, only a value is suggested: not a key, an array's
     item, or the same file anywhere else."""
-    text = (
-        "{\n"
-        '  "@meta": {"safety": ["colour"]},\n'  # spelling-ok
-        '  "colour": "the colour",\n'  # spelling-ok
-        '  "pick": "Pick a colour or a {colour}"\n'  # spelling-ok
-        "}\n"
-    )
-    want = (
-        "{\n"
-        '  "@meta": {"safety": ["colour"]},\n'  # spelling-ok
-        '  "colour": "the color",\n'  # spelling-ok
-        '  "pick": "Pick a color or a {colour}"\n'  # spelling-ok
-        "}\n"
-    )
     bad = []
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -1809,24 +1931,39 @@ def catalog(mod: ModuleType) -> list[str]:
         mod.ROOT = root
         try:
             for rel, expect in [
-                ("app/i18n/en.json", want),
-                ("app/i18n/framework/en.json", text),
-                ("docs/en.json", text),
+                ("app/i18n/en.json", CATALOG_WANT),
+                ("app/i18n/framework/en.json", CATALOG_TEXT),
+                ("docs/en.json", CATALOG_TEXT),
             ]:
                 path = root / rel
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(text, encoding="utf-8")
-                mod.fix(path, [])
-                got = path.read_text(encoding="utf-8")
+                path.write_text(CATALOG_TEXT, encoding="utf-8")
+                got = mod.suggest(path, [])[1]
                 if got != expect:
-                    bad.append(f"--fix of {rel} ({got!r})")
+                    bad.append(f"the patch for {rel} ({got!r})")
         finally:
             mod.ROOT = saved
     return bad
 
 
+def run_fix(mod: ModuleType, root: Path, argv: list[str]) -> tuple[int, str, str]:
+    """main(["--fix", *argv]) with the repository root at `root`: its exit code,
+    stdout (the patch) and stderr (the hits to fix by hand)."""
+    saved = mod.ROOT, mod.ALLOWLIST
+    mod.ROOT, mod.ALLOWLIST = root, root / ".spelling-allow"
+    try:
+        with (
+            contextlib.redirect_stdout(io.StringIO()) as out,
+            contextlib.redirect_stderr(io.StringIO()) as err,
+        ):
+            code = mod.main(["--fix", *argv])
+    finally:
+        mod.ROOT, mod.ALLOWLIST = saved
+    return code, out.getvalue(), err.getvalue()
+
+
 def fix_respects_skip(mod: ModuleType) -> list[str]:
-    """--fix never touches a file skip() skips: something quoted verbatim, the
+    """The patch never names a file skip() skips: something quoted verbatim, the
     corpus. Named on the command line, or found by a whole-repository run."""
     bad = []
     text = f"the {W} here\n"
@@ -1839,27 +1976,128 @@ def fix_respects_skip(mod: ModuleType) -> list[str]:
         for rel in rels:
             (root / rel).parent.mkdir(parents=True, exist_ok=True)
             (root / rel).write_text(text, encoding="utf-8")
-        saved = mod.ROOT, mod.ALLOWLIST
-        mod.ROOT, mod.ALLOWLIST = root, root / ".spelling-allow"
-        try:
-            for argv in (["--fix", *(str(root / r) for r in rels)], ["--fix"]):
-                with (
-                    contextlib.redirect_stdout(io.StringIO()),
-                    contextlib.redirect_stderr(io.StringIO()),
-                ):
-                    mod.main(argv)
-                changed = [
-                    r for r in rels if (root / r).read_text(encoding="utf-8") != text
-                ]
-                if changed:
-                    bad.append(f"--fix leaves skipped files ({argv[1:2]}: {changed})")
-        finally:
-            mod.ROOT, mod.ALLOWLIST = saved
+        for argv in ([str(root / r) for r in rels], []):
+            _, out, err = run_fix(mod, root, argv)
+            named = [r for r in rels if r in out or r in err]
+            if named:
+                bad.append(f"the patch leaves skipped files ({argv[:1]}: {named})")
+    return bad
+
+
+# A modification time far in the past, so a write is seen even when the clock
+# is coarse.
+OLD_MTIME_NS = 1_000_000_000 * 10**9
+
+
+def never_writes(mod: ModuleType) -> list[str]:
+    """--fix writes nothing: no file's bytes or modification time change, for
+    every kind of file, the English catalog, CRLF endings, a last line with no
+    newline, and every file of the verifier's corpus (as written, and as
+    Markdown), whether the files are named or found by a whole-repository run."""
+    bad = []
+    files = {name: f"the {W} here\n".encode() for name, _ in FILE_KINDS}
+    files["app/i18n/en.json"] = CATALOG_TEXT.encode()
+    files["crlf.md"] = b"the colour\r\nthe grey\r\n"  # spelling-ok
+    files["no-newline.md"] = b"x\ncolour"  # spelling-ok
+    for path in sorted(CORPUS.iterdir()):
+        files[f"corpus/{path.name}"] = path.read_bytes()
+        files[f"corpus/{path.stem}.md"] = path.read_bytes()
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for rel, data in files.items():
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_bytes(data)
+            os.utime(root / rel, ns=(OLD_MTIME_NS, OLD_MTIME_NS))
+        for argv in ([str(root / rel) for rel in files], []):
+            code, _, _ = run_fix(mod, root, argv)
+            changed = [
+                rel
+                for rel, data in files.items()
+                if (root / rel).read_bytes() != data
+                or (root / rel).stat().st_mtime_ns != OLD_MTIME_NS
+            ]
+            if changed:
+                bad.append(f"--fix writes nothing ({argv[:1]}: {changed[:5]})")
+            if code != 1:
+                bad.append(f"--fix exits 1 when there are hits ({code})")
+    return bad
+
+
+# Each row is (path, text, the text after the patch is applied). One has no
+# hit the patch suggests, so the patch must not name it.
+PATCH_CASES = [
+    ("a.md", "the colour here\n", "the color here\n"),  # spelling-ok
+    ("docs/b.txt", "x\ncolour", "x\ncolor"),  # spelling-ok
+    (
+        "c.rst",
+        "the grey\r\nand the centre\r\n",  # spelling-ok
+        "the gray\r\nand the center\r\n",
+    ),
+    ("d.md", "page\x0cthe colour\nmore\n", "page\x0cthe color\nmore\n"),  # spelling-ok
+    ("app/i18n/en.json", CATALOG_TEXT, CATALOG_WANT),
+    ("e.md", "Colour Springs\n", "Colour Springs\n"),  # spelling-ok
+]
+
+
+def git_apply(patch: str, where: Path, *args: str) -> subprocess.CompletedProcess:
+    # Outside any repository, git apply patches the files under `where`.
+    env = {**os.environ, "GIT_CEILING_DIRECTORIES": str(where.parent)}
+    return subprocess.run(
+        ["git", "apply", *args],
+        input=patch.encode("utf-8"),
+        cwd=where,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+
+
+def patch_applies(mod: ModuleType) -> list[str]:
+    """The --fix patch says it is a suggestion, `git apply --check` accepts it
+    on a copy of the files, and applying it makes exactly the expected text,
+    while the files themselves are left as written."""
+    bad = []
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "repo"
+        for rel, text, _ in PATCH_CASES:
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_bytes(text.encode("utf-8"))
+        code, patch, err = run_fix(
+            mod, root, [str(root / r) for r, _, _ in PATCH_CASES]
+        )
+        header = mod.PATCH_HEADER
+        if not patch.startswith(header) or "suggestion" not in header:
+            bad.append(f"the patch's header says it is a suggestion ({patch[:200]!r})")
+        if "nothing has been written" not in header:
+            bad.append("the header says nothing has been written")
+        if "a/e.md" in patch or "e.md:1:1" not in err:
+            bad.append(f"a hit with no suggestion is listed, not patched ({err!r})")
+        if code != 1:
+            bad.append(f"--fix exits 1 when there are hits ({code})")
+        if any((root / r).read_bytes() != t.encode("utf-8") for r, t, _ in PATCH_CASES):
+            bad.append("--fix leaves the files as written")
+        copy = Path(tmp) / "copy"
+        shutil.copytree(root, copy)
+        checked = git_apply(patch, copy, "--check")
+        if checked.returncode != 0:
+            bad.append(f"git apply --check takes the patch ({checked.stderr!r})")
+            return bad
+        applied = git_apply(patch, copy)
+        wrong = [
+            rel
+            for rel, _, want in PATCH_CASES
+            if (copy / rel).read_bytes() != want.encode("utf-8")
+        ]
+        if applied.returncode != 0 or wrong:
+            bad.append(
+                f"the patch makes the expected text ({wrong}, {applied.stderr!r})"
+            )
     return bad
 
 
 # British by their shape, not listed: each is reported with the suggestion,
-# and never rewritten (the verifier's third pass, #169).
+# and never in the patch (the verifier's third and fifth passes, #169). Each
+# pattern of SHAPES has a word here that no other pattern matches.
 SHAPED = [
     ("haematoxylin", "hematoxylin"),  # spelling-ok
     ("haematogenous", "hematogenous"),  # spelling-ok
@@ -1887,8 +2125,32 @@ SHAPED = [
     ("platypnoeas", "platypneas"),  # spelling-ok
     ("hectolitre", "hectoliter"),  # spelling-ok
     ("hectolitres", "hectoliters"),  # spelling-ok
+    ("methaemoglobin", "methemoglobin"),  # spelling-ok
+    ("oedematogenic", "edematogenic"),  # spelling-ok
+    ("tracheooesophageal", "tracheoesophageal"),  # spelling-ok
+    ("polyoestrous", "polyestrous"),  # spelling-ok
+    ("maternofoetal", "maternofetal"),  # spelling-ok
+    ("faecolith", "fecolith"),  # spelling-ok
+    ("caecum", "cecum"),  # spelling-ok
+    ("logopaedics", "logopedics"),  # spelling-ok
+    ("synaesthetic", "synesthetic"),  # spelling-ok
+    ("pseudogynaecomastia", "pseudogynecomastia"),  # spelling-ok
+    ("leucodystrophy", "leukodystrophy"),  # spelling-ok
+    ("aetiopathogenesis", "etiopathogenesis"),  # spelling-ok
+    ("palaeopathology", "paleopathology"),  # spelling-ok
+    ("praecordial", "precordial"),  # spelling-ok
+    ("pharmacopoeial", "pharmacopeial"),  # spelling-ok
+    ("spirochaetal", "spirochetal"),  # spelling-ok
+    ("sulphinpyrazone", "sulfinpyrazone"),  # spelling-ok
+    ("antitumoural", "antitumoral"),  # spelling-ok
+    ("otorrhoeas", "otorrheas"),  # spelling-ok
+    ("eupnoeic", "eupneic"),  # spelling-ok
+    ("glycaemically", "glycemically"),  # spelling-ok
+    ("milligramme", "milligram"),  # spelling-ok
 ]
-# Not reported: capitalized and not listed, a Latin ending, or American too.
+# Not reported: capitalized and not listed, a segment alone, hex, a Latin ending
+# or epithet, an exception, a word the en_US dictionary accepts, or an American
+# word that holds a segment's letters by accident (each narrowing of SHAPES).
 NOT_SHAPED = [
     "Haemonetics",  # spelling-ok
     "Haematoxylin",  # spelling-ok
@@ -1904,6 +2166,25 @@ NOT_SHAPED = [
     "paedomorphosis",
     "paedogenesis",
     "haemolyticusRate",  # spelling-ok
+    "faecab",  # spelling-ok
+    "caecilian",  # spelling-ok
+    "caecilians",  # spelling-ok
+    "leucotomy",  # spelling-ok
+    "pharmacopoeia",  # spelling-ok
+    "faecium",  # spelling-ok
+    "haematobium",  # spelling-ok
+    "haemofelis",  # spelling-ok
+    "alphaemission",  # spelling-ok
+    "videoedema",  # spelling-ok
+    "phytoestrogen",  # spelling-ok
+    "shoestring",  # spelling-ok
+    "infoetl",  # spelling-ok
+    "aesthetic",  # spelling-ok
+    "unaesthetic",  # spelling-ok
+    "programmed",  # spelling-ok
+    "leucovorin",  # spelling-ok
+    "gastroesophageal",  # spelling-ok
+    "tracheoesophageal",  # spelling-ok
 ]
 
 
@@ -1917,8 +2198,8 @@ def shapes(mod: ModuleType) -> list[str]:
         }
         bad.append(f"a British shape is reported, with its suggestion ({wrong})")
     text = "\n".join(f"the {b} here" for b, _ in SHAPED) + "\n"
-    if fixed(mod, text) != text:
-        bad.append("--fix leaves a word found by its shape")
+    if suggested(mod, text) != text:
+        bad.append("the patch leaves a word found by its shape")
     found = scan(mod, [f"the {w} here" for w in NOT_SHAPED])
     if found:
         bad.append(f"no shape matches {[NOT_SHAPED[n - 1] for n in found]}")
@@ -1975,8 +2256,10 @@ def is_text_window(mod: ModuleType) -> list[str]:
 # The en_US Hunspell dictionary, pinned in pixi.toml: American English, with
 # its affix rules expanded. No rule of the checker may match one of its
 # lowercase words but these two, which it lists as variants and CLAUDE.md does
-# not allow. Its capitalized entries that the checker lists (four surnames and
-# places) are names, and a capitalized word is never rewritten.
+# not allow. The checker's DICTIONARY_WORDS are British-looking words the
+# dictionary accepts ("leucotomy", "pharmacopoeia"), so they are not reported.
+# Its capitalized entries that the checker lists (four surnames and places) are
+# names, and a capitalized word is never in the suggestion patch.
 DICTIONARY = Path(sys.prefix) / "share" / "hunspell_dictionaries" / "en_US"
 CAUGHT_ON_PURPOSE = {"towards", "whilst"}  # spelling-ok
 
@@ -2039,10 +2322,15 @@ def dictionary(mod: ModuleType) -> list[str]:
         if not DICTIONARY.with_suffix(".dic").exists():
             return [f"the en_US dictionary is installed ({DICTIONARY}.dic)"]
         AMERICAN_WORDS.extend(sorted(hunspell_words(DICTIONARY)))
+    # Each word as the checker reads it: its runs of letters ("pharmacopoeia's"
+    # is "pharmacopoeia" and "s").
     matched = {
         w
         for w in AMERICAN_WORDS
-        if w.islower() and (mod.american(w) or mod.by_shape(w))
+        if w.islower()
+        and any(
+            mod.american(part) or mod.by_shape(part) for part in re.findall("[a-z]+", w)
+        )
     }
     if matched != CAUGHT_ON_PURPOSE:
         return [f"no rule matches an American word ({sorted(matched)[:10]})"]
@@ -2077,6 +2365,9 @@ PROPERTIES = [
     file_kinds,
     catalog,
     fix_respects_skip,
+    never_writes,
+    patch_applies,
+    binomials,
     shapes,
     accented,
     still_prose,
@@ -2267,6 +2558,7 @@ def command_line() -> None:
                 capture_output=True,
                 text=True,
                 check=False,
+                cwd=tmp,
             )
 
         hit = run(str(bad))
@@ -2284,33 +2576,54 @@ def command_line() -> None:
         )
         unfixed = run("--fix", str(latin))
         check("--fix on a file it cannot read exits nonzero", unfixed.returncode == 1)
-        fix = run("--fix", str(bad))
-        check("--fix exits zero", fix.returncode == 0, fix.stderr)
+        clean = run("--fix", str(good))
         check(
-            "--fix rewrote the file",
-            bad.read_text(encoding="utf-8") == "Our judgments.\n",
+            "--fix on clean input exits zero and prints no patch",
+            clean.returncode == 0 and not clean.stdout,
+            clean.stdout + clean.stderr,
         )
-        check("and the file is clean after", run(str(bad)).returncode == 0)
+        before = bad.read_bytes()
+        fix = run("--fix", "bad.md")
+        check("--fix exits 1 on a hit", fix.returncode == 1, fix.stderr)
+        check("--fix leaves the file as written", bad.read_bytes() == before)
+        check(
+            "--fix prints a suggestion patch, named from where it ran",
+            fix.stdout.startswith(cs.PATCH_HEADER)
+            and "--- a/bad.md" in fix.stdout
+            and "+Our judgments." in fix.stdout,
+            fix.stdout,
+        )
+        copy = Path(tmp) / "copy"
+        copy.mkdir()
+        shutil.copy(bad, copy / "bad.md")
+        applied = git_apply(fix.stdout, copy)
+        check(
+            "and git apply makes the American text of a copy",
+            applied.returncode == 0
+            and (copy / "bad.md").read_text(encoding="utf-8") == "Our judgments.\n",
+            applied.stderr.decode(errors="replace"),
+        )
+        check("the file itself still fails the check", run(str(bad)).returncode == 1)
 
         name = Path(tmp) / "name.md"
         text = "Haemorrhage was noted; the colour too.\n"  # spelling-ok
         name.write_text(text, encoding="utf-8")
         hit = run(str(name))
         check(
-            "a capitalized word is reported as left for a human",
+            "a capitalized word is reported as not in the patch",
             hit.returncode == 1 and cs.LEFT_FOR_A_HUMAN in hit.stderr,
             hit.stderr,
         )
-        fix = run("--fix", str(name))
+        fix = run("--fix", "name.md")
         check(
-            "--fix rewrites the lowercase word and leaves the capitalized one",
-            name.read_text(encoding="utf-8")
-            == "Haemorrhage was noted; the color too.\n",  # spelling-ok
+            "--fix suggests the lowercase word and lists the capitalized one",
+            "+Haemorrhage was noted; the color too." in fix.stdout  # spelling-ok
+            and f"name.md:1:1: {text.split()[0]!r}" in fix.stderr,
+            fix.stdout + fix.stderr,
         )
         check(
-            "and exits 1, naming what it left",
-            fix.returncode == 1 and f"name.md:1:1: {text.split()[0]!r}" in fix.stderr,
-            fix.stderr,
+            "and exits 1, leaving the file as written",
+            fix.returncode == 1 and name.read_text(encoding="utf-8") == text,
         )
 
     print("A malformed .spelling-allow fails the command")
@@ -2390,7 +2703,7 @@ MUTATIONS: list[tuple[str, str, str]] = [
         "            hit = key.replace(stem_b, stem_a)\n"
         "    return hit",
     ),
-    ("the -yse stem 'catal' is dropped", '"catal", ', ""),
+    ("the -yse stem 'catal' is dropped", '            "catal",\n', ""),
     ("the -ise stem 'immun' is dropped", '"immun",', ""),
     ("the -our stem 'ferv' is dropped", '"ferv",', ""),
     ("the -re stem 'scept' is dropped", '"scept",', ""),
@@ -2478,7 +2791,7 @@ MUTATIONS: list[tuple[str, str, str]] = [
         "except UnicodeDecodeError as error:\n        return [",
         "except UnicodeDecodeError as error:\n        return [] if True else [",
     ),
-    ("--fix ignores case", "return american.upper()", "return american"),
+    ("the patch ignores case", "return american.upper()", "return american"),
     # Which files a whole-repository run reads.
     (
         "only known suffixes are read",
@@ -2560,14 +2873,14 @@ MUTATIONS: list[tuple[str, str, str]] = [
         'path = run.rstrip(".")',
         "path = run",
     ),
-    # What --fix rewrites, and what it leaves for a person.
+    # What the patch suggests, and what it leaves for a person.
     (
-        "a capitalized word is fixed",
+        "a capitalized word is suggested",
         "    if not word.islower():\n        return Left.CAPITALIZED\n",
         "",
     ),
     (
-        "the report does not say what --fix leaves",
+        "the report does not say what the patch leaves",
         'f"{left_note(reason)}\\n"',
         'f"\\n"',
     ),
@@ -2601,7 +2914,7 @@ MUTATIONS: list[tuple[str, str, str]] = [
     ),
     ("a domain's path is read", r"""(?:[/:?#][^\s)\]>\"'`]*)?""", ""),
     ("the path of a git address is read", r"(?:\.[\w-]+)+(?::\S*)?", r"(?:\.[\w-]+)+"),
-    ("-aemias is not generated", '("ia", "ias", "ic")', '("ia", "ic")'),
+    ("-aemias is not generated", '("ia", "ias", "ic")', '("ia", "ic")'),  # spelling-ok
     ("a -pnoea word's -ic is not generated", '("a", "as", "ic")', '("a", "as")'),
     (
         "any dot is a file extension",
@@ -2649,11 +2962,13 @@ MUTATIONS: list[tuple[str, str, str]] = [
 BEFORE_SOURCE = """BEFORE = frozenset("([\\"'*")"""
 AFTER_SOURCE = """AFTER = frozenset(")]\\"'*,;:.!?")"""
 MUTATIONS += [
-    # A character that may stand next to a word --fix rewrites, added or
+    # Each pattern of SHAPES, dropped.
+    *[(f"the shape {p} is dropped", f'    r"{p}",\n', "") for p in cs.SHAPES],
+    # A character that may stand next to a word the patch suggests, added or
     # dropped.
     *[
         (
-            f"{c!r} may stand before a word --fix rewrites",
+            f"{c!r} may stand before a word the patch suggests",
             BEFORE_SOURCE,
             BEFORE_SOURCE[:-2] + c + '")',
         )
@@ -2661,7 +2976,7 @@ MUTATIONS += [
     ],
     *[
         (
-            f"{c!r} may stand after a word --fix rewrites",
+            f"{c!r} may stand after a word the patch suggests",
             AFTER_SOURCE,
             AFTER_SOURCE[:-2] + c + '")',
         )
@@ -2714,7 +3029,7 @@ MUTATIONS += [
     ("~/ does not start a path", '("./", "../", "~/", "/")', '("./", "../", "/")'),
     ("../ does not start a path", '("./", "../", "~/", "/")', '("./", "~/", "/")'),
     (
-        "--fix rewrites a line left to right",
+        "the patch respells a line left to right",
         "in reversed(found):",
         "in found:",
     ),
@@ -2751,7 +3066,7 @@ MUTATIONS += [
     ),
     # Shapes.
     (
-        "a word found by its shape is fixed",
+        "a word found by its shape is suggested",
         "    if not listed:\n        return Left.SHAPE\n",
         "",
     ),
@@ -2762,18 +3077,24 @@ MUTATIONS += [
     ),
     (
         "a Latin ending is matched by shape",
-        "        if latin or key.startswith(SHAPE_EXCEPTIONS):",
-        "        if key.startswith(SHAPE_EXCEPTIONS):",
+        "            latin\n            or key in LATIN_EPITHETS",
+        "            False\n            or key in LATIN_EPITHETS",
     ),
     (
-        "a prefix alone is a shape",
-        "key.startswith(prefix) and len(key) > len(prefix)",
-        "key.startswith(prefix)",
+        "a Latin epithet is matched by shape",
+        "            or key in LATIN_EPITHETS\n",
+        "",
     ),
     (
-        "a suffix alone is a shape",
-        "key.endswith(suffix) and len(key) > len(suffix)",
-        "key.endswith(suffix)",
+        "the dictionary's words are matched",
+        "            or key in DICTIONARY_WORDS\n",
+        "",
+    ),
+    ("hex is matched by shape", "            or HEX.fullmatch(key)\n", ""),
+    (
+        "a segment alone is a shape",
+        "if match is None or match.group(0) == key:",
+        "if match is None:",
     ),
     ("-ous is a Latin ending", " and not key.endswith(NOT_LATIN)", ""),
     (
@@ -2782,25 +3103,110 @@ MUTATIONS += [
         "SHAPE_WORDS = ()",
     ),
     (
-        "an epithet found by its shape is reported",
-        "            if found[3] or not names(",
-        "            if True or not names(",
-    ),
-    (
         "no word is excepted from the shapes",
-        'SHAPE_EXCEPTIONS = ("paedomorph", "paedogen")',
+        "SHAPE_EXCEPTIONS = ("
+        + '"paedomorph", "paedogen", "caecilian", "leucovorin", "unaesthe")',
         'SHAPE_EXCEPTIONS = ("-",)',
     ),
-    ("the shape haem- is dropped", 'SHAPE_PREFIXES = ("haem", ', "SHAPE_PREFIXES = ("),
-    ("the shape gynae- is dropped", ', "anaes", "gynae")', ', "anaes")'),  # spelling-ok
-    ("the shape -aemic is dropped", '    "aemic",\n', ""),
-    ("the shape -litre is dropped", '    "litre",\n    "litres",\n', ""),  # spelling-ok
+    ("caecilian is not excepted", '"paedogen", "caecilian", ', '"paedogen", '),
+    ("unaesthetic is not excepted", '"leucovorin", "unaesthe")', '"leucovorin")'),
+    # Each narrowing of a pattern, undone, matches an American word.
+    ("haem matches anywhere", 'r"^haem|haem(?=[ao])"', 'r"haem"'),
+    ("oedem matches after any letter", 'r"(?:^|(?<=[aiouy]))oedem"', 'r"oedem"'),
     (
-        "the shape leuc- is added",
-        'SHAPE_PREFIXES = ("haem", ',
-        'SHAPE_PREFIXES = ("leuc", "haem", ',
+        "oedem matches after an e",
+        'r"(?:^|(?<=[aiouy]))oedem"',
+        'r"(?:^|(?<=[aeiouy]))oedem"',
     ),
-    # The kinds of file --fix rewrites.
+    ("oestr matches after any letter", 'r"(?:^|(?<=[aiouy]))oestr"', 'r"oestr"'),
+    (
+        "oesophag matches after any letter",
+        'r"(?:^|(?<=[aiouy]))oesophag"',
+        'r"oesophag"',
+    ),
+    ("foet matches anywhere", 'r"foet(?=al|us|id|o|icid)"', 'r"foet"'),
+    ("aesthe matches at the start", 'r"(?<=.)aesthe"', 'r"aesthe"'),
+    ("gramme matches anywhere", 'r"grammes?$"', 'r"grammes?"'),  # spelling-ok
+    ("the shape leuc is added", 'r"leuco",', 'r"leuc",'),
+    # The binomial skip.
+    (
+        "the binomial skip is off",
+        "    return bool(genus) and (genus.group(2)",
+        "    return False and bool(genus) and (genus.group(2)",
+    ),
+    (
+        "any capitalized word is a genus",
+        "genus.group(1) in GENERA)",
+        "genus.group(1) is not None)",
+    ),
+    ("an abbreviation is no genus", "genus.group(2) is not None or ", ""),
+    (
+        "an English ending is an epithet",
+        'EPITHET_ENDINGS = ("a", ',
+        'EPITHET_ENDINGS = ("al", "a", ',
+    ),
+    (
+        "-ous is an epithet",
+        "    if key.endswith(NOT_LATIN):\n        return False\n",
+        "",
+    ),
+    ("markup hides the genus", 'text = MARKUP.sub(" ", before)', "text = before"),
+    (
+        "the genus is not read on the line before",
+        'text = MARKUP.sub(" ", previous) + " " + text',
+        "text = text",
+    ),
+    (
+        "a blank line does not end a binomial",
+        "        previous = line\n",
+        "        previous = line if line.strip() else previous\n",
+    ),
+    ("a comma is markup", r"""\[\]]*$")""", r"""\[\],]*$")"""),
+    # Nothing is written, and the patch is one git applies.
+    (
+        "--fix writes the file",
+        "                if after != before:\n                    patches.append",
+        "                if after != before:\n"
+        '                    path.write_text(after, encoding="utf-8")\n'
+        "                    patches.append",
+    ),
+    (
+        "the patch has no header",
+        'print(PATCH_HEADER + "".join(patches), end="")',
+        'print("".join(patches), end="")',
+    ),
+    (
+        "--fix exits 0 with hits",
+        "return 1 if unread or patches or hand else 0",
+        "return 1 if unread else 0",
+    ),
+    (
+        "--fix does not list the rest",
+        '                hand.extend(f"  {name}:{hit}" for hit in left)\n',
+        "",
+    ),
+    (
+        "a last line with no newline is not marked",
+        'else f"{line}\\n{NO_NEWLINE}"',
+        'else f"{line}\\n"',
+    ),
+    (
+        "the patch splits lines as Python does",
+        "        GIT_LINE.findall(before),\n        GIT_LINE.findall(after),",
+        "        before.splitlines(keepends=True),\n"
+        "        after.splitlines(keepends=True),",
+    ),
+    (
+        "line endings are translated when read",
+        'return path.read_bytes().decode("utf-8")',
+        'return path.read_text(encoding="utf-8")',
+    ),
+    (
+        "an abbreviation is a file extension",
+        " and not DOTTED.fullmatch(segment)",
+        "",
+    ),
+    # The kinds of file the patch suggests in.
     (
         "a .py file is prose",
         'PROSE_SUFFIXES = {".md": Kind.MARKDOWN,',
@@ -2856,37 +3262,10 @@ MUTATIONS += [
         "directive = bool(RST_CODE.match(line))",
         "directive = False",
     ),
-    ("import is prose", "    if token.strip(", "    if False and token.strip("),
-    # Names.
     (
-        "a word after a capitalized one is fixed",
-        "    if names(token):\n        return Left.AFTER_NAME\n",
-        "",
-    ),
-    (
-        "an abbreviated genus is no name",
-        "    if ABBREVIATION.fullmatch(token):\n        return True\n",
-        "",
-    ),
-    (
-        "a name is not carried across lines",
-        'previous = words[-1] if words else ""',
-        'previous = ""',
-    ),
-    (
-        "a blank line does not end a name",
-        'previous = words[-1] if words else ""',
-        "previous = words[-1] if words else previous",
-    ),
-    (
-        "a sentence's first word is a name",
-        "    return core.lower() not in OPENERS",
-        "    return True",
-    ),
-    (
-        "a word with a digit or punctuation is a name",
-        "    if not core.isalpha() or not core[0].isupper():",
-        "    if not core[:1].isupper():",
+        "import is prose",
+        "    if word_before(line, start).strip(",
+        "    if False and word_before(line, start).strip(",
     ),
 ]
 

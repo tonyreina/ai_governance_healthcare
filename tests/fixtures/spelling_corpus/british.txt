@@ -50,3 +50,15 @@ macaemia  =>  macaemia
 # Moved from unlisted.txt when their stems were listed
 foetid  =>  fetid
 caesium  =>  cesium
+# Moved from unlisted.txt when segments were matched inside a word: found by
+# their shape, never suggested
+leucoderma  =>  leucoderma
+leucoplakia  =>  leucoplakia
+leucotriene  =>  leucotriene
+# After a capitalized word, which once silenced them as possible epithets;
+# a listed word there is suggested
+Severe oedema  =>  Severe edema
+NHS haemovigilance  =>  NHS haemovigilance
+# An abbreviation with dots is not a file extension
+oedema/e.g. swelling  =>  oedema/e.g. swelling
+anaemia/i.e. low Hb  =>  anaemia/i.e. low Hb

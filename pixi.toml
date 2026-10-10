@@ -167,6 +167,8 @@ check-framework = "python scripts/check_framework.py"
 test-check-framework = "python tests/test_check_framework.py"
 check-chai = "python scripts/check_chai_updates.py"
 check-chai-write = "python scripts/check_chai_updates.py --write"
+# Prints a patch of suggested respellings to review and `git apply`, and lists
+# the rest to fix by hand. It never writes a file (#169, D-81).
 fix-spelling = "python scripts/check_spelling.py --fix"
 hooks-install = "prek install"
 check = "prek run --all-files"

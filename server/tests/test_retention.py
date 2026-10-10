@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+from enum import StrEnum
 from pathlib import Path
 
 import asyncpg
@@ -371,39 +372,58 @@ async def test_an_empty_read_trail_reports_nothing_due(client: AsyncClient) -> N
     assert (report["events"], report["held"]) == (0, 0)
 
 
-CHAI_DIR = (
-    Path(__file__).resolve().parents[2] / "app" / "js" / "10-frameworks" / "10-chai"
+CHAI_DEFINITION = (
+    Path(__file__).resolve().parents[2]
+    / "app"
+    / "frameworks"
+    / "chai"
+    / "framework.json"
 )
-RULES_JS = CHAI_DIR / "10-rules.js"
-DEFINITION_JS = CHAI_DIR / "00-definition.js"
-
-# The decision classes phase() treats as retired (#168: decisions carry a
-# GateClass; the rule reads the class, never the wording).
-ENDING = ("STOP", "RETIRE")
 
 
-def ending_classes_js(rules: str) -> set[str]:
-    """The GateClass members phase() returns "retired" for."""
-    found: set[str] = set()
-    for line in rules.splitlines():
-        if 'key:"retired"' in line and "return" in line:
-            found |= set(re.findall(r"includes\(GateClass\.(\w+)\)", line))
-    return found
+class GateClass(StrEnum):
+    """A checkpoint decision's class, as a framework definition spells it (the
+    dashboard's GateClass, D-74)."""
+
+    GO = "go"
+    CONDITIONAL = "conditional"
+    REVISE = "revise"
+    STOP = "stop"
+    RETIRE = "retire"
 
 
-def retiring_decisions_js(definition: str, rules: str) -> set[tuple[str, str]]:
-    """(checkpoint, decision) pairs that make phase() return "retired": every
-    option of every gate whose class is one phase() treats as ending."""
-    classes = dict(re.findall(r'"([^"]+)":\s*GateClass\.(\w+)', definition))
-    ending = ending_classes_js(rules)
-    found: set[tuple[str, str]] = set()
-    for gate, options in re.findall(
-        r"^\s*(\w):\{after:.*?options:\[([^\]]*)\]", definition, re.M
-    ):
-        for option in re.findall(r'"([^"]+)"', options):
-            if classes.get(option) in ending:
-                found.add((gate, option))
-    return found
+# The classes that end a project (#168: decisions carry a class; the engine's
+# rule reads the class, never the wording). Any STOP-class decision ends a
+# project as Stopped and any RETIRE-class one as Retired, at whichever gate.
+ENDING = frozenset({GateClass.STOP, GateClass.RETIRE})
+
+
+def chai_definition() -> dict:
+    """A fresh in-memory copy of CHAI's definition, so a mutation stays local."""
+    return json.loads(CHAI_DEFINITION.read_text(encoding="utf-8"))
+
+
+def ending_classes(definition: dict) -> set[GateClass]:
+    """The ending classes the definition's checkpoints offer. Every class is
+    parsed as a GateClass, so a misspelled one fails here instead of quietly
+    never ending a project."""
+    return {
+        cls
+        for gate in definition["gates"]
+        for option in gate["options"]
+        if (cls := GateClass(option["class"])) in ENDING
+    }
+
+
+def retiring_decisions(definition: dict) -> set[tuple[str, str]]:
+    """(checkpoint, decision) pairs that end a project: every option of every
+    gate whose class is an ending one."""
+    return {
+        (gate["id"], option["value"])
+        for gate in definition["gates"]
+        for option in gate["options"]
+        if GateClass(option["class"]) in ENDING
+    }
 
 
 def retiring_decisions_sql(source: str) -> set[tuple[str, str]]:
@@ -416,32 +436,34 @@ def retiring_decisions_sql(source: str) -> set[tuple[str, str]]:
 
 
 def test_retired_means_the_same_in_the_database_and_the_dashboard() -> None:
-    definition = DEFINITION_JS.read_text(encoding="utf-8")
-    rules = RULES_JS.read_text(encoding="utf-8")
-    assert ending_classes_js(rules) == set(ENDING)
-    js = retiring_decisions_js(definition, rules)
-    assert js == {("A", "Stop"), ("B", "Stop"), ("C", "Stop"), ("D", "Retire")}
-    assert retiring_decisions_sql(MIGRATION) == js
+    definition = chai_definition()
+    assert ending_classes(definition) == ENDING
+    dashboard = retiring_decisions(definition)
+    assert dashboard == {("A", "Stop"), ("B", "Stop"), ("C", "Stop"), ("D", "Retire")}
+    assert retiring_decisions_sql(MIGRATION) == dashboard
+
+
+def gate(definition: dict, gate_id: str) -> dict:
+    return next(g for g in definition["gates"] if g["id"] == gate_id)
 
 
 def test_the_rule_comparison_notices_a_difference() -> None:
     # Mutation: a new way to retire in the dashboard, or one dropped from the SQL.
-    rules = RULES_JS.read_text(encoding="utf-8")
-    definition = (
-        DEFINITION_JS.read_text(encoding="utf-8")
-        .replace(
-            '"Revise and resubmit","Stop"]},\n  D:',
-            '"Revise and resubmit","Stop","Withdraw"]},\n  D:',
-        )
-        .replace(
-            '"Retire": GateClass.RETIRE,',
-            '"Retire": GateClass.RETIRE,\n  "Withdraw": GateClass.STOP,',
-        )
-    )
-    assert ("C", "Withdraw") in retiring_decisions_js(definition, rules)
-    # Or a class phase() stops treating as ending.
-    weaker = rules.replace("classes.includes(GateClass.RETIRE)", "false")
-    assert ending_classes_js(weaker) == {"STOP"}
+    definition = chai_definition()
+    gate(definition, "C")["options"].append({"value": "Withdraw", "class": "stop"})
+    assert ("C", "Withdraw") in retiring_decisions(definition)
+    assert retiring_decisions(definition) != retiring_decisions_sql(MIGRATION)
+    # Or a decision that stops being of an ending class.
+    weaker = chai_definition()
+    retire = next(o for o in gate(weaker, "D")["options"] if o["value"] == "Retire")
+    retire["class"] = "revise"
+    assert ending_classes(weaker) == {GateClass.STOP}
+    assert ("D", "Retire") not in retiring_decisions(weaker)
+    # Or a class nobody defined, which must fail rather than never end a project.
+    typo = chai_definition()
+    gate(typo, "D")["options"][-1]["class"] = "retired"
+    with pytest.raises(ValueError):
+        retiring_decisions(typo)
     sql = MIGRATION.replace("OR g.d ->> 'decision' = 'Retire'", "")
     assert ("D", "Retire") not in retiring_decisions_sql(sql)
 

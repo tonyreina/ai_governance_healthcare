@@ -64,6 +64,8 @@ document.addEventListener("click",async e=>{
     return;
   }
   if(btn.dataset.gate && !RO){
+    // The server would retire the record by rules this page does not show (D-83).
+    if(rulesBlockWrites()){ toast(t("rules.refused")); return; }
     const k=btn.dataset.gate, g=S.gates[k]||{};
     const val = g.decision===btn.dataset.d ? "" : btn.dataset.d;
     const now=new Date().toISOString();

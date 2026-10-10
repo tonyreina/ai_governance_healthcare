@@ -339,6 +339,11 @@ body.locked > *:not(#lockScreen){display:none!important}
 .storage-warning b{color:var(--amber)}
 .storage-warning .sw-detail{color:var(--muted)}
 @media print{.storage-warning{display:none}}
+.rules-banner.blocking{background:var(--red-soft);border-bottom-color:var(--red)}
+.rules-banner.blocking b{color:var(--red)}
+.rules-banner .sw-detail{color:var(--ink)}
+/* The banner reads in one direction, set by dir=auto from its words, not each part its own (D-83). */
+.rules-banner > b,.rules-banner .sw-detail{unicode-bidi:isolate}
 .banner{background:var(--teal-soft);border-inline-start:3px solid var(--teal);padding:10px 14px;border-radius:0;border-start-end-radius:6px;border-end-end-radius:6px;font-size:14px;margin:0 0 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 body.ro .ro-hide{display:none!important}
 

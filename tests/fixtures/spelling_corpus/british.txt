@@ -1,0 +1,30 @@
+# British spellings from the verifier's corpus (#169), each as 'line  =>  the
+# line --fix makes of it'. Each must be found, and fixed to exactly that.
+# Lines starting with '# ' are comments.
+# British words listed among the drugs (fp2.txt)
+oestradiol valerate  =>  estradiol valerate
+leucocyte  =>  leukocyte
+haemoglobin A1c  =>  hemoglobin A1c
+# British words listed among the American ones (fp5.txt)
+toxaemia  =>  toxemia
+haemal arch  =>  hemal arch
+oestrus  =>  estrus
+litre  =>  liter
+spectre  =>  specter
+sceptre  =>  scepter
+modeller  =>  modeler
+# British words in code of our own (fp6.txt)
+primary: grey  =>  primary: gray
+accent: blue grey  =>  accent: blue gray
+color: grey;  =>  color: gray;
+const centreX = 0;  =>  const centerX = 0;
+OPTIMISE_FLAG  =>  OPTIMIZE_FLAG
+# word forms, prefixes and look-alikes (fp8.txt)
+dioestrus  =>  diestrus
+antioestrogen  =>  antiestrogen
+oestrogenicity  =>  estrogenicity
+haematocrit  =>  hematocrit
+microhaematuria  =>  microhematuria
+anaesthetist  =>  anesthetist
+encyclopaedic  =>  encyclopedic
+encyclopaedist  =>  encyclopedist

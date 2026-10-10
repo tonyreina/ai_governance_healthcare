@@ -1,0 +1,11 @@
+# British spellings whose stem the checker does not list, a known limit (D-81):
+# none is found today. When a stem is added, move its line to british.txt.
+# Lines starting with '# ' are comments.
+leucoderma
+leucoplakia
+leucotomy
+leucotriene
+paeony
+caesium
+diaeresis
+foetid

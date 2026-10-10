@@ -12,21 +12,32 @@ What is pinned, both ways:
   prose, in a code comment, in a string, and as a part of an identifier
   (snake_case, camelCase, kebab-case), in lower, Title and UPPER case;
 * a table written by hand, independently of the checker, is caught with the
-  American form it names. It names every EXPLICIT word, and a form of every
-  stem, ending and prefix of every family and of every segment (the medical
-  family among them), and the tests demand it does, so dropping any part of the
-  checker leaves a row uncaught; no EXPLICIT word may also be generated, so
-  dropping one is always noticed;
+  American form it names. It names every EXPLICIT word, a form of every stem,
+  ending and prefix of every family, and a form of every MEDICAL stem and
+  prefix, and the tests demand it does, so dropping any part of the checker
+  leaves a row uncaught; no EXPLICIT word may also be generated, so dropping one
+  is always noticed; no MEDICAL form has a Latin ending, and no British word is
+  spelled with the letters a-f alone;
 * a British word written with a ligature ("oe" or "ae" as one letter) is caught;
 * American words, and American words a careless new stem would generate
   ("precise", "compelled", "lustring", "improvisation", "leucovorin"), are not
   flagged;
-* names that keep a British segment (Latin binomials, taxa, genera, places and
-  titles) are not flagged and --fix leaves them alone, while the same segments
-  in prose, a capitalized common noun among them, are caught;
+* the verifier's corpus (tests/fixtures/spelling_corpus/): every clean line
+  (organisms, drugs, places, titles, names, code, URLs, hex, encoded data, the
+  binomial wrapped across lines) produces no finding; no line of names is
+  rewritten by --fix; every British line is found and fixed exactly; Python's
+  own spelling passes in a .py file; and the --fix demonstration that
+  corrupted the first version is left as written;
+* a capitalized word is reported and left by --fix, unless it is part of an
+  identifier, which --fix rewrites; the report says which;
+* URLs of every listed scheme, email and git addresses, domains, file names,
+  paths, digests and encoded data are neither reported nor rewritten, while an
+  identifier with a digit is still read;
+* `.cancelled()` is exempt only as a method call in a .py file;
 * a slash in prose (two words joined by "/") is not a path, while a URL, ./, ../, an
-  absolute path and a path with a file extension are; a URL needs "://" and
-  ends at whitespace, and a segment ending in a dot has no extension;
+  absolute path and a path with a file extension are; a URL needs "://" or a
+  listed scheme, and ends at whitespace; a segment ending in a dot has no
+  extension, nor does a dot inside a segment;
 * `spelling-ok`, in lowercase, exempts its own line and no other; a
   `.spelling-allow` entry exempts its exact phrase as a whole, in its own case
   (a mixed-case one too), only in the files its glob names, matched against the
@@ -37,11 +48,14 @@ What is pinned, both ways:
   documentation, .css, .html, .txt, .rst, .svg, a Makefile, a shell script, a
   .caddy file, .env.example, the ignore files, a lock file, a LICENSE) and none
   of our real files is skipped, while a binary file, a symbolic link,
-  translations, SKIP_DIRS, QUOTED_VERBATIM (pinned to exactly its entries),
-  the allowlist and the checker itself are;
+  translations, SKIP_DIRS and QUOTED_VERBATIM (each pinned to exactly its
+  entries), the corpus's own files, the allowlist and the checker itself are;
+  an escape byte is text, a DEL byte is not, and a file that cannot be opened
+  counts as text;
 * --fix rewrites in place, keeping case, and leaves exempt text alone;
 * the command exits nonzero on a hit, or a file it cannot read, and zero on
-  clean input.
+  clean input; --fix exits nonzero when it could not read a file or left a hit
+  for a human.
 
 Then the checker is broken on purpose, at least once for each property above
 (MUTATIONS lists them), and the same assertions must notice. A check never
@@ -586,8 +600,8 @@ travellers travelers  spelling-ok
 tunnelling tunneling  spelling-ok
 yodelling yodeling  spelling-ok
 
-# Segments, the medical family among them: every segment, and the inflections
-# a list of exact forms missed.
+# MEDICAL: a form of every stem and every prefix, and the inflections a list
+# of exact forms missed.
 haemorrhage hemorrhage  spelling-ok
 haemorrhages hemorrhages  spelling-ok
 haemorrhagic hemorrhagic  spelling-ok
@@ -641,6 +655,7 @@ diarrhoea diarrhea  spelling-ok
 diarrhoeal diarrheal  spelling-ok
 gonorrhoea gonorrhea  spelling-ok
 dyspnoea dyspnea  spelling-ok
+dyspnoeic dyspneic  spelling-ok
 apnoea apnea  spelling-ok
 paediatric pediatric  spelling-ok
 paediatrician pediatrician  spelling-ok
@@ -664,6 +679,68 @@ leucocyte leukocyte  spelling-ok
 leucocytes leukocytes  spelling-ok
 leucocytosis leukocytosis  spelling-ok
 leucopenia leukopenia  spelling-ok
+haemothorax hemothorax  spelling-ok
+haemangioma hemangioma  spelling-ok
+haemochromatosis hemochromatosis  spelling-ok
+haemarthrosis hemarthrosis  spelling-ok
+haemal hemal  spelling-ok
+haemolysed hemolyzed  spelling-ok
+gynaecomastia gynecomastia  spelling-ok
+urogynaecology urogynecology  spelling-ok
+viraemia viremia  spelling-ok
+pyaemia pyemia  spelling-ok
+hyperaemia hyperemia  spelling-ok
+thalassaemia thalassemia  spelling-ok
+hyperoxaemia hyperoxemia  spelling-ok
+hypokalaemia hypokalemia  spelling-ok
+hyponatraemia hyponatremia  spelling-ok
+hypercalcaemia hypercalcemia  spelling-ok
+hypovolaemia hypovolemia  spelling-ok
+euvolaemia euvolemia  spelling-ok
+normoglycaemia normoglycemia  spelling-ok
+dyslipidaemia dyslipidemia  spelling-ok
+hypercholesterolaemia hypercholesterolemia  spelling-ok
+hyperuricaemia hyperuricemia  spelling-ok
+hyperinsulinaemia hyperinsulinemia  spelling-ok
+hypophosphataemia hypophosphatemia  spelling-ok
+hypomagnesaemia hypomagnesemia  spelling-ok
+paraproteinaemia paraproteinemia  spelling-ok
+polycythaemia polycythemia  spelling-ok
+nonanaemic nonanemic  spelling-ok
+preleukaemia preleukemia  spelling-ok
+paraesthesia paresthesia  spelling-ok
+dysaesthesia dysesthesia  spelling-ok
+synaesthesia synesthesia  spelling-ok
+hyperaesthesia hyperesthesia  spelling-ok
+hypoaesthesia hypoesthesia  spelling-ok
+kinaesthetic kinesthetic  spelling-ok
+amenorrhoea amenorrhea  spelling-ok
+dysmenorrhoea dysmenorrhea  spelling-ok
+rhinorrhoea rhinorrhea  spelling-ok
+steatorrhoea steatorrhea  spelling-ok
+seborrhoeic seborrheic  spelling-ok
+galactorrhoea galactorrhea  spelling-ok
+tachypnoea tachypnea  spelling-ok
+bradypnoea bradypnea  spelling-ok
+orthopnoea orthopnea  spelling-ok
+paedophile pedophile  spelling-ok
+myxoedema myxedema  spelling-ok
+lymphoedema lymphedema  spelling-ok
+angiooedema angioedema  spelling-ok
+papilloedema papilledema  spelling-ok
+gastrooesophageal gastroesophageal  spelling-ok
+transoesophageal transesophageal  spelling-ok
+anoestrus anestrus  spelling-ok
+dioestrus diestrus  spelling-ok
+prooestrus proestrus  spelling-ok
+metoestrus metestrus  spelling-ok
+antioestrogen antiestrogen  spelling-ok
+posthaemorrhagic posthemorrhagic  spelling-ok
+perihaemorrhagic perihemorrhagic  spelling-ok
+macrohaematuria macrohematuria  spelling-ok
+microhaematuria microhematuria  spelling-ok
+disulphide disulfide  spelling-ok
+bisulphate bisulfate  spelling-ok
 """
 
 # The ligatures, read as their two letters.
@@ -673,6 +750,7 @@ LIGATURE_ROWS = [
     ("fœtus", "fetus"),  # spelling-ok
     ("anæmia", "anemia"),  # spelling-ok
     ("Œdema", "Edema"),  # spelling-ok
+    ("MANŒUVRE", "MANEUVER"),  # spelling-ok
 ]
 
 # American words, and words that merely contain a British string, which the
@@ -710,46 +788,59 @@ pressure moisture crystalline fertility oxide mineral centerpiece fiberglass
 paedomorphosis paedomorphic paedogenesis paedogenetic Caesarea Aemilia Aemilius
 """
 
-# Names that keep a British segment in American text: Latin binomials, taxa,
-# genera, places and titles. Each would be corrupted by --fix if flagged.
-NAMES = [
-    "Haemophilus influenzae type b",  # spelling-ok
-    "Enterococcus faecalis and Enterococcus faecium",  # spelling-ok
-    "E. faecalis, E. faecium and S. haemolyticus.",  # spelling-ok
-    "Staphylococcus haemolyticus was cultured.",  # spelling-ok
-    "Mannheimia haemolytica causes it.",  # spelling-ok
-    "Faecalibacterium prausnitzii is a gut commensal.",  # spelling-ok
-    "Haemagogus and Haemadipsa and Haematopinus.",  # spelling-ok
-    "Haematobia, Haemoproteus and Haemaphysalis.",  # spelling-ok
-    "The order Haemosporida; the alga Haematococcus.",  # spelling-ok
-    "Oestrus ovis, of the family Oestridae.",  # spelling-ok
-    "Paederus beetles.",  # spelling-ok
-    "Sulphur, Louisiana, and Sulphur, LA.",  # spelling-ok
-    "Sulphur Springs and White Sulphur Springs.",  # spelling-ok
-    "See the Encyclopaedia Britannica.",  # spelling-ok
-    "Caesarea Maritima; Aemilia and Aemilius.",  # spelling-ok
-]
-
-# The same segments in prose, which must still be caught: a capitalized common
-# noun, and lines that look like a binomial and are not one.
-NOT_NAMES = [
+# Capitalized British words, which may be names: reported, and left as written
+# by --fix. Each row is (line, the words reported).
+CAPITALIZED = [
     ("Haemorrhage was noted.", ["Haemorrhage"]),  # spelling-ok
     ("Paediatric Care", ["Paediatric"]),  # spelling-ok
-    ("Trauma haematoma noted.", ["haematoma"]),  # spelling-ok
-    ("Pneumonia oedema persists.", ["oedema"]),  # spelling-ok
-    ("Severe haemolysis and anaemia.", ["haemolysis", "anaemia"]),  # spelling-ok
-    ("The foetus, the oesophagitis.", ["foetus", "oesophagitis"]),  # spelling-ok
-    # A capitalized word is a genus only if it looks Latin.
-    ("Viable foetus at term.", ["foetus"]),  # spelling-ok
-    ("Leukaemia virus", ["Leukaemia"]),  # spelling-ok
-    ("Foetus data", ["Foetus"]),  # spelling-ok
-    ("Oestrus cycles vary.", ["Oestrus"]),  # spelling-ok
-    ("Sulphur is yellow.", ["Sulphur"]),  # spelling-ok
-    ("Sulphur springs bubble.", ["Sulphur"]),  # spelling-ok
-    ("Encyclopaedia entries.", ["Encyclopaedia"]),  # spelling-ok
-    ("A Caesarean section.", ["Caesarean"]),  # spelling-ok
-    ("The haemophilus vaccine.", []),
-    ("A paedophile.", ["paedophile"]),  # spelling-ok
+    ("See the British Journal of Haematology.", ["Haematology"]),  # spelling-ok
+    ("Oestrus ovis, of the family Oestridae.", ["Oestrus"]),  # spelling-ok
+    ("Sulphur, Louisiana", ["Sulphur"]),  # spelling-ok
+    ("A BEHAVIOUR SHOUT", ["BEHAVIOUR"]),  # spelling-ok
+    ("the Lexington-Centre trust", ["Centre"]),  # spelling-ok
+    ("ColourPicker", ["Colour"]),  # spelling-ok
+    ("An \u0152dema.", ["\u0152dema"]),
+    ("Haemonetics Corporation", []),  # spelling-ok
+]
+# A capitalized British word inside an identifier, which --fix does rewrite:
+# after a letter, digit or underscore, or before an underscore or digit.
+IDENTIFIERS = [
+    ("getColourValue()", "getColorValue()"),  # spelling-ok
+    ("MAX_COLOURS = 3", "MAX_COLORS = 3"),  # spelling-ok
+    ("COLOUR_MAX = 3", "COLOR_MAX = 3"),  # spelling-ok
+    ("x = COLOUR2", "x = COLOR2"),  # spelling-ok
+    ("renderColourPanelV2Layout()", "renderColorPanelV2Layout()"),  # spelling-ok
+    ("self.colour = 1", "self.color = 1"),  # spelling-ok
+    # Its case changes often, but it has no digit: not taken for encoded data.
+    ("TestWhoColouredItAndWhen", "TestWhoColoredItAndWhen"),  # spelling-ok
+    # Short, so not taken for encoded data.
+    ("let aColour2 = 0", "let aColor2 = 0"),  # spelling-ok
+]
+
+# Text that is not prose: never reported, never rewritten.
+NOT_PROSE = [
+    "mailto:colour",  # spelling-ok
+    "MAILTO:colour",  # spelling-ok
+    "urn:colour:behaviour",  # spelling-ok
+    "doi:colour",  # spelling-ok
+    "data:text/plain,colour",  # spelling-ok
+    "tel:colour",  # spelling-ok
+    "write to colour.team@example.org now",  # spelling-ok
+    "git@github.com:org/colour-tools.git",  # spelling-ok
+    "www.colour.org",  # spelling-ok
+    "see colour.nhs.uk/behaviour today",  # spelling-ok
+    "favour.io",  # spelling-ok
+    "example.com/x?colour=1",  # spelling-ok
+    "clone colour-tools.git",  # spelling-ok
+    "git@github.com:colour",  # spelling-ok
+    "see colour.md and behaviour.JSON",  # spelling-ok
+    # A path with an extension no list names, before a period.
+    "See docs/colour.qmd.",  # spelling-ok
+    'integrity="sha256-ColourBehaviourFavour"',  # spelling-ok
+    "ColourBehaviourHonourFavour1==",  # spelling-ok
+    "x QmVoYXZpb3VyIGNvbG91cgAbHaemoglobin",  # spelling-ok
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWVtIn0.HaemFaecPaedSulphxyz",  # spelling-ok
+    "#faec00 3faec12 9faec3d1-0000-4000-8000-000000000000",
 ]
 
 # Ordinary American lines that must stay clean: URLs and paths among them.
@@ -771,11 +862,12 @@ SLASHED_PROSE = [
     # A segment ending in a dot is not a file extension.
     ("And so on...colour/flavour now.", ["colour", "flavour"]),  # spelling-ok
     ("Then colour./flavour now.", ["colour", "flavour"]),  # spelling-ok
+    # Nor is a dot inside a segment: the extension runs to the segment's end.
+    ("Pick colour/flavour.x-ray now.", ["colour", "flavour"]),  # spelling-ok
     # A URL ends at whitespace, not at the end of the line.
     ("See https://example.org/x for the colour.", ["colour"]),  # spelling-ok
-    # A URL has "://": a colon alone does not make one.
+    # A URL has "://" or a scheme written without it: a colon alone is not one.
     ("A note:colour here.", ["colour"]),  # spelling-ok
-    ("mailto:colour", ["colour"]),  # spelling-ok
 ]
 
 
@@ -916,23 +1008,217 @@ def american_left_alone(mod: ModuleType) -> list[str]:
     return [f"no false positives (flagged {sorted(named.items())[:5]})"] * bool(found)
 
 
-def names(mod: ModuleType) -> list[str]:
-    """Binomials, taxa, genera, places and titles keep their spelling, and --fix
-    leaves them as written; the same segments in prose are still caught."""
+def capitalized(mod: ModuleType) -> list[str]:
+    """A capitalized word is reported and left for a human, unless it is part of
+    an identifier, which --fix rewrites."""
     bad = []
-    found = scan(mod, NAMES)
-    if found:
-        flagged = {NAMES[n - 1]: hits for n, hits in found.items()}
-        bad.append(f"names are left alone (flagged {flagged})")
-    text = "\n".join(NAMES) + "\n"
-    if fixed(mod, text) != text:
-        bad.append("--fix leaves names alone")
-    found = scan(mod, [line for line, _ in NOT_NAMES])
+    found = scan(mod, [line for line, _ in CAPITALIZED])
     got = {n: [w for w, _ in hits] for n, hits in found.items()}
-    want = {n: words for n, (_, words) in enumerate(NOT_NAMES, 1) if words}
+    want = {n: words for n, (_, words) in enumerate(CAPITALIZED, 1) if words}
     if got != want:
-        bad.append(f"a segment in prose is caught ({got})")
+        bad.append(f"a capitalized word is reported ({got})")
+    text = "\n".join(line for line, _ in CAPITALIZED) + "\n"
+    if fixed(mod, text) != text:
+        bad.append(f"--fix leaves a capitalized word ({fixed(mod, text)!r})")
+    for line, want_line in IDENTIFIERS:
+        got_line = fixed(mod, line + "\n")
+        if got_line != want_line + "\n":
+            bad.append(f"--fix rewrites an identifier's part ({got_line!r})")
+    # The report says which hits --fix leaves, and only those.
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "a.md"
+        text = "Haemorrhage here.\nthe colour here.\n"  # spelling-ok
+        path.write_text(text, encoding="utf-8")
+        messages = mod.check(path, [])
+    left = [mod.LEFT_FOR_A_HUMAN in m for m in messages]
+    if left != [True, False] or "may be a name" not in mod.LEFT_FOR_A_HUMAN:
+        bad.append(f"the report says what --fix leaves ({messages})")
     return bad
+
+
+def not_prose(mod: ModuleType) -> list[str]:
+    """URLs of every scheme, email addresses, domains, file names, digests and
+    encoded data are neither reported nor rewritten."""
+    bad = []
+    found = scan(mod, NOT_PROSE)
+    if found:
+        bad.append(f"text that is not prose is left alone ({found})")
+    text = "\n".join(NOT_PROSE) + "\n"
+    if fixed(mod, text) != text:
+        bad.append("--fix leaves text that is not prose")
+    return bad
+
+
+CORPUS = ROOT / "tests" / "fixtures" / "spelling_corpus"
+
+
+def corpus_lines(name: str) -> list[str]:
+    text = (CORPUS / name).read_text(encoding="utf-8")
+    return [line for line in text.splitlines() if line and not line.startswith("# ")]
+
+
+def corpus(mod: ModuleType) -> list[str]:
+    """The verifier's corpus (#169): American words, organisms, places, titles,
+    names, code and hex produce no finding; names with a capitalized British
+    word are not rewritten; every British line is found and fixed exactly."""
+    bad = []
+    clean = corpus_lines("clean.txt") + corpus_lines("unlisted.txt")
+    found = scan(mod, clean)
+    if found:
+        flagged = {clean[n - 1]: hits for n, hits in found.items()}
+        bad.append(f"the corpus's clean lines produce no finding ({flagged})")
+
+    wrap = (CORPUS / "wrap.md").read_text(encoding="utf-8")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "wrap.md"
+        path.write_text(wrap, encoding="utf-8")
+        if mod.check(path, []):
+            bad.append("a binomial wrapped across lines is left alone")
+
+    names = "\n".join(corpus_lines("names.txt")) + "\n"
+    got = fixed(mod, names)
+    if got != names:
+        changed = [
+            (a, b)
+            for a, b in zip(names.splitlines(), got.splitlines(), strict=True)
+            if a != b
+        ]
+        bad.append(f"--fix leaves the corpus's names alone ({changed[:5]})")
+
+    rows = [line.split("  =>  ") for line in corpus_lines("british.txt")]
+    found = scan(mod, [british for british, _ in rows])
+    missed = [rows[n][0] for n in range(len(rows)) if n + 1 not in found]
+    if missed:
+        bad.append(f"the corpus's British lines are found (missed {missed})")
+    text = "\n".join(british for british, _ in rows) + "\n"
+    want = "\n".join(american for _, american in rows) + "\n"
+    if fixed(mod, text) != want:
+        bad.append(f"--fix fixes the corpus's British lines ({fixed(mod, text)!r})")
+
+    python = corpus_lines("python.txt")
+    found = scan(mod, python, mod.load_allowlist(), name="corpus.py")
+    if found:
+        bad.append(f"Python's own spelling is left alone in a .py file ({found})")
+
+    # The verifier's --fix demonstration: a CSS and a Markdown file, which the
+    # first version of this checker corrupted.
+    demo = (CORPUS / "fixdemo.txt").read_text(encoding="utf-8")
+    with tempfile.TemporaryDirectory() as tmp:
+        paths = [Path(tmp) / "a.css", Path(tmp) / "a.md"]
+        for path in paths:
+            path.write_text(demo, encoding="utf-8")
+        with (
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()) as err,
+        ):
+            code = mod.main(["--fix", *map(str, paths)])
+        after = [path.read_text(encoding="utf-8") for path in paths]
+        reported = [
+            (m.group(3), m.group(4))
+            for path in paths
+            for m in map(HIT.search, mod.check(path, []))
+            if m
+        ]
+    if after != [demo, demo]:
+        bad.append(f"--fix leaves the demonstration as written ({after})")
+    if code != 1 or err.getvalue().count(mod.LEFT_FOR_A_HUMAN) != 4:
+        bad.append(f"--fix says what it left, and exits 1 ({code}, {err.getvalue()})")
+    names = ("Haematology", "Sulphur")  # spelling-ok
+    want_reported = [(names[0], "Hematology"), (names[1], "Sulfur")] * 2
+    if reported != want_reported:
+        bad.append(f"the demonstration's names are reported ({reported})")
+    return bad
+
+
+def python_protocol(mod: ModuleType) -> list[str]:
+    """With the real .spelling-allow, `.cancelled()` is exempt only as a method
+    call in a .py file: the word in a comment, a docstring or a bare call is
+    still caught, and the method call is caught outside Python."""
+    word = "cancelled"  # spelling-ok
+    allow = mod.load_allowlist()
+    lines = [
+        f"if task.{word}():",
+        f"    return fut.{word}()",
+        f"# the job was {word}",
+        f"{word}()",
+        f'"""Whether it was {word}."""',
+    ]
+    found = scan(mod, lines, allow, name="tool.py")
+    bad = []
+    if sorted(found) != [3, 4, 5]:
+        bad.append(f".{word}() is exempt only as a method call in Python ({found})")
+    found = scan(mod, [f"if task.{word}():"], allow, name="notes.md")
+    if not found:
+        bad.append(f".{word}() is not exempt outside Python")
+    return bad
+
+
+# Exactly the directories a whole-repository run skips, so one added to hide
+# files, or one dropped, is noticed.
+SKIPPED_DIRS = {
+    ".git",
+    ".pixi",
+    "site",
+    ".cache",
+    "node_modules",
+    ".venv",
+    "venv",
+    "backups",
+    "build",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+}
+
+
+def skip_dirs(mod: ModuleType) -> list[str]:
+    if mod.SKIP_DIRS == SKIPPED_DIRS:
+        return []
+    return [f"SKIP_DIRS is exactly its entries ({mod.SKIP_DIRS ^ SKIPPED_DIRS})"]
+
+
+def fix_exit_codes(mod: ModuleType) -> list[str]:
+    """main() with --fix: 0 when everything was fixed, 1 when a file could not be
+    read or a hit was left for a human."""
+    with tempfile.TemporaryDirectory() as tmp:
+        good = Path(tmp) / "good.md"
+        good.write_text("the colour\n", encoding="utf-8")  # spelling-ok
+        latin = Path(tmp) / "latin1.md"
+        latin.write_bytes("Our café.\n".encode("latin-1"))
+        name = Path(tmp) / "name.md"
+        name.write_text("Colour Springs\n", encoding="utf-8")  # spelling-ok
+        codes = []
+        for path in (good, latin, name):
+            with (
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                codes.append(mod.main(["--fix", str(path)]))
+    return [] if codes == [0, 1, 1] else [f"--fix exits 0, 1, 1 ({codes})"]
+
+
+def unopenable_is_text(mod: ModuleType) -> list[str]:
+    """A file is_text() cannot open counts as text, so check() reports it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        ok = mod.is_text(Path(tmp)) and mod.is_text(Path(tmp) / "gone.md")
+    return [] if ok else ["a file that cannot be opened counts as text"]
+
+
+def corpus_skipped(mod: ModuleType) -> list[str]:
+    """The files of the spelling corpus are skipped, and nothing else is."""
+    rel = "tests/fixtures/spelling_corpus"
+    want = [
+        (f"{rel}/clean.txt", True),
+        (f"{rel}/british.txt", True),
+        (f"{rel}/wrap.md", True),
+        (f"{rel}/sub/notes.md", False),
+        (f"{rel}.md", False),
+        ("tests/fixtures/snapshot_default.json", False),
+        ("tests/fixtures/notes.md", False),
+    ]
+    wrong = [r for r, skipped in want if mod.skip(ROOT / r) != skipped]
+    return [f"only the corpus's own files are skipped ({wrong})"] if wrong else []
 
 
 def slashes_in_prose(mod: ModuleType) -> list[str]:
@@ -1077,6 +1363,7 @@ def unreadable(mod: ModuleType) -> list[str]:
 
 
 def fixes(mod: ModuleType) -> list[str]:
+    # A capitalized word on its own may be a name, so --fix leaves it.
     text = (
         "Behaviour, BEHAVIOUR and behaviour;\n"  # spelling-ok
         "a colourPicker and MAX_COLOURS.\n"  # spelling-ok
@@ -1087,13 +1374,13 @@ def fixes(mod: ModuleType) -> list[str]:
         "Haemorrhagic oedematous foetuses.\n"  # spelling-ok
     )
     want = (
-        "Behavior, BEHAVIOR and behavior;\n"
+        "Behaviour, BEHAVIOUR and behavior;\n"  # spelling-ok
         "a colorPicker and MAX_COLORS.\n"
         "The colour stays.  <!-- spelling-ok -->\n"  # spelling-ok
         "See https://example.org/colour for it.\n"  # spelling-ok
         f"Keep {PHRASE} but fix the center.\n"
-        "Unrecognized judgments.\n"
-        "Hemorrhagic edematous fetuses.\n"
+        "Unrecognised judgments.\n"  # spelling-ok
+        "Haemorrhagic edematous fetuses.\n"  # spelling-ok
     )
     got = fixed(mod, text, [("*.md", PHRASE)])
     return [] if got == want else [f"--fix keeps case and exemptions ({got!r})"]
@@ -1131,6 +1418,8 @@ SCANNED = [
     "docs/developing.md",
     "scripts/tool.py",
     "server/schema.sql",
+    # Terminal output: an escape byte is text, by identify's rule.
+    "logs/ansi.log",
 ]
 # Translations, which the checker must not judge by English spelling (#80); a
 # binary file, which pre-commit would not call text; and a symbolic link, which
@@ -1140,6 +1429,8 @@ NOT_SCANNED = [
     "app/i18n/framework/fr.json",
     "app/logo.png",
     "docs/link.md",
+    # A DEL byte makes a file binary, by the same rule.
+    "data/del.dat",
 ]
 
 
@@ -1155,6 +1446,10 @@ def scanned(mod: ModuleType) -> list[str]:
             body = f'{{"note": "the {word}"}}\n' if json_file else f"# the {word}\n"
             if rel.endswith(".png"):
                 path.write_bytes(b"\x89PNG\r\n\x1a\n\x00" + body.encode())
+            elif rel == "logs/ansi.log":
+                path.write_bytes(b"\x1b[31m" + body.encode())
+            elif rel == "data/del.dat":
+                path.write_bytes(b"\x7f" + body.encode())
             elif rel == "docs/link.md":
                 path.symlink_to(root / "docs/page.html")
             else:
@@ -1235,7 +1530,10 @@ PROPERTIES = [
     table,
     ligatures,
     american_left_alone,
-    names,
+    capitalized,
+    not_prose,
+    corpus,
+    python_protocol,
     slashes_in_prose,
     case_folding,
     spelling_ok,
@@ -1246,6 +1544,10 @@ PROPERTIES = [
     real_files_read,
     quoted_verbatim,
     translations,
+    skip_dirs,
+    fix_exit_codes,
+    unopenable_is_text,
+    corpus_skipped,
 ]
 
 
@@ -1268,6 +1570,21 @@ def decompositions(mod: ModuleType, word: str) -> list[tuple[str, str, str, str]
                     if prefix + stem + ending_b == word:
                         out.append((family, prefix, stem, ending_b))
     return out
+
+
+# The endings of Latin epithets and genera, which no medical form may have.
+LATIN_ENDINGS = ("alis", "ium", "icus", "ica", "ae", "ii", "um", "ensis")
+
+
+def medical_decompositions(mod: ModuleType, word: str) -> list[tuple[str, str]]:
+    """Every (stem, prefix) of MEDICAL that generates `word`."""
+    return [
+        (stem, prefix)
+        for stem, _, endings, prefixes in mod.MEDICAL
+        for prefix in prefixes
+        for ending in endings
+        if prefix + stem + mod.ending_pair(ending)[0] == word
+    ]
 
 
 def coverage() -> None:
@@ -1294,14 +1611,24 @@ def coverage() -> None:
         check(f"{family}: a form of every ending", not missing, str(missing))
         missing = [p for p in prefixes if p not in {d[1] for d in used}]
         check(f"{family}: a form of every prefix", not missing, str(missing))
-    missing = [b for b, _ in cs.SEGMENTS if not any(re.search(b, w) for w in british)]
-    check("a form of every segment", not missing, str(missing))
+    medical = [d for w in british for d in medical_decompositions(cs, w)]
+    missing = [m[0] for m in cs.MEDICAL if m[0] not in {d[0] for d in medical}]
+    check("MEDICAL: a form of every stem", not missing, str(missing))
+    prefixes = {p for m in cs.MEDICAL for p in m[3]}
+    missing = sorted(prefixes - {d[1] for d in medical})
+    check("MEDICAL: a form of every prefix", not missing, str(missing))
+
+    # A species epithet is never generated: no medical form has a Latin ending.
+    generated = cs.generate({}, {}, cs.MEDICAL)
+    latin = [w for w in generated if w.endswith(LATIN_ENDINGS)]
+    check("MEDICAL generates no Latin epithet", not latin, str(latin[:5]))
+    # A word is a run of letters, so hex is read as runs of a-f; no British word
+    # may be made of those letters alone.
+    hexlike = [w for w in cs.BRITISH if re.fullmatch("[a-f]+", w)]
+    check("no British word can be read out of hex", not hexlike, str(hexlike))
 
     redundant = [
-        w
-        for w in cs.EXPLICIT
-        if w in cs.generate(cs.FAMILIES, {})
-        or any(re.search(b, w) for b, _ in cs.SEGMENTS)
+        w for w in cs.EXPLICIT if w in cs.generate(cs.FAMILIES, {}, cs.MEDICAL)
     ]
     check(
         "no EXPLICIT word is also generated, so dropping one is noticed",
@@ -1431,6 +1758,27 @@ def command_line() -> None:
         )
         check("and the file is clean after", run(str(bad)).returncode == 0)
 
+        name = Path(tmp) / "name.md"
+        text = "Haemorrhage was noted; the colour too.\n"  # spelling-ok
+        name.write_text(text, encoding="utf-8")
+        hit = run(str(name))
+        check(
+            "a capitalized word is reported as left for a human",
+            hit.returncode == 1 and cs.LEFT_FOR_A_HUMAN in hit.stderr,
+            hit.stderr,
+        )
+        fix = run("--fix", str(name))
+        check(
+            "--fix rewrites the lowercase word and leaves the capitalized one",
+            name.read_text(encoding="utf-8")
+            == "Haemorrhage was noted; the color too.\n",  # spelling-ok
+        )
+        check(
+            "and exits 1, naming what it left",
+            fix.returncode == 1 and f"name.md:1:1: {text.split()[0]!r}" in fix.stderr,
+            fix.stderr,
+        )
+
     print("A malformed .spelling-allow fails the command")
     code = malformed_allowlist_exit(cs)
     check("an unscoped allowlist line exits 1", code == 1, str(code))
@@ -1472,9 +1820,42 @@ MUTATIONS: list[tuple[str, str, str]] = [
     ("'aluminium' is dropped", '"aluminium": "aluminum",', ""),  # spelling-ok
     ("'whilst' is dropped", '"whilst": "while",', ""),  # spelling-ok
     ("'ageing' is dropped", '"ageing": "aging",', ""),  # spelling-ok
-    ("'oesophagus' is dropped", '("oesoph", "esoph"),', ""),  # spelling-ok
-    ("'haemorrhage' is dropped (its segment)", '("haem", "hem"),', ""),  # spelling-ok
-    ("the -aemia segment is dropped", '("(?<=[a-z])aemi", "emi"),', ""),
+    (
+        "a MEDICAL stem is dropped",
+        '    ("faec", "fec", ("es", "al", "aloma", "alith", "aliths"), ("",)),\n',
+        "",
+    ),
+    ("an -aemia stem is dropped", '    ("anaem", "anem", AEMIA, ("", "non")),\n', ""),
+    (
+        "a MEDICAL prefix is dropped",
+        '("glycaem", "glycem", AEMIA, ("", "hypo", "hyper", "normo", "eu"))',
+        '("glycaem", "glycem", AEMIA, ("", "hyper", "normo", "eu"))',
+    ),
+    (
+        "a MEDICAL British ending is not respelled",
+        "= prefix + stem_a + ending_a",
+        "= prefix + stem_a + ending_b",
+    ),
+    (
+        "MEDICAL prefixes are not generated",
+        "        for prefix in prefixes:\n            for ending in endings:",
+        "        for prefix in prefixes[:1]:\n            for ending in endings:",
+    ),
+    (
+        "a Latin ending is generated",
+        '("faec", "fec", ("es",',
+        '("faec", "fec", ("alis", "ium", "es",',
+    ),
+    (
+        "a MEDICAL stem matches inside a longer word",
+        "    return BRITISH.get(word.lower().translate(LIGATURES))",
+        "    key = word.lower().translate(LIGATURES)\n"
+        "    hit = BRITISH.get(key)\n"
+        "    for stem_b, stem_a, _, _ in MEDICAL:\n"
+        "        if hit is None and stem_b in key:\n"
+        "            hit = key.replace(stem_b, stem_a)\n"
+        "    return hit",
+    ),
     ("the -yse stem 'catal' is dropped", '"catal", ', ""),
     ("the -ise stem 'immun' is dropped", '"immun",', ""),
     ("the -our stem 'ferv' is dropped", '"ferv",', ""),
@@ -1487,20 +1868,19 @@ MUTATIONS: list[tuple[str, str, str]] = [
     ),  # spelling-ok
     ("the ending -llist is dropped", '("list", "ist"),', ""),
     ("the -ce prefix 'sub' is dropped", '("", "sub"),', '("",),'),
-    (
-        "a segment's ending is not respelled",
-        "return BRITISH.get(respelled, respelled)",
-        "return respelled",
-    ),
     # A new stem that generates an American word must be noticed.
     ("the -ise stem 'prec' is added", '"priorit",', '"priorit", "prec",'),
     ("the -ll stem 'compel' is added", '"counsel",', '"counsel", "compel",'),
     ("the -re stem 'lust' is added", '"lit",', '"lit", "lust",'),
-    ("case folding is off", "key = word.lower().translate", "key = word.translate"),
+    (
+        "case folding is off",
+        "BRITISH.get(word.lower().translate",
+        "BRITISH.get(word.translate",
+    ),
     (
         "ligatures are not read",
-        "key = word.lower().translate(LIGATURES)",
-        "key = word.lower()",
+        "BRITISH.get(word.lower().translate(LIGATURES))",
+        "BRITISH.get(word.lower())",
     ),
     (
         "ligatures are not letters",
@@ -1541,8 +1921,8 @@ MUTATIONS: list[tuple[str, str, str]] = [
     ),
     (
         "prefixes are not generated",
-        "for prefix in prefixes",
-        "for prefix in prefixes[:1]",
+        "            for prefix in prefixes:\n                for ending_b",
+        "            for prefix in prefixes[:1]:\n                for ending_b",
     ),
     (
         "identifiers are not split",
@@ -1550,9 +1930,9 @@ MUTATIONS: list[tuple[str, str, str]] = [
         "WHOLE.finditer(scannable)",
     ),
     (
-        "URLs are not blanked",
-        "scannable = blank_names(blank_urls(scannable))",
-        "scannable = blank_names(scannable)",
+        "text that is not prose is not blanked",
+        "scannable = blank_unprose(scannable)",
+        "scannable = scannable",
     ),
     (
         "any run with a slash is a path",
@@ -1599,8 +1979,112 @@ MUTATIONS: list[tuple[str, str, str]] = [
         '"docs/app/index.html", "README.md",',
     ),
     # URLs and paths.
-    ("a URL runs to the end of the line", r'://\S+")', r'://.*")'),
-    ("a colon makes a URL", r'*://\S+")', r'*:\S+")'),
+    ("a URL runs to the end of the line", r'[\w+.-]*://\S+"', r'[\w+.-]*://.*"'),
+    ("a colon makes a URL", r'[\w+.-]*://\S+"', r'[\w+.-]*:\S+"'),
+    ("mailto: is not a scheme", "mailto|", ""),
+    ("urn: is not a scheme", "|urn|", "|"),
+    ("doi: is not a scheme", "|doi|", "|"),
+    ("data: is not a scheme", "|data|", "|"),
+    (
+        "email addresses are read",
+        "(URL, EMAIL, DIGEST, DOMAIN)",
+        "(URL, DIGEST, DOMAIN)",
+    ),
+    (
+        "domains are read",
+        "(URL, EMAIL, DIGEST, DOMAIN)",
+        "(URL, EMAIL, DIGEST)",
+    ),
+    (
+        "file names are read",
+        "    line = FILE_NAME.sub(blank, line)\n",
+        "",
+    ),
+    (
+        "digests are read",
+        "(URL, EMAIL, DIGEST, DOMAIN)",
+        "(URL, EMAIL, DOMAIN)",
+    ),
+    ("encoded data is read", "return ENCODED.sub(blank_encoded, line)", "return line"),
+    (
+        "padding is not a sign of data",
+        '    if run.endswith("="):\n        return True',
+        '    if run.endswith("="):\n        pass',
+    ),
+    (
+        "an identifier with a digit is taken for data",
+        "return runs * 2 >= len(alnum)",
+        "return runs * 3 >= len(alnum)",
+    ),
+    (
+        "only the most broken-up data is taken for data",
+        "return runs * 2 >= len(alnum)",
+        "return runs >= len(alnum)",
+    ),
+    (
+        "the trailing period of a path is read as its extension's",
+        'path = run.rstrip(".")',
+        "path = run",
+    ),
+    # What --fix rewrites, and what it leaves for a human.
+    ("a capitalized word is fixed", "    if word.islower():\n", "    if True:\n"),
+    (
+        "a word after a letter is not an identifier's part",
+        'before.isalnum() or before == "_"',
+        'before == "_"',
+    ),
+    (
+        "a hyphen joins an identifier",
+        'before.isalnum() or before == "_"',
+        'before.isalnum() or before in "_-"',
+    ),
+    (
+        "the character after a word is not read",
+        'after.isdigit() or after == "_"',
+        "False",
+    ),
+    (
+        "--fix exits zero with hits left",
+        "return 1 if unread or unfixed else 0",
+        "return 1 if unread else 0",
+    ),
+    (
+        "the report does not say what --fix leaves",
+        "{'' if can_fix else LEFT_FOR_A_HUMAN}",
+        "{''}",
+    ),
+    # The files read.
+    (
+        "the corpus is not skipped",
+        "        or PurePosixPath(rel).parent.as_posix() == CORPUS\n",
+        "",
+    ),
+    (
+        "anything under the corpus is skipped",
+        "PurePosixPath(rel).parent.as_posix() == CORPUS",
+        "rel.startswith(CORPUS)",
+    ),
+    (
+        "an escape byte makes a file binary",
+        "{7, 8, 9, 10, 11, 12, 13, 27}",
+        "{7, 8, 9, 10, 11, 12, 13}",
+    ),
+    ("a DEL byte is text", " - {0x7F}", ""),
+    (
+        "a file is_text() cannot open is binary",
+        "    except OSError:\n        return True",
+        "    except OSError:\n        return False",
+    ),
+    ("build/ is not skipped", '    "build",\n', ""),
+    (
+        "a run with no digit is taken for encoded data",
+        "    if not any(c.isdigit() for c in alnum):\n        return False\n",
+        "",
+    ),
+    ("a domain's path is read", r"""(?:[/:?#][^\s)\]>\"'`]*)?""", ""),
+    ("the path of a git address is read", r"(?:\.[\w-]+)+(?::\S*)?", r"(?:\.[\w-]+)+"),
+    ("-aemias is not generated", '("ia", "ias", "ic")', '("ia", "ic")'),
+    ("a -pnoea word's -ic is not generated", '("a", "as", "ic")', '("a", "as")'),
     (
         "any dot is a file extension",
         r'EXTENSION = re.compile(r"\w\.[A-Za-z0-9]+$")',
@@ -1641,74 +2125,6 @@ MUTATIONS: list[tuple[str, str, str]] = [
         "the marker is read in any case",
         "if MARKER in line:",
         "if MARKER in line.lower():",
-    ),
-    # Names.
-    (
-        "names are not blanked",
-        "scannable = blank_names(blank_urls(scannable))",
-        "scannable = blank_urls(scannable)",
-    ),
-    (
-        "genera are respelled",
-        "if key in GENERA or key.endswith(TAXON_SUFFIXES):",
-        "if key.endswith(TAXON_SUFFIXES):",
-    ),
-    (
-        "taxa are respelled",
-        "if key in GENERA or key.endswith(TAXON_SUFFIXES):",
-        "if key in GENERA:",
-    ),
-    (
-        "proper nouns are respelled",
-        "    for name in PROPER_NOUNS:\n",
-        "    for name in ():\n",
-    ),
-    (
-        "species epithets are respelled",
-        "        if not EPITHET.fullmatch(epithet):",
-        "        if True:",
-    ),
-    (
-        "any word after a genus is an epithet",
-        "        if not EPITHET.fullmatch(epithet):",
-        "        if False:",
-    ),
-    (
-        "an English noun is an epithet",
-        "(?<!ous)(?<!sis)(?<!itis)(?<!ia)(?<!ma)(?<!oea)",
-        "",
-    ),
-    (
-        "any capitalized word is a genus",
-        r"(?:us|um|a|is|on|es|as|ix))|[A-Z]\.) +",
-        r")|[A-Z]\.) +",
-    ),
-    (
-        "the genus of a binomial is respelled",
-        "            spans.append(match.span(1))",
-        "            pass",
-    ),
-    (
-        "a genus in -a is left alone",
-        "if genus and KEPT_GENUS.fullmatch(genus) and LATIN_ONLY.fullmatch(epithet):",
-        "if genus:",
-    ),
-    (
-        "a genus is left alone before any epithet",
-        " and LATIN_ONLY.fullmatch(epithet):",
-        ":",
-    ),
-    ("-aemi- starts a word", '("(?<=[a-z])aemi", "emi")', '("aemi", "emi")'),
-    ("caesar is a segment", '("caesar(?=[ei]an)", "cesar")', '("caesar", "cesar")'),
-    (
-        "paedomorphosis is respelled",
-        '("paed(?!omorph|ogene)", "ped")',  # spelling-ok
-        '("paed", "ped")',  # spelling-ok
-    ),
-    (
-        "leuco is a segment",
-        '("leucocyt", "leukocyt")',  # spelling-ok
-        '("leuco", "leuko")',
     ),
 ]
 
@@ -1757,7 +2173,12 @@ def mutations() -> None:
         check(f"noticed: {what}", bool(problems), "every property still passed")
 
     mutant = load(
-        source.replace("rel in QUOTED_VERBATIM or ", ""), "check_spelling_mutant_q"
+        source.replace("        rel in QUOTED_VERBATIM\n        or ", "        "),
+        "check_spelling_mutant_q",
+    )
+    check(
+        "the QUOTED_VERBATIM mutation applies",
+        source.count("        rel in QUOTED_VERBATIM\n        or ") == 1,
     )
     quoted = sorted(cs.QUOTED_VERBATIM)[0]
     check("the real checker skips a quoted file", cs.skip(ROOT / quoted))

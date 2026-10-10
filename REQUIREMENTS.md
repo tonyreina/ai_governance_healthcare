@@ -942,12 +942,14 @@ honest answer and is a gap worth closing; see R-19.
   spelling.
 - Enforced by: `pixi run check-spelling` (pre-commit, and CI through the lint
   workflow's `prek run --all-files`), which generates each listed root's
-  inflections and matches the British medical segments, leaving names such as
-  Latin binomials alone (D-81). The checker is
-  itself tested by `pixi run test-check-spelling` (CI and pre-commit),
-  including mutation tests (#169).
-- Not enforced: commit messages (the check reads files, not messages), and any
-  British word whose root or segment is not on the list. These rest on review.
+  inflections, the British medical roots among them, and matches only whole
+  words (D-81). The checker is itself tested by `pixi run test-check-spelling`
+  (CI and pre-commit), including a verifier's corpus and mutation tests
+  (#169).
+- Not enforced: commit messages (the check reads files, not messages); any
+  British word whose root is not on the list; and a capitalized British word
+  that is not part of an identifier, which the check reports but `--fix`
+  leaves for a person, since it may be a name. These rest on review.
 
 ### R-18 A closed set of values has an enumerated type
 

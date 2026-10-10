@@ -17,3 +17,8 @@
 # Python's own spelling: asyncio.CancelledError is the standard library's
 # exception class, and the name cannot be respelled.
 *.py: CancelledError
+
+# Python asyncio: Future.cancelled() and Task.cancelled() are the standard
+# library's methods. Only the method call is exempt (a dot before it), and only
+# in Python files: the word in a comment or a docstring is still checked.
+*.py: .cancelled()

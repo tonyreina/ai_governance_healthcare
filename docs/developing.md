@@ -388,14 +388,18 @@ In short:
   with the test that enforces it, and `pixi run check-claims` fails if a quoted
   sentence is no longer where the row says it is.
 - **American English** everywhere, checked by `pixi run check-spelling`. It
-  lists British roots and generates their inflections, and reads identifiers
-  word by word (camelCase and SHOUTING_CASE). A quotation keeps its spelling
-  with `spelling-ok` on the line, or with a `glob: phrase` entry in
+  lists British roots, medical ones among them, generates their inflections,
+  and matches only whole words, reading identifiers word by word (camelCase and
+  SHOUTING_CASE). Only listed roots are caught. URLs, email addresses, domains,
+  file names, paths and encoded data are skipped. `pixi run fix-spelling`
+  rewrites lowercase words and the parts of identifiers, and leaves a
+  capitalized word (it may be a name: a journal, a company, a place, a genus)
+  for you: it lists each one and exits 1. A quotation or a name keeps its
+  spelling with `spelling-ok` on the line, or with a `glob: phrase` entry in
   `.spelling-allow`, which exempts that exact phrase only in the files the glob
-  matches, and not the rest of its line. Latin binomials, taxa and a short list
-  of genera, places and titles keep their spelling. Run with no arguments, it
-  reads every text file, as the pre-commit hook does. `pixi run
-  test-check-spelling` shows the checker failing.
+  matches, and not the rest of its line. Run with no arguments, it reads every
+  text file, as the pre-commit hook does. `pixi run test-check-spelling` shows
+  the checker failing.
 
 ## The documentation site
 

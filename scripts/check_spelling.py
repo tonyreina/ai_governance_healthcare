@@ -19,41 +19,35 @@ the l); "analyses" (the plural of "analysis"); "aesthetic", "archaeology",
 The list is of roots, not of words: each root's inflections (plurals, -ed,
 -ing, -er, the -isation family, un-, re- and the like) are generated from it,
 because a list of exact forms missed "judgements" while it listed "judgement"
-(#169). The British medical digraphs ("haem", "oesoph", "paed", "-aemia" and the
-like) are matched as segments in a word, so every inflection of "haemorrhage"
-or "oedema" is caught without being listed.
+(#169). The British medical spellings are roots too (MEDICAL: "haemorrhag-",
+"oedem-", "oesophag-", the -aemia words and the rest), each with a closed set of
+English endings and a few known prefixes. Every word is matched whole, never
+inside a longer word, so "phytoestrogen" and "proestrus" are not touched, and
+no Latin species epithet ("faecalis", "haemolyticus") is ever generated.
 
-A segment can also be part of a name that keeps its spelling in American text,
-and --fix must not respell a name. Those are recognized by their shape, with a
-short list only where no shape tells them apart:
+Only what is listed is caught. A British word whose root is not listed passes
+(tests/fixtures/spelling_corpus/unlisted.txt keeps a few), and so does a
+commit message, which the check does not read.
 
-* a species epithet, the lowercase Latin word after a genus ("Enterococcus
-  faecalis", "S. haemolyticus"): a capitalized Latin-shaped word or a capital
-  and a period, then a lowercase word with a Latin ending (and the genus too
-  when it ends in -us or -um: "Oestrus ovis");
-* a taxon by its rank's suffix ("Oestridae", "Haemosporida",
-  "Faecalibacterium", "Haematococcus");
-* a segment narrowed where a name or an American word shares its letters:
-  "-aemi-" never starts a word ("Aemilia"), the "caesar" of "caesarean" must be
-  followed by "-ean" or "-ian" ("Caesarea"), "paed" is not the "paedomorph-"
-  or "paedogen-" of American biology, and only "leucocyt-" and "leucopeni-"
-  are caught ("leucovorin" is American);
-* GENERA, the genera with a British segment that stand alone in a sentence
-  ("Haemophilus", "Haematobia"), and PROPER_NOUNS, the places and titles
-  ("Sulphur Springs", "Encyclopaedia Britannica").
+Not prose, so neither reported nor rewritten: a URL (with "://", or one of the
+schemes written without it, such as mailto:, urn:, doi: and data:), an email
+address, a domain, a file name with a known extension, a path, a digest
+("sha384-..."), and a long run that looks like encoded data (see
+looks_encoded()). Hex needs no rule: a word is a run of letters, and no British
+word is spelled with the letters a-f alone.
 
-A capitalized word is otherwise checked like any other: a heading ("Paediatric
-Care") and an identifier (``PaediatricWard``) are ours to spell, so
-"Haemorrhage was noted." is caught. The other way, leaving every capitalized
-segment word alone unless it is a known common noun, was rejected: it needs a
-list of every common medical word, the list this checker exists not to keep.
-Its cost is a name that has no shape and is not listed, like the city of
-Sulphur, Louisiana written without its state; that takes ``spelling-ok``.
+Reported, but not rewritten by --fix: a word with a capital letter, unless it is
+part of an identifier (``getColourValue``, ``MAX_COLOURS``). It may be a name: a
+journal ("British Journal of Haematology"), a company, a place ("Sulphur,
+Oklahoma"), a genus ("Oestrus"), and no rule over the text tells a name from
+the first word of a sentence. --fix lists each one it leaves and exits 1, and a
+person respells it or marks the line ``spelling-ok``. See fixable().
 
 Words are read the way code writes them, so the parts of an identifier
 (``colourPicker``, ``MAX_COLOURS``, ``data-colour-id``) are checked too, in any
 case, and the ligatures "œ" and "æ" are read as "oe" and "ae".
-tests/test_check_spelling.py pins all of this.
+tests/test_check_spelling.py pins all of this, against a corpus a verifier
+built (tests/fixtures/spelling_corpus/).
 
 Quoting a source that spells a word the British way is legitimate. Two escapes:
 
@@ -82,6 +76,7 @@ from __future__ import annotations
 
 import re
 import sys
+from itertools import pairwise
 from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -125,6 +120,10 @@ QUOTED_VERBATIM = {
     # app/ ARE checked, so nothing of ours escapes review by being in here.
     "docs/app/index.html",
 }
+# The test corpus of tests/test_check_spelling.py: British words, and names and
+# code that keep a British spelling, each there on purpose. Only the files
+# directly in it are skipped.
+CORPUS = "tests/fixtures/spelling_corpus"
 # The bytes a text file is made of, by the rule of identify, which pre-commit's
 # `types: [text]` uses for a file it cannot classify by its name: the printable
 # range and the usual control characters. A NUL, or any other control byte, in
@@ -284,8 +283,8 @@ FAMILIES: dict[str, Family] = {
             "hyper",
         ),
         (
-            # "anesthet": the American segment, so "anaesthetise" is caught by
-            # its segment and its ending together (see american()).
+            # "anesthet": the American stem with the British ending. The
+            # British stem ("anaesthetise") is in MEDICAL.
             "anesthet",
             "anonym",
             "apolog",
@@ -472,8 +471,8 @@ FAMILIES: dict[str, Family] = {
 }
 
 # Words that belong to no family, each with its own inflections spelled out. No
-# entry here may also be generated by a family or matched by a segment: the
-# tests check that, so every entry is load-bearing.
+# entry here may also be generated by a family or by MEDICAL: the tests check
+# that, so every entry is load-bearing.
 EXPLICIT: dict[str, str] = {
     "catalogue": "catalog",
     "catalogues": "catalogs",
@@ -628,102 +627,232 @@ EXPLICIT: dict[str, str] = {
     "tumourigenesis": "tumorigenesis",
 }
 
-# British spellings that are a segment of many words, mostly medical since this
-# is aimed at US health systems. Each is a regular expression matched in a word
-# and replaced by its American segment, so "haemorrhages", "haemorrhagic",
-# "haematoma" and "haemodialysis" are all caught by "haem" without a list of
-# their forms. A segment is meant to be one no American word contains. That was
-# checked only against the words we thought of, which are the American
-# look-alikes pinned in tests/test_check_spelling.py ("aerial", "academia",
-# "coelacanth", "Caesar", "paean", "onomatopoeia", "leucovorin" and the rest);
-# it is not a search of a dictionary. Where one of them shares a segment's
-# letters, the segment is narrowed: "oea" alone is not a segment (only "rrhoea"
-# and "pnoea" are), nor is "coel" ("coelacanth", "coelom"), nor "leuco"
-# ("leucovorin"); "caesar" only before "-ean" or "-ian" (the names "Caesar" and
-# "Caesarea"); "-aemi-" never at the start of a word ("Aemilia"); "paed" not in
-# "paedomorphosis" or "paedogenesis", which American biology spells so.
-SEGMENTS: tuple[tuple[str, str], ...] = (
-    ("haem", "hem"),  # haemorrhage, haematoma, haemodynamic, haemophilia
-    ("(?<=[a-z])aemi", "emi"),  # anaemia, leukaemia, septicaemic, ischaemia
-    ("anaes", "anes"),  # anaesthesia, anaesthetise
-    ("paed(?!omorph|ogene)", "ped"),  # paediatric, orthopaedist, encyclopaedia
-    ("oesoph", "esoph"),  # oesophagus, oesophagitis
-    ("oestr", "estr"),  # oestrogen, oestradiol
-    ("oedem", "edem"),  # oedema, oedematous
-    ("foet", "fet"),  # foetus, foetal
-    ("faec", "fec"),  # faeces, faecal
-    ("gynaec", "gynec"),  # gynaecology, gynaecologic
-    ("coeliac", "celiac"),
-    ("caesar(?=[ei]an)", "cesar"),  # caesarean, caesarian
-    ("aetiolog", "etiolog"),  # aetiology
-    ("rrhoea", "rrhea"),  # diarrhoea, gonorrhoea
-    ("pnoea", "pnea"),  # apnoea, dyspnoea
-    ("sulph", "sulf"),  # sulphur, sulphate, sulphide
-    ("homoeo", "homeo"),  # homoeopathy, homoeostasis
-    ("leucocyt", "leukocyt"),  # leucocyte, leucocytosis
-    ("leucopeni", "leukopeni"),  # leucopenia
-)
-SEGMENT_PATTERNS = tuple((re.compile(b), a) for b, a in SEGMENTS)
-
-# Names that keep a British segment in American text, so must not be respelled.
+# British medical spellings, as whole words. Each entry is (British stem,
+# American stem, endings, prefixes): every prefix + stem + ending is generated,
+# and matched only as an entire word, never inside a longer one. An ending is a
+# string both spellings share, or a (British, American) pair where the ending is
+# British too ("anaesthetise"). The endings are a closed set of English ones:
+# none is a Latin ending such as -alis, -ium, -icus, -ica or -ae, so a species
+# epithet ("faecalis", "faecium", "haemolyticus", "gonorrhoeae") is never
+# generated and never matched, wherever it is written. A genus that is also an
+# English word ("Oestrus") is capitalized, and a capitalized word is reported
+# but never rewritten by --fix (see fixable()).
 #
-# Genera that stand alone in a sentence, where no shape tells "Haematobia" (a
-# fly) from "haematuria" (British for hematuria). Matched as the whole word.
-# "Oestrus" is not here: alone it is far more often the British "estrus", and
-# as a genus it comes with its species ("Oestrus ovis"), which BINOMIAL reads.
-GENERA: frozenset[str] = frozenset(
-    {
-        "haemophilus",
-        "haemaphysalis",
-        "haemonchus",
-        "haemagogus",
-        "haemadipsa",
-        "haematopinus",
-        "haematobia",
-        "haemoproteus",
-        "paederus",
-    }
-)
-# A taxon named by its rank's suffix: a family (-idae), subfamily (-inae), order
-# (-ida), plant family (-aceae), or a bacterial or algal genus (-bacterium,
-# -bacter, -coccus, -monas). No common word with a British segment ends so.
-TAXON_SUFFIXES: tuple[str, ...] = (
-    "idae",
-    "inae",
-    "ida",
-    "aceae",
-    "bacterium",
-    "bacter",
-    "coccus",
-    "monas",
-)
-# A species epithet: the lowercase word after a genus, which is a capitalized
-# word with a Latin ending, or the genus's initial and a period ("Enterococcus
-# faecalis", "E. faecium", "Mannheimia haemolytica"). The epithet must look Latin
-# too, and not like an English noun of the -sis, -itis, -ia, -ma or -oea kinds
-# ("Trauma haematoma" is prose, and is checked). The genus is left alone too
-# when it ends in -us or -um and its epithet ends in -ae, -ii, -i or -is
-# ("Oestrus ovis"), endings an English word after "Foetus" or "Oesophagus"
-# almost never has; a genus in -a stays checked ("Leukaemia virus" is prose).
-BINOMIAL = re.compile(
-    r"\b(?:([A-Z][a-z]{3,}(?:us|um|a|is|on|es|as|ix))|[A-Z]\.) +([a-z]+)\b"
-)
-EPITHET = re.compile(
-    r"[a-z]{2,}(?:us|um|ae|ii|i|is|a)(?<!ous)(?<!sis)(?<!itis)(?<!ia)(?<!ma)(?<!oea)"
-)
-LATIN_ONLY = re.compile(r"[a-z]+(?:ae|i|is)(?<!sis)(?<!itis)")
-KEPT_GENUS = re.compile(r"[A-Z][a-z]+(?:us|um)")
-# Places and titles, matched exactly and case-sensitively anywhere. "Sulphur"
-# alone is read as the element: the city is named with its state.
-PROPER_NOUNS: tuple[str, ...] = (
-    "Encyclopaedia Britannica",
-    "Sulphur Springs",  # Texas; and White Sulphur Springs, West Virginia
-    "Sulphur, Louisiana",
-    "Sulphur, LA",
+# This is a list, so a British word whose stem is not here passes ("haem" alone,
+# "leucoplakia", "foetid" are not here). Add the stem, its endings and its
+# prefixes when one turns up; the tests demand every stem has a row.
+Ending = str | tuple[str, str]
+Medical = tuple[str, str, tuple[Ending, ...], tuple[str, ...]]
+AEMIA: tuple[Ending, ...] = ("ia", "ias", "ic")
+PNOEA: tuple[Ending, ...] = ("a", "as", "ic")
+MEDICAL: tuple[Medical, ...] = (
+    (
+        "haemorrhag",
+        "hemorrhag",
+        ("e", "es", "ed", "ing", "ic"),
+        ("", "non", "post", "pre", "peri"),
+    ),
+    ("haemorrhoid", "hemorrhoid", ("", "s", "al", "ectomy", "ectomies"), ("",)),
+    (
+        "haemat",
+        "hemat",
+        (
+            "oma",
+            "omas",
+            "omata",
+            "ology",
+            "ological",
+            "ologic",
+            "ologist",
+            "ologists",
+            "uria",
+            "ocrit",
+            "ocrits",
+            "emesis",
+            "ochezia",
+            "opoiesis",
+            "opoietic",
+        ),
+        ("", "micro", "macro"),
+    ),
+    (
+        "haemoly",
+        "hemoly",
+        ("sis", "tic", "sin", "sins", ("se", "ze"), ("sed", "zed"), ("sing", "zing")),
+        ("", "non"),
+    ),
+    (
+        "haemoglobin",
+        "hemoglobin",
+        ("", "s", "uria", "opathy", "opathies", ("aemia", "emia")),
+        ("",),
+    ),
+    ("haemodialys", "hemodialys", ("is", "es", ("er", "zer"), ("ers", "zers")), ("",)),
+    ("haemodynamic", "hemodynamic", ("", "s", "ally"), ("",)),
+    ("haemophil", "hemophil", ("ia", "iac", "iacs", "ic"), ("",)),
+    ("haemosta", "hemosta", ("sis", "tic", "tics", "t", "ts"), ("",)),
+    ("haemopty", "hemopty", ("sis",), ("",)),
+    ("haemothorax", "hemothorax", ("", "es"), ("",)),
+    ("haemangiom", "hemangiom", ("a", "as", "ata"), ("",)),
+    ("haemochromatos", "hemochromatos", ("is",), ("",)),
+    ("haemarthros", "hemarthros", ("is", "es"), ("",)),
+    ("haemal", "hemal", ("",), ("",)),
+    (
+        "oedem",
+        "edem",
+        ("a", "as", "ata", "atous"),
+        ("", "non", "myx", "lymph", "angio", "papill"),
+    ),
+    (
+        "oesophag",
+        "esophag",
+        (
+            "us",
+            "i",
+            "eal",
+            "itis",
+            "ectomy",
+            "ectomies",
+            "oscopy",
+            "oscopies",
+            "ostomy",
+        ),
+        ("", "gastro", "trans"),
+    ),
+    (
+        "oestr",
+        "estr",
+        (
+            "ogen",
+            "ogens",
+            "ogenic",
+            "ogenicity",
+            "adiol",
+            "iol",
+            "one",
+            "us",
+            "ous",
+        ),
+        ("", "anti", "an", "di", "pro", "met"),
+    ),
+    ("foet", "fet", ("us", "uses", "al", "icide", "oscopy"), ("",)),
+    ("faec", "fec", ("es", "al", "aloma", "alith", "aliths"), ("",)),
+    ("gynaecolog", "gynecolog", ("y", "ic", "ical", "ist", "ists"), ("", "uro")),
+    ("gynaecomasti", "gynecomasti", ("a",), ("",)),
+    ("anaem", "anem", AEMIA, ("", "non")),
+    ("leukaem", "leukem", AEMIA, ("", "pre")),
+    ("septicaem", "septicem", AEMIA, ("",)),
+    ("ischaem", "ischem", AEMIA, ("", "non")),
+    ("glycaem", "glycem", AEMIA, ("", "hypo", "hyper", "normo", "eu")),
+    ("bacteraem", "bacterem", AEMIA, ("",)),
+    ("viraem", "virem", AEMIA, ("",)),
+    ("toxaem", "toxem", AEMIA, ("",)),
+    ("uraem", "urem", AEMIA, ("",)),
+    ("pyaem", "pyem", AEMIA, ("",)),
+    ("hyperaem", "hyperem", AEMIA, ("",)),
+    ("thalassaem", "thalassem", AEMIA, ("",)),
+    ("oxaem", "oxem", AEMIA, ("hyp", "hyper")),
+    ("kalaem", "kalem", AEMIA, ("hypo", "hyper", "normo")),
+    ("natraem", "natrem", AEMIA, ("hypo", "hyper", "normo", "eu")),
+    ("calcaem", "calcem", AEMIA, ("hypo", "hyper", "normo")),
+    ("volaem", "volem", AEMIA, ("hypo", "hyper", "normo", "eu")),
+    ("lipidaem", "lipidem", AEMIA, ("hyper", "dys")),
+    ("cholesterolaem", "cholesterolem", AEMIA, ("hyper",)),
+    ("uricaem", "uricem", AEMIA, ("hypo", "hyper")),
+    ("insulinaem", "insulinem", AEMIA, ("hypo", "hyper")),
+    ("phosphataem", "phosphatem", AEMIA, ("hypo", "hyper")),
+    ("magnesaem", "magnesem", AEMIA, ("hypo", "hyper")),
+    ("proteinaem", "proteinem", AEMIA, ("hypo", "hyper", "dys", "para")),
+    ("cythaem", "cythem", AEMIA, ("poly",)),
+    (
+        "anaesthe",
+        "anesthe",
+        (
+            "sia",
+            "sias",
+            "tic",
+            "tics",
+            "tist",
+            "tists",
+            "siology",
+            "siologist",
+            "siologists",
+            "tize",
+            "tized",
+            "tizing",
+            ("tise", "tize"),
+            ("tised", "tized"),
+            ("tises", "tizes"),
+            ("tising", "tizing"),
+            ("tisation", "tization"),
+        ),
+        ("", "non"),
+    ),
+    ("paraesthesi", "paresthesi", ("a", "as"), ("",)),
+    ("dysaesthesi", "dysesthesi", ("a", "as"), ("",)),
+    ("synaesthesi", "synesthesi", ("a", "as"), ("",)),
+    ("hyperaesthesi", "hyperesthesi", ("a",), ("",)),
+    ("hypoaesthesi", "hypoesthesi", ("a",), ("",)),
+    ("kinaesthe", "kinesthe", ("sia", "tic"), ("",)),
+    ("diarrhoe", "diarrhe", ("a", "as", "al", "ic"), ("",)),
+    ("gonorrhoe", "gonorrhe", ("a", "al"), ("",)),
+    ("menorrhoe", "menorrhe", ("a",), ("a", "dys")),
+    ("rhinorrhoe", "rhinorrhe", ("a",), ("",)),
+    ("steatorrhoe", "steatorrhe", ("a",), ("",)),
+    ("seborrhoe", "seborrhe", ("a", "ic"), ("",)),
+    ("galactorrhoe", "galactorrhe", ("a",), ("",)),
+    ("pnoe", "pne", PNOEA, ("a", "dys", "hypo", "hyper", "tachy", "brady", "ortho")),
+    ("paediatric", "pediatric", ("", "s", "ian", "ians", "ally"), ("", "non")),
+    ("orthopaed", "orthoped", ("ic", "ics", "ist", "ists", "ically"), ("",)),
+    ("paedophil", "pedophil", ("e", "es", "ia", "iac", "iacs", "ic"), ("",)),
+    ("encyclopaedi", "encyclopedi", ("a", "as", "c", "st", "sts"), ("",)),
+    ("coeliac", "celiac", ("", "s"), ("",)),
+    ("caesar", "cesar", ("ean", "eans", "ian", "ians"), ("",)),
+    ("aetiolog", "etiolog", ("y", "ies", "ic", "ical", "ically"), ("",)),
+    ("homoeopath", "homeopath", ("y", "ic", "s", "ist", "ists", "ically"), ("",)),
+    ("homoeosta", "homeosta", ("sis", "tic"), ("",)),
+    ("leucocyt", "leukocyt", ("e", "es", "osis", "ic"), ("",)),
+    ("leucopeni", "leukopeni", ("a", "c"), ("",)),
+    (
+        "sulph",
+        "sulf",
+        (
+            "ur",
+            "urs",
+            "uric",
+            "urous",
+            "ate",
+            "ates",
+            "ated",
+            "ide",
+            "ides",
+            "ite",
+            "ites",
+            "onamide",
+            "onamides",
+            "onate",
+            "onates",
+            "onic",
+            "onylurea",
+            "onylureas",
+            "asalazine",
+            "amethoxazole",
+            "adiazine",
+        ),
+        ("", "bi", "di"),
+    ),
 )
 
 
-def generate(families: dict[str, Family], explicit: dict[str, str]) -> dict[str, str]:
+def ending_pair(ending: Ending) -> tuple[str, str]:
+    return (ending, ending) if isinstance(ending, str) else ending
+
+
+def generate(
+    families: dict[str, Family],
+    explicit: dict[str, str],
+    medical: tuple[Medical, ...] = (),
+) -> dict[str, str]:
     """Every British form, lowercase, mapped to its American one."""
     out: dict[str, str] = {}
     for endings, prefixes, stems in families.values():
@@ -731,11 +860,16 @@ def generate(families: dict[str, Family], explicit: dict[str, str]) -> dict[str,
             for prefix in prefixes:
                 for ending_b, ending_a in endings:
                     out[prefix + stem + ending_b] = prefix + stem + ending_a
+    for stem_b, stem_a, endings, prefixes in medical:
+        for prefix in prefixes:
+            for ending in endings:
+                ending_b, ending_a = ending_pair(ending)
+                out[prefix + stem_b + ending_b] = prefix + stem_a + ending_a
     out.update(explicit)
     return out
 
 
-BRITISH: dict[str, str] = generate(FAMILIES, EXPLICIT)
+BRITISH: dict[str, str] = generate(FAMILIES, EXPLICIT, MEDICAL)
 
 # The ligatures, as their two letters. Each is one character, so a word keeps
 # its length and its column when it is read this way.
@@ -743,21 +877,9 @@ LIGATURES = str.maketrans({"œ": "oe", "æ": "ae"})
 
 
 def american(word: str) -> str | None:
-    """The American spelling of `word`, lowercase, or None if it is not British."""
-    key = word.lower().translate(LIGATURES)
-    hit = BRITISH.get(key)
-    if hit is not None:
-        return hit
-    if key in GENERA or key.endswith(TAXON_SUFFIXES):
-        return None
-    respelled = key
-    for pattern, american_segment in SEGMENT_PATTERNS:
-        respelled = pattern.sub(american_segment, respelled)
-    if respelled == key:
-        return None
-    # A segment and an ending can both be British: "anaesthetise" is respelled
-    # "anesthetise" by its segment, and then "anesthetize" by the -ise family.
-    return BRITISH.get(respelled, respelled)
+    """The American spelling of `word`, lowercase, or None if it is not British.
+    Only an entire word is looked up: nothing is matched inside a longer one."""
+    return BRITISH.get(word.lower().translate(LIGATURES))
 
 
 MARKER = "spelling-ok"
@@ -768,15 +890,48 @@ WORD = re.compile(r"[A-ZŒÆ]+(?![a-zœæ])|[A-ZŒÆ]?[a-zœæ]+")
 # The whole run of letters, without splitting identifiers (kept for the tests'
 # mutation that shows the split matters).
 WHOLE = re.compile(r"[A-Za-zŒÆœæ]+")
-# A URL or a path can legitimately contain any spelling; it is not prose. A URL
-# has a scheme. A run with a slash is a path only if it starts with "./", "../"
-# or "/", or a segment has a file extension: "colour/flavour" is prose. A run
-# is matched from its first character (a match starts at the leftmost place it
-# can, and every character a run is made of can start one), so no lookbehind
-# is needed to keep a match from starting mid-run.
-URL = re.compile(r"\b[A-Za-z][\w+.-]*://\S+")
+
+# Text that is not prose, and is blanked before the scan, so it is neither
+# reported nor rewritten: whatever is spelled there is someone else's, or is
+# not a word at all. Each is replaced by spaces of its length, so columns hold.
+#
+# A URL: a scheme and "://", or one of the schemes written without slashes.
+# A colon alone is not one ("note:colour" is prose).
+URL = re.compile(
+    r"\b[A-Za-z][\w+.-]*://\S+"
+    r"|\b(?:mailto|urn|doi|data|tel|sms|news|blob|javascript|about|geo|magnet"
+    r"|cid|mid|pmid|arxiv|isbn):\S+",
+    re.IGNORECASE,
+)
+# An email address, and the user@host:path form of git.
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+(?::\S*)?")
+# A domain, by its top-level domain, with any path after it.
+DOMAIN = re.compile(
+    r"\b(?:[A-Za-z0-9-]+\.)+"
+    r"(?:com|org|net|edu|gov|mil|int|io|ai|app|dev|co|uk|us|ca|au|nz|ie|de|fr"
+    r"|eu|nl|info|biz|me|ly|gl)\b(?:[/:?#][^\s)\]>\"'`]*)?",
+)
+# A file name with a known extension ("colour.md", "behaviour.json").
+FILE_NAME = re.compile(
+    r"\b[\w.-]*\w\.(?:md|txt|py|pyi|js|mjs|cjs|ts|tsx|jsx|json|ya?ml|toml"
+    r"|html?|css|scss|csv|tsv|png|jpe?g|gif|svg|webp|ico|pdf|sh|bash|git|sql"
+    r"|xml|ini|cfg|conf|lock|log|rst|docx?|xlsx?|pptx?|gz|zip|tar|woff2?|ttf"
+    r"|otf|env|caddy)\b",
+    re.IGNORECASE,
+)
+# A run with a slash is a path only if it starts with "./", "../" or "/", or a
+# segment has a file extension: "colour/flavour" is prose. A run is matched from
+# its first character (a match starts at the leftmost place it can, and every
+# character a run is made of can start one), so no lookbehind is needed.
 SLASHED = re.compile(r"[\w.~-]*/[\w./~-]*")
 EXTENSION = re.compile(r"\w\.[A-Za-z0-9]+$")
+# A digest named by its algorithm (an SRI hash, a Docker digest).
+DIGEST = re.compile(r"\b(?:sha1|sha224|sha256|sha384|sha512|md5)[-:]\S+", re.I)
+# Hex needs no pattern: a word is a run of letters, so "#faec00" or a hash is
+# read as its runs of the letters a-f, and no British word is spelled with
+# those letters alone (the tests check every one).
+# A run of the base64 alphabet (and base64url, and the dots of a JWT).
+ENCODED = re.compile(r"[A-Za-z0-9+/=_.-]{16,}")
 
 
 def blank(match: re.Match[str]) -> str:
@@ -793,25 +948,40 @@ def blank_path(match: re.Match[str]) -> str:
     return run
 
 
-def blank_urls(line: str) -> str:
-    return SLASHED.sub(blank_path, URL.sub(blank, line))
+def looks_encoded(run: str) -> bool:
+    """Whether a long run of the base64 alphabet is data, not words: it ends in
+    "=" padding, or it holds a digit and its letters and digits fall into runs
+    of one kind (upper case, lower case, digits) two characters long or less on
+    average. An identifier's words make longer runs: `renderColourPanelV2Layout`
+    averages nearly three. One with no digit is never data, however its case
+    changes (`TestWhoSignedAndWhen`)."""
+    if run.endswith("="):
+        return True
+    alnum = [c for c in run if c.isalnum()]
+    if not any(c.isdigit() for c in alnum):
+        return False
+
+    def kind(c: str) -> int:
+        return 0 if c.isdigit() else 1 if c.isupper() else 2
+
+    runs = 1 + sum(kind(a) != kind(b) for a, b in pairwise(alnum))
+    return runs * 2 >= len(alnum)
 
 
-def blank_names(line: str) -> str:
-    """Blank the proper nouns and the species epithets, which keep their
-    spelling. Each is replaced by spaces of its length, so columns hold."""
-    for name in PROPER_NOUNS:
-        line = line.replace(name, " " * len(name))
-    for match in BINOMIAL.finditer(line):
-        genus, epithet = match.group(1, 2)
-        if not EPITHET.fullmatch(epithet):
-            continue
-        spans = [match.span(2)]
-        if genus and KEPT_GENUS.fullmatch(genus) and LATIN_ONLY.fullmatch(epithet):
-            spans.append(match.span(1))
-        for start, end in spans:
-            line = line[:start] + " " * (end - start) + line[end:]
-    return line
+def blank_encoded(match: re.Match[str]) -> str:
+    run = match.group(0)
+    return " " * len(run) if looks_encoded(run) else run
+
+
+def blank_unprose(line: str) -> str:
+    """Blank what is not prose: URLs, email addresses, domains, file names,
+    paths, digests and encoded data."""
+    for pattern in (URL, EMAIL, DIGEST, DOMAIN):
+        line = pattern.sub(blank, line)
+    # A path before a file name, so the file name does not cut the path short.
+    line = SLASHED.sub(blank_path, line)
+    line = FILE_NAME.sub(blank, line)
+    return ENCODED.sub(blank_encoded, line)
 
 
 def american_for(word: str, american: str) -> str:
@@ -823,8 +993,31 @@ def american_for(word: str, american: str) -> str:
     return american
 
 
-def find(line: str, allow: list[str]) -> list[tuple[int, str, str]]:
-    """(column, British word, American word) for each hit in one line.
+def fixable(line: str, start: int, word: str) -> bool:
+    """Whether --fix may rewrite `word`, found at `start` in `line`.
+
+    A lowercase word, yes. A word with a capital letter only when it is part of
+    an identifier: right after a letter, digit or underscore (`getColourValue`,
+    `MAX_COLOURS`), or right before an underscore or digit (`COLOUR_MAX`). Any
+    other capitalized word may be a name ("British Journal of Haematology",
+    "Haemonetics", "Oestrus ovis", "Sulphur, Oklahoma"), and no rule over the
+    text can tell a name from a word at the start of a sentence, so it is
+    reported and left for a human.
+    """
+    if word.islower():
+        return True
+    before = line[start - 1] if start > 0 else ""
+    end = start + len(word)
+    after = line[end] if end < len(line) else ""
+    return before.isalnum() or before == "_" or after.isdigit() or after == "_"
+
+
+# A hit: (column, British word, American word, whether --fix may rewrite it).
+Hit = tuple[int, str, str, bool]
+
+
+def find(line: str, allow: list[str]) -> list[Hit]:
+    """Each hit in one line.
 
     `allow` is the phrases allowed in this file. A line with the marker is
     exempt. An allowed phrase exempts only itself, matched exactly: it is blanked
@@ -836,13 +1029,21 @@ def find(line: str, allow: list[str]) -> list[tuple[int, str, str]]:
     scannable = line
     for phrase in allow:
         scannable = scannable.replace(phrase, " " * len(phrase))
-    scannable = blank_names(blank_urls(scannable))
+    scannable = blank_unprose(scannable)
     hits = []
     for match in WORD.finditer(scannable):
         word = match.group(0)
         respelled = american(word)
         if respelled is not None:
-            hits.append((match.start(), word, american_for(word, respelled)))
+            start = match.start()
+            hits.append(
+                (
+                    start,
+                    word,
+                    american_for(word, respelled),
+                    fixable(line, start, word),
+                )
+            )
     return hits
 
 
@@ -874,7 +1075,8 @@ def is_translation(rel: str) -> bool:
 def skip(path: Path) -> bool:
     """This file (it IS the word list), the allowlist (it is the list of British
     phrases allowed, so each of its entries is one), anything quoted verbatim,
-    and translations. pre-commit names files itself, so this applies to them."""
+    the spelling corpus, and translations. pre-commit names files itself, so
+    this applies to them."""
     resolved = path.resolve()
     if resolved == SELF:
         return True
@@ -884,7 +1086,11 @@ def skip(path: Path) -> bool:
         rel = str(resolved.relative_to(ROOT))
     except ValueError:
         return False
-    return rel in QUOTED_VERBATIM or is_translation(rel)
+    return (
+        rel in QUOTED_VERBATIM
+        or PurePosixPath(rel).parent.as_posix() == CORPUS
+        or is_translation(rel)
+    )
 
 
 # An allowlist entry: (glob, phrase). The phrase is allowed only in the files
@@ -926,6 +1132,10 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+# Said of a hit --fix will not rewrite.
+LEFT_FOR_A_HUMAN = " (capitalized, so it may be a name: --fix leaves it to you)"
+
+
 def check(path: Path, allow: list[Allow]) -> list[str]:
     try:
         text = read(path)
@@ -937,10 +1147,11 @@ def check(path: Path, allow: list[Allow]) -> list[str]:
     phrases = allowed_in(path, allow)
     problems = []
     for number, line in enumerate(text.splitlines(), 1):
-        for column, word, respelled in find(line, phrases):
+        for column, word, respelled, can_fix in find(line, phrases):
             problems.append(
                 f"{path}:{number}:{column + 1}: "
-                f"British spelling {word!r} -- use {respelled!r}\n"
+                f"British spelling {word!r} -- use {respelled!r}"
+                f"{'' if can_fix else LEFT_FOR_A_HUMAN}\n"
                 f"    {line.strip()[:100]}"
             )
     return problems
@@ -970,28 +1181,36 @@ def targets(argv: list[str]) -> list[Path]:
     ]
 
 
-def fix(path: Path, allow: list[Allow]) -> int:
-    """Rewrite British spellings in place. Returns how many were changed.
+def fix(path: Path, allow: list[Allow]) -> tuple[int, list[str]]:
+    """Rewrite British spellings in place. Returns how many were changed, and
+    the hits left for a human (each as "line:column: word").
 
-    Uses the same scan as check(), so it changes exactly what check() reports:
-    never an exempt line, an allowed phrase or a URL. A file that cannot be
-    read raises, so the caller reports it.
+    Uses the same scan as check(), so it never touches what check() does not
+    report: an exempt line, an allowed phrase, a URL, an email address, a
+    domain, a file name, a path, a digest or encoded data. Of what it
+    reports, it rewrites only what fixable() allows: a capitalized word that is
+    not part of an identifier may be a name, and is left as written. A file
+    that cannot be read raises, so the caller reports it.
     """
     text = read(path)
     phrases = allowed_in(path, allow)
 
     changed = 0
+    left = []
     out = []
-    for line in text.splitlines(keepends=True):
+    for number, line in enumerate(text.splitlines(keepends=True), 1):
         # Right to left, so an earlier column is not moved by a later change.
-        for column, word, respelled in reversed(find(line, phrases)):
+        for column, word, respelled, can_fix in reversed(find(line, phrases)):
+            if not can_fix:
+                left.append(f"{number}:{column + 1}: {word!r} -- {respelled!r}")
+                continue
             line = line[:column] + respelled + line[column + len(word) :]
             changed += 1
         out.append(line)
 
     if changed:
         path.write_text("".join(out), encoding="utf-8")
-    return changed
+    return changed, sorted(left, key=lambda h: tuple(map(int, h.split(":")[:2])))
 
 
 def main(argv: list[str]) -> int:
@@ -1006,23 +1225,33 @@ def main(argv: list[str]) -> int:
     if do_fix:
         total = 0
         unread = 0
+        unfixed = 0
         for path in targets(argv):
             if path.is_file() and not skip(path):
                 try:
-                    n = fix(path, allow)
+                    n, left = fix(path, allow)
                 except (UnicodeDecodeError, OSError) as error:
                     print(f"  could not read {path}: {error}", file=sys.stderr)
                     unread += 1
                     continue
+                try:
+                    shown = path.resolve().relative_to(ROOT)
+                except ValueError:
+                    shown = path
                 if n:
-                    try:
-                        shown = path.resolve().relative_to(ROOT)
-                    except ValueError:
-                        shown = path
                     print(f"  {n:3d}  {shown}")
                     total += n
+                for hit in left:
+                    print(f"  {shown}:{hit}{LEFT_FOR_A_HUMAN}", file=sys.stderr)
+                unfixed += len(left)
         print(f"\n{total} spelling(s) corrected")
-        return 1 if unread else 0
+        if unfixed:
+            print(
+                f"{unfixed} left for you: respell each, or mark it `spelling-ok` "
+                "if it is a name.",
+                file=sys.stderr,
+            )
+        return 1 if unread or unfixed else 0
 
     problems = [
         msg

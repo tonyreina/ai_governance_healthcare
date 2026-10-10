@@ -275,7 +275,8 @@ async def migrate_and_sync(db: Database, settings: Settings) -> None:
     ``RETIREMENT_RULES_ACK`` does not acknowledge, stops the API from starting.
     Without it the API still migrates, retiring by whatever the database holds
     (010's seed is CHAI's rules), logs a warning, and ``/api/health`` reports the
-    rules as not synced (``retirement_rules.synced``) until a manifest sets them.
+    rules as not synced (``retirement_rules.synced``) for as long as it runs, even
+    over rules an earlier sync recorded: this API checked nothing against its build.
     """
     manifest = None
     if settings.retirement_manifest:
@@ -285,10 +286,12 @@ async def migrate_and_sync(db: Database, settings: Settings) -> None:
             raise RuntimeError(f"retirement rules: {exc}") from exc
     await db.migrate()
     if manifest is None:
+        db.rules_unsynced = True
         log.warning(
             "RUN_MIGRATIONS=true and RETIREMENT_MANIFEST is not set: the retirement "
             "rules were not synced from the build's manifest, so the database "
-            "retires by what it holds (010's seed is CHAI's rules) and /api/health "
+            "retires by what it holds (010's seed, CHAI's rules, unless an earlier "
+            "sync recorded others) and /api/health "
             "reports retirement_rules.synced=false. Set RETIREMENT_MANIFEST to the "
             "build's manifest.json, or run `python -m app.migrate` (D-76)."
         )

@@ -1671,6 +1671,49 @@ async def test_without_the_identity_a_change_is_refused_and_nothing_else_is(
     assert (await latest_change())["framework_id"] == "chai"
 
 
+@pytest.mark.parametrize("part", ["cluster", "database", "history"])
+async def test_an_identity_with_a_null_part_is_refused_cleanly(
+    client: AsyncClient, tmp_path: Path, part: str
+) -> None:
+    # 012's function, replaced (inside a transaction that is rolled back) by one
+    # that returns NULL for one part. A NULL must not become the text "None" or an
+    # int() crash: the change is refused, saying why, and nothing is changed.
+    from app import retirement
+
+    parts = {
+        "cluster": "(SELECT system_identifier::text FROM pg_control_system())",
+        "database": "(SELECT oid::bigint FROM pg_database"
+        " WHERE datname = current_database())",
+        "history": "'retirement_rule_change'::regclass::oid::bigint",
+    }
+    parts[part] = "NULL::text" if part == "cluster" else "NULL::bigint"
+    acme = load_acme(tmp_path)
+    before = await latest_change()
+    conn = await asyncpg.connect(DB_URL)
+    try:
+        tx = conn.transaction()
+        await tx.start()
+        try:
+            await conn.execute(
+                "CREATE OR REPLACE FUNCTION retirement_ack_database()"
+                " RETURNS TABLE (cluster text, database bigint, history bigint)"
+                f" LANGUAGE sql STABLE AS $$ SELECT {parts['cluster']},"
+                f" {parts['database']}, {parts['history']} $$"
+            )
+            with pytest.raises(retirement.RulesRefused) as direct:
+                await retirement.database_identity(conn)
+            with pytest.raises(retirement.RulesRefused) as refused:
+                await retirement.sync_rules(conn, acme, "a" * 64)
+        finally:
+            await tx.rollback()
+    finally:
+        await conn.close()
+    for raised in (direct, refused):
+        assert "identity came back incomplete" in str(raised.value)
+        assert "RETIREMENT_RULES_ACK=" not in str(raised.value)
+    assert await latest_change() == before
+
+
 async def test_012_reads_the_identity_the_acknowledgment_states(
     client: AsyncClient,
 ) -> None:
@@ -1682,8 +1725,12 @@ async def test_012_reads_the_identity_the_acknowledgment_states(
 
 
 @pytest.mark.parametrize(
-    "part", ["cluster", "database", "history", "follows", "at", "before", "after"]
-)
+    "part",
+    [
+        "cluster", "database", "history", "follows", "at", "before", "after",
+        "before rules", "after rules",
+    ],
+)  # fmt: skip
 def test_every_part_of_the_acknowledgment_changes_it(part: str) -> None:
     from app.retirement import DatabaseIdentity, Follows, RuleState, transition_ack
 
@@ -1718,4 +1765,11 @@ def test_every_part_of_the_acknowledgment_changes_it(part: str) -> None:
             changed["before"] = RuleState("other", rules)
         case "after":
             changed["after"] = RuleState("chai", rules)
+        # The same primaries, with one rule more before, or one fewer after.
+        case "before rules":
+            changed["before"] = RuleState("chai", rules | {("chai", "B", "Shelve")})
+        case "after rules":
+            changed["after"] = RuleState("acme", rules - {("chai", "D", "Retire")})
+        case _:
+            raise AssertionError(f"no change made for {part!r}")
     assert transition_ack(**base) != transition_ack(**changed)

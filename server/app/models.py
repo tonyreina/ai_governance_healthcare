@@ -49,9 +49,10 @@ class RetirementRulesOut(BaseModel):
     )
     synced: bool = Field(
         description=(
-            "True once a build's manifest set or confirmed the rules. False while "
-            "the database holds only 010's seed (CHAI's rules), which is what an "
-            "API that migrates itself with no RETIREMENT_MANIFEST leaves."
+            "True when the latest change of the rules came from a build's "
+            "manifest. False while the database holds only 010's seed (CHAI's "
+            "rules), and on an API that migrated itself (RUN_MIGRATIONS=true) "
+            "with no RETIREMENT_MANIFEST, whatever an earlier sync recorded."
         )
     )
 

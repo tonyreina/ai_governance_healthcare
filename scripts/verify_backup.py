@@ -68,6 +68,12 @@ RULES_HISTORY = "retirement_rule_change"
 # O (origin, the default) and A (always). D is disabled; R fires only when
 # session_replication_role is "replica", which neither sets, so it counts as off.
 FIRING = ("O", "A")
+# The latest change of the rules: the row with the highest id, whose new_rules the
+# table must hold. A module constant so the test can show the order matters.
+LATEST_CHANGE = (
+    "SELECT coalesce((SELECT json_build_array(id, new_rules)"
+    f" FROM {RULES_HISTORY} ORDER BY id DESC LIMIT 1), 'null')"
+)
 
 
 @dataclass
@@ -321,13 +327,7 @@ def inspect(container: str) -> Report:
             )
         ]
     if RULES_HISTORY in present:
-        latest = json.loads(
-            psql_value(
-                container,
-                "SELECT coalesce((SELECT json_build_array(id, new_rules)"
-                f" FROM {RULES_HISTORY} ORDER BY id DESC LIMIT 1), 'null')",
-            )
-        )
+        latest = json.loads(psql_value(container, LATEST_CHANGE))
         if latest is not None:
             report.latest_change = int(latest[0])
             report.latest_rules = [tuple(r) for r in latest[1]]
@@ -344,8 +344,15 @@ def inspect(container: str) -> Report:
     return report
 
 
+def container_name() -> str:
+    """``chai-verify-``, then ``VERIFY_BACKUP_RUN`` when it is set, then a random
+    suffix. The test names its run, so it finds only the containers it started."""
+    run = os.environ.get("VERIFY_BACKUP_RUN", "").strip()
+    return f"chai-verify-{run + '-' if run else ''}{secrets.token_hex(4)}"
+
+
 def start_container() -> str:
-    name = f"chai-verify-{secrets.token_hex(4)}"
+    name = container_name()
     done = docker(
         "run", "-d", "--rm", "--name", name,
         "-e", "POSTGRES_USER=chai", "-e", "POSTGRES_DB=chai",

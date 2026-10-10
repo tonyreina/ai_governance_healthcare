@@ -1607,11 +1607,15 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   change itself moves on, it is spent once used: a value left set accepts no later
   change, not even the same change made again. Because it binds the database's
   identity, a value printed by one database is refused by another with the same
-  history (staging and production, or two fresh databases migrated alike), which
+  history (staging built separately or from a dump, and production, or two
+  fresh databases migrated alike), which
   the history row's id alone did not do, and by a copy restored from a dump: into
   another database (a new database OID) or cluster (a new system identifier), or
-  over the same database in place, as `make restore` does (pg_dump --clean creates
-  every table again, so the history table has a new OID). If the identity cannot
+  over the same database in place, as `make restore` does (`make backup` dumps
+  with `--clean`, so the restore creates every table again and the history table
+  has a new OID). A restore of the data alone into the tables already there
+  (`--data-only`, or TRUNCATE and reload, as the owner) keeps that OID, so it is
+  the same database; see the limit below. If the identity cannot
   be read (a platform that withholds `pg_control_system()`, which PostgreSQL
   grants to every role), the job refuses every change and says why; a sync that
   changes nothing does not read it. Additions need it too: a stale or mistaken
@@ -1636,8 +1640,10 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   `manifest` row confirming them, with no acknowledgment. A new primary over rows
   the database already holds is a change, acknowledged like any other.
   `/api/health` reports `retirement_rules` as `hash`,
-  `primary` (the latest row's framework) and `synced` (that row came from a
-  manifest, not 010's seed).
+  `primary` (the latest row's framework) and `synced`: true when that row came
+  from a manifest, not 010's seed, and false on an API that migrated itself with
+  no manifest (below), whatever the row says, since that API checked nothing
+  against its build.
 - **The stamp is checked.** A record follows the rules of its
   `meta.framework.id`, so a writer who could stamp any id could keep a record
   from ever coming due. The API refuses (422) a create that sets
@@ -1662,12 +1668,17 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   single-role setup) and `RETIREMENT_MANIFEST` set, the API runs the same sync
   with the same refusal before it serves; a refusal or a bad manifest stops it
   starting. Without a manifest it migrates, logs a warning, and `/api/health`
-  reports `synced: false`.
+  reports `synced: false` for as long as it runs, even over rules an earlier
+  sync recorded (`Database.rules_unsynced`, set by `migrate_and_sync()`).
 - **Fail closed.** No `RETIREMENT_MANIFEST`, an unreadable or malformed manifest
   (strict: unknown keys, bad ids, a supplement with pairs, a hash that does not
   match its pairs), or a primary with no ending decision exits 1 before anything
-  is changed or provisioned, so the API, which waits for the job, does not start.
-  No fallback to CHAI's rules or to whatever the table holds.
+  is changed or provisioned, so on a first deploy the API, which waits for the
+  job, does not start. Over a running stack the running API keeps serving by the
+  rules the database holds, a service Compose recreated (the proxy) is left
+  created and not started, and `docker compose up -d` can return 0;
+  `docs/self-hosting.md` tells the operator to check `docker compose ps -a` after
+  every deploy. No fallback to CHAI's rules or to whatever the table holds.
 - **Recorded.** Each change appends to `retirement_rule_change` (who, when, the
   rules before and after, the rule-set and definition hashes, whether the change
   was acknowledged), append-only by trigger, which `make verify-backup` requires
@@ -1717,10 +1728,15 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - **Limit, stated:** a copy of the database's files is the database. A base
   backup, point-in-time recovery, a volume or disk snapshot, or a promoted replica
   keeps the system identifier, the database's OID and the history table's OID, so
-  it accepts again a value printed against the state it holds;
-  `docs/self-hosting.md` says to clear `RETIREMENT_RULES_ACK` before restoring
-  one. Nothing prevents it: telling such a copy from the original would need
-  state outside the database. (A dump, restored anywhere, is told apart.)
+  it accepts again a value printed against the state it holds, and a staging
+  database made that way and its original each accept a value printed on the
+  other. A restore of the data alone into the existing tables
+  keeps the history table's OID too, and puts back the history row a spent value
+  follows, so that value is accepted again. `docs/self-hosting.md` says to clear
+  `RETIREMENT_RULES_ACK` before restoring either, and to build staging from a
+  dump. Nothing prevents it: telling such a copy from the original would need
+  state outside the database. (A dump restored with its tables created again,
+  anywhere, is told apart.)
 - **Limit, stated:** the acknowledgment binds the rules and the primary, not the
   records. The projects listed as becoming due, or stopping being due, are those
   at the moment the refusal was printed; a project decided or edited between that

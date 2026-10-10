@@ -363,9 +363,12 @@ def transition_ack(follows: Follows, before: RuleState, after: RuleState) -> str
     it is spent once used: a value left set never accepts a later change, even one
     identical to it. The database's identity (012) makes it one database's: another
     database refuses it, with the same history or restored from a dump of this one,
-    and so does this database after a dump is restored over it. A copy of the
-    database's files (a base backup, a snapshot, a promoted replica) keeps the
-    identity, and accepts a value printed against the state it was copied in.
+    and so does this database after a dump that creates the tables again is
+    restored over it. A copy of the database's files (a base backup, a snapshot, a
+    promoted replica) keeps the identity, and accepts a value printed against the
+    state it was copied in, as does its original a value printed on the copy. So
+    does a restore of the data alone into the existing tables (``--data-only``, or
+    TRUNCATE and reload), which keeps the history table's OID.
 
     It binds the rules and the primary, not the records: the projects a refusal
     lists are those at the moment it was printed, and one edited before the

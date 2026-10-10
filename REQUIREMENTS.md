@@ -1176,11 +1176,15 @@ honest answer and is a gap worth closing; see R-19.
   every project that would become due or stop being due as the projects stood
   then. It binds the rules and the primary, not the records: a project edited
   between the refusal and the acknowledged run is affected without having been
-  listed. An acknowledgment accepts that one change once, in that database, and
-  nothing else: another database refuses it, and so does a copy restored from a
-  dump, elsewhere or over the same database in place; a copy of the database's
-  files (a snapshot, a base backup, a promoted replica) is, to it, the database
-  it was copied from. A sync
+  listed. An acknowledgment accepts that one change once, in the database that
+  printed it, and nothing else: another database refuses it, and so does a copy
+  restored from a dump that creates the tables again (as `make restore` does),
+  elsewhere or over the same database in place. Two things are, to it, the same
+  database: a copy of the database's files (a snapshot, a base backup,
+  point-in-time recovery, a promoted replica), so a staging database made that
+  way and its original each accept a value printed on the other, and a restore
+  of the data alone into the tables already there, which accepts again a value
+  spent after the dump was taken. A sync
   that changes nothing (the same rules, the same primary) needs no
   acknowledgment. A build leaves the rules of frameworks it does not list. A missing
   or malformed manifest, or a primary with no ending decision, stops the job, and
@@ -1206,10 +1210,12 @@ honest answer and is a gap worth closing; see R-19.
   acknowledgment never accepting a different change, a rollback, a later change,
   a switch to another primary over the same rules, another database with the
   same history, or a copy restored from a dump into another database or in
-  place, each part with a mutation test; a stale manifest refused; unlisted
+  place, each part with a mutation test; an identity with a missing part
+  refusing the change; a stale manifest refused; unlisted
   frameworks' rules kept),
   `server/tests/test_retirement_rules.py` (a malformed or missing manifest fails
-  the job; the API's own migration syncs or warns; the stamp is refused unless it
+  the job; the API's own migration syncs or warns, and with no manifest never
+  reports the rules synced; the stamp is refused unless it
   is the active primary's, and required under another primary; no patch changes
   a record's framework, with mutation tests; the API role can only read the
   rules; their history is append-only; the sync takes the migration lock before
@@ -1218,8 +1224,8 @@ honest answer and is a gap worth closing; see R-19.
   the rule set),
   `tests/test_dispose.py` and `tests/test_verify_backup.py` (records with no rules
   are counted; the history keeps its trigger, enabled, after a restore, and the
-  rules are the ones it last recorded; a real dump does not carry the database's
-  identity),
+  rules are the ones its latest change recorded; a real dump does not carry the
+  database's identity),
   `tests/test_build_config.py` (the manifest is the definitions' own, and names
   the primary even when the config does not list it first),
   `tests/test_compose_isolation.py` (the page and the manifest come from one build
@@ -1248,8 +1254,9 @@ honest answer and is a gap worth closing; see R-19.
   an unstamped record is refused", "opening another primary's record is
   refused", the import refusals, and "the example's own export is accepted");
   `tests/test_snapshot.py` (the published build unchanged). The server checks
-  the stamp against its build (R-66): it accepts a record's `meta.framework` only
-  as exactly its active primary's, and under a primary other than CHAI refuses a
+  the stamp against its build (R-66): it accepts a new record's `meta.framework`
+  only as exactly its active primary's (a patch keeps the record's own
+  framework), and under a primary other than CHAI refuses a
   new record without it (`server/tests/test_retirement_rules.py`:
   `test_the_api_refuses_a_stamp_that_is_not_the_active_primary`,
   `test_under_another_primary_a_record_must_carry_its_stamp`; C-90), and

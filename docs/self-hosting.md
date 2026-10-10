@@ -97,9 +97,17 @@ and so when it comes due for disposal ([Privacy and retention](privacy.md#dispos
   ends a project, no longer has one the database retires on today, or has a
   different primary framework, `migrate` refuses: it lists the decisions added and
   removed, the change of primary, and every project that would become due, or stop
-  being due, for disposal, prints the value to set, and exits non-zero, so the API
-  does not start. If the change is intended, set `RETIREMENT_RULES_ACK` in `.env`
-  to that value and run `docker compose up -d` again; then clear it. The value
+  being due, for disposal, prints the value to set, and exits non-zero. On a
+  first deploy the API waits for `migrate` and does not start. On a redeploy over
+  a running stack, `docker compose up -d` can still return 0: the API that is
+  already running keeps serving, by the rules the database already holds, while
+  a service it recreated for the new build, such as the proxy, is left created
+  and not started, so the dashboard is down. After every deploy, run
+  `docker compose ps -a` and read `docker compose logs migrate`: a `migrate` that
+  exited 3 printed the value. If the change is intended, set `RETIREMENT_RULES_ACK`
+  in `.env` to that value and run `docker compose up -d` again; then clear it. If
+  it is not, deploy the previous build again (`APP_DIR`, `CSP_FILE`) and run
+  `docker compose up -d`. The value
   acknowledges exactly the change you were shown: every rule the database holds
   before and after it, of every framework, and the primary before and after, from
   the database's rules as they stood when it was printed. A different change, even
@@ -109,10 +117,15 @@ and so when it comes due for disposal ([Privacy and retention](privacy.md#dispos
   the same way. It also belongs to the database that printed it: it includes the
   cluster's system identifier, the database's internal id (OID) and the internal
   id of the rules' history table, none of which a dump carries, so another
-  database refuses it even when its history is the same (a value printed on
-  staging does nothing on production), and so does a copy restored from a dump,
-  into another database or cluster or over the same database in place (`make
-  restore` creates every table again).
+  database refuses it even when its history is the same (a value printed on a
+  staging database built separately, or restored from a dump, does nothing on
+  production), and so does a copy restored from a dump that creates the tables
+  again, into another database or cluster or over the same database in place
+  (`make backup` dumps with `--clean`, so `make restore` drops and creates every
+  table). A restore of the data alone does not: reloading the rows into the
+  tables that are already there (`pg_dump --data-only`, or `TRUNCATE` and reload)
+  keeps the history table's OID, so it is the same database to `migrate`, and a
+  value spent after the dump was taken is accepted again.
 - The value binds the rules and the primary, not the projects. The list is of the
   projects as they stood when it was printed: a project decided or edited before
   you run `migrate` again with the value is affected all the same, without having
@@ -123,7 +136,11 @@ and so when it comes due for disposal ([Privacy and retention](privacy.md#dispos
   identifier and both internal ids, so to `migrate` it is the database it was
   copied from, and it accepts again a value printed against the state it holds.
   Clear `RETIREMENT_RULES_ACK` before you restore one, and read what `migrate`
-  prints afterward.
+  prints afterward. The same holds for a staging database made that way: it
+  shares production's identity, so a value printed on either, against the state
+  both hold, is accepted by the other. If you want staging's values never to work
+  on production, build staging from a dump (`pg_dump`, then `pg_restore` or
+  `psql`, creating the tables), not from a copy of production's files.
 - The database's identity comes from `pg_control_system()`, which PostgreSQL lets
   every role call. On a platform that withholds it, `migrate` cannot bind a value
   to the database, so it refuses every change of the rules and says why; a build
@@ -140,8 +157,11 @@ Every change is recorded in the append-only `retirement_rule_change` table (who,
 when, the rules before and after) and as a `retirement.rules_changed` security
 event. `GET /api/health` reports the rule set in use as `retirement_rules`: its
 `hash`, which equals `ruleSetHash` in the manifest of the build that set it, its
-`primary` framework, and `synced`, which is `false` until a build's manifest has
-set or confirmed the rules.
+`primary` framework, and `synced`, which is `true` when the latest change of the
+rules came from a build's manifest. It is `false` while the database holds only
+010's seed, and on an API that migrated itself (`RUN_MIGRATIONS=true`) with no
+`RETIREMENT_MANIFEST`, whatever an earlier sync recorded, since that API did not
+check the rules against its build.
 
 A record's framework is its `meta.framework.id`, and it decides when the record
 can be disposed of. The API accepts a new record that sets it only when it is

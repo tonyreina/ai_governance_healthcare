@@ -42,6 +42,12 @@ spec.loader.exec_module(vb)
 
 failures: list[str] = []
 
+# This run's name for the throwaway containers the script starts (its
+# VERIFY_BACKUP_RUN), so a check that nothing is left running counts only this run's
+# containers, never those of another run going on at the same time.
+RUN = f"t{secrets.token_hex(5)}"
+os.environ["VERIFY_BACKUP_RUN"] = RUN
+
 
 def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"  {'PASS' if ok else 'FAIL'}  {name}{'' if ok else f'  <- {detail}'}")
@@ -56,8 +62,9 @@ def docker(*args: str, stdin: bytes | None = None, check_rc: bool = False):
 
 
 def leftovers() -> list[str]:
-    out = docker("ps", "-a", "--format", "{{.Names}}", "--filter", "name=chai-verify-")
-    return [n for n in out.stdout.decode().split() if n]
+    prefix = f"chai-verify-{RUN}-"
+    out = docker("ps", "-a", "--format", "{{.Names}}", "--filter", f"name={prefix}")
+    return [n for n in out.stdout.decode().split() if n.startswith(prefix)]
 
 
 def start_source() -> str:
@@ -382,6 +389,12 @@ def main() -> int:
         vb.problems_for(good) == [] and vb.RULES_MIGRATION not in good.migrations,
     )
     check(
+        "the throwaway container is named for this run, so a test finds only its own",
+        vb.container_name().startswith(f"chai-verify-{RUN}-")
+        and vb.container_name() != vb.container_name(),
+        vb.container_name(),
+    )
+    check(
         "the throwaway database is the production major version",
         vb.production_image().startswith("postgres:17"),
         vb.production_image(),
@@ -536,12 +549,88 @@ def main() -> int:
             and not any(vb.RULES_HISTORY in p for p in vb.problems_for(mutated)),
             str(vb.problems_for(mutated)),
         )
+        # Enabled ALWAYS (tgenabled A): it fires in every session, replica or not,
+        # so it is as good as the default, and the dump verifies.
+        psql(
+            source,
+            f"ALTER TABLE retirement_rule_change ENABLE ALWAYS TRIGGER {trigger}",
+        )
+        always_report = vb.inspect(source)
+        check(
+            "a trigger enabled ALWAYS counts as enabled",
+            vb.RULES_HISTORY in always_report.triggers
+            and vb.RULES_HISTORY not in always_report.disabled_triggers,
+            f"{always_report.triggers} {always_report.disabled_triggers}",
+        )
+        always = verify(str(make_dump(source, work / "always.sql.gz.gpg")))
+        check(
+            "a dump whose rules' history trigger fires ALWAYS verifies",
+            always.returncode == 0,
+            always.stdout[-600:] + always.stderr[-300:],
+        )
+        check("and leaves nothing running", leftovers() == [], str(leftovers()))
+        saved = vb.FIRING
+        vb.FIRING = ("O",)
+        try:
+            mutated = vb.inspect(source)
+        finally:
+            vb.FIRING = saved
+        check(
+            "mutation: with only O counted as firing, the ALWAYS trigger would fail",
+            any(vb.RULES_HISTORY in p for p in vb.problems_for(mutated)),
+            str(vb.problems_for(mutated)),
+        )
+
         psql(source, f"ALTER TABLE retirement_rule_change ENABLE TRIGGER {trigger}")
         recheck = verify(str(make_dump(source, work / "again.sql.gz.gpg")))
         check(
             "and the same source, set right again, verifies",
             recheck.returncode == 0,
             recheck.stdout[-600:],
+        )
+
+        # An acknowledged change, as the migrate job records one: a rule added, and
+        # a second history row whose new_rules hold it. The restore must hold the
+        # rules of the LATEST row, not the seed's.
+        withdraw = "('chai', 'C', 'Withdraw')"
+        psql(source, f"INSERT INTO retirement_rule VALUES {withdraw}")
+        psql(
+            source,
+            "INSERT INTO retirement_rule_change (source, framework_id, old_rules,"
+            " new_rules, rule_set_hash, acknowledged) SELECT 'manifest', 'chai',"
+            " (SELECT new_rules FROM retirement_rule_change ORDER BY id DESC LIMIT 1),"
+            " (SELECT jsonb_agg(jsonb_build_array(framework_id, gate_id, decision)"
+            "  ORDER BY framework_id, gate_id, decision) FROM retirement_rule),"
+            f" '{'ab' * 32}', true",
+        )
+        latest = psql(source, "SELECT max(id) FROM retirement_rule_change")
+        changed = verify(str(make_dump(source, work / "changed.sql.gz.gpg")))
+        check(
+            "a dump with an acknowledged change in its history verifies",
+            latest == "2" and changed.returncode == 0,
+            f"rows to #{latest}: " + changed.stdout[-600:] + changed.stderr[-300:],
+        )
+        check(
+            "and reports the latest change, with the rule it added",
+            "as last recorded   retirement_rule_change #2" in changed.stdout
+            and "chai: checkpoint C decided 'Withdraw'" in changed.stdout
+            and "retirement_rule           5 row(s)" in changed.stdout,
+            changed.stdout[-800:],
+        )
+        check("and leaves nothing running", leftovers() == [], str(leftovers()))
+        saved = vb.LATEST_CHANGE
+        ascending = saved.replace("ORDER BY id DESC", "ORDER BY id")
+        vb.LATEST_CHANGE = ascending
+        try:
+            oldest = vb.inspect(source)
+        finally:
+            vb.LATEST_CHANGE = saved
+        check(
+            "mutation: read the oldest history row as the latest, and it would fail",
+            ascending != saved
+            and oldest.latest_change == 1
+            and any("last recorded" in p for p in vb.problems_for(oldest)),
+            str(vb.problems_for(oldest)),
         )
 
         identity_checks(source)

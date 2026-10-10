@@ -1175,7 +1175,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   an unlisted framework's rules, a rollback to another primary, a switch to
   another primary over the same rules), once used it accepts nothing later, and
   another database refuses it even with the same history, as does a copy restored
-  from a dump, into another database or over the same one in place. It leaves the
+  from a dump that creates the tables again (`make restore`), into another
+  database or over the same one in place. It leaves the
   rules of frameworks the manifest does not list, and fails without a usable
   manifest, so disposal never changes silently (R-66, D-76). The operator is shown
   the projects that would become due or stop being due as they stood when the
@@ -1198,9 +1199,14 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   migrate job built; `tests/test_verify_backup.py` shows with a real pg_dump that
   the identity differs after a restore into another database, over the same one
   in place, and into another cluster. A copy of the database's files (a base
-  backup, a snapshot, a promoted replica) keeps the identity and the history, so
-  it accepts again a value printed against the state it holds:
-  `docs/self-hosting.md` says so; nothing prevents it. And the value does not
+  backup, a snapshot, point-in-time recovery, a promoted replica) keeps the
+  identity and the history, so it accepts again a value printed against the state
+  it holds, and a staging database made that way and production each accept a
+  value printed on the other; `docs/self-hosting.md` says so, and advises building
+  staging from a dump. A restore of the data alone into the tables already there
+  (`pg_dump --data-only`, or TRUNCATE and reload, as the owner) keeps the history
+  table's OID, so a value spent after the dump was taken is accepted again;
+  `docs/self-hosting.md` says so too. Nothing prevents either. And the value does not
   bind the records, so the list the operator saw can be out of date when the
   value is used.
 - **Asserted in:** `docs/self-hosting.md` — "another database refuses it even when its history is the same"
@@ -1227,6 +1233,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_retention.py::test_the_restore_tests_fail_without_the_database_oid_in_the_identity`
   `server/tests/test_retention.py::test_without_the_identity_a_change_is_refused_and_nothing_else_is`
   `server/tests/test_retention.py::test_012_reads_the_identity_the_acknowledgment_states`
+  `server/tests/test_retention.py::test_an_identity_with_a_null_part_is_refused_cleanly`
   `server/tests/test_retention.py::test_a_value_for_one_new_primary_is_refused_for_another_over_the_same_rules`
   `server/tests/test_retention.py::test_the_new_primary_test_fails_when_the_value_omits_the_primary_after`
   `server/tests/test_retention.py::test_every_part_of_the_acknowledgment_changes_it`
@@ -1239,6 +1246,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_retirement_rules.py::test_a_manifest_the_server_would_misread_is_refused`
   `server/tests/test_retirement_rules.py::test_the_api_migrating_itself_syncs_from_its_manifest`
   `server/tests/test_retirement_rules.py::test_the_api_migrating_itself_without_a_manifest_says_so`
+  `server/tests/test_retirement_rules.py::test_an_api_with_no_manifest_never_reports_synced`
   `server/tests/test_retirement_rules.py::test_two_syncs_serialize_on_the_migration_lock`
   `server/tests/test_retirement_rules.py::test_the_lock_test_fails_when_the_lock_is_taken_after_the_reads`
   `tests/test_stack.py::the database retires by the served build's rule set, synced from it`

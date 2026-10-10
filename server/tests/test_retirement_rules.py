@@ -294,9 +294,13 @@ async def test_the_rules_history_is_append_only_even_for_the_owner(
 # --- /api/health -------------------------------------------------------------------
 
 
-async def health_rules(client: AsyncClient) -> dict:
-    client.app.state.db._rules_cache = None  # type: ignore[attr-defined]
-    return (await client.get("/api/health")).json()["retirement_rules"]
+async def health_rules() -> dict:
+    """What a fresh API that does not migrate itself (``RUN_MIGRATIONS=false``, the
+    split setup the migrate job serves) reports. The ``client`` fixture's API
+    migrates itself with no manifest in owner mode, so it never reports synced."""
+    app = create_app(make_settings(run_migrations=False))
+    async with app.router.lifespan_context(app):
+        return (await health_of(app))["retirement_rules"]
 
 
 @requires_db
@@ -317,7 +321,7 @@ async def test_health_reports_the_rule_set_the_database_uses(
         DB_URL, RETIREMENT_MANIFEST=str(manifests.DEFAULT_MANIFEST)
     )
     assert done.returncode == 0, done.stdout + done.stderr
-    assert await health_rules(client) == {
+    assert await health_rules() == {
         "hash": seed_hash(), "primary": "chai", "synced": True,
     }  # fmt: skip
 
@@ -333,7 +337,7 @@ async def test_health_reports_the_rule_set_the_database_uses(
         ),
     )
     assert done.returncode == 0, done.stdout + done.stderr
-    assert await health_rules(client) == {
+    assert await health_rules() == {
         "hash": wanted, "primary": "acme", "synced": True,
     }  # fmt: skip
     assert wanted != seed_hash()
@@ -852,6 +856,27 @@ async def test_the_api_migrating_itself_without_a_manifest_says_so(
     assert await changes() == 1
 
 
+@requires_db
+async def test_an_api_with_no_manifest_never_reports_synced(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    """``synced`` says whether this API's rules were checked against its build. An
+    earlier sync's ``manifest`` row does not make an API that migrated itself with
+    no manifest synced: it checked nothing, and its build may differ."""
+    path = manifests.write(tmp_path / "m.json", manifests.default_build(), "chai")
+    app = create_app(fallback_settings(retirement_manifest=str(path)))
+    async with app.router.lifespan_context(app):
+        assert (await health_of(app))["retirement_rules"]["synced"] is True
+    assert await changes() == 2  # the manifest confirmed 010's seed
+
+    app = create_app(fallback_settings())
+    async with app.router.lifespan_context(app):
+        body = await health_of(app)
+    # The latest row is the manifest's, so reading the history alone says True.
+    assert body["retirement_rules"]["synced"] is False
+    assert await changes() == 2
+
+
 def test_the_manifest_settings_are_read_from_the_environment(monkeypatch) -> None:
     monkeypatch.setenv("RUN_MIGRATIONS", "true")
     monkeypatch.delenv("APP_POSTGRES_PASSWORD", raising=False)
@@ -1096,11 +1121,20 @@ CREATE_BLOCKER = (
 )
 
 
-async def race_a_create(client: AsyncClient, tmp_path: Path):
-    # A record without a stamp: CHAI's, accepted while CHAI is the primary.
+# Both ways a create's check reads the primary: an unstamped body (CHAI's, accepted
+# only while CHAI is the primary, `_check_new_record`) and a body stamped with
+# CHAI's id (accepted only while it is the primary's stamp, `_check_stamp`).
+RACING_META = {
+    "unstamped": {"solution": "x"},
+    "stamped chai": {"solution": "x", "framework": {"id": "chai"}},
+}
+
+
+async def race_a_create(client: AsyncClient, tmp_path: Path, meta: dict):
+    # A record CHAI's rules govern, accepted while CHAI is the primary.
     return await race_a_write_with_a_switch(
         tmp_path,
-        lambda: client.post("/api/projects/racer", json={"meta": {"solution": "x"}}),
+        lambda: client.post("/api/projects/racer", json={"meta": meta}),
         CREATE_BLOCKER,
         "INSERT INTO projects",
         "racer",
@@ -1108,10 +1142,12 @@ async def race_a_create(client: AsyncClient, tmp_path: Path):
 
 
 @requires_db
+@pytest.mark.parametrize("body", list(RACING_META))
 async def test_a_write_that_read_the_primary_holds_off_a_switch(
-    client: AsyncClient, tmp_path: Path
+    client: AsyncClient, tmp_path: Path, body: str
 ) -> None:
-    waited, response, result = await race_a_create(client, tmp_path)
+    meta = RACING_META[body]
+    waited, response, result = await race_a_create(client, tmp_path, meta)
     # The sync waited for the write in flight, so the write, checked against CHAI,
     # committed before the switch: a record written before it, which keeps its
     # framework (R-66). Then the switch went through with its acknowledgment.
@@ -1121,22 +1157,38 @@ async def test_a_write_that_read_the_primary_holds_off_a_switch(
     assert result.outcome is SyncOutcome.CHANGED
     assert await primary_now() == "acme"
     # And a write that starts now reads the new primary.
-    late = await client.post("/api/projects/late", json={"meta": {"solution": "x"}})
+    late = await client.post("/api/projects/late", json={"meta": meta})
     assert late.status_code == 422, late.text
 
 
+def read_the_primary_without_the_lock(monkeypatch, body: str) -> None:
+    """The mutation, where each body's check reads the primary: the unstamped
+    create's own read, or `_check_stamp`'s for a stamped one."""
+    from app import retirement, routes
+
+    if body == "unstamped":
+        monkeypatch.setattr(routes, "write_primary", retirement.active_primary)
+        return
+
+    async def unlocked_check_stamp(conn, document) -> None:
+        problem = routes.stamp_problem(document, await retirement.active_primary(conn))
+        if problem:
+            raise routes.HTTPException(422, problem)
+
+    monkeypatch.setattr(routes, "_check_stamp", unlocked_check_stamp)
+
+
 @requires_db
+@pytest.mark.parametrize("body", list(RACING_META))
 async def test_the_race_test_fails_without_the_shared_lock(
-    client: AsyncClient, tmp_path: Path, monkeypatch
+    client: AsyncClient, tmp_path: Path, monkeypatch, body: str
 ) -> None:
     # Mutation: the create reads the primary without the lock. The sync no longer
     # waits; it switches to acme while the create is in flight, and the create,
     # checked against CHAI, commits after the switch a record acme forbids (no
-    # stamp), which no acknowledgment listed.
-    from app import retirement, routes
-
-    monkeypatch.setattr(routes, "write_primary", retirement.active_primary)
-    waited, response, result = await race_a_create(client, tmp_path)
+    # stamp, or CHAI's), which no acknowledgment listed.
+    read_the_primary_without_the_lock(monkeypatch, body)
+    waited, response, result = await race_a_create(client, tmp_path, RACING_META[body])
     assert not waited
     assert response.status_code in (200, 201), response.text
     assert result.outcome is SyncOutcome.CHANGED

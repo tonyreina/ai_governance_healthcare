@@ -22,7 +22,10 @@
 --
 -- What keeps all three is a copy of the files rather than a dump: a base backup,
 -- point-in-time recovery, a volume or disk snapshot, or a promoted replica. To the
--- acknowledgment such a copy is the database it was copied from (D-76 says so).
+-- acknowledgment such a copy is the database it was copied from, and the original
+-- accepts a value printed on the copy. A restore of the data alone into the tables
+-- already there (--data-only, or TRUNCATE and reload) keeps all three too (D-76
+-- says so).
 
 CREATE OR REPLACE FUNCTION retirement_ack_database()
 RETURNS TABLE (cluster text, database bigint, history bigint)

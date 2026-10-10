@@ -118,9 +118,12 @@ sentences) are translated in every language already.
     that page and the `migrate` job loads that manifest. When the manifest
     changes which decisions end a project, or which framework is primary (so the
     first time you deploy your build over the published one), `migrate` refuses
-    to start the stack. It lists every project whose disposal would change and
-    prints a value; if the change is intended, set `RETIREMENT_RULES_ACK` in
-    `.env` to that value, run `docker compose up -d` again, then clear it
+    and your build does not start. Over a running stack `docker compose up -d`
+    can still return 0, leaving the old API running and the proxy stopped, so
+    check `docker compose ps -a` after the deploy. `migrate` lists every project
+    whose disposal would change and prints a value; if the change is intended,
+    set `RETIREMENT_RULES_ACK` in `.env` to that value, run
+    `docker compose up -d` again, then clear it
     ([Self-hosting](../self-hosting.md#which-build-it-serves-and-the-retirement-rules)).
     Once your primary is the server's, the API accepts a new record only with
     your primary's stamp, so every record your build saves retires by your

@@ -166,6 +166,10 @@ class Database:
         self._ping_lock = asyncio.Lock()
         self._rules_cache: tuple[float, dict | None] | None = None
         self._rules_lock = asyncio.Lock()
+        # Set by ``migrate_and_sync()`` when this API migrated itself with no
+        # RETIREMENT_MANIFEST: it checked nothing against its build, so
+        # /api/health reports the rules as not synced, whatever the history says.
+        self.rules_unsynced = False
 
     # --- lifecycle --------------------------------------------------------
 
@@ -348,7 +352,8 @@ class Database:
         """The active retirement rules (D-76), at most once per ``ttl``: the latest
         ``retirement_rule_change`` row's rule-set hash, its primary framework, and
         whether a build's manifest set or confirmed them (``synced``) rather than
-        010's seed alone.
+        010's seed alone. ``synced`` is false, whatever the history says, when this
+        API migrated itself with no manifest (:attr:`rules_unsynced`).
 
         For ``/api/health``, which is unauthenticated and not rate limited, so it is
         cached for the reason :meth:`ping_cached` is. The rules change only when the
@@ -375,7 +380,8 @@ class Database:
                     else {
                         "hash": active.rule_set_hash,
                         "primary": active.primary,
-                        "synced": active.source is ChangeSource.MANIFEST,
+                        "synced": active.source is ChangeSource.MANIFEST
+                        and not self.rules_unsynced,
                     }
                 )
             except (OSError, asyncpg.PostgresError, RuntimeError, ValueError) as exc:

@@ -130,6 +130,65 @@ class FlagRule(StrEnum):
     IDLE = "idle"
 
 
+class UiSlot(StrEnum):
+    """A screen's whole-sentence catalog key a definition may supply (the engine's
+    UiSlot in app/js/10-frameworks/01-engine/10-facade.js). A slot a definition
+    leaves out gets the engine's neutral key, so none is required."""
+
+    RAIL_OVERVIEW = "railOverview"
+    RAIL_SHORT = "railShort"
+    PIP_TITLE = "pipTitle"
+    SECTION_EYEBROW = "sectionEyebrow"
+    SECTION_ANSWERED = "sectionAnswered"
+    DECLINED_COUNT = "declinedCount"
+    CHIP_NOTE = "chipNote"
+    LEGEND = "legend"
+    EXTERNAL_COUNT = "externalCount"
+    COVERED_BY = "coveredBy"
+    NOT_COVERED = "notCovered"
+    GATE_EYEBROW = "gateEyebrow"
+    GATE_GAPS = "gateGaps"
+    GATE_ANSWERED_PARTIAL = "gateAnsweredPartial"
+    GATE_ALL_MET = "gateAllMet"
+    GATE_GAP_ITEM = "gateGapItem"
+    DASH_LEDE = "dashLede"
+    SETUP_EYEBROW = "setupEyebrow"
+    FW_LEDE = "fwLede"
+    DEL_REMOVES = "delRemoves"
+    DEL_DESTROYS = "delDestroys"
+    REPORT_EYEBROW = "reportEyebrow"
+    TITLE_SUFFIX = "titleSuffix"
+    COL_SECTION = "colSection"
+    COL_ITEM = "colItem"
+    COL_CATEGORY = "colCategory"
+    CHECKPOINTS = "checkpoints"
+    COL_GATE = "colGate"
+    NO_GAPS = "noGaps"
+    READINESS_DETAIL = "readinessDetail"
+    MD_OVERALL = "mdOverall"
+    DISCLAIMER = "disclaimer"
+    MD_FOOTER = "mdFooter"
+    FW_NOTE = "fwNote"
+    FLAG_LIVE_OPEN = "flagLiveOpen"
+    FLAG_NO_RATIONALE = "flagNoRationale"
+    FLAG_NO_DEPLOY_DATE = "flagNoDeployDate"
+    OVERVIEW_TITLE = "overviewTitle"
+    OVERVIEW_LEDE = "overviewLede"
+    CARD_ANSWERED = "cardAnswered"
+    CARD_PROGRESS = "cardProgress"
+    CARD_DECLINED = "cardDeclined"
+    WHO_OWES = "whoOwes"
+    RELAY = "relay"
+    COL_WHO = "colWho"
+    COL_OUTSTANDING = "colOutstanding"
+    NEVER_TITLE = "neverTitle"
+    NEVER_DETAIL = "neverDetail"
+    OFF = "off"
+    TURN_ON = "turnOn"
+    TOGGLE_ON_DETAIL = "toggleOnDetail"
+    TOGGLE_OFF_DETAIL = "toggleOffDetail"
+
+
 class CategoriesOn(StrEnum):
     ITEMS = "items"
     SECTIONS = "sections"
@@ -204,6 +263,7 @@ DEFAULT_SECTION_BODY = "blurb"
 # Where each closed set lives in the schema, so schema_drift() can compare.
 SCHEMA_ENUMS: dict[type[StrEnum], tuple[str, ...]] = {
     Role: ("properties", "role", "enum"),
+    UiSlot: ("properties", "ui", "propertyNames", "enum"),
     StatusClass: (
         "properties",
         "statuses",
@@ -265,6 +325,91 @@ class Report:
 
 def load_schema(path: Path = SCHEMA) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def framework_strings(doc: dict) -> dict[str, str]:
+    """Every content key a definition implies, with its English: the keys the
+    engine's tf() asks for (app/js/10-frameworks/01-engine/10-facade.js). A
+    translation of a developer's framework holds exactly these (R-65)."""
+    ns = doc["id"]
+    keys = {"section": "section", "sectionBody": "blurb", "category": "category"}
+    keys.update(doc.get("keys", {}))
+    out: dict[str, str] = {}
+    if CategoriesOn(doc.get("categoriesOn", CategoriesOn.ITEMS)) is CategoriesOn.ITEMS:
+        for c in doc.get("categories", []):
+            out[f"{ns}.{keys['category']}.{c['id']}"] = c["name"]
+    for s in doc["sections"]:
+        out[f"{ns}.{keys['section']}.{s['id']}.title"] = s["title"]
+        if s.get(keys["sectionBody"]):
+            out[f"{ns}.{keys['section']}.{s['id']}.{keys['sectionBody']}"] = s[
+                keys["sectionBody"]
+            ]
+    for s in doc["sections"]:
+        for it in s["items"]:
+            out[f"{ns}.item.{it['id']}"] = it["text"]
+    for g in doc.get("gates", []):
+        out[f"{ns}.gate.{g['id']}.title"] = g["title"]
+        if g.get("question"):
+            out[f"{ns}.gate.{g['id']}.q"] = g["question"]
+        if g.get("help"):
+            out[f"{ns}.gate.{g['id']}.help"] = g["help"]
+        for o in g["options"]:
+            out[f"{ns}.option.{o['value']}"] = o.get("label", o["value"])
+            if o.get("short"):
+                out[f"{ns}.short.{o['value']}"] = o["short"]
+    for st in doc["statuses"]:
+        if "msg" not in st:
+            out[f"{ns}.status.{st['value']}"] = st["label"]
+    for w in doc.get("whos", []):
+        if "msg" not in w:
+            out[f"{ns}.who.{w['value']}"] = w["label"]
+    for ph in doc.get("phases", []):
+        if "msg" not in ph:
+            out[f"{ns}.phase.{ph['key']}"] = ph["label"]
+    return out
+
+
+def shell_keys(path: Path = SHELL_CATALOG) -> frozenset[str]:
+    """Every key in the shell catalog, en.json."""
+    catalog = json.loads(path.read_text(encoding="utf-8"))
+    return frozenset(key for key in catalog if not key.startswith("@"))
+
+
+def catalog_problems(where: str, doc: dict, keys: frozenset[str]) -> Report:
+    """Every catalog key a definition names exists, and the screens it will show
+    have the sentences they need."""
+    r = Report()
+    ui = doc.get("ui", {})
+    for slot, key in ui.items():
+        if key not in keys:
+            r.add(
+                where, ("ui", slot), f"{key!r} is not a key in {label(SHELL_CATALOG)}"
+            )
+    for si, status in enumerate(doc["statuses"]):
+        for field in ("msg", "reasonMsg"):
+            if field in status and status[field] not in keys:
+                r.add(
+                    where,
+                    ("statuses", si, field),
+                    f"{status[field]!r} is not a catalog key",
+                )
+        if "reasonField" in status:
+            for field in ("reasonLabel", "reasonMsg"):
+                if field not in status:
+                    r.add(
+                        where,
+                        ("statuses", si),
+                        f"a status with a reasonField needs {field}",
+                    )
+    for wi, who in enumerate(doc.get("whos", [])):
+        if "msg" in who and who["msg"] not in keys:
+            r.add(where, ("whos", wi, "msg"), f"{who['msg']!r} is not a catalog key")
+    for pi, phase in enumerate(doc.get("phases", [])):
+        if "msg" in phase and phase["msg"] not in keys:
+            r.add(
+                where, ("phases", pi, "msg"), f"{phase['msg']!r} is not a catalog key"
+            )
+    return r
 
 
 def shell_prefixes(path: Path = SHELL_CATALOG) -> frozenset[str]:
@@ -862,6 +1007,7 @@ def problems(
     prefixes: frozenset[str] | None = None,
     folders: dict[str, str] | None = None,
     config: Any = None,
+    catalog: frozenset[str] | None = None,
 ) -> list[str]:
     """Every problem in a set of definitions, keyed by where each came from.
 
@@ -879,6 +1025,9 @@ def problems(
             continue  # the rules below assume the shape
         folder = (folders or {}).get(where, Path(where).parent.name)
         out += definition_problems(where, doc, folder).lines
+        out += catalog_problems(
+            where, doc, shell_keys() if catalog is None else catalog
+        ).lines
         valid[where] = doc
     config = load_config() if config is None else config
     out += config_problems(config, valid)

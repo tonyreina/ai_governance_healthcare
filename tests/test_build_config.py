@@ -179,6 +179,67 @@ def main() -> int:
             build_app.SRC = saved
         check("a primary whose definition is a supplement", "not a primary" in why, why)
 
+    print("Only the selected frameworks' text ships, with their languages")
+
+    def parsed(js: str, name: str) -> dict:
+        m = re.search(rf"const {name} = Object\.freeze\((\{{.*?\}})\);", js, re.S)
+        return json.loads(m.group(1)) if m else {}
+
+    js = build_app.catalogs_js()
+    locales = parsed(js, "FRAMEWORK_LOCALES")
+    seven = ["de", "es", "fr", "he", "hi", "ru", "zh-Hans"]
+    check(
+        "the default build: CHAI and OPTICA in all seven other languages",
+        locales == {"chai": seven, "optica": seven},
+        str(locales),
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "app"
+        shutil.copytree(ROOT / "app" / "i18n", src / "i18n")
+        shutil.copytree(ROOT / "app" / "frameworks", src / "frameworks")
+        zz = json.loads((src / "frameworks/chai/framework.json").read_text("utf-8"))
+        zz.update(id="zz", namespaces=["zz"])
+        (src / "frameworks/zz/i18n").mkdir(parents=True)
+        (src / "frameworks/zz/framework.json").write_text(json.dumps(zz))
+        (src / "frameworks/zz/i18n/de.json").write_text(
+            json.dumps({"zz.item.s1-1": "Bedarf"})
+        )
+        js = build_app.catalogs_js({"zz": zz}, src=src)
+        shell = parsed(js, "I18N_CATALOGS")["en"]
+        content = parsed(js, "FRAMEWORK_I18N")
+        foreign = sorted(
+            k for k in shell if k.split(".")[0] in ("chai", "te", "optica")
+        )
+        check(
+            "a custom build's catalogs carry no CHAI or OPTICA keys",
+            not foreign,
+            str(foreign[:4]),
+        )
+        check(
+            "and no CHAI or OPTICA content in any language",
+            not [k for cat in content.values() for k in cat if not k.startswith("zz.")],
+        )
+        check(
+            "its own translation ships",
+            content.get("de", {}).get("zz.item.s1-1") == "Bedarf",
+        )
+        check(
+            "and its languages are recorded",
+            parsed(js, "FRAMEWORK_LOCALES") == {"zz": ["de"]},
+            str(parsed(js, "FRAMEWORK_LOCALES")),
+        )
+        # A key CHAI's own translations already hold, in a build with both.
+        (src / "frameworks/zz/i18n/de.json").write_text(
+            json.dumps({"chai.item.s1-1": "x"})
+        )
+        chai = json.loads((src / "frameworks/chai/framework.json").read_text("utf-8"))
+        why = refused(lambda: build_app.catalogs_js({"chai": chai, "zz": zz}, src=src))
+        check(
+            "a translation file repeating another framework's key is refused",
+            "repeats" in why,
+            why,
+        )
+
     manifest_checks(defs)
 
     print()

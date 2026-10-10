@@ -157,11 +157,21 @@ def main() -> int:
         ctx_zh, zh = open_app(browser, "zh-CN")
         reviewers = zh.evaluate("I18N_CATALOGS['zh-Hans']['@meta'].reviewers")
         safety = zh.evaluate("I18N_CATALOGS.en['@meta'].safety")
+        # The engine's neutral report footers (#168, R-65) are new safety text no one
+        # has reviewed yet: they stay English in Chinese until a review is recorded.
+        neutral = {"engine.report.disclaimer", "engine.md.footer"}
         check(
-            "every safety-bearing string has a recorded Chinese reviewer",
-            sorted(reviewers) == sorted(safety)
-            and all("Cody Chen" in reviewers[k] for k in safety),
-            str(reviewers),
+            "every safety string but the new neutral footers has a Chinese reviewer",
+            sorted(reviewers) == sorted(set(safety) - neutral)
+            and all("Cody Chen" in reviewers[k] for k in reviewers),
+            str(sorted(set(safety) ^ set(reviewers))),
+        )
+        check(
+            "and those footers are safety-bearing, so they show in English in Chinese",
+            neutral <= set(safety)
+            and zh.evaluate("t('engine.md.footer', {name: 'X'})").startswith(
+                "Structured"
+            ),
         )
         warning = zh.inner_text("#storageWarning")
         check(
@@ -172,7 +182,7 @@ def main() -> int:
         )
         zh.evaluate("loadSamples()")
         zh.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
-        zh.evaluate("openProject([...PROJECTS.keys()][0], STAGES[0].id)")
+        zh.evaluate("openProject([...PROJECTS.keys()][0], ENGINES.chai.sections[0].id)")
         zh.wait_for_timeout(200)
         note = zh.inner_text(".fw-note")
         check(
@@ -279,7 +289,9 @@ def main() -> int:
             "Weiter zu" in page.inner_text(".pager"),
             page.inner_text(".pager"),
         )
-        page.evaluate("openProject([...PROJECTS.keys()][0], STAGES[0].id)")
+        page.evaluate(
+            "openProject([...PROJECTS.keys()][0], ENGINES.chai.sections[0].id)"
+        )
         page.wait_for_timeout(200)
         segs = page.eval_on_selector_all(
             ".ci .seg button", "bs => [...new Set(bs.map(b => b.textContent))]"
@@ -369,7 +381,7 @@ def main() -> int:
         print("OPTICA")
         page.evaluate(
             "openProject([...PROJECTS.keys()][0], 'setup');"
-            " setOpticaEnabled(true); go('o1');"
+            " setFrameworkEnabled('optica', true); go('o1');"
         )
         page.wait_for_timeout(200)
         segs = page.eval_on_selector_all(
@@ -398,7 +410,7 @@ def main() -> int:
         )  # fmt: skip
         page.evaluate("setLocale('de')")
         english = page.evaluate(
-            "[...PROJECTS.values()].flatMap(p => flags(normalize(clone(p))))"
+            "[...PROJECTS.values()].flatMap(p => spine().flags(normalize(clone(p))))"
             ".map(f => f.text)"
         )
         check(
@@ -508,13 +520,15 @@ def main() -> int:
         page.evaluate("goHome()")
         counts = {}
         counts["dashboard"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
-        page.evaluate("openProject([...PROJECTS.keys()][0], STAGES[0].id)")
+        page.evaluate(
+            "openProject([...PROJECTS.keys()][0], ENGINES.chai.sections[0].id)"
+        )
         page.wait_for_timeout(200)
         counts["checklist"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
         page.evaluate("go('report')")
         page.wait_for_timeout(200)
         counts["report"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
-        page.evaluate("setOpticaEnabled(true); go('o1');")
+        page.evaluate("setFrameworkEnabled('optica', true); go('o1');")
         page.wait_for_timeout(200)
         counts["optica"] = len(page.evaluate(f"({PLAIN_TEXT})(document.body)"))
         ctx.close()

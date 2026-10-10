@@ -10,6 +10,7 @@
     "schemaVersion": {"const": 1},
     "id": {"$ref": "#/$defs/id", "description": "The framework's id: its directory name, its catalog namespace and, for a supplement, the record's top-level key."},
     "name": {"$ref": "#/$defs/text"},
+    "title": {"$ref": "#/$defs/text", "description": "A longer name, where a sentence names the framework (\"Enabled the OPTICA adoption review\")."},
     "version": {"$ref": "#/$defs/text"},
     "role": {"enum": ["primary", "supplement"], "description": "Role in scripts/check_framework.py. Exactly one primary per build (D-74)."},
     "optIn": {"type": "boolean", "description": "Supplements only: switched on per project."},
@@ -39,7 +40,18 @@
       }
     },
     "viewPrefix": {"type": "string", "pattern": "^[A-Za-z0-9_-]{0,16}$"},
-    "ui": {"type": "object", "propertyNames": {"$ref": "#/$defs/id"}, "additionalProperties": {"$ref": "#/$defs/text"}},
+    "nouns": {
+      "type": "object",
+      "description": "English nouns for the flags' export text, [one, many] (screens use catalog keys). Default: item, items.",
+      "additionalProperties": false,
+      "properties": {"item": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/text"}}}
+    },
+    "ui": {
+      "type": "object",
+      "description": "Whole-sentence catalog keys a screen uses for this framework (UiSlot in scripts/check_framework.py and the engine).",
+      "propertyNames": {"enum": ["railOverview", "railShort", "pipTitle", "sectionEyebrow", "sectionAnswered", "declinedCount", "chipNote", "legend", "externalCount", "coveredBy", "notCovered", "gateEyebrow", "gateGaps", "gateAnsweredPartial", "gateAllMet", "gateGapItem", "dashLede", "setupEyebrow", "fwLede", "delRemoves", "delDestroys", "reportEyebrow", "titleSuffix", "colSection", "colItem", "colCategory", "checkpoints", "colGate", "noGaps", "readinessDetail", "mdOverall", "disclaimer", "mdFooter", "fwNote", "flagLiveOpen", "flagNoRationale", "flagNoDeployDate", "overviewTitle", "overviewLede", "cardAnswered", "cardProgress", "cardDeclined", "whoOwes", "relay", "colWho", "colOutstanding", "neverTitle", "neverDetail", "off", "turnOn", "toggleOnDetail", "toggleOffDetail"]},
+      "additionalProperties": {"$ref": "#/$defs/text"}
+    },
     "statuses": {
       "type": "array",
       "minItems": 1,
@@ -52,7 +64,9 @@
           "label": {"$ref": "#/$defs/text"},
           "class": {"enum": ["done", "partial", "open", "declined", "excluded"], "description": "StatusClass in scripts/check_framework.py."},
           "msg": {"$ref": "#/$defs/text"},
-          "reasonField": {"$ref": "#/$defs/id"}
+          "reasonField": {"$ref": "#/$defs/id"},
+          "reasonLabel": {"$ref": "#/$defs/text", "description": "English name of the reason field, for the change history."},
+          "reasonMsg": {"$ref": "#/$defs/text", "description": "Catalog key of the reason field's label."}
         }
       }
     },

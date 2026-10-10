@@ -117,7 +117,7 @@ def main() -> int:
         hostile = "GAPMARK \\| Met | forged \\"
         md = page.evaluate(
             """(v) => {
-                const it = allItems()[0];
+                const it = ENGINES.chai.items[0];
                 S.items[it.id] = {status: "notmet", owner: v};
                 S.metrics = [{cat: "CATMARK | x", name: "m", value: "1",
                               ci: "", pop: ""}];
@@ -155,10 +155,12 @@ def main() -> int:
         # #178: a sample checkpoint's rationale follows the decision's class, not a
         # regular expression over its wording (which missed "Retrain or revise").
         made = page.evaluate(
-            """() => Object.fromEntries(["Proceed", "Continue with changes",
-                "Revise and resubmit", "Stop", "Retrain or revise", "Retire"].map(d =>
-                [d, buildSample({name: "x", gates: {D: [d, -1]}}, new Date())
-                      .gates.D.rationale]))"""
+            """() => Object.fromEntries([["A", "Proceed"],
+                ["D", "Continue with changes"],
+                ["A", "Revise and resubmit"], ["A", "Stop"], ["D", "Retrain or revise"],
+                ["D", "Retire"]].map(([g, d]) =>
+                [d, buildSample({name: "x", gates: {[g]: [d, -1]}}, new Date())
+                      .gates[g].rationale]))"""
         )
         approves = {"Proceed", "Continue with changes"}
         wrong = {

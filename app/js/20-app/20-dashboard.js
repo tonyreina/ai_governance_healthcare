@@ -11,8 +11,8 @@ const GATE_PIP = Object.freeze({
 function lcTrack(p){
   const fw=spine(), ph=fw.phase(p);
   const pip=s=>{const c=fw.score(p,s.items); const frac=c.total?c.answered/c.total:0;
-    return `<span class="pip${frac===1?" full":""}${ph.stage===s.n?" cur":""}" title="${esc(t("dash.pipTitle",{n:s.n,answered:c.answered,total:c.total}))}"><i style="height:${Math.round(frac*100)}%"></i>${esc(s.n)}</span>`;};
-  const gd=g=>{const d=fw.gateRecord(p,g.id).decision||""; const c=fw.decisionClass(d); const cls=c?GATE_PIP[c]:""; return `<span class="gd ${cls}" title="${esc(fw.gateLabel(g.id))}: ${esc(d?fw.optionLabel(d):t("dash.gateOpen"))}"></span>`;};
+    return `<span class="pip${frac===1?" full":""}${ph.stage===s.n?" cur":""}" title="${esc(t(uiKey(UiSlot.PIP_TITLE),{n:s.n,answered:c.answered,total:c.total}))}"><i style="height:${Math.round(frac*100)}%"></i>${esc(s.n)}</span>`;};
+  const gd=g=>{const d=fw.gateRecord(p,g.id).decision||""; const c=fw.decisionClass(d,g.id); const cls=c?GATE_PIP[c]:""; return `<span class="gd ${cls}" title="${esc(fw.gateLabel(g.id))}: ${esc(d?fw.optionLabel(d):t("dash.gateOpen"))}"></span>`;};
   const gates=fw.gates();
   const track=fw.sections().map(s=>pip(s)+gates.filter(g=>g.after===s.id).map(gd).join("")).join("");
   return `<div class="lc" aria-hidden="true">${track}</div><div class="lc-label">${esc(phaseLabel(ph))}</div>`;
@@ -36,7 +36,7 @@ function renderDashboardShell(){
   m.innerHTML = `
     <div class="dash-head">
       <div><p class="eyebrow">${esc(t("dash.eyebrow"))}</p><h1>${esc(t("dash.title"))}</h1>
-      <p class="lede">${esc(t("dash.lede"))}</p></div>
+      <p class="lede">${esc(t(uiKey(UiSlot.DASH_LEDE),uiName()))}</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
         <button class="btn ro-hide" data-act="samples" title="${esc(t("dash.addSamplesTitle"))}">${esc(t("dash.addSamples"))}</button>
         <button class="btn primary ro-hide" data-act="new">${esc(t("dash.newProject"))}</button>
@@ -105,7 +105,7 @@ function updateDashboard(){
         ${r.hits&&everything?`<div class="psub hits">${esc(t("dash.foundIn",{places:r.hits.slice(0,4).join("; ")}))}${r.hits.length>4?` ${esc(t("dash.andMore",{count:r.hits.length-4}))}`:""}</div>`:""}</div>
       <div>${lcTrack(p)}</div>
       <div><span class="pct">${r.score}%</span></div>
-      <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">${esc(t("dash.overdue"))}</div>`:""}`:`<span class="small">${esc(t(spine().phase(p).key==="deployed"?"dash.notSet":"dash.notLive"))}</span>`}</div>
+      <div>${r.nr?`<span class="due${late?" late":""}">${esc(fmtDay(r.nr))}</span>${late?`<div class="small" style="color:var(--red)">${esc(t("dash.overdue"))}</div>`:""}`:`<span class="small">${esc(t(spine().isLive(spine().phase(p))?"dash.notSet":"dash.notLive"))}</span>`}</div>
       <div><span class="st ${r.st.key}">${esc(statusLabel(r.st))}</span>
         ${r.f.length?`<ul class="flags">${r.f.slice(0,3).map(f=>`<li class="${f.sev}">${esc(flagText(f))}</li>`).join("")}${r.f.length>3?`<li>${esc(t("dash.andMore",{count:r.f.length-3}))}</li>`:""}</ul>`:""}
         <button class="icon-btn ro-hide parchive" data-archive="${esc(p.id)}"
@@ -134,7 +134,7 @@ function openProject(id,view){
   document.body.classList.toggle("ro", RO);
   UI.view=view||"setup"; saveUI();
   warmNames(idsOfProject(S));
-  unsubLog=STORE.subscribeLog(id,(l,meta)=>{ LOG=l||[]; LOG_TOTAL=(meta && Number.isFinite(meta.total)) ? meta.total : null; warmNames(LOG.map(e=>e.by)); if(CUR===id && (UI.view==="setup"||UI.view==="report") && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
+  unsubLog=STORE.subscribeLog(id,(l,meta)=>{ LOG=l||[]; LOG_TOTAL=(meta && Number.isFinite(meta.total)) ? meta.total : null; warmNames(LOG.map(e=>e.by)); if(CUR===id && (UI.view==="setup"||UI.view===spine().reportViewId) && !editingInMain()){ const y=window.scrollY; renderMain(false); window.scrollTo(0,y);} });
   renderProject(true);
 }
 function go(view){ flushAllChanges(); UI.view=view; saveUI(); renderRail(); renderMain(true); document.getElementById("panel").classList.remove("open"); }

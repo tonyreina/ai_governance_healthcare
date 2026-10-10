@@ -294,7 +294,7 @@ def main() -> int:
         pid = page.evaluate("[...PROJECTS.keys()].sort()[0]")
         page.evaluate(f"openProject({pid!r}, 's1')")
         page.wait_for_timeout(300)
-        item = page.evaluate("allItems()[0].id")
+        item = page.evaluate("ENGINES.chai.items[0].id")
         page.evaluate(f"openItems.add({item!r}); renderMain(false)")
         ta = f"#ev_{item}"
         preview = f"{ta} ~ .md-help [data-mdpreview]"

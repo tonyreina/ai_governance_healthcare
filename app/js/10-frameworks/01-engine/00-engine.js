@@ -69,19 +69,38 @@ function engineFramework(def) {
   const items = sections.flatMap(s => s.items.map(it => ({ ...it, section: s })));
   const statusClass = Object.fromEntries((def.statuses || []).map(st => [st.value, st.class]));
   const optionClass = {};
-  (def.gates || []).forEach(g => g.options.forEach(o => { optionClass[o.value] = o.class; }));
+  const gateOptionClass = {};
+  (def.gates || []).forEach(g => {
+    gateOptionClass[g.id] = Object.fromEntries(g.options.map(o => [o.value, o.class]));
+    g.options.forEach(o => { optionClass[o.value] = o.class; });
+  });
   const gates = (def.gates || []).map(g => ({ ...g }));
   const gateById = Object.fromEntries(gates.map(g => [g.id, g]));
   const phases = def.phases || [];
   const sectionN = Object.fromEntries(sections.map(s => [s.id, s.n]));
   const review = def.review || null;
+  // A flag's catalog key: the definition's own, or the engine's neutral one (UiSlot).
+  const slotKey = s => (def.ui && Object.hasOwn(def.ui, s)) ? def.ui[s] : DEFAULT_SLOT[s];
+  // English nouns for the flags' export text (screens use catalog keys).
+  const [itemOne, itemMany] = (def.nouns || {}).item || ["item", "items"];
 
   const classOf = value => (value && Object.hasOwn(statusClass, value)) ? statusClass[value] : null;
   /* A decision's class, or null when none is recorded. A stored value this build
      does not know (an edited import, a renamed option) has no class, so it neither
      advances nor ends anything. */
-  const decisionClass = d => (d && Object.hasOwn(optionClass, d)) ? optionClass[d] : null;
-  const advances = d => ADVANCES.has(decisionClass(d));
+  /* By the checkpoint it was recorded at: a value that is not one of that gate's
+     options has no class there (D = "Stop" ends nothing; the server's retirement
+     rules are per checkpoint too). Without a gate, by value alone (one class per
+     value, check-framework). */
+  const decisionClass = (d, gateId) => {
+    if (!d) return null;
+    if (gateId !== undefined) {
+      const at = gateOptionClass[gateId] || {};
+      return Object.hasOwn(at, d) ? at[d] : null;
+    }
+    return Object.hasOwn(optionClass, d) ? optionClass[d] : null;
+  };
+  const advances = (d, gateId) => ADVANCES.has(decisionClass(d, gateId));
   const decision = (p, k) => ((p.gates || {})[k] || {}).decision || "";
 
   /* Score over any list of items against a project's answers. Declined counts as
@@ -111,13 +130,14 @@ function engineFramework(def) {
 
   function phase(p) {
     // `label` is the English an export records; `msg` is the catalog key a reader sees.
-    const classes = gates.map(g => decisionClass(decision(p, g.id)));
+    const classes = gates.map(g => decisionClass(decision(p, g.id), g.id));
     if (classes.includes(GateClass.STOP)) return { key: PhaseKey.RETIRED, label: "Stopped", msg: "phase.stopped" };
     if (classes.includes(GateClass.RETIRE)) return { key: PhaseKey.RETIRED, label: "Retired", msg: "phase.retired" };
     for (let i = phases.length - 1; i >= 0; i--) {
       const ph = phases[i];
-      if (i === 0 || advances(decision(p, ph.reachedBy))) {
-        return { key: ph.key, label: ph.label, stage: sectionN[ph.section], msg: ph.msg, role: ph.role };
+      if (i === 0 || advances(decision(p, ph.reachedBy), ph.reachedBy)) {
+        return { key: ph.key, label: ph.label, stage: sectionN[ph.section], msg: ph.msg, role: ph.role,
+          tfKey: `${def.id}.phase.${ph.key}` };
       }
     }
     return { key: "", label: "", msg: "", role: null };
@@ -150,7 +170,7 @@ function engineFramework(def) {
     let best = null;
     gates.forEach(gate => {
       const g = (p.gates || {})[gate.id] || {};
-      if (advances(g.decision)) { const d = parseDay(g.date); if (d && (!best || d > best.d)) best = { k: gate.id, d }; }
+      if (advances(g.decision, gate.id)) { const d = parseDay(g.date); if (d && (!best || d > best.d)) best = { k: gate.id, d }; }
     });
     return best;
   }
@@ -184,13 +204,13 @@ function engineFramework(def) {
         case FlagRule.OPEN_WHEN_LIVE: {
           if (!live) break;
           const open = items.filter(it => classOf((answers[it.id] || {}).status) === StatusClass.OPEN).length;
-          if (open) F.push({ sev: Severity.RED, text: `Live with ${open} criteri${open > 1 ? "a" : "on"} not met`, msg: ["flag.liveNotMet", { count: open }] });
+          if (open) F.push({ sev: Severity.RED, text: `Live with ${open} ${open > 1 ? itemMany : itemOne} not met`, msg: [slotKey(UiSlot.FLAG_LIVE_OPEN), { count: open }] });
           break;
         }
         case FlagRule.REVIEW: {
           if (!live) break;
           const nr = nextReview(p);
-          if (!nr) F.push({ sev: Severity.RED, text: `Live with no deployment date recorded at ${gateById[entry.gate].title}`, msg: ["flag.noDeployDate", {}] });
+          if (!nr) F.push({ sev: Severity.RED, text: `Live with no deployment date recorded at ${gateById[entry.gate].title}`, msg: [slotKey(UiSlot.FLAG_NO_DEPLOY_DATE), { gateKey: entry.gate }] });
           else {
             const left = daysBetween(today, parseDay(nr));
             if (left < 0) F.push({ sev: Severity.RED, text: `Periodic review overdue since ${fmtDay(nr)}`, msg: ["flag.reviewOverdue", { date: nr }] });
@@ -199,15 +219,15 @@ function engineFramework(def) {
           break;
         }
         case FlagRule.REVISE_AT_REVIEW: {
-          if (live && decisionClass(decision(p, entry.gate)) === GateClass.REVISE) F.push({ sev: Severity.AMBER, text: "Last review asked for retraining or revision", msg: ["flag.retrain", {}] });
+          if (live && decisionClass(decision(p, entry.gate), entry.gate) === GateClass.REVISE) F.push({ sev: Severity.AMBER, text: "Last review asked for retraining or revision", msg: ["flag.retrain", {}] });
           break;
         }
         case FlagRule.APPROVAL_WITHOUT_RATIONALE: {
           gates.forEach(gate => {
             const g = (p.gates || {})[gate.id] || {};
-            if (!advances(g.decision) || (g.rationale || "").trim()) return;
-            if (decisionClass(g.decision) === GateClass.CONDITIONAL) F.push({ sev: Severity.AMBER, text: `${gate.title}: conditional approval with no conditions recorded`, msg: ["flag.noConditions", { gateKey: gate.id }] });
-            else if (gapsUpTo(p, gate.after).length) F.push({ sev: Severity.AMBER, text: `${gate.title}: approved with open criteria and no rationale`, msg: ["flag.noRationale", { gateKey: gate.id }] });
+            if (!advances(g.decision, gate.id) || (g.rationale || "").trim()) return;
+            if (decisionClass(g.decision, gate.id) === GateClass.CONDITIONAL) F.push({ sev: Severity.AMBER, text: `${gate.title}: conditional approval with no conditions recorded`, msg: ["flag.noConditions", { gateKey: gate.id }] });
+            else if (gapsUpTo(p, gate.after).length) F.push({ sev: Severity.AMBER, text: `${gate.title}: approved with open ${itemMany} and no rationale`, msg: [slotKey(UiSlot.FLAG_NO_RATIONALE), { gateKey: gate.id }] });
           });
           break;
         }

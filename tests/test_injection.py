@@ -218,7 +218,7 @@ def run_payload(
         "file": {"name": payload, "size": 5, "sha256": "a" * 64},
     }
     doc["items"][next(iter(doc["items"]))]["refs"] = {"rinj000001": hostile_ref}
-    optica_key = page.evaluate("OPTICA_ITEMS[0].key")
+    optica_key = page.evaluate("ENGINES.optica.items[0].id")
     doc.setdefault("optica", {}).setdefault("answers", {}).setdefault(optica_key, {})[
         "refs"
     ] = {"rinj000002": hostile_ref}
@@ -237,7 +237,7 @@ def run_payload(
         payload,
     )
     page.evaluate("openProject('inj1', 'setup')")
-    page.evaluate("setOpticaEnabled(true)")
+    page.evaluate("setFrameworkEnabled('optica', true)")
     page.evaluate("(p) => writeLog('inj1', p)", payload)
     page.wait_for_timeout(100)
     # The litigation-hold history shows a person's typed reason and the name of whoever

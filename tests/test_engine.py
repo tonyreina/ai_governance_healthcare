@@ -162,7 +162,7 @@ def main() -> int:
             "the plug-in flag sits where the definition put it, after red sorts first",
             texts
             == [
-                "Live with 1 criterion not met",
+                "Live with 1 item not met",  # this definition has no nouns: "item"
                 "Live with no deployment date recorded at Gate one",
                 "plugin flag",
                 "Last review asked for retraining or revision",
@@ -174,7 +174,7 @@ def main() -> int:
         # The server's retention SQL holds the same set (server/tests/test_retention.py
         # reads it from the definition); this is the dashboard's side, on the engine.
         rows = page.evaluate(
-            """() => CHAI_DEF.gates.flatMap(g => g.options.map(o => {
+            """() => FRAMEWORK_DEFS.chai.gates.flatMap(g => g.options.map(o => {
                  const ph = ENGINES.chai.phase({gates: {[g.id]: {decision: o.value}},
                                                 items: {}, meta: {}});
                  return [g.id, o.value, o.class, ph.key];
@@ -191,6 +191,142 @@ def main() -> int:
             "and the ending ones are the four the server retires",
             ending == [("A", "Stop"), ("B", "Stop"), ("C", "Stop"), ("D", "Retire")],
             str(ending),
+        )
+
+        print("A supplement never feeds the primary (R-64)")
+        # Every OPTICA item answered, some declined, OPTICA switched on: CHAI's status,
+        # phase, flags, next review and score are exactly what they were. A control
+        # that changes one of CHAI's own answers shows the comparison can fail.
+        page.evaluate("loadSamples()")
+        end = time.time() + 15
+        while time.time() < end and not page.evaluate("PROJECTS.size >= 10"):
+            page.wait_for_timeout(100)
+        verdicts = page.evaluate(
+            """() => {
+              const view = p => JSON.stringify([spine().status(p), spine().phase(p),
+                spine().flags(p), spine().nextReview(p), spine().score(p)]);
+              return [...PROJECTS.values()].map(p0 => {
+                const p = normalize(clone(p0));
+                const before = view(p);
+                p.optica = {enabled: true, answers: Object.fromEntries(
+                  ENGINES.optica.items.map((it, i) =>
+                    [it.id, {status: i % 3 ? "met" : "declined"}]))};
+                const after = view(p);
+                const c = normalize(clone(p0));
+                const first = ENGINES.chai.items[0].id;
+                const was = (c.items[first] || {}).status;
+                c.items[first] = {status: was === "notmet" ? "met" : "notmet"};
+                return [before === after, before !== view(c)];
+              });
+            }"""
+        )
+        check(
+            "OPTICA answers change nothing CHAI decides, on every sample",
+            len(verdicts) >= 10 and all(v[0] for v in verdicts),
+            str(verdicts),
+        )
+        check(
+            "while one CHAI answer does change it (the check can fail)",
+            all(v[1] for v in verdicts),
+            str(verdicts),
+        )
+
+        print("A framework that names no catalog keys reads in neutral words")
+        missing = page.evaluate(
+            "Object.values(DEFAULT_SLOT).filter(k => !(k in I18N_CATALOGS.en))"
+        )
+        check("every default sentence exists in the catalog", not missing, str(missing))
+        neutral = page.evaluate(
+            """() => {
+              const saved = FRAMEWORK_DEFS.chai.ui;
+              delete FRAMEWORK_DEFS.chai.ui;
+              try {
+                const F = frameworkFacade("chai");
+                F.extras = {};
+                const p = normalize(blankProject("x"));
+                const was = S; S = p;
+                try {
+                  return {section: renderSection(F, "s2"), gate: renderGate(F, "A"),
+                          report: reportBody(F, true),
+                          key: F.slot(UiSlot.SECTION_EYEBROW)};
+                } finally { S = was; }
+              } finally { FRAMEWORK_DEFS.chai.ui = saved; }
+            }"""
+        )
+        check(
+            "the section's eyebrow is the engine's",
+            neutral["key"] == "engine.section.eyebrow"
+            and "Section 2 of 6" in neutral["section"],
+            neutral["section"][:200],
+        )
+        check(
+            "the checkpoint says section, not stage",
+            "after section 1" in neutral["gate"]
+            and "after stage" not in neutral["gate"],
+            neutral["gate"][:200],
+        )
+        words = ("Stage", "Checkpoint decisions", "Principle", "Criterion")
+        check(
+            "the report uses neutral headings",
+            not [w for w in words if w in neutral["report"]]
+            and "CHAI review" in neutral["report"],
+            [w for w in words if w in neutral["report"]],
+        )
+        shown = neutral["section"] + neutral["gate"] + neutral["report"]
+        check("no raw catalog key shows", "engine." not in shown)
+
+        print("The note under translated framework text belongs to that framework")
+        notes = page.evaluate(
+            """() => {
+              setLocale("zh-Hans");
+              try {
+                const chai = fwNoteHTML(FACADES.chai);
+                const saved = FRAMEWORK_DEFS.chai.ui;
+                delete FRAMEWORK_DEFS.chai.ui;
+                // CHAI's text, with no note of its own.
+                const F = frameworkFacade("chai");
+                FRAMEWORK_DEFS.chai.ui = saved;
+                const neutral = fwNoteHTML(F);
+                const G = {...F, id: "zz"};  // a framework with no zh-Hans file
+                return {chai, neutral, untranslated: fwNoteHTML(G),
+                        reviewed: t("fw.note"), plain: t("engine.fw.note"),
+                        none: t("engine.fw.untranslated")};
+              } finally { setLocale("en"); }
+            }"""
+        )
+        check(
+            "CHAI's note is its own (it names the reviewer)",
+            notes["reviewed"] in notes["chai"],
+            notes["chai"][:120],
+        )
+        check(
+            "a framework with no note of its own gets the neutral one",
+            notes["plain"] in notes["neutral"]
+            and notes["reviewed"] not in notes["neutral"],
+            notes["neutral"][:120],
+        )
+        check(
+            "a framework with no translation says its words are in English",
+            notes["none"] in notes["untranslated"],
+            notes["untranslated"][:120],
+        )
+        check(
+            "no note names a reviewer it does not have",
+            "Cody Chen" not in notes["neutral"] + notes["untranslated"],
+        )
+
+        print("A decision is classed by its own checkpoint, as the server retires")
+        cross = page.evaluate(
+            """() => [["D", "Stop"], ["A", "Retire"], ["B", "Continue"]].map(([g, d]) =>
+                 [g, d,
+                  ENGINES.chai.phase(
+                    {gates: {[g]: {decision: d}}, items: {}, meta: {}}).key,
+                  ENGINES.chai.decisionClass(d, g)])"""
+        )
+        check(
+            "an option of another checkpoint ends or advances nothing there",
+            all(r[2] != "retired" and r[3] is None for r in cross),
+            str(cross),
         )
 
         print("A plain checklist with no lifecycle")

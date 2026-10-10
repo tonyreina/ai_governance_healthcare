@@ -864,6 +864,54 @@ def main() -> int:
         str(found[:3]),
     )
 
+    print("Catalog keys and the sentences a screen needs (PR B1)")
+
+    def has(found: list, words: str) -> bool:
+        return any(words in line for line in found)
+
+    found = run(lambda c, o: c["ui"].update(noSuchSlot="stage.eyebrow"))
+    check("a slot the screens do not have", has(found, "$.ui"), str(found[:2]))
+    found = run(lambda c, o: c["ui"].update(sectionEyebrow="no.such.key"))
+    check(
+        "a slot naming a missing catalog key",
+        has(found, "'no.such.key' is not a key"),
+        str(found[:2]),
+    )
+    # Every slot a screen needs has the engine's neutral words (PR B2), so a
+    # definition that names no catalog keys at all is valid.
+    found = run(lambda c, o: (c.pop("ui"), o.pop("ui")))
+    check("a definition with no ui slots is valid", not found, str(found[:3]))
+    found = run(lambda c, o: o["statuses"][3].pop("reasonMsg"))
+    check(
+        "a reason field without its label key",
+        has(found, "needs reasonMsg"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: setv(c["statuses"][0], "msg", "status.nosuch"))
+    check(
+        "a status naming a missing catalog key",
+        has(found, "'status.nosuch' is not a catalog key"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: setv(c["phases"][0], "msg", "phase.nosuch"))
+    check(
+        "a phase naming a missing catalog key",
+        has(found, "'phase.nosuch' is not a catalog key"),
+        str(found[:2]),
+    )
+    found = run(lambda c, o: setv(o["whos"][0], "msg", "who.nosuch"))
+    check(
+        "a stakeholder naming a missing catalog key",
+        has(found, "'who.nosuch' is not a catalog key"),
+        str(found[:2]),
+    )
+    drifted = copy.deepcopy(SCHEMA)
+    drifted["properties"]["ui"]["propertyNames"]["enum"].remove("legend")
+    check(
+        "the schema's slot list and UiSlot drifting apart",
+        bool(ck.schema_drift(drifted)),
+    )
+
     if failures:
         print(f"\n{len(failures)} failed: {', '.join(failures)}")
         return 1

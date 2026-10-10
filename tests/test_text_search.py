@@ -64,7 +64,7 @@ def main() -> int:
             """([target, other, hidden]) => {
               const put = (id, f) => {
                 openProject(id, 'checklist'); f(); flushAllChanges(); };
-              put(target, () => edit(`items.${allItems()[0].id}.evidence`,
+              put(target, () => edit(`items.${ENGINES.chai.items[0].id}.evidence`,
                                      'Traced to ZEBRA-41 in the vendor packet'));
               const access = {owners: [ME.id || 'me@hosp.org'], writers: [],
                               readers: ['pat@hosp.org']};

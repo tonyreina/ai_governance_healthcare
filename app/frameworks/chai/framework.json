@@ -14,7 +14,45 @@
     "sectionBody": "blurb",
     "category": "principle"
   },
+  "nouns": {
+    "item": [
+      "criterion",
+      "criteria"
+    ]
+  },
   "viewPrefix": "",
+  "ui": {
+    "railShort": "rail.stageShort",
+    "sectionEyebrow": "stage.eyebrow",
+    "sectionAnswered": "stage.answered",
+    "pipTitle": "dash.pipTitle",
+    "gateEyebrow": "gate.eyebrow",
+    "gateGaps": "gate.gaps",
+    "gateAnsweredPartial": "gate.answeredPartial",
+    "gateAllMet": "gate.allMet",
+    "gateGapItem": "gate.gapItem",
+    "dashLede": "dash.lede",
+    "setupEyebrow": "setup.eyebrow",
+    "fwLede": "fw.lede",
+    "delRemoves": "del.removes",
+    "delDestroys": "del.destroys",
+    "reportEyebrow": "report.eyebrow",
+    "titleSuffix": "export.titleSuffix",
+    "colSection": "report.col.stage",
+    "colItem": "report.col.criterion",
+    "colCategory": "report.col.principle",
+    "checkpoints": "report.checkpoints",
+    "colGate": "report.col.checkpoint",
+    "noGaps": "report.noGaps",
+    "readinessDetail": "report.readinessDetail",
+    "mdOverall": "md.overall",
+    "disclaimer": "report.disclaimer",
+    "mdFooter": "md.footer",
+    "fwNote": "fw.note",
+    "flagLiveOpen": "flag.liveNotMet",
+    "flagNoRationale": "flag.noRationale",
+    "flagNoDeployDate": "flag.noDeployDate"
+  },
   "statuses": [
     {
       "value": "met",

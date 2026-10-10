@@ -114,12 +114,27 @@ function tf(key, english){
   if(LOCALE === Locale.EN) return english;
   if(LOCALE === Locale.PSEUDO) return pseudoize(english);
   const own = (typeof FRAMEWORK_I18N === "object" && FRAMEWORK_I18N[LOCALE]) || {};
-  return typeof own[key] === "string" && own[key] ? own[key] : english;
+  if(typeof own[key] === "string" && own[key]) return own[key];
+  // A framework with no translation into this language shows its English, isolated
+  // left to right in a right-to-left page as t() does (D-63).
+  return RTL_LOCALES.has(LOCALE) ? `\u2066${english}\u2069` : english;
 }
 /* Is framework wording on screen a translation? Then it says so (D-60). */
 const frameworkTranslated = () => LOCALE !== Locale.EN && LOCALE !== Locale.PSEUDO;
-const fwNoteHTML = () => frameworkTranslated()
-  ? `<p class="fw-note small" role="note">${esc(t("fw.note"))}</p>` : "";
+/* Which languages each framework in this build is translated into (the build fills
+   FRAMEWORK_LOCALES). A developer's framework may bring only English (R-65). */
+const frameworkHasLocale = (id, loc) =>
+  ((typeof FRAMEWORK_LOCALES === "object" && FRAMEWORK_LOCALES[id]) || []).includes(loc);
+/* The note under translated framework wording, per framework: its own (CHAI's and
+   OPTICA's name their zh-Hans reviewer), or the engine's neutral one; and, when the
+   framework has no translation into the reader's language, a note that its words
+   are shown in English. */
+const fwNoteHTML = F => {
+  if(!frameworkTranslated()) return "";
+  const fac = F || primaryFramework().facade;
+  const key = frameworkHasLocale(fac.id, LOCALE) ? fac.slot(UiSlot.FW_NOTE) : "engine.fw.untranslated";
+  return `<p class="fw-note small" role="note">${esc(t(key))}</p>`;
+};
 
 /* English whatever the reader chose: for machine contracts (JSON, CSV headers) and
    anything an export must keep stable. */

@@ -7,11 +7,8 @@
     "innerHTML": 3
   },
   "app/js/10-frameworks/10-chai/20-views.js": {
-    "attribute": 28,
+    "attribute": 6,
     "innerHTML": 1
-  },
-  "app/js/10-frameworks/20-optica/20-views.js": {
-    "attribute": 4
   },
   "app/js/20-app/10-shell.js": {
     "attribute": 2,

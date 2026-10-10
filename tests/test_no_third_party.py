@@ -90,7 +90,7 @@ def main() -> int:
         views_seen = 0
         for index in (0, 1, 2):
             walk.evaluate(f"openProject([...PROJECTS.keys()][{index}], 'setup')")
-            walk.evaluate("setOpticaEnabled(true)")
+            walk.evaluate("setFrameworkEnabled('optica', true)")
             for view in walk.evaluate("activeViews().map(v => v.id)"):
                 walk.evaluate("(v) => go(v)", view)
                 walk.wait_for_timeout(15)

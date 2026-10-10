@@ -6,7 +6,7 @@
       "id": "chai",
       "role": "primary",
       "version": "1",
-      "sha256": "0aab919e83381fc3854801753df48562512364b9e1769c628b2cc0b26f64d4d0",
+      "sha256": "8a01e088afa373f9fc67de83cd62dead99e5fa7cdefc5a301f4da2443ae7ad65",
       "retire": [
         {
           "gate": "A",
@@ -30,7 +30,7 @@
       "id": "optica",
       "role": "supplement",
       "version": "1",
-      "sha256": "352cf4fc7d6b1c79d45bd00bc5ca308b61bb621ca3a34a6df1dfda4d06d64234",
+      "sha256": "0491c30943bf7763d67d9c606f02109121c8f6a5ac90b1551da5e5eb7649cdf5",
       "retire": []
     }
   ],

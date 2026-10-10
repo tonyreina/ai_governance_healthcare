@@ -50,6 +50,10 @@ const frameworkById = id => FRAMEWORKS.find(f => f.id === id);
      gateRecord(p, id)  {decision, by, date, rationale, signedBy, ...}
      decisionClass(d)   a GateClass member, or null
      answers(p)         {itemId: {status, evidence, owner, due, refs}}
+     statusKnown(v), statusLabel(v)   whether a stored status is one it defines;
+                        its label as the reader sees it
+     isLive(phase), reviewGateId(), reportViewId, fileSuffix, schemaId
+     uiKey(slot), name  a sentence's catalog key for this framework (UiSlot); its name
      phase(p), flags(p), status(p), nextReview(p)
      score(p, items?)   {pct, answered, total, applicable}
      reportBody(names)  the report's HTML (screen, HTML export, PDF)
@@ -122,7 +126,7 @@ function frameworkNormalize(p) {
 /* What a reader sees for a phase, a status or a flag. The objects keep their English
    `label`/`text` for exports (which stay English); `msg` names the catalog entry, and
    a date parameter is formatted in the reader's language here. */
-const phaseLabel = ph => t(ph.msg);
+const phaseLabel = ph => ph.msg ? t(ph.msg) : tf(ph.tfKey, ph.label);
 const statusLabel = st => t(st.msg);
 function flagText(f){
   if(!f.msg) return f.text;
@@ -149,3 +153,14 @@ function frameworkChange(el) {
   for (const f of activeFrameworks(S)) if (f.onChange && f.onChange(el)) return true;
   return false;
 }
+
+/* What a framework's own code adds to the framework its definition makes (CHAI:
+   the model card view, its report section, its samples). Collected here, first,
+   and read when 90-register.js registers every definition. */
+const FRAMEWORK_EXTRAS = {};
+function frameworkExtras(id, extras) { FRAMEWORK_EXTRAS[id] = Object.assign(FRAMEWORK_EXTRAS[id] || {}, extras); }
+
+/* A shell sentence's catalog key: the primary framework's own, or the engine's
+   neutral one (UiSlot). Its params always include the framework's name. */
+const uiKey = slot => spine().uiKey(slot);
+const uiName = () => ({ name: spine().name });

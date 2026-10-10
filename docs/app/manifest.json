@@ -1,0 +1,38 @@
+{
+  "manifest": 1,
+  "primary": "chai",
+  "frameworks": [
+    {
+      "id": "chai",
+      "role": "primary",
+      "version": "1",
+      "sha256": "e909c03a549c5cdcc83caac5600cdf5ebacf71ec603b2bc60222e6b3397e8103",
+      "retire": [
+        {
+          "gate": "A",
+          "decision": "Stop"
+        },
+        {
+          "gate": "B",
+          "decision": "Stop"
+        },
+        {
+          "gate": "C",
+          "decision": "Stop"
+        },
+        {
+          "gate": "D",
+          "decision": "Retire"
+        }
+      ]
+    },
+    {
+      "id": "optica",
+      "role": "supplement",
+      "version": "1",
+      "sha256": "0491c30943bf7763d67d9c606f02109121c8f6a5ac90b1551da5e5eb7649cdf5",
+      "retire": []
+    }
+  ],
+  "ruleSetHash": "941520e1fccb882717349cdf052699d4aaaf255dfcdcbf39db7fdcdf2edda501"
+}

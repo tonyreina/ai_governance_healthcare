@@ -4,7 +4,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-mmke1ztMFI211orkCNzZIqrQzLv+rfDH01WCTAIkJqg='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-TF1/jv82H3EcveLINS4kaJTeu8DtJ2DNA6exlvX+Bf0='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Health AI assurance review</title>
@@ -643,7 +643,8 @@ function blankProject(name){
   const now=new Date().toISOString();
   // A build of other frameworks stamps every record it makes with its primary, and
   // opens and imports only records stamped so (isOwnRecord, R-67); a record with
-  // none is the published build's. The server does not check the stamp yet.
+  // none is the published build's. The server accepts only the stamp of the
+  // primary its rules were loaded from (R-66), and retires the record by it.
   const stamp = BUILD.published ? {} : {framework: {id: BUILD.primary}};
   return {meta:{...blankMeta(),solution:name||"",...stamp}, ...frameworkBlank(), metrics:[], card:{},
     access: ME.id ? {owners:[ME.id], writers:[], readers:[]} : blankAccess(),

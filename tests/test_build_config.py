@@ -42,6 +42,101 @@ def refused(fn) -> str:
     return ""
 
 
+def manifest_checks(defs: dict) -> None:
+    """docs/app/manifest.json: what the server loads its retirement rules from (D-76).
+    It must be the build's definitions, exactly, and its pairs must be exactly the
+    options whose class ends a project, so a change to either is noticed."""
+    import copy
+    import hashlib
+
+    import build_manifest as bm
+
+    print("The build manifest (docs/app/manifest.json)")
+    path = ROOT / "docs" / "app" / "manifest.json"
+    committed = path.read_text(encoding="utf-8")
+    check(
+        "the committed manifest is what the build writes",
+        committed == bm.manifest_json(defs, "chai"),
+        "run pixi run build-app",
+    )
+    check(
+        "build_app writes it beside the page",
+        path == build_app.MANIFEST_OUT,
+        str(build_app.MANIFEST_OUT),
+    )
+    m = json.loads(committed)
+    by_id = {f["id"]: f for f in m["frameworks"]}
+    check("it lists the build's frameworks, in order", list(by_id) == list(defs))
+    check(
+        "each definition's hash is of its canonical JSON",
+        all(
+            by_id[fid]["sha256"] == hashlib.sha256(bm.canonical_json(d)).hexdigest()
+            and by_id[fid]["version"] == d["version"]
+            for fid, d in defs.items()
+        ),
+    )
+    chai_pairs = {(p["gate"], p["decision"]) for p in by_id["chai"]["retire"]}
+    check(
+        "CHAI ends a project on exactly Stop at A, B, C and Retire at D",
+        chai_pairs == {("A", "Stop"), ("B", "Stop"), ("C", "Stop"), ("D", "Retire")},
+        str(chai_pairs),
+    )
+    check("OPTICA, a supplement, ends nothing", by_id["optica"]["retire"] == [])
+    check(
+        "the rule-set hash is the primary's",
+        m["primary"] == "chai"
+        and m["ruleSetHash"] == bm.rule_set_hash("chai", by_id["chai"]["retire"]),
+    )
+
+    print("What the manifest notices (mutations)")
+    more = copy.deepcopy(defs)
+    gate = next(g for g in more["chai"]["gates"] if g["id"] == "C")
+    gate["options"].append({"value": "Withdraw", "class": "stop"})
+    grown = bm.manifest(more, "chai")
+    check(
+        "a new stop option becomes a pair and a new rule-set hash",
+        {"gate": "C", "decision": "Withdraw"} in grown["frameworks"][0]["retire"]
+        and grown["ruleSetHash"] != m["ruleSetHash"],
+    )
+    weaker = copy.deepcopy(defs)
+    retire = next(
+        o
+        for g in weaker["chai"]["gates"]
+        for o in g["options"]
+        if o["value"] == "Retire"
+    )
+    retire["class"] = "revise"
+    check(
+        "an option that stops ending a project leaves the pairs",
+        {"gate": "D", "decision": "Retire"}
+        not in bm.manifest(weaker, "chai")["frameworks"][0]["retire"],
+    )
+    reworded = copy.deepcopy(defs)
+    reworded["chai"]["name"] = reworded["chai"]["name"] + " (edited)"
+    other = bm.manifest(reworded, "chai")
+    check(
+        "any edit changes the definition hash; only an ending change the rule set",
+        other["frameworks"][0]["sha256"] != by_id["chai"]["sha256"]
+        and other["ruleSetHash"] == m["ruleSetHash"],
+    )
+    for g in weaker["chai"]["gates"]:
+        for o in g["options"]:
+            if o["class"] in ("stop", "retire"):
+                o["class"] = "revise"
+    check(
+        "a primary that ends nothing gets no manifest",
+        "no stop or retire" in refused(lambda: bm.manifest(weaker, "chai")),
+    )
+    typo = copy.deepcopy(defs)
+    typo["chai"]["gates"][0]["options"][0]["class"] = "stopped"
+    try:
+        bm.manifest(typo, "chai")
+        typo_refused = False
+    except ValueError:
+        typo_refused = True
+    check("a class nobody defined is an error, not a non-ending option", typo_refused)
+
+
 def main() -> int:
     print("The published build")
     defs = build_app.framework_defs()
@@ -89,7 +184,11 @@ def main() -> int:
     example = ROOT / "app" / "frameworks" / "example" / "build.json"
     published = {
         p: p.read_bytes()
-        for p in (ROOT / "docs" / "app" / "index.html", ROOT / "proxy" / "csp.caddy")
+        for p in (
+            ROOT / "docs" / "app" / "index.html",
+            ROOT / "proxy" / "csp.caddy",
+            ROOT / "docs" / "app" / "manifest.json",
+        )
     }
     check(
         "--config without --out is refused",
@@ -110,6 +209,14 @@ def main() -> int:
     with tempfile.TemporaryDirectory(dir=ROOT / "build") as tmp:
         (Path(tmp) / "index.html").symlink_to(ROOT / "docs" / "app" / "index.html")
         codes["a link to the published page"] = build_app.main(
+            ["--config", str(example), "--out", tmp]
+        )
+    # And one whose manifest.json is a link to the published manifest.
+    with tempfile.TemporaryDirectory(dir=ROOT / "build") as tmp:
+        (Path(tmp) / "manifest.json").symlink_to(
+            ROOT / "docs" / "app" / "manifest.json"
+        )
+        codes["a link to the published manifest"] = build_app.main(
             ["--config", str(example), "--out", tmp]
         )
     check(
@@ -138,6 +245,66 @@ def main() -> int:
         )
         html = page.read_text(encoding="utf-8") if page.exists() else ""
         check("it is the example's build", '"primary":"example"' in html)
+        # The server retires by the manifest beside the page it serves (D-76), so a
+        # custom build's manifest is its own, in --out, never the published one.
+        import build_manifest as bm
+
+        written = Path(tmp) / "out" / "manifest.json"
+        example_defs = build_app.framework_defs(example, custom=True)
+        check(
+            "its manifest is written there too, for the example's primary",
+            written.exists()
+            and written.read_text(encoding="utf-8")
+            == bm.manifest_json(example_defs, "example"),
+        )
+        shown = json.loads(written.read_text("utf-8")) if written.exists() else {}
+        check(
+            "the manifest names the example as primary",
+            shown.get("primary") == "example",
+            str(shown.get("primary")),
+        )
+
+        # A config whose primary is not listed first: the manifest's primary, and
+        # the rule set the server retires by, are still the primary's, never the
+        # first framework's.
+        later = Path(tmp) / "later.json"
+        later.write_text(
+            json.dumps({"primary": "example", "frameworks": ["optica", "example"]})
+        )
+        code = build_app.main(["--config", str(later), "--out", str(Path(tmp) / "l")])
+        check("a config listing its primary second builds", code == 0, str(code))
+        out = Path(tmp) / "l" / "manifest.json"
+        got = json.loads(out.read_text("utf-8")) if out.exists() else {}
+        later_defs = build_app.framework_defs(later, custom=True)
+        example_pairs = {
+            (g["id"], o["value"])
+            for g in later_defs["example"]["gates"]
+            for o in g["options"]
+            if o["class"] in ("stop", "retire")
+        }
+        check(
+            "its manifest names that primary, and hashes that primary's rules",
+            [f["id"] for f in got.get("frameworks", [])] == ["optica", "example"]
+            and got.get("primary") == "example"
+            and got.get("ruleSetHash")
+            == bm.rule_set_hash(
+                "example",
+                [{"gate": g, "decision": d} for g, d in sorted(example_pairs)],
+            )
+            and bool(example_pairs),
+            str({k: got.get(k) for k in ("primary", "ruleSetHash")}),
+        )
+        # Mutation: taking the first framework listed as the primary would write
+        # another manifest (here none: OPTICA ends nothing, so the build would fail),
+        # which the check above tells apart.
+        try:
+            first = bm.manifest_json(later_defs, next(iter(later_defs)))
+        except SystemExit:
+            first = None
+        check(
+            "mutation: the first-listed framework's manifest is not this one",
+            out.exists() and first != out.read_text("utf-8"),
+        )
     check(
         "the published page and policy are untouched",
         all(p.read_bytes() == b for p, b in published.items()),
@@ -203,6 +370,8 @@ def main() -> int:
             "repeats" in why,
             why,
         )
+
+    manifest_checks(defs)
 
     print()
     if failures:

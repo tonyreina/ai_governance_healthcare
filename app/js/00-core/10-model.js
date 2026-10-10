@@ -8,7 +8,8 @@ function blankProject(name){
   const now=new Date().toISOString();
   // A build of other frameworks stamps every record it makes with its primary, and
   // opens and imports only records stamped so (isOwnRecord, R-67); a record with
-  // none is the published build's. The server does not check the stamp yet.
+  // none is the published build's. The server accepts only the stamp of the
+  // primary its rules were loaded from (R-66), and retires the record by it.
   const stamp = BUILD.published ? {} : {framework: {id: BUILD.primary}};
   return {meta:{...blankMeta(),solution:name||"",...stamp}, ...frameworkBlank(), metrics:[], card:{},
     access: ME.id ? {owners:[ME.id], writers:[], readers:[]} : blankAccess(),

@@ -15,9 +15,11 @@ It starts a throwaway PostgreSQL of the SAME MAJOR VERSION as production (read f
 compose.yaml, so the test cannot drift from what runs), with no network and its data
 on tmpfs, streams the dump into it (decrypting with BACKUP_PASSPHRASE for a `.gpg`),
 and checks what the dump is FOR: the tables exist, the rows came back, and **the
-append-only triggers are present**, because a dump that restores into a database
-without them has quietly lost the guarantee the history's value rests on. The
-container is always removed.
+append-only triggers are present and enabled**, because a dump that restores into a
+database without them, or with them switched off, has quietly lost the guarantee the
+history's value rests on. From migration 010 it also checks that the retirement rules
+are exactly the ones their history last recorded (D-76). The container is always
+removed.
 
 What it cannot tell you: that the dump is recent, that it contains everything (it
 can only compare counts to what the dump says), or that your off-host copy is the
@@ -27,6 +29,7 @@ missing.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
@@ -50,6 +53,26 @@ REPORTED_TABLES = (
     "project_deletion",
     "principals",
     "access_event",
+    "retirement_rule",
+    "retirement_rule_change",
+)
+# From this migration on, which decisions retire a project, and so when disposal is
+# due, is a table (D-76). A restore without its rows would treat no project as
+# retired, so it is required, and its rows are reported.
+RULES_MIGRATION = "010_retirement_rules.sql"
+RULES_TABLE = "retirement_rule"
+# Their history, append-only by trigger from the same migration: "by which rule, set
+# when and by whom" must not be rewritable in a restored copy either.
+RULES_HISTORY = "retirement_rule_change"
+# pg_trigger.tgenabled states in which a trigger fires for the API and the owner:
+# O (origin, the default) and A (always). D is disabled; R fires only when
+# session_replication_role is "replica", which neither sets, so it counts as off.
+FIRING = ("O", "A")
+# The latest change of the rules: the row with the highest id, whose new_rules the
+# table must hold. A module constant so the test can show the order matters.
+LATEST_CHANGE = (
+    "SELECT coalesce((SELECT json_build_array(id, new_rules)"
+    f" FROM {RULES_HISTORY} ORDER BY id DESC LIMIT 1), 'null')"
 )
 
 
@@ -58,8 +81,32 @@ class Report:
     """What a restored database holds."""
 
     counts: dict[str, int] = field(default_factory=dict)
+    # Enabled user triggers per table: ones that fire in a normal session.
     triggers: dict[str, int] = field(default_factory=dict)
     migrations: list[str] = field(default_factory=list)
+    rules: list[tuple[str, str, str]] = field(default_factory=list)
+    # The rules the latest retirement_rule_change row says were set (its new_rules)
+    # and that row's id; None when there is no row to read.
+    latest_rules: list[tuple[str, str, str]] | None = None
+    latest_change: int | None = None
+    # User triggers present but not firing (disabled, or replica-only), per table.
+    disabled_triggers: dict[str, int] = field(default_factory=dict)
+    # Live records whose framework has no retirement rules, by framework: they never
+    # come due. Reported, not a failure: it may be what the deployment intends.
+    unruled: dict[str, int] = field(default_factory=dict)
+
+
+def _trigger_problem(report: Report, table: str, what: str) -> str | None:
+    """Why ``table``'s append-only trigger does not hold in the restore, if it does
+    not: absent, or present and switched off."""
+    if report.triggers.get(table, 0) >= 1:
+        return None
+    if report.disabled_triggers.get(table, 0) >= 1:
+        return (
+            f"{table} was restored with its append-only trigger DISABLED: it is "
+            f"there but does not fire, so {what}"
+        )
+    return f"{table} was restored WITHOUT its append-only trigger: {what}"
 
 
 def problems_for(report: Report) -> list[str]:
@@ -70,12 +117,73 @@ def problems_for(report: Report) -> list[str]:
         if table not in report.counts
     ]
     for table in TRIGGERED_TABLES:
-        if table in report.counts and report.triggers.get(table, 0) < 1:
-            problems.append(
-                f"{table} was restored WITHOUT its append-only trigger: this dump "
-                "has lost the guarantee that the history cannot be rewritten"
+        if table in report.counts:
+            problem = _trigger_problem(
+                report,
+                table,
+                "this dump has lost the guarantee that the history cannot be rewritten",
             )
+            if problem:
+                problems.append(problem)
+    if RULES_MIGRATION in report.migrations:
+        if RULES_TABLE not in report.counts:
+            problems.append(
+                f"{RULES_TABLE} is missing although {RULES_MIGRATION} was applied: "
+                "the restored database cannot tell which projects are retired"
+            )
+        elif report.counts[RULES_TABLE] < 1:
+            problems.append(
+                f"{RULES_TABLE} is empty: the restored database would treat no "
+                "project as retired, so nothing would ever come due for disposal"
+            )
+        if RULES_HISTORY not in report.counts:
+            problems.append(
+                f"{RULES_HISTORY} is missing although {RULES_MIGRATION} was applied: "
+                "the history of the retirement rules did not come back"
+            )
+            return problems
+        problem = _trigger_problem(
+            report,
+            RULES_HISTORY,
+            "the history of which decisions retire a project could be rewritten",
+        )
+        if problem:
+            problems.append(problem)
+        if report.counts[RULES_HISTORY] < 1:
+            problems.append(
+                f"{RULES_HISTORY} is empty: the history of the retirement rules did "
+                f"not come back ({RULES_MIGRATION} records its seed there)"
+            )
+        else:
+            problems.extend(_rules_drift(report))
     return problems
+
+
+def _rules_drift(report: Report) -> list[str]:
+    """The restored rules against the ones their history last recorded. A rule in
+    only one of them means the table was changed outside the sync (D-76), or the
+    dump lost rows of one and not the other: either way the restore would retire by
+    rules nobody recorded choosing."""
+    if report.latest_rules is None:
+        return [
+            f"the latest {RULES_HISTORY} row could not be read, so it cannot be "
+            f"shown that {RULES_TABLE} holds the rules last recorded"
+        ]
+    table, recorded = set(report.rules), set(report.latest_rules)
+    if table == recorded:
+        return []
+    lines = [
+        f"  {f}: checkpoint {g} decided {d!r} ({why})"
+        for rules, why in (
+            (table - recorded, "not in the history"),
+            (recorded - table, "recorded, not in the table"),
+        )
+        for f, g, d in sorted(rules)
+    ]
+    return [
+        f"{RULES_TABLE} does not hold the rules its history last recorded "
+        f"({RULES_HISTORY} #{report.latest_change}):\n" + "\n".join(lines)
+    ]
 
 
 def production_image() -> str:
@@ -186,24 +294,65 @@ def inspect(container: str) -> Report:
             report.counts[table] = int(
                 psql_value(container, f"SELECT count(*) FROM {table}")
             )
+    # tgenabled: O fires in a normal session, A always; D (disabled) and R (replica
+    # only) do not fire for the API or the owner, so they do not count as present.
+    firing = ", ".join(f"'{state}'" for state in FIRING)
     triggers = psql_value(
         container,
-        "SELECT c.relname || ' ' || count(*) FROM pg_trigger t "
-        "JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal "
-        "GROUP BY c.relname",
+        f"SELECT c.relname || ' ' || count(*) FILTER (WHERE t.tgenabled IN ({firing}))"
+        f" || ' ' || count(*) FILTER (WHERE t.tgenabled NOT IN ({firing}))"
+        " FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid"
+        " WHERE NOT t.tgisinternal GROUP BY c.relname",
     )
     for line in triggers.splitlines():
-        name, _, count = line.rpartition(" ")
-        report.triggers[name] = int(count)
+        name, enabled, disabled = line.rsplit(" ", 2)
+        if int(enabled):
+            report.triggers[name] = int(enabled)
+        if int(disabled):
+            report.disabled_triggers[name] = int(disabled)
     if "schema_migrations" in present:
         report.migrations = psql_value(
             container, "SELECT version FROM schema_migrations ORDER BY version"
         ).split()
+    if RULES_TABLE in present:
+        report.rules = [
+            tuple(r)
+            for r in json.loads(
+                psql_value(
+                    container,
+                    "SELECT coalesce(json_agg(json_build_array(framework_id, gate_id,"
+                    " decision) ORDER BY framework_id, gate_id, decision), '[]')"
+                    f" FROM {RULES_TABLE}",
+                )
+            )
+        ]
+    if RULES_HISTORY in present:
+        latest = json.loads(psql_value(container, LATEST_CHANGE))
+        if latest is not None:
+            report.latest_change = int(latest[0])
+            report.latest_rules = [tuple(r) for r in latest[1]]
+    if RULES_MIGRATION in report.migrations and RULES_TABLE in present:
+        report.unruled = json.loads(
+            psql_value(
+                container,
+                "SELECT coalesce(json_object_agg(f, n), '{}') FROM ("
+                " SELECT record_framework(p.doc) AS f, count(*) AS n FROM projects p"
+                f" WHERE NOT EXISTS (SELECT 1 FROM {RULES_TABLE} r"
+                "  WHERE r.framework_id = record_framework(p.doc)) GROUP BY 1) u",
+            )
+        )
     return report
 
 
+def container_name() -> str:
+    """``chai-verify-``, then ``VERIFY_BACKUP_RUN`` when it is set, then a random
+    suffix. The test names its run, so it finds only the containers it started."""
+    run = os.environ.get("VERIFY_BACKUP_RUN", "").strip()
+    return f"chai-verify-{run + '-' if run else ''}{secrets.token_hex(4)}"
+
+
 def start_container() -> str:
-    name = f"chai-verify-{secrets.token_hex(4)}"
+    name = container_name()
     done = docker(
         "run", "-d", "--rm", "--name", name,
         "-e", "POSTGRES_USER=chai", "-e", "POSTGRES_DB=chai",
@@ -275,6 +424,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {table:<18} {count:>8} row(s)")
     if report.migrations:
         print(f"  schema at          {report.migrations[-1]}")
+    for framework, gate, decision in report.rules:
+        print(
+            f"  retires on         {framework}: checkpoint {gate} decided {decision!r}"
+        )
+    if report.latest_change is not None and set(report.rules) == set(
+        report.latest_rules or []
+    ):
+        print(f"  as last recorded   {RULES_HISTORY} #{report.latest_change}")
+    if RULES_MIGRATION in report.migrations:
+        unruled = sum(report.unruled.values())
+        named = ", ".join(f"{f}: {n}" for f, n in sorted(report.unruled.items()))
+        print(
+            f"  no rules for       {unruled:>8} record(s)"
+            + (f" ({named}): never retired, so never due" if unruled else "")
+        )
     if report.counts and not report.counts.get("projects"):
         print(
             "  note: the restored portfolio is empty. If that is not expected, this "
@@ -288,7 +452,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(
         "\nverify-backup: restored cleanly, with its tables and its "
-        "append-only triggers."
+        "append-only triggers, enabled."
     )
     return 0
 

@@ -49,7 +49,8 @@ The samples are written in the definition itself.
         --config app/frameworks/your-id/build.json --out build/your-id
     ```
 
-`--out` writes `index.html` and `csp.caddy`, the proxy's policy for that page.
+`--out` writes `index.html`, `csp.caddy`, the proxy's policy for that page, and
+`manifest.json`, which tells the server which of your decisions end a project.
 The build refuses an `--out` under `docs/` or `proxy/`, where the published page
 and its policy live, or under `app/`, the sources.
 
@@ -109,10 +110,25 @@ sentences) are translated in every language already.
 
 !!! warning "Running your build behind the server"
 
-    The server decides when a retired project's records may be disposed of. It
-    reads that from the framework's checkpoint options classed `retire`. Until
-    the server carries each framework's retirement rules (#168), it knows only
-    CHAI's, so run a build of your own framework in local mode.
+    The server decides when a project is retired, and so when its records come
+    due for disposal, from the checkpoint options your definition classes `stop`
+    or `retire`. It reads them from the `manifest.json` your build writes beside
+    its page, so to run your build behind the server, set `APP_DIR` in `.env` to
+    your `--out` directory and `CSP_FILE` to its `csp.caddy`: the proxy serves
+    that page and the `migrate` job loads that manifest. When the manifest
+    changes which decisions end a project, or which framework is primary (so the
+    first time you deploy your build over the published one), `migrate` refuses
+    and your build does not start. Over a running stack `docker compose up -d`
+    can still return 0, leaving the old API running and the proxy stopped, so
+    check `docker compose ps -a` after the deploy. `migrate` lists every project
+    whose disposal would change and prints a value; if the change is intended,
+    set `RETIREMENT_RULES_ACK` in `.env` to that value, run
+    `docker compose up -d` again, then clear it
+    ([Self-hosting](../self-hosting.md#which-build-it-serves-and-the-retirement-rules)).
+    Once your primary is the server's, the API accepts a new record only with
+    your primary's stamp, so every record your build saves retires by your
+    definition, and no change moves a record to another framework's rules. A
+    record with no stamp is CHAI's and retires by CHAI's rules.
 
 `pixi run test-custom-build` builds the example and checks all of this in a
 real browser: every screen, the report and every export, with no word of CHAI or

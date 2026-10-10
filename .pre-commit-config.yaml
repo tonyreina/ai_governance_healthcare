@@ -89,7 +89,7 @@ repos:
         entry: pixi run check-framework
         language: system
         pass_filenames: false
-        files: '^app/frameworks/|^app/frameworks\.json$|^app/i18n/en\.json$|^schema/framework|^scripts/check_framework'
+        files: '^app/frameworks/|^app/frameworks\.json$|^app/i18n/en\.json$|^schema/framework|^scripts/check_framework|^scripts/framework_enums\.py$'
 
       # The checker's own mutation tests, whenever it, the schema or a definition changes.
       - id: test-check-framework
@@ -97,7 +97,7 @@ repos:
         entry: pixi run test-check-framework
         language: system
         pass_filenames: false
-        files: '^app/frameworks/|^schema/framework|^scripts/check_framework|^tests/test_check_framework\.py$|^app/i18n/en\.json$|^app/js/10-frameworks/05-project/'
+        files: '^app/frameworks/|^schema/framework|^scripts/check_framework|^scripts/framework_enums\.py$|^tests/test_check_framework\.py$|^app/i18n/en\.json$|^app/js/10-frameworks/05-project/'
 
       # A closed set of values gets an enumerated type, not a bare string. It is
       # a ratchet: scripts/enum_baseline.json holds the existing uses, a new one
@@ -161,14 +161,15 @@ repos:
         files: '^(app/frameworks/|scripts/gen_.*\.py$)'
 
       # Rebuilds the single-file dashboard from app/. prek fails the run if
-      # this changes docs/app/index.html, so the generated file can never be
-      # stale relative to its sources.
+      # this changes docs/app/index.html or docs/app/manifest.json (the
+      # retirement rules the server loads, D-76), so neither generated file can
+      # be stale relative to its sources, and a hand edit is undone.
       - id: build-app
         name: rebuild the dashboard from app/
         entry: pixi run build-app
         language: system
         pass_filenames: false
-        files: '^(app/|scripts/build_app\.py$)'
+        files: '^(app/|scripts/(build_app|build_manifest|framework_enums)\.py$|docs/app/manifest\.json$)'
 
       # Syntax, undefined names, use before declaration and duplicate declarations,
       # on the published page and a build of each app/frameworks/*/build.json (#176).

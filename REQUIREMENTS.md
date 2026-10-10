@@ -660,7 +660,7 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-56 Records past their retention period are disposed of, unless held
 
-- Status: Active
+- Status: Active; what "retired" means is amended by R-66 (2026-10-10)
 - The owner's decision, 2026-10-08, on #57: the exception to the append-only
   rule (R-10, R-40) that applying R-54 needs is granted, on these terms.
 - **Disposal is a purge.** A retired project past its period loses its live
@@ -1107,9 +1107,11 @@ honest answer and is a gap worth closing; see R-19.
   `docs/` or `proxy/`, and leaves the published page untouched; and
   `tests/test_custom_build.py` builds the example framework and shows every
   screen, the report and every export name nothing of CHAI or OPTICA, with a
-  control that finds their words in the published build. Running a custom build
-  behind the server needs each framework's retirement rules there (#168 PR C);
-  until then the docs say to run it in local mode.
+  control that finds their words in the published build. A custom build can run
+  behind the server: its `--out` holds the `manifest.json` the server retires by
+  (R-66; `tests/test_build_config.py` shows it is written there, for the build's
+  own primary, and the server tests in R-66 show a stand-in primary's manifest
+  loaded, acknowledged and retired by).
 
 ### R-64 A supplement never feeds the primary
 
@@ -1150,6 +1152,87 @@ honest answer and is a gap worth closing; see R-19.
   text and records its languages), `tests/test_engine.py` (neutral wording, and
   the note per framework, never naming a reviewer it does not have).
 
+### R-66 Retired means what the record's framework says ends a project
+
+- Status: Active
+- Amends R-56's definition of retired, which named CHAI's checkpoints and words.
+  R-56 is otherwise unchanged.
+- The owner's design for #168 (design v2, 2026-10-10, "Server (PR C)"): a build
+  may use its own framework (R-63), so the server decides when a project is
+  retired, and so when disposal is due, from the same definition the dashboard was
+  built with, and never changes disposal silently.
+- **Retired means** one of the project's checkpoints holds a decision that the
+  definition of the project's framework (`meta.framework.id`; a record without one
+  is CHAI's) gives a `stop` or `retire` class at that checkpoint. In the published
+  build that is still "Stop" at A, B or C or "Retire" at D. The clock starts as
+  R-56 says: at the later of those decisions' dates and the record's last change.
+- **The build is the unit.** The rules reach the database only from the manifest
+  built beside the page (`docs/app/manifest.json` by default), loaded by the
+  migrate job as the database owner. The API cannot change them.
+- **Never silently.** Any change, a rule added or dropped or a new primary, is
+  made only when the operator acknowledges exactly that change (every rule held
+  before and after it, the primary before and after, from the point in the
+  history it was shown at, in the database that showed it), after being shown
+  every project that would become due or stop being due as the projects stood
+  then. It binds the rules and the primary, not the records: a project edited
+  between the refusal and the acknowledged run is affected without having been
+  listed. An acknowledgment accepts that one change once, in the database that
+  printed it, and nothing else: another database refuses it, and so does a copy
+  restored from a dump that creates the tables again (as `make restore` does),
+  elsewhere or over the same database in place. Two things are, to it, the same
+  database: a copy of the database's files (a snapshot, a base backup,
+  point-in-time recovery, a promoted replica), so a staging database made that
+  way and its original each accept a value printed on the other, and a restore
+  of the data alone into the tables already there, which accepts again a value
+  spent after the dump was taken. A sync
+  that changes nothing (the same rules, the same primary) needs no
+  acknowledgment. A build leaves the rules of frameworks it does not list. A missing
+  or malformed manifest, or a primary with no ending decision, stops the job, and
+  stops an API that migrates itself with a manifest. Every change is recorded,
+  append-only, with who and when.
+- **The stamp is the build's.** Through the API a new record may name only the
+  active primary as its framework (`meta.framework` exactly `{"id": <primary>}`).
+  It may name none only while that primary is CHAI, whose records an unstamped
+  one is; under another primary a new record without the stamp is refused. No
+  write changes an existing record's framework, as retention reads it: a record
+  written before a switch keeps the framework it had, and one written under a
+  later primary keeps it after a rollback. A change of primary never lands
+  between a create's check of the stamp and its commit.
+- Source: the owner's design v2 on #168; DECISIONS D-76. Numbered R-66 as that
+  design names it ("R-66 amends R-56"), leaving R-64 and R-65 to the entries it
+  assigns them.
+- Enforced by: `server/tests/test_retention.py` (real PostgreSQL and the real
+  migrate job: every option of CHAI's definition and of a stand-in primary is due
+  exactly when its class ends a project; a record follows only its own
+  framework's rules, a blank stamp is CHAI's and the clock starts at the latest
+  ending decision, each with a mutation test; an addition, a removal or a new
+  primary refused without the change's acknowledgment and applied with it; an
+  acknowledgment never accepting a different change, a rollback, a later change,
+  a switch to another primary over the same rules, another database with the
+  same history, or a copy restored from a dump into another database or in
+  place, each part with a mutation test; an identity with a missing part
+  refusing the change; a stale manifest refused; unlisted
+  frameworks' rules kept),
+  `server/tests/test_retirement_rules.py` (a malformed or missing manifest fails
+  the job; the API's own migration syncs or warns, and with no manifest never
+  reports the rules synced; the stamp is refused unless it
+  is the active primary's, and required under another primary; no patch changes
+  a record's framework, with mutation tests; the API role can only read the
+  rules; their history is append-only; the sync takes the migration lock before
+  it reads; a create that read the primary holds off a sync that switches it,
+  and creates share the lock, each with a mutation test; `/api/health` reports
+  the rule set),
+  `tests/test_dispose.py` and `tests/test_verify_backup.py` (records with no rules
+  are counted; the history keeps its trigger, enabled, after a restore, and the
+  rules are the ones its latest change recorded; a real dump does not carry the
+  database's identity),
+  `tests/test_build_config.py` (the manifest is the definitions' own, and names
+  the primary even when the config does not list it first),
+  `tests/test_compose_isolation.py` (the page and the manifest come from one build
+  directory) and `tests/test_stack.py` (the running stack's rules are the served
+  default build's, confirmed by a sync; it cannot show a different rule set,
+  which the server tests do). Security claims C-88 to C-90.
+
 ### R-67 A build opens only its own framework's records
 
 - Status: Active
@@ -1170,8 +1253,15 @@ honest answer and is a gap worth closing; see R-19.
   published build's", "the portfolio lists only the example's record", "opening
   an unstamped record is refused", "opening another primary's record is
   refused", the import refusals, and "the example's own export is accepted");
-  `tests/test_snapshot.py` (the published build unchanged). The server does not
-  yet check a record's stamp against its build (#168 PR C).
+  `tests/test_snapshot.py` (the published build unchanged). The server checks
+  the stamp against its build (R-66): it accepts a new record's `meta.framework`
+  only as exactly its active primary's (a patch keeps the record's own
+  framework), and under a primary other than CHAI refuses a
+  new record without it (`server/tests/test_retirement_rules.py`:
+  `test_the_api_refuses_a_stamp_that_is_not_the_active_primary`,
+  `test_under_another_primary_a_record_must_carry_its_stamp`; C-90), and
+  `tests/test_build_config.py` shows a `--config` build writes its own
+  `manifest.json` beside its page, the file the server loads its primary from.
 
 ### R-68 An export matches its published schema, and anyone can recompute its fingerprint
 

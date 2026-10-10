@@ -792,14 +792,18 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-61 A backup can be verified by restoring it, and a restore asks first
 
 - **Claim:** `make verify-backup` restores a dump into a throwaway PostgreSQL and
-  fails unless the tables, rows and append-only triggers came back, and `make restore`
-  asks for `YES` before overwriting the live database.
+  fails unless the tables, rows and append-only triggers came back with the triggers
+  enabled, and, from migration 010, unless the retirement rules are exactly the
+  ones the latest `retirement_rule_change` row recorded; and `make restore` asks for
+  `YES` before overwriting the live database.
 - **Asserted in:** `docs/self-hosting.md` — "`make verify-backup` restores the newest
   dump"
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_verify_backup.py::a good encrypted dump verifies`
   `tests/test_verify_backup.py::a dump that restores without the append-only triggers fails`
+  `tests/test_verify_backup.py::a dump whose rules' history trigger is disabled fails`
+  `tests/test_verify_backup.py::a dump whose rules differ from their history's last change fails`
   `tests/test_verify_backup.py::the wrong passphrase fails`
   `tests/test_verify_backup.py::a truncated dump fails`
   `tests/test_verify_backup.py::with no answer it aborts and touches nothing`
@@ -1158,6 +1162,160 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_markdown.py::with safeUrl weakened the structure check would catch the hole`
   `tests/test_injection.py::an app that does not escape is rejected`
 
+### C-88 The server retires exactly what the build's definition marks ending
+
+- **Claim:** The database treats a project as retired, and starts its retention
+  clock (R-56), exactly when one of its checkpoints holds a decision that the
+  project's framework definition, as the deployed build's manifest states it,
+  gives a stop or retire class at that checkpoint. A record without a framework
+  stamp is CHAI's. The migrate job, and the API when it migrates itself with a
+  manifest, refuses any change (an ending decision added or dropped, or a new
+  primary) unless `RETIREMENT_RULES_ACK` is the acknowledgment of exactly that
+  change: the SHA-256 of every rule the table holds before and after it, the
+  primary before and after, the history row it follows (its id and time), and the
+  database's identity (012: the cluster's system identifier, the database's OID
+  and the OID of the history table, none of which a dump carries). So a value
+  printed for one change never accepts a different one (a build that also drops
+  an unlisted framework's rules, a rollback to another primary, a switch to
+  another primary over the same rules), once used it accepts nothing later, and
+  another database refuses it even with the same history, as does a copy restored
+  from a dump that creates the tables again (`make restore`), into another
+  database or over the same one in place. It leaves the
+  rules of frameworks the manifest does not list, and fails without a usable
+  manifest, so disposal never changes silently (R-66, D-76). The operator is shown
+  the projects that would become due or stop being due as they stood when the
+  value was printed; the value binds the rules and the primary, not the records,
+  so a project edited before the acknowledged run is affected without having been
+  listed. Each guard in the SQL (the join on the record's framework, a blank stamp
+  read as CHAI's, the clock at the latest ending decision), the parts of the
+  acknowledgment (the identity dropped, a value from one database is accepted by
+  another; the database's OID dropped, by a copy in another database; the history
+  table's OID dropped, by a copy restored in place; the primary after dropped, by
+  a switch to another primary), and the migration lock (taken before the rules
+  are read, so a sync waiting on another job works from what that job committed)
+  has a test that breaks it and fails.
+- **Gap:** the stack test proves only the default build: its rule set is
+  010's seed (the same hash), so it shows the migrate job read and confirmed the
+  manifest (`synced`), not that a different rule set reaches a running stack. That
+  a different set is loaded, refused or acknowledged is the server tests' evidence,
+  against a real PostgreSQL and the real migrate job. The server tests restore a
+  dump by copying its rows with COPY, as pg_dump does, into a database the real
+  migrate job built; `tests/test_verify_backup.py` shows with a real pg_dump that
+  the identity differs after a restore into another database, over the same one
+  in place, and into another cluster. A copy of the database's files (a base
+  backup, a snapshot, point-in-time recovery, a promoted replica) keeps the
+  identity and the history, so it accepts again a value printed against the state
+  it holds, and a staging database made that way and production each accept a
+  value printed on the other; `docs/self-hosting.md` says so, and advises building
+  staging from a dump. A restore of the data alone into the tables already there
+  (`pg_dump --data-only`, or TRUNCATE and reload, as the owner) keeps the history
+  table's OID, so a value spent after the dump was taken is accepted again;
+  `docs/self-hosting.md` says so too. Nothing prevents either. And the value does not
+  bind the records, so the list the operator saw can be out of date when the
+  value is used.
+- **Asserted in:** `docs/self-hosting.md` — "another database refuses it even when its history is the same"
+- **Asserted in:** `docs/self-hosting.md` — "loads those decisions into the database, which decides from them when a project is retired"
+- **Asserted in:** `docs/privacy.md` — "A build of another framework retires on its own decisions"
+- **Asserted in:** `docs/frameworks/custom.md` — "from the checkpoint options your definition classes `stop` or `retire`"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_retention.py::test_every_chai_decision_retires_exactly_when_its_class_ends_a_project`
+  `server/tests/test_retention.py::test_a_stand_in_primary_retires_by_its_own_words_once_acknowledged`
+  `server/tests/test_retention.py::test_a_new_ending_decision_is_refused_until_acknowledged`
+  `server/tests/test_retention.py::test_a_leftover_acknowledgment_never_matches_another_transition`
+  `server/tests/test_retention.py::test_a_stale_manifest_cannot_undo_a_newer_one`
+  `server/tests/test_retention.py::test_a_manifest_leaves_the_rules_of_frameworks_it_does_not_list`
+  `server/tests/test_retention.py::test_an_ack_for_a_harmless_addition_never_accepts_a_removal`
+  `server/tests/test_retention.py::test_a_rollback_is_acknowledged_and_does_not_revive_an_old_ack`
+  `server/tests/test_retention.py::test_a_leftover_ack_never_accepts_a_later_change`
+  `server/tests/test_retention.py::test_a_primary_switch_over_the_same_rules_needs_an_ack`
+  `server/tests/test_retention.py::test_a_value_printed_for_one_database_is_refused_by_another`
+  `server/tests/test_retention.py::test_the_database_test_fails_without_the_identity`
+  `server/tests/test_retention.py::test_a_dump_restored_elsewhere_refuses_the_originals_value_both_ways`
+  `server/tests/test_retention.py::test_a_dump_restored_in_place_refuses_a_value_printed_before_it`
+  `server/tests/test_retention.py::test_the_restore_tests_fail_without_the_history_table_in_the_identity`
+  `server/tests/test_retention.py::test_the_restore_tests_fail_without_the_database_oid_in_the_identity`
+  `server/tests/test_retention.py::test_without_the_identity_a_change_is_refused_and_nothing_else_is`
+  `server/tests/test_retention.py::test_012_reads_the_identity_the_acknowledgment_states`
+  `server/tests/test_retention.py::test_an_identity_with_a_null_part_is_refused_cleanly`
+  `server/tests/test_retention.py::test_a_value_for_one_new_primary_is_refused_for_another_over_the_same_rules`
+  `server/tests/test_retention.py::test_the_new_primary_test_fails_when_the_value_omits_the_primary_after`
+  `server/tests/test_retention.py::test_every_part_of_the_acknowledgment_changes_it`
+  `server/tests/test_retention.py::test_a_record_follows_only_its_own_frameworks_rules`
+  `server/tests/test_retention.py::test_the_mirror_a_chai_record_never_retires_by_anothers_words`
+  `server/tests/test_retention.py::test_a_blank_stamp_is_chai`
+  `server/tests/test_retention.py::test_the_clock_starts_at_the_latest_ending_decision`
+  `server/tests/test_retention.py::test_the_database_retires_by_the_table_not_by_literals`
+  `server/tests/test_retirement_rules.py::test_the_migrate_job_fails_closed_without_a_usable_manifest`
+  `server/tests/test_retirement_rules.py::test_a_manifest_the_server_would_misread_is_refused`
+  `server/tests/test_retirement_rules.py::test_the_api_migrating_itself_syncs_from_its_manifest`
+  `server/tests/test_retirement_rules.py::test_the_api_migrating_itself_without_a_manifest_says_so`
+  `server/tests/test_retirement_rules.py::test_an_api_with_no_manifest_never_reports_synced`
+  `server/tests/test_retirement_rules.py::test_two_syncs_serialize_on_the_migration_lock`
+  `server/tests/test_retirement_rules.py::test_the_lock_test_fails_when_the_lock_is_taken_after_the_reads`
+  `tests/test_stack.py::the database retires by the served build's rule set, synced from it`
+  `tests/test_verify_backup.py`
+
+### C-89 The API's role cannot change which decisions retire a project
+
+- **Claim:** The API's database role can read the retirement rules and their
+  history and cannot insert, update, delete or truncate either, and the history
+  refuses an update or a delete even from the owner.
+- **Asserted in:** `docs/privacy.md` — "Nor can it change which decisions retire a project: its role may only read those rules."
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_retirement_rules.py::test_the_api_role_can_read_the_rules_and_not_change_them`
+  `server/tests/test_retirement_rules.py::test_the_rules_history_is_append_only_even_for_the_owner`
+  `server/tests/test_roles.py`
+
+### C-90 A writer cannot choose which framework's rules retire a record
+
+- **Claim:** A record follows the retirement rules of the framework its
+  `meta.framework.id` names, so a writer who could stamp any id could keep a
+  record from ever coming due. The API refuses (422) a create that sets
+  `meta.framework` to anything but exactly `{"id": <the primary the latest sync
+  recorded>}`; a record without one is CHAI's. While that primary is not CHAI, it
+  also refuses a create that leaves the stamp out, so omitting it cannot choose
+  CHAI's rules. It refuses a patch that would change the framework the record
+  follows, as 010's `record_framework()` reads it before and after the patch (by
+  setting, removing or blanking the stamp, or replacing `meta`), and a patch that
+  sets the stamp to anything but exactly the record's own framework: so a record
+  written before a switch keeps its framework and stays editable, and one written
+  under a later primary keeps it after a rollback. A create reads the primary
+  under the migration lock, shared, so creates do not wait on one another: a sync
+  that changes the primary waits for every create in flight, and one that starts
+  during the sync waits and reads the new primary, so none is checked against a
+  primary that has just been replaced. A patch reads no primary and takes no lock.
+  Stamps written before this check,
+  or by the database owner, are not re-checked,
+  and `make dispose` and `make verify-backup` count the records whose framework
+  has no rules (R-66, D-76).
+- **Asserted in:** `docs/privacy.md` — "Nor can a writer choose which framework's rules a record follows"
+- **Asserted in:** `docs/frameworks/custom.md` — "the API accepts a new record only with your primary's stamp"
+- **Asserted in:** `docs/self-hosting.md` — "so no record is checked against a primary that has just been replaced"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_retirement_rules.py::test_the_api_refuses_a_stamp_that_is_not_the_active_primary`
+  `server/tests/test_retirement_rules.py::test_the_api_accepts_no_stamp_or_exactly_the_active_primarys`
+  `server/tests/test_retirement_rules.py::test_a_stamp_follows_the_primary_the_latest_sync_recorded`
+  `server/tests/test_retirement_rules.py::test_under_another_primary_a_record_must_carry_its_stamp`
+  `server/tests/test_retirement_rules.py::test_a_correctly_stamped_record_retires`
+  `server/tests/test_retirement_rules.py::test_the_sql_reads_a_stamp_as_the_api_does`
+  `server/tests/test_retirement_rules.py::test_a_write_that_read_the_primary_holds_off_a_switch`
+  `server/tests/test_retirement_rules.py::test_the_race_test_fails_without_the_shared_lock`
+  `server/tests/test_retirement_rules.py::test_two_creates_hold_the_lock_at_once`
+  `server/tests/test_retirement_rules.py::test_the_shared_lock_test_fails_with_an_exclusive_lock`
+  `server/tests/test_retirement_rules.py::test_a_patch_never_waits_on_the_migration_lock`
+  `server/tests/test_retirement_rules.py::test_the_no_wait_test_fails_when_a_patch_takes_the_lock`
+  `server/tests/test_retirement_rules.py::test_a_patch_cannot_stamp_a_pre_switch_record_with_the_new_primary`
+  `server/tests/test_retirement_rules.py::test_a_patch_cannot_unstamp_a_record_after_a_rollback`
+  `server/tests/test_retirement_rules.py::test_no_patch_changes_a_records_framework_or_reshapes_its_stamp`
+  `server/tests/test_retirement_rules.py::test_a_patch_that_keeps_a_records_framework_still_works`
+  `server/tests/test_retirement_rules.py::test_the_framework_check_fails_when_a_patch_is_checked_against_the_primary`
+  `server/tests/test_retirement_rules.py::test_the_framework_check_fails_when_only_the_stamp_shape_is_checked`
+  `tests/test_dispose.py`
+  `tests/test_verify_backup.py`
+
 ### C-91 A framework definition's text is never run
 
 - **Claim:** Whatever characters a framework definition holds (a name, an item,
@@ -1210,7 +1368,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_build_config.py::an --out into docs/, proxy/ or app/ is refused`
   `tests/test_build_config.py::--config without --out is refused`
 
-### C-95 A revision's fingerprint is the record's, as the dashboard shows it
+### C-96 A revision's fingerprint is the record's, as the dashboard shows it
 
 - **Claim:** The server hashes each revision in the version history by the rule
   the dashboard and `examples/load_export.py` use (the record as stored, the same

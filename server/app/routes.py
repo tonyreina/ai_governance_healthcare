@@ -83,6 +83,16 @@ from .models import (
 from .principals import MAX_ID_LENGTH, MAX_LOOKUP
 from .principals import resolve as resolve_principals
 from .retention import HoldAction
+from .retirement import (
+    META_KEY,
+    STAMP_ID_KEY,
+    STAMP_KEY,
+    UNSTAMPED_FRAMEWORK,
+    sets_stamp,
+    stamp_problem,
+    stored_frameworks,
+    write_primary,
+)
 from .securitylog import SecurityEvent, emit
 from .signoff import attribute_signoffs
 
@@ -201,6 +211,7 @@ async def health(
         idle_lock_minutes=settings.idle_lock_minutes,
         sign_out_url=settings.sign_out_url,
         auth_mode=settings.auth_mode,
+        retirement_rules=(await db.retirement_rules_cached()) if database_up else None,
     )
 
 
@@ -307,6 +318,67 @@ def _listed_ids(value: Any) -> list[str]:
     return list(dict.fromkeys(str(v) for v in value))
 
 
+async def _check_stamp(conn: Any, document: dict[str, Any]) -> None:
+    """422 unless the document's ``meta.framework`` is exactly the active primary's
+    stamp. A writer who could stamp any id could keep a record from ever coming due
+    for disposal (R-66, D-76)."""
+    problem = stamp_problem(document, await write_primary(conn))
+    if problem:
+        raise HTTPException(422, problem)
+
+
+async def _check_new_record(conn: Any, document: dict[str, Any]) -> None:
+    """A new record's stamp. One it sets must be exactly the active primary's. One it
+    leaves out makes it CHAI's (the reading every record written before stamps had),
+    which is right only while CHAI is the primary: under another primary, leaving
+    the stamp out would let a writer choose CHAI's rules over the primary's, so the
+    create is refused (R-66)."""
+    if sets_stamp(document):
+        await _check_stamp(conn, document)
+        return
+    primary = await write_primary(conn)
+    if primary != UNSTAMPED_FRAMEWORK:
+        raise HTTPException(
+            422,
+            f'a new record must carry meta.framework {{"id": "{primary}"}}: the '
+            "primary framework of the build this server retires by (R-66). A record "
+            f"without one is read as {UNSTAMPED_FRAMEWORK}'s, and would retire by "
+            "its rules instead.",
+        )
+
+
+async def _check_framework_kept(
+    conn: Any, before: dict[str, Any], document: dict[str, Any], patch: Any
+) -> None:
+    """422 if a patch would change the framework an existing record follows, or set
+    its stamp to anything but exactly ``{"id": <that framework>}``.
+
+    A record's framework decides which decisions retire it, and so when it can be
+    disposed of; no acknowledgment lists a record that a write moves (R-66). So the
+    check is against the record's own framework before the patch, never against the
+    active primary: a pre-switch CHAI record stamped with the new primary would stop
+    coming due, and an acme record unstamped after a rollback to CHAI would start
+    following CHAI's rules. Both sides are read by 010's ``record_framework()``, the
+    function retention reads them with, so an absent or blank stamp is CHAI's here
+    exactly as it is there."""
+    was, now = await stored_frameworks(conn, before, document)
+    if was != now:
+        raise HTTPException(
+            422,
+            f"a patch cannot change a record's framework: this record follows "
+            f"{was!r}'s retirement rules and the patch would make it {now!r}'s. Its "
+            "framework decides which decisions retire it, and so when it can be "
+            "disposed of (R-66).",
+        )
+    if sets_stamp(patch) and document[META_KEY][STAMP_KEY] != {STAMP_ID_KEY: was}:
+        raise HTTPException(
+            422,
+            f'meta.framework, when a patch sets it, must be exactly {{"id": "{was}"}}, '
+            "the record's own framework: a patch cannot change a record's framework, "
+            "which decides which decisions retire it (R-66).",
+        )
+
+
 @router.post(
     "/projects/{project_id}",
     response_model=ProjectOut,
@@ -353,6 +425,7 @@ async def create_project(
             "readers": _listed_ids(access.get("readers")),
         }
     async with db.acquire() as conn, conn.transaction():
+        await _check_new_record(conn, doc)
         row = await conn.fetchrow(
             """
                 INSERT INTO projects (id, doc, created_by, updated_by)
@@ -463,6 +536,10 @@ async def patch_project(
             document = merged(before, patch)
         except TooDeep as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+        # The record's framework decides which rules retire it (R-66): no patch
+        # changes it. Checked against the record, not the active primary, so this
+        # needs no lock against a sync.
+        await _check_framework_kept(conn, before, document, patch)
         rev = await conn.fetchval(
             """
                 UPDATE projects

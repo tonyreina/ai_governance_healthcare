@@ -33,6 +33,7 @@ spreadsheet would run as a formula.
 from __future__ import annotations
 
 import csv
+import faulthandler
 import io
 import json
 import re
@@ -383,6 +384,9 @@ def saved_state_problems(browser, payload: str) -> list[str]:
 
 
 def main() -> int:
+    # A hang (a modal print dialog once did this in headless Firefox) fails with
+    # a stack trace after 15 minutes instead of running into CI's job timeout.
+    faulthandler.dump_traceback_later(900, exit=True)
     with sync_playwright() as pw:
         browser = launch(pw)
         print("Every string poisoned, every screen and export audited")

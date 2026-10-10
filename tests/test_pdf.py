@@ -33,6 +33,26 @@ FREEZE = """
 """
 
 
+# Every frame's print() is replaced the moment the frame loads (any document,
+# including its first blank one), and each call is recorded with its address.
+PRINT_SPY = """() => {
+  window.__printed = [];
+  const desc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "onload");
+  Object.defineProperty(HTMLIFrameElement.prototype, "onload", {
+    configurable: true,
+    get() { return desc.get.call(this); },
+    set(fn) {
+      const frame = this;
+      desc.set.call(this, function (ev) {
+        const w = frame.contentWindow;
+        w.print = () => window.__printed.push(w.location.href);
+        return fn.call(this, ev);
+      });
+    },
+  });
+}"""
+
+
 def main() -> int:
     failures: list[str] = []
 
@@ -63,6 +83,21 @@ def main() -> int:
         check(
             "PDF button stays visible without the downloads API",
             page.locator('[data-act="dl-pdf"]').is_visible(),
+        )
+
+        # exportPDF() prints the report from a frame, exactly once: not the frame's
+        # blank first document too. A frame fires `load` for that blank document the
+        # moment it is inserted, so a handler set before insertion printed a blank
+        # page (and hung headless Firefox in the injection suite). The spy records
+        # the address of every document print() is called on, in every frame.
+        page.evaluate(PRINT_SPY)
+        page.evaluate("exportPDF()")
+        page.wait_for_timeout(1500)
+        printed = page.evaluate("window.__printed")
+        check(
+            "the PDF export prints the report, once, and no blank page",
+            printed == ["about:srcdoc"],
+            str(printed),
         )
 
         # exportPDF() opens a print dialog, which headless cannot complete. Render

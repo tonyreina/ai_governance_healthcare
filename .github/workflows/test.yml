@@ -166,6 +166,11 @@ jobs:
       # one failure does not hide the rest.
       - name: the CHAI and OPTICA dashboard
         run: pixi run test-app
+      # check-app is shown failing on broken, rebuilt copies of app/, and every
+      # browser global it accepts is shown to exist in this engine (#176).
+      - name: check-app finds undefined names and use before declaration
+        if: ${{ !cancelled() }}
+        run: pixi run test-check-app
       - name: boot, storage mode, and the saved label
         if: ${{ !cancelled() }}
         run: pixi run test-boot
@@ -414,6 +419,10 @@ jobs:
 
       - name: the page policy refuses injected script in this engine
         run: pixi run test-csp
+      # The browser globals check-app accepts exist in this engine too (#176).
+      - name: check-app's accepted globals exist in this engine
+        if: ${{ !cancelled() }}
+        run: pixi run test-check-app
       - name: poisoned text stays text in this engine
         if: ${{ !cancelled() }}
         run: pixi run test-injection

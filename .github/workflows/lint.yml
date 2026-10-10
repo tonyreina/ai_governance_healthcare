@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# The hooks include check-app, which runs `node --check` when node is on PATH and
+# otherwise says it skipped it. REQUIRE_TESTS makes that skip a failure here, as
+# in test.yml: a skip exits 0 and reads as a pass.
+env:
+  REQUIRE_TESTS: "1"
+
 jobs:
   prek:
     runs-on: ubuntu-latest

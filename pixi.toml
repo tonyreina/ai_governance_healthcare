@@ -27,12 +27,11 @@ lint-fix = { depends-on = ["lint-md-fix", "lint-py-fix", "format-py"] }
 lint-md-fix = "rumdl check --fix ."
 lint-py-fix = "ruff check --fix ."
 format-py = "ruff format ."
-# Generated artifacts. `gen-docs` regenerates everything derived from
-# data/optica_items.json and the app itself, then rebuilds the dashboard.
-gen-docs = { depends-on = ["gen-chai-docs", "gen-optica-docs", "gen-optica-module", "gen-te-page", "build-app"] }
-gen-chai-docs = "python scripts/gen_chai_checklist.py"
-gen-optica-docs = "python scripts/gen_optica_checklist.py"
-gen-optica-module = "python scripts/gen_optica_module.py"
+# Generated artifacts. `gen-docs` regenerates everything derived from the
+# framework definitions (app/frameworks/<id>/framework.json), then rebuilds the dashboard.
+gen-docs = { depends-on = ["gen-framework-docs", "gen-te-page", "build-app"] }
+# docs/frameworks/<id>-checklist.md, one per definition (#168, D-75).
+gen-framework-docs = "python scripts/gen_framework_docs.py"
 gen-chai-metrics = "python scripts/gen_chai_metrics.py"
 gen-te-page = "python scripts/gen_te_page.py"
 
@@ -56,6 +55,8 @@ test-audit = "python tests/test_audit_log.py"
 test-text-fields = "python tests/test_text_fields.py"
 test-refs = "python tests/test_refs.py"
 test-framework-boundary = "python tests/test_framework_boundary.py"
+# The checklist pages are their definitions, byte for byte, and the built app agrees (#168).
+test-framework-docs = "python tests/test_framework_docs.py"
 test-snapshot = "python tests/test_snapshot.py"
 test-build-config = "python tests/test_build_config.py"
 test-engine = "python tests/test_engine.py"

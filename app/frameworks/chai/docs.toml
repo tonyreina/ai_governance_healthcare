@@ -1,0 +1,29 @@
+# The published checklist page's own words: docs/frameworks/chai-checklist.md,
+# written by scripts/gen_framework_docs.py (`pixi run gen-docs`). The criteria
+# themselves come from framework.json beside this file. $total is the number of
+# criteria and $definition the definition's path.
+
+count_noun = "criteria"
+item_column = "Criterion"
+
+intro = '''
+The $total criteria this tool tracks, in the order the dashboard presents
+them. Each is tagged with the CHAI principle it serves.
+
+!!! info "Generated file"
+
+    This page is generated from `$definition` by
+    `scripts/gen_framework_docs.py` (`pixi run gen-docs`), so it cannot drift
+    from the checklist the tool actually enforces. Edit the criteria in
+    `$definition`, not here.
+
+    These criteria are original summaries written for this project. They
+    are not the text of CHAI's Responsible AI Checklist — see
+    [Notice & license](../notice.md).
+'''
+
+footer = '''
+---
+
+**$total criteria in total.**
+'''

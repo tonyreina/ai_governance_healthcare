@@ -1494,3 +1494,48 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   (`server/migrations/008_retention.sql`) decides retirement, and so when
   disposal is due, from CHAI's own "Stop" and "Retire" decisions.
 - Source: #168; R-63.
+
+### D-75 One generator writes every framework's checklist page from its definition
+
+- Status: Accepted
+- Part of #168 PR A (design v2: "gen_framework_docs byte-identical"; R-63).
+  `docs/frameworks/<id>-checklist.md` is written by
+  `scripts/gen_framework_docs.py` from `app/frameworks/<id>/framework.json`, for
+  every definition there. It replaces `gen_chai_checklist.py` (which
+  regex-scraped CHAI's criteria back out of the built `docs/app/index.html`),
+  `gen_optica_checklist.py` and `gen_optica_module.py`, and retires
+  `data/optica_items.json`: OPTICA's definition holds every field that file had,
+  checked field by field before it was deleted, so it is the single source.
+- **The page's own prose sits beside the definition**, in
+  `app/frameworks/<id>/docs.toml` (title, introduction, a few column labels, a
+  citation template, a footer). The definition keeps only what the app needs.
+  A definition without a `docs.toml` still gets a page, in neutral words, and
+  an unknown key in one is an error rather than a silently ignored setting.
+- **The definition decides the page's shape**: `keys` name the headings,
+  `categoriesOn: "sections"` groups sections by category, `whos` adds a "Who
+  answers" column, `crossRefs` add a column named for the other framework, and
+  `source` adds a citation.
+- The CHAI and OPTICA pages it writes are byte-identical to the pages the old
+  scripts wrote, except one sentence: the CHAI page told editors to edit
+  `docs/app/index.html`, a generated file; it now names the definition.
+- **Until the engine reads the definitions** (#168 step 2), the app still
+  carries its own copy of CHAI's criteria and OPTICA's items in `app/js/`, now
+  maintained by hand, since `gen_optica_module.py` is gone. So the page's
+  "cannot drift from the checklist the tool actually enforces" stays true only
+  because `tests/test_framework_docs.py` compares the built dashboard's copy
+  with the definitions and fails when they differ.
+- **Rejected:** keeping two generators (each framework would need its own, so a
+  developer's framework would get no page); putting the page prose in
+  `framework.json` (the build embeds the definition in the app, and admonitions
+  and documentation links do not belong there); per-framework prose keyed by id
+  inside the generator (a new framework would mean editing the generator).
+- Known gap: the header comment of
+  `app/js/10-frameworks/20-optica/00-definition.js` still says it is generated
+  by the deleted `scripts/gen_optica_module.py`. That directory was being
+  rewritten in parallel, so this change did not touch it.
+- Source: #168; design v2; R-63; D-74.
+- Enforced by: `tests/test_framework_docs.py` (`pixi run test-framework-docs`,
+  the workflows job of `test.yml`): a fresh run equals the committed pages byte
+  for byte, and mutations show that an edited item, a missing page, an orphaned
+  page, a misspelled `docs.toml` key and app drift are each noticed; and the
+  `gen-checklists` pre-commit hook, whose filter now matches `app/frameworks/`.

@@ -57,6 +57,10 @@ jobs:
       - run: pixi run test-check-injection
       - run: pixi run test-check-i18n
 
+      # The checklist pages are their framework definitions, byte for byte, and the
+      # built dashboard's own copy of the criteria agrees with them (#168).
+      - run: pixi run test-framework-docs
+
       # The showcase video on the docs site: present, under its size cap,
       # first-party, and honest about which mode it shows.
       - run: pixi run test-docs-media

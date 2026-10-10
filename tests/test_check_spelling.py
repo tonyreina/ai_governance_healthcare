@@ -18,21 +18,37 @@ What is pinned, both ways:
   leaves a row uncaught; no EXPLICIT word may also be generated, so dropping one
   is always noticed; no MEDICAL form has a Latin ending, and no British word is
   spelled with the letters a-f alone;
-* a British word written with a ligature ("oe" or "ae" as one letter) is caught;
+* a lowercase word with a British medical prefix or suffix that is not listed
+  is reported by its shape, and never rewritten (SHAPED lists them); a
+  capitalized word, a Latin epithet and the American "paedomorphosis" are not;
+* no rule matches a lowercase word of the en_US Hunspell dictionary (pinned in
+  pixi.toml), except the two in CAUGHT_ON_PURPOSE, which CLAUDE.md rules out;
+* a British word written with a ligature ("oe" or "ae" as one letter) is caught,
+  and a word with an accented letter ("décentre", "réanalyse") is not English
+  and is not read;
 * American words, and American words a careless new stem would generate
   ("precise", "compelled", "lustring", "improvisation", "leucovorin"), are not
   flagged;
 * the verifier's corpus (tests/fixtures/spelling_corpus/): every clean line
   (organisms, drugs, places, titles, names, code, URLs, hex, encoded data, the
   binomial wrapped across lines) produces no finding; no line of names is
-  rewritten by --fix; every British line is found and fixed exactly; Python's
-  own spelling passes in a .py file; and the --fix demonstration that
-  corrupted the first version is left as written;
-* a capitalized word is reported and left by --fix, unless it is part of an
-  identifier, which --fix rewrites; the report says which;
-* URLs of every listed scheme, email and git addresses, domains, file names,
-  paths, digests and encoded data are neither reported nor rewritten, while an
-  identifier with a digit is still read;
+  rewritten by --fix; every British line is found, and fixed exactly where it
+  may be; Python's own spelling passes in a .py file; and the --fix
+  demonstration that corrupted the first version is left as written;
+* --fix rewrites a hit only when it is listed, all lowercase, in a Markdown,
+  reStructuredText or plain-text file or a value of app/i18n/en.json, not in
+  code, standing alone between whitespace with only an opening bracket, a quote
+  or "*" before it and only those that close, "*" or ",;:.!?" after it, and not
+  after a capitalized word that may begin a name; FIX_CASES pins every boundary
+  character both ways, every kind of file, every kind of code, and each of the
+  verifier's cases (a genus in italics, a citation key, a database prefix, an
+  import, an R aesthetic, a method call, an epithet after its genus, a French
+  word); the report says, of each hit --fix leaves, why;
+* --fix leaves alone every file skip() skips;
+* URLs of every listed scheme, also after "_" and not inside a longer word,
+  email and git addresses, domains, file names, paths (with ./, ../, ~/ or /,
+  or an extension), digests and encoded data from 16 characters are neither
+  reported nor rewritten, while an identifier with a digit is still read;
 * `.cancelled()` is exempt only as a method call in a .py file;
 * a slash in prose (two words joined by "/") is not a path, while a URL, ./, ../, an
   absolute path and a path with a file extension are; a URL needs "://" or a
@@ -50,12 +66,12 @@ What is pinned, both ways:
   of our real files is skipped, while a binary file, a symbolic link,
   translations, SKIP_DIRS and QUOTED_VERBATIM (each pinned to exactly its
   entries), the corpus's own files, the allowlist and the checker itself are;
-  an escape byte is text, a DEL byte is not, and a file that cannot be opened
-  counts as text;
-* --fix rewrites in place, keeping case, and leaves exempt text alone;
+  BEL, BS, VT, FF and ESC bytes are text, a DEL byte is not, only the first
+  1024 bytes are read to decide, and a file that cannot be opened counts as
+  text;
 * the command exits nonzero on a hit, or a file it cannot read, and zero on
   clean input; --fix exits nonzero when it could not read a file or left a hit
-  for a human.
+  for a person.
 
 Then the checker is broken on purpose, at least once for each property above
 (MUTATIONS lists them), and the same assertions must notice. A check never
@@ -741,6 +757,46 @@ macrohaematuria macrohematuria  spelling-ok
 microhaematuria microhematuria  spelling-ok
 disulphide disulfide  spelling-ok
 bisulphate bisulfate  spelling-ok
+# Added after the verifier's third pass (#169).
+oesophagi esophagi  spelling-ok
+colouration coloration  spelling-ok
+discolouration discoloration  spelling-ok
+malodour malodor  spelling-ok
+decilitre deciliter  spelling-ok
+femtolitre femtoliter  spelling-ok
+picolitre picoliter  spelling-ok
+decimetre decimeter  spelling-ok
+titre titer  spelling-ok
+titres titers  spelling-ok
+epithelialisation epithelialization  spelling-ok
+solubilise solubilize  spelling-ok
+hybridise hybridize  spelling-ok
+polymerisation polymerization  spelling-ok
+opsonisation opsonization  spelling-ok
+lateralisation lateralization  spelling-ok
+aerosolise aerosolize  spelling-ok
+autolyse autolyze  spelling-ok
+spirochaete spirochete  spelling-ok
+spirochaetes spirochetes  spelling-ok
+neurone neuron  spelling-ok
+neurones neurons  spelling-ok
+caesium cesium  spelling-ok
+paraesthesiae paresthesiae  spelling-ok
+xenooestrogen xenoestrogen  spelling-ok
+ethinyloestradiol ethinylestradiol  spelling-ok
+foetid fetid  spelling-ok
+leucaemia leukemia  spelling-ok
+hypaesthesia hypesthesia  spelling-ok
+menorrhoea menorrhea  spelling-ok
+oligomenorrhoea oligomenorrhea  spelling-ok
+palaeontology paleontology  spelling-ok
+sulphoxide sulfoxide  spelling-ok
+sulphydryl sulfhydryl  spelling-ok
+sulphadoxine sulfadoxine  spelling-ok
+sulphapyridine sulfapyridine  spelling-ok
+sulphation sulfation  spelling-ok
+sulphanilamide sulfanilamide  spelling-ok
+anaesthetically anesthetically  spelling-ok
 """
 
 # The ligatures, read as their two letters.
@@ -802,19 +858,19 @@ CAPITALIZED = [
     ("An \u0152dema.", ["\u0152dema"]),
     ("Haemonetics Corporation", []),  # spelling-ok
 ]
-# A capitalized British word inside an identifier, which --fix does rewrite:
-# after a letter, digit or underscore, or before an underscore or digit.
+# A British word inside an identifier: reported, with its American form, and
+# left by --fix, which never rewrites code (it may be a third party's name).
 IDENTIFIERS = [
-    ("getColourValue()", "getColorValue()"),  # spelling-ok
-    ("MAX_COLOURS = 3", "MAX_COLORS = 3"),  # spelling-ok
-    ("COLOUR_MAX = 3", "COLOR_MAX = 3"),  # spelling-ok
-    ("x = COLOUR2", "x = COLOR2"),  # spelling-ok
-    ("renderColourPanelV2Layout()", "renderColorPanelV2Layout()"),  # spelling-ok
-    ("self.colour = 1", "self.color = 1"),  # spelling-ok
+    ("getColourValue()", "Color"),  # spelling-ok
+    ("MAX_COLOURS = 3", "COLORS"),  # spelling-ok
+    ("COLOUR_MAX = 3", "COLOR"),  # spelling-ok
+    ("x = COLOUR2", "COLOR"),  # spelling-ok
+    ("renderColourPanelV2Layout()", "Color"),  # spelling-ok
+    ("self.colour = 1", "color"),  # spelling-ok
     # Its case changes often, but it has no digit: not taken for encoded data.
-    ("TestWhoColouredItAndWhen", "TestWhoColoredItAndWhen"),  # spelling-ok
+    ("TestWhoColouredItAndWhen", "Colored"),  # spelling-ok
     # Short, so not taken for encoded data.
-    ("let aColour2 = 0", "let aColor2 = 0"),  # spelling-ok
+    ("let aColour2 = 0", "Color"),  # spelling-ok
 ]
 
 # Text that is not prose: never reported, never rewritten.
@@ -841,6 +897,16 @@ NOT_PROSE = [
     "x QmVoYXZpb3VyIGNvbG91cgAbHaemoglobin",  # spelling-ok
     "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWVtIn0.HaemFaecPaedSulphxyz",  # spelling-ok
     "#faec00 3faec12 9faec3d1-0000-4000-8000-000000000000",
+    # A URL after "_" (Markdown italics), with a scheme or without.
+    "_ws://localhost/colour_",  # spelling-ok
+    "_ws://host?colour_",  # spelling-ok
+    "_mailto:colour_",  # spelling-ok
+    "javascript:alert('colour')",  # spelling-ok
+    "see behaviour.gov now",  # spelling-ok
+    "pin colour.lock today",  # spelling-ok
+    "md5:colour",  # spelling-ok
+    "~/colour/notes",  # spelling-ok
+    "see /users/~colour/notes now",  # spelling-ok
 ]
 
 # Ordinary American lines that must stay clean: URLs and paths among them.
@@ -1009,8 +1075,8 @@ def american_left_alone(mod: ModuleType) -> list[str]:
 
 
 def capitalized(mod: ModuleType) -> list[str]:
-    """A capitalized word is reported and left for a human, unless it is part of
-    an identifier, which --fix rewrites."""
+    """A capitalized word is reported and left for a person; so is a word inside
+    an identifier."""
     bad = []
     found = scan(mod, [line for line, _ in CAPITALIZED])
     got = {n: [w for w, _ in hits] for n, hits in found.items()}
@@ -1020,19 +1086,28 @@ def capitalized(mod: ModuleType) -> list[str]:
     text = "\n".join(line for line, _ in CAPITALIZED) + "\n"
     if fixed(mod, text) != text:
         bad.append(f"--fix leaves a capitalized word ({fixed(mod, text)!r})")
-    for line, want_line in IDENTIFIERS:
-        got_line = fixed(mod, line + "\n")
-        if got_line != want_line + "\n":
-            bad.append(f"--fix rewrites an identifier's part ({got_line!r})")
-    # The report says which hits --fix leaves, and only those.
+    found = scan(mod, [line for line, _ in IDENTIFIERS])
+    got = {n: [a for _, a in hits] for n, hits in found.items()}
+    want = {n: [a] for n, (_, a) in enumerate(IDENTIFIERS, 1)}
+    if got != want:
+        bad.append(f"an identifier's part is reported ({got})")
+    text = "\n".join(line for line, _ in IDENTIFIERS) + "\n"
+    if fixed(mod, text) != text:
+        bad.append(f"--fix leaves an identifier ({fixed(mod, text)!r})")
+    # The report says which hits --fix leaves, why, and only those.
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "a.md"
         text = "Haemorrhage here.\nthe colour here.\n"  # spelling-ok
         path.write_text(text, encoding="utf-8")
         messages = mod.check(path, [])
     left = [mod.LEFT_FOR_A_HUMAN in m for m in messages]
-    if left != [True, False] or "may be a name" not in mod.LEFT_FOR_A_HUMAN:
-        bad.append(f"the report says what --fix leaves ({messages})")
+    named = [mod.Left.CAPITALIZED in m for m in messages]
+    if (
+        left != [True, False]
+        or named != [True, False]
+        or "may be a name" not in mod.Left.CAPITALIZED
+    ):
+        bad.append(f"the report says what --fix leaves, and why ({messages})")
     return bad
 
 
@@ -1363,24 +1438,28 @@ def unreadable(mod: ModuleType) -> list[str]:
 
 
 def fixes(mod: ModuleType) -> list[str]:
-    # A capitalized word on its own may be a name, so --fix leaves it.
+    # A capitalized word may be a name, an identifier may be someone else's,
+    # and a lowercase word after a capitalized one may be an epithet: --fix
+    # leaves each.
     text = (
         "Behaviour, BEHAVIOUR and behaviour;\n"  # spelling-ok
         "a colourPicker and MAX_COLOURS.\n"  # spelling-ok
         "The colour stays.  <!-- spelling-ok -->\n"  # spelling-ok
         "See https://example.org/colour for it.\n"  # spelling-ok
         f"Keep {PHRASE} but fix the centre.\n"  # spelling-ok
-        "Unrecognised judgements.\n"  # spelling-ok
+        "Our judgements, unrecognised.\n"  # spelling-ok
         "Haemorrhagic oedematous foetuses.\n"  # spelling-ok
+        "the colour, the grey and the centre.\n"  # spelling-ok
     )
     want = (
         "Behaviour, BEHAVIOUR and behavior;\n"  # spelling-ok
-        "a colorPicker and MAX_COLORS.\n"
+        "a colourPicker and MAX_COLOURS.\n"  # spelling-ok
         "The colour stays.  <!-- spelling-ok -->\n"  # spelling-ok
         "See https://example.org/colour for it.\n"  # spelling-ok
         f"Keep {PHRASE} but fix the center.\n"
-        "Unrecognised judgments.\n"  # spelling-ok
-        "Haemorrhagic edematous fetuses.\n"  # spelling-ok
+        "Our judgments, unrecognized.\n"
+        "Haemorrhagic oedematous fetuses.\n"  # spelling-ok
+        "the color, the gray and the center.\n"
     )
     got = fixed(mod, text, [("*.md", PHRASE)])
     return [] if got == want else [f"--fix keeps case and exemptions ({got!r})"]
@@ -1420,6 +1499,8 @@ SCANNED = [
     "server/schema.sql",
     # Terminal output: an escape byte is text, by identify's rule.
     "logs/ansi.log",
+    # So are BEL, BS, VT and FF.
+    "logs/bell.log",
 ]
 # Translations, which the checker must not judge by English spelling (#80); a
 # binary file, which pre-commit would not call text; and a symbolic link, which
@@ -1448,6 +1529,8 @@ def scanned(mod: ModuleType) -> list[str]:
                 path.write_bytes(b"\x89PNG\r\n\x1a\n\x00" + body.encode())
             elif rel == "logs/ansi.log":
                 path.write_bytes(b"\x1b[31m" + body.encode())
+            elif rel == "logs/bell.log":
+                path.write_bytes(b"\x07\x08\x0b\x0c" + body.encode())
             elif rel == "data/del.dat":
                 path.write_bytes(b"\x7f" + body.encode())
             elif rel == "docs/link.md":
@@ -1525,6 +1608,447 @@ def translations(mod: ModuleType) -> list[str]:
     return [f"is_translation() reads only a catalog ({wrong})"] if wrong else []
 
 
+# ---------------------------------------------------------------------------
+# What --fix rewrites, and what it leaves for a person (D-81).
+# ---------------------------------------------------------------------------
+
+W = "colour"  # spelling-ok
+# Each row is (line, the line --fix makes of it in a Markdown file, the name of
+# the Left member it is reported with, or None when --fix rewrites it).
+FIX_CASES: list[tuple[str, str, str | None]] = [
+    (f"the {W} here", "the color here", None),
+    (W, "color", None),
+    # What may stand next to a word --fix rewrites.
+    *[(f"the {c}{W} here", f"the {c}color here", None) for c in "([\"'*"],
+    *[(f"the {W}{c} here", f"the color{c} here", None) for c in ")]\"'*,;:.!?"],
+    (f"the **{W}**.", "the **color**.", None),
+    (f"the ({W}).", "the (color).", None),
+    (f"| a | {W} |", "| a | color |", None),
+    (f"- {W}", "- color", None),
+    (f"> {W}", "> color", None),
+    # And what may not: anything else, before or after.
+    *[(f"the {c}{W} here", "", "JOINED") for c in "_-@:.=<>`~#$%&+\\^{|}0"],
+    *[(f"the {W}{c} here", "", "JOINED") for c in "_-/@=<>`~#$%&+\\^{|}(0"],
+    (f"the {W}'s here", "", "JOINED"),
+    (f"the {W}.x here", "", "JOINED"),
+    (f"the {W}:x here", "", "JOINED"),
+    (f"the “{W}” here", "", "JOINED"),
+    (f"the _{W}_ here", "", "JOINED"),
+    # The verifier's cases (#169).
+    ("_Oestrus ovis_", "", "CAPITALIZED"),  # spelling-ok
+    ("_British Journal of Anaesthesia_", "", "CAPITALIZED"),  # spelling-ok
+    ("__Haemophilia__", "", "CAPITALIZED"),  # spelling-ok
+    ("@Grey2019", "", "CAPITALIZED"),  # spelling-ok
+    ("@article{Grey2019,", "", "CAPITALIZED"),  # spelling-ok
+    ("Oestrus_ovis", "", "CAPITALIZED"),  # spelling-ok
+    ("GBIF:Oestrus_ovis", "", "CAPITALIZED"),  # spelling-ok
+    ("Centre_County", "", "CAPITALIZED"),  # spelling-ok
+    ("OpenGrey", "", "CAPITALIZED"),  # spelling-ok
+    ("Sulphur8", "", "CAPITALIZED"),  # spelling-ok
+    ("MonoBehaviour", "", "CAPITALIZED"),  # spelling-ok
+    ("cmap='Greys_r'", "", "CAPITALIZED"),  # spelling-ok
+    ("01H8XGJWBWBAQ4Z1HXKT2GREY7", "", "CAPITALIZED"),  # spelling-ok
+    ("import colour", "", "CODE"),  # spelling-ok
+    ("See import colour, page 3.", "", "CODE"),  # spelling-ok
+    ("aes(colour=)", "", "JOINED"),  # spelling-ok
+    ("ggplot(df, aes(colour = arm))", "", "JOINED"),  # spelling-ok
+    ("scale_colour_manual(values = pal)", "", "JOINED"),  # spelling-ok
+    ("grey.colors()", "", "JOINED"),  # spelling-ok
+    ("@behaviour GenServer", "", "JOINED"),  # spelling-ok
+    ("pip install colour-science", "", "JOINED"),  # spelling-ok
+    ("if task.cancelled():", "", "JOINED"),  # spelling-ok
+    ("Tritrichomonas foetus", "", "AFTER_NAME"),  # spelling-ok
+    ("*Tritrichomonas foetus* in cattle", "", "AFTER_NAME"),  # spelling-ok
+    ("T. foetus in cattle", "", "AFTER_NAME"),  # spelling-ok
+    ("in Boston grey skies", "", "AFTER_NAME"),  # spelling-ok
+    # A capitalized word that opens a sentence, or that punctuation closes, or
+    # that has a digit, is not a name's start.
+    ("The foetus grew.", "The fetus grew.", None),  # spelling-ok
+    ("In Boston, grey skies", "In Boston, gray skies", None),  # spelling-ok
+    ("HbA1c grey", "HbA1c gray", None),  # spelling-ok
+    # Code in prose.
+    ("from colour import x", "", "CODE"),  # spelling-ok
+    ("- import colour", "", "CODE"),  # spelling-ok
+    ("$ grey --help", "", "CODE"),  # spelling-ok
+    (">>> grey", "", "CODE"),  # spelling-ok
+    ("run `set grey now` then", "", "CODE"),  # spelling-ok
+    ("run ``set grey now`` then", "", "CODE"),  # spelling-ok
+    ("    the grey", "", "CODE"),  # spelling-ok
+    ("\tthe grey", "", "CODE"),  # spelling-ok
+    # Found by its shape: reported with a suggestion, never rewritten.
+    ("the haematoxylin stain", "", "SHAPE"),  # spelling-ok
+]
+# Neither reported nor rewritten: not English, or not prose.
+NOT_READ = [
+    "décentre réanalyse Décentre",  # spelling-ok
+    "_ws://localhost/colour_",  # spelling-ok
+]
+
+
+def fix_cases(mod: ModuleType) -> list[str]:
+    """Each row of FIX_CASES, in a Markdown file: what --fix makes of it, and why
+    the report says it was left."""
+    bad = []
+    for line, want, reason in FIX_CASES:
+        want = want or line
+        got = fixed(mod, line + "\n")
+        if got != want + "\n":
+            bad.append(f"--fix makes {want!r} of {line!r} ({got!r})")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "a.md"
+            path.write_text(line + "\n", encoding="utf-8")
+            messages = mod.check(path, [])
+        note = "" if reason is None else mod.left_note(mod.Left[reason])
+        ok = len(messages) == 1 and (
+            note in messages[0] if reason else mod.LEFT_FOR_A_HUMAN not in messages[0]
+        )
+        if not ok:
+            bad.append(f"{line!r} is reported once, {reason or 'fixable'} ({messages})")
+    for line in NOT_READ:
+        if scan(mod, [line]) or fixed(mod, line + "\n") != line + "\n":
+            bad.append(f"{line!r} is neither reported nor rewritten")
+    return bad
+
+
+def fix_lines(mod: ModuleType) -> list[str]:
+    """Across lines: a name broken at the end of a line, fenced, indented and
+    literal blocks, the first column, and a last line with no newline."""
+    bad = []
+    g, a = "the grey", "the gray"  # spelling-ok
+    cases = [
+        ("a.md", "Tritrichomonas\nfoetus here\n", None),  # spelling-ok
+        (
+            "a.md",
+            "Tritrichomonas\n\nfoetus here\n",  # spelling-ok
+            "Tritrichomonas\n\nfetus here\n",
+        ),
+        ("a.md", f"```\n{g}\n```\n{g}\n", f"```\n{g}\n```\n{a}\n"),
+        ("a.md", f"~~~\n{g}\n~~~\n{g}\n", f"~~~\n{g}\n~~~\n{a}\n"),
+        ("a.md", f"````\n```\n{g}\n````\n{g}\n", f"````\n```\n{g}\n````\n{a}\n"),
+        ("a.rst", f"Example::\n\n    {g}\n\n{g}\n", f"Example::\n\n    {g}\n\n{a}\n"),
+        (
+            "a.rst",
+            f".. code-block:: python\n\n    {g}\n\n{g}\n",
+            f".. code-block:: python\n\n    {g}\n\n{a}\n",
+        ),
+        ("a.txt", f"    {g}\n", f"    {a}\n"),
+        ("a.md", f"{g} x", f"{a} x"),
+        ("a.md", W, "color"),
+        ("a.md", f"x\n{W}", "x\ncolor"),
+    ]
+    for name, text, want in cases:
+        want = text if want is None else want
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / name
+            path.write_text(text, encoding="utf-8")
+            mod.fix(path, [])
+            got = path.read_text(encoding="utf-8")
+        if got != want:
+            bad.append(f"--fix makes {want!r} of {text!r} in {name} ({got!r})")
+    return bad
+
+
+# Files of every kind: only Markdown, reStructuredText and plain text are
+# rewritten (and the English catalog's values, below).
+FILE_KINDS = [
+    ("a.md", True),
+    ("a.MD", True),
+    ("a.txt", True),
+    ("a.rst", True),
+    ("a.py", False),
+    ("a.js", False),
+    ("a.json", False),
+    ("a.yml", False),
+    ("a.html", False),
+    ("a.css", False),
+    ("a.R", False),
+    ("a.bib", False),
+    ("a.tex", False),
+    ("Makefile", False),
+]
+
+
+def file_kinds(mod: ModuleType) -> list[str]:
+    bad = []
+    line = f"the {W} here\n"
+    for name, rewritten in FILE_KINDS:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / name
+            path.write_text(line, encoding="utf-8")
+            reported = mod.check(path, [])
+            mod.fix(path, [])
+            got = path.read_text(encoding="utf-8")
+        if (got != line) != rewritten or len(reported) != 1:
+            bad.append(f"{name} is {'' if rewritten else 'not '}rewritten ({got!r})")
+        if not rewritten and mod.Left.NOT_PROSE not in reported[0]:
+            bad.append(f"{name}: the report says it is not prose ({reported})")
+    return bad
+
+
+def catalog(mod: ModuleType) -> list[str]:
+    """In app/i18n/en.json, only a value is rewritten: not a key, an array's
+    item, or the same file anywhere else."""
+    text = (
+        "{\n"
+        '  "@meta": {"safety": ["colour"]},\n'  # spelling-ok
+        '  "colour": "the colour",\n'  # spelling-ok
+        '  "pick": "Pick a colour or a {colour}"\n'  # spelling-ok
+        "}\n"
+    )
+    want = (
+        "{\n"
+        '  "@meta": {"safety": ["colour"]},\n'  # spelling-ok
+        '  "colour": "the color",\n'  # spelling-ok
+        '  "pick": "Pick a color or a {colour}"\n'  # spelling-ok
+        "}\n"
+    )
+    bad = []
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        saved = mod.ROOT
+        mod.ROOT = root
+        try:
+            for rel, expect in [
+                ("app/i18n/en.json", want),
+                ("app/i18n/framework/en.json", text),
+                ("docs/en.json", text),
+            ]:
+                path = root / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text, encoding="utf-8")
+                mod.fix(path, [])
+                got = path.read_text(encoding="utf-8")
+                if got != expect:
+                    bad.append(f"--fix of {rel} ({got!r})")
+        finally:
+            mod.ROOT = saved
+    return bad
+
+
+def fix_respects_skip(mod: ModuleType) -> list[str]:
+    """--fix never touches a file skip() skips: something quoted verbatim, the
+    corpus. Named on the command line, or found by a whole-repository run."""
+    bad = []
+    text = f"the {W} here\n"
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        rels = [
+            sorted(r for r in mod.QUOTED_VERBATIM if r.endswith(".md"))[0],
+            f"{mod.CORPUS}/notes.txt",
+        ]
+        for rel in rels:
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(text, encoding="utf-8")
+        saved = mod.ROOT, mod.ALLOWLIST
+        mod.ROOT, mod.ALLOWLIST = root, root / ".spelling-allow"
+        try:
+            for argv in (["--fix", *(str(root / r) for r in rels)], ["--fix"]):
+                with (
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
+                ):
+                    mod.main(argv)
+                changed = [
+                    r for r in rels if (root / r).read_text(encoding="utf-8") != text
+                ]
+                if changed:
+                    bad.append(f"--fix leaves skipped files ({argv[1:2]}: {changed})")
+        finally:
+            mod.ROOT, mod.ALLOWLIST = saved
+    return bad
+
+
+# British by their shape, not listed: each is reported with the suggestion,
+# and never rewritten (the verifier's third pass, #169).
+SHAPED = [
+    ("haematoxylin", "hematoxylin"),  # spelling-ok
+    ("haematogenous", "hematogenous"),  # spelling-ok
+    ("haemopoietic", "hemopoietic"),  # spelling-ok
+    ("haemopericardium", "hemopericardium"),  # spelling-ok
+    ("haemagglutination", "hemagglutination"),  # spelling-ok
+    ("haemovigilance", "hemovigilance"),  # spelling-ok
+    ("oesophagogastroduodenoscopy", "esophagogastroduodenoscopy"),  # spelling-ok
+    ("oesophagogastric", "esophagogastric"),  # spelling-ok
+    ("oestrogenised", "estrogenised"),  # spelling-ok
+    ("foetoplacental", "fetoplacental"),  # spelling-ok
+    ("foetomaternal", "fetomaternal"),  # spelling-ok
+    ("paediatrist", "pediatrist"),  # spelling-ok
+    ("anaesthesiometer", "anesthesiometer"),  # spelling-ok
+    ("gynae", "gyne"),  # spelling-ok
+    ("gynaeoid", "gyneoid"),  # spelling-ok
+    ("acidaemia", "acidemia"),  # spelling-ok
+    ("methaemoglobinaemia", "methemoglobinemia"),  # spelling-ok
+    ("hyperbilirubinaemias", "hyperbilirubinemias"),  # spelling-ok
+    ("isovolaemic", "isovolemic"),  # spelling-ok
+    ("azotaemics", "azotemics"),  # spelling-ok
+    ("otorrhoea", "otorrhea"),  # spelling-ok
+    ("logorrhoeal", "logorrheal"),  # spelling-ok
+    ("eupnoea", "eupnea"),  # spelling-ok
+    ("platypnoeas", "platypneas"),  # spelling-ok
+    ("hectolitre", "hectoliter"),  # spelling-ok
+    ("hectolitres", "hectoliters"),  # spelling-ok
+]
+# Not reported: capitalized and not listed, a Latin ending, or American too.
+NOT_SHAPED = [
+    "Haemonetics",  # spelling-ok
+    "Haematoxylin",  # spelling-ok
+    "HAEMATOXYLIN",  # spelling-ok
+    "Acidaemia",  # spelling-ok
+    "aemia",  # spelling-ok
+    "haem",  # spelling-ok
+    "ACIDAEMIA",  # spelling-ok
+    "haemolyticus",  # spelling-ok
+    "haemophysalis",  # spelling-ok
+    "haemolyticum",  # spelling-ok
+    "gonorrhoeae",  # spelling-ok
+    "paedomorphosis",
+    "paedogenesis",
+    "haemolyticusRate",  # spelling-ok
+]
+
+
+def shapes(mod: ModuleType) -> list[str]:
+    bad = []
+    found = scan(mod, [f"the {b} here" for b, _ in SHAPED])
+    want = {n: [row] for n, row in enumerate(SHAPED, 1)}
+    if found != want:
+        wrong = {
+            SHAPED[n - 1][0]: found.get(n) for n in want if found.get(n) != want[n]
+        }
+        bad.append(f"a British shape is reported, with its suggestion ({wrong})")
+    text = "\n".join(f"the {b} here" for b, _ in SHAPED) + "\n"
+    if fixed(mod, text) != text:
+        bad.append("--fix leaves a word found by its shape")
+    found = scan(mod, [f"the {w} here" for w in NOT_SHAPED])
+    if found:
+        bad.append(f"no shape matches {[NOT_SHAPED[n - 1] for n in found]}")
+    return bad
+
+
+# Not English: a word with an accented letter is not read, so neither its
+# English-looking end nor its start is reported.
+ACCENTED = [
+    ("décentre", []),  # spelling-ok
+    ("réanalyse", []),  # spelling-ok
+    ("Décentre", []),  # spelling-ok
+    ("centreé", []),  # spelling-ok
+    ("a naïve colour", ["colour"]),  # spelling-ok
+]
+
+
+def accented(mod: ModuleType) -> list[str]:
+    found = scan(mod, [line for line, _ in ACCENTED])
+    got = {n: [w for w, _ in hits] for n, hits in found.items()}
+    want = {n: words for n, (_, words) in enumerate(ACCENTED, 1) if words}
+    return [] if got == want else [f"an accented word is not read ({got})"]
+
+
+# Read as prose, though it looks like a URL or data: each British word is
+# reported.
+STILL_PROSE = [
+    ("metadata:colour", ["colour"]),  # spelling-ok
+    ("9ftp://host?colour", ["colour"]),  # spelling-ok
+    ("aB1colour2cD3e=", ["colour"]),  # spelling-ok
+    ("aB1colour2cD3eF=", []),  # spelling-ok
+]
+
+
+def still_prose(mod: ModuleType) -> list[str]:
+    found = scan(mod, [line for line, _ in STILL_PROSE])
+    got = {n: [w for w, _ in hits] for n, hits in found.items()}
+    want = {n: words for n, (_, words) in enumerate(STILL_PROSE, 1) if words}
+    return [] if got == want else [f"what is still prose is read ({got})"]
+
+
+def is_text_window(mod: ModuleType) -> list[str]:
+    """is_text() reads the first 1024 bytes: a NUL inside them makes a file
+    binary, and one after them does not."""
+    with tempfile.TemporaryDirectory() as tmp:
+        inside = Path(tmp) / "inside.dat"
+        inside.write_bytes(b"a" * 1000 + b"\x00")
+        outside = Path(tmp) / "outside.dat"
+        outside.write_bytes(b"a" * 1024 + b"\x00")
+        ok = not mod.is_text(inside) and mod.is_text(outside)
+    return [] if ok else ["is_text() reads exactly the first 1024 bytes"]
+
+
+# The en_US Hunspell dictionary, pinned in pixi.toml: American English, with
+# its affix rules expanded. No rule of the checker may match one of its
+# lowercase words but these two, which it lists as variants and CLAUDE.md does
+# not allow. Its capitalized entries that the checker lists (four surnames and
+# places) are names, and a capitalized word is never rewritten.
+DICTIONARY = Path(sys.prefix) / "share" / "hunspell_dictionaries" / "en_US"
+CAUGHT_ON_PURPOSE = {"towards", "whilst"}  # spelling-ok
+
+
+def hunspell_words(stem: Path) -> set[str]:
+    """Every word of a Hunspell dictionary: its entries, and each entry with
+    the affixes its flags allow (prefixes crossed with suffixes)."""
+    affixes: dict[str, tuple[str, bool, list[tuple[str, str, re.Pattern[str]]]]] = {}
+    lines = stem.with_suffix(".aff").read_text(encoding="utf-8").splitlines()
+    i = 0
+    while i < len(lines):
+        head = lines[i].split()
+        if len(head) == 4 and head[0] in ("PFX", "SFX") and head[2] in ("Y", "N"):
+            kind, flag, cross, count = head[0], head[1], head[2] == "Y", int(head[3])
+            rules = []
+            for rule in lines[i + 1 : i + 1 + count]:
+                f = rule.split()
+                strip = "" if f[2] == "0" else f[2]
+                add = "" if f[3] == "0" else f[3].split("/")[0]
+                anchored = f"^{f[4]}" if kind == "PFX" else f"{f[4]}$"
+                rules.append((strip, add, re.compile(anchored)))
+            affixes[flag] = (kind, cross, rules)
+            i += count + 1
+        else:
+            i += 1
+    words = set()
+    entries = stem.with_suffix(".dic").read_text(encoding="utf-8").splitlines()[1:]
+    for entry in entries:
+        word, _, flags = entry.partition("/")
+        words.add(word)
+        suffixed = []
+        for flag in flags:
+            kind, cross, rules = affixes.get(flag, ("", False, []))
+            for strip, add, condition in rules:
+                if not condition.search(word):
+                    continue
+                if kind == "SFX" and word.endswith(strip):
+                    new = word[: len(word) - len(strip)] + add
+                    words.add(new)
+                    if cross:
+                        suffixed.append(new)
+                elif kind == "PFX" and word.startswith(strip):
+                    words.add(add + word[len(strip) :])
+        for flag in flags:
+            kind, cross, rules = affixes.get(flag, ("", False, []))
+            if kind != "PFX" or not cross:
+                continue
+            for new in suffixed:
+                for strip, add, condition in rules:
+                    if condition.search(new) and new.startswith(strip):
+                        words.add(add + new[len(strip) :])
+    return words
+
+
+AMERICAN_WORDS: list[str] = []
+
+
+def dictionary(mod: ModuleType) -> list[str]:
+    if not AMERICAN_WORDS:
+        if not DICTIONARY.with_suffix(".dic").exists():
+            return [f"the en_US dictionary is installed ({DICTIONARY}.dic)"]
+        AMERICAN_WORDS.extend(sorted(hunspell_words(DICTIONARY)))
+    matched = {
+        w
+        for w in AMERICAN_WORDS
+        if w.islower() and (mod.american(w) or mod.by_shape(w))
+    }
+    if matched != CAUGHT_ON_PURPOSE:
+        return [f"no rule matches an American word ({sorted(matched)[:10]})"]
+    return []
+
+
 PROPERTIES = [
     every_word,
     table,
@@ -1548,6 +2072,16 @@ PROPERTIES = [
     fix_exit_codes,
     unopenable_is_text,
     corpus_skipped,
+    fix_cases,
+    fix_lines,
+    file_kinds,
+    catalog,
+    fix_respects_skip,
+    shapes,
+    accented,
+    still_prose,
+    is_text_window,
+    dictionary,
 ]
 
 
@@ -1926,8 +2460,8 @@ MUTATIONS: list[tuple[str, str, str]] = [
     ),
     (
         "identifiers are not split",
-        "WORD.finditer(scannable)",
-        "WHOLE.finditer(scannable)",
+        "WORD.finditer(scannable, run.start(), run.end())",
+        "WHOLE.finditer(scannable, run.start(), run.end())",
     ),
     (
         "text that is not prose is not blanked",
@@ -1936,7 +2470,7 @@ MUTATIONS: list[tuple[str, str, str]] = [
     ),
     (
         "any run with a slash is a path",
-        'if path.startswith(("./", "../", "/")) or any(',
+        'if path.startswith(("./", "../", "~/", "/")) or any(',
         "if True or any(",
     ),
     (
@@ -2026,32 +2560,16 @@ MUTATIONS: list[tuple[str, str, str]] = [
         'path = run.rstrip(".")',
         "path = run",
     ),
-    # What --fix rewrites, and what it leaves for a human.
-    ("a capitalized word is fixed", "    if word.islower():\n", "    if True:\n"),
+    # What --fix rewrites, and what it leaves for a person.
     (
-        "a word after a letter is not an identifier's part",
-        'before.isalnum() or before == "_"',
-        'before == "_"',
-    ),
-    (
-        "a hyphen joins an identifier",
-        'before.isalnum() or before == "_"',
-        'before.isalnum() or before in "_-"',
-    ),
-    (
-        "the character after a word is not read",
-        'after.isdigit() or after == "_"',
-        "False",
-    ),
-    (
-        "--fix exits zero with hits left",
-        "return 1 if unread or unfixed else 0",
-        "return 1 if unread else 0",
+        "a capitalized word is fixed",
+        "    if not word.islower():\n        return Left.CAPITALIZED\n",
+        "",
     ),
     (
         "the report does not say what --fix leaves",
-        "{'' if can_fix else LEFT_FOR_A_HUMAN}",
-        "{''}",
+        'f"{left_note(reason)}\\n"',
+        'f"\\n"',
     ),
     # The files read.
     (
@@ -2125,6 +2643,250 @@ MUTATIONS: list[tuple[str, str, str]] = [
         "the marker is read in any case",
         "if MARKER in line:",
         "if MARKER in line.lower():",
+    ),
+]
+
+BEFORE_SOURCE = """BEFORE = frozenset("([\\"'*")"""
+AFTER_SOURCE = """AFTER = frozenset(")]\\"'*,;:.!?")"""
+MUTATIONS += [
+    # A character that may stand next to a word --fix rewrites, added or
+    # dropped.
+    *[
+        (
+            f"{c!r} may stand before a word --fix rewrites",
+            BEFORE_SOURCE,
+            BEFORE_SOURCE[:-2] + c + '")',
+        )
+        for c in "_-@:.=<`~#0"
+    ],
+    *[
+        (
+            f"{c!r} may stand after a word --fix rewrites",
+            AFTER_SOURCE,
+            AFTER_SOURCE[:-2] + c + '")',
+        )
+        for c in "_-/@=<`~#(0"
+    ],
+    ("'(' may not stand before", BEFORE_SOURCE, BEFORE_SOURCE.replace('"([', '"[', 1)),
+    ("'.' may not stand after", AFTER_SOURCE, AFTER_SOURCE.replace(".", "", 1)),
+    (
+        "--fix ignores skip()",
+        "            if path.is_file() and not skip(path):\n                try:",
+        "            if path.is_file():\n                try:",
+    ),
+    (
+        "column 0 reads the end of the line",
+        "LEAD.search(line[:start])",
+        "LEAD.search(line[:start] or line[-1:])",
+    ),
+    (
+        "a URL needs no boundary",
+        r'r"(?<![A-Za-z0-9])[A-Za-z][\w+.-]*://\S+"',
+        r'r"[A-Za-z][\w+.-]*://\S+"',
+    ),
+    (
+        "a URL's boundary is a word boundary",
+        r'r"(?<![A-Za-z0-9])[A-Za-z][\w+.-]*://\S+"',
+        r'r"\b[A-Za-z][\w+.-]*://\S+"',
+    ),
+    (
+        "a scheme without slashes needs no boundary",
+        'r"|(?<![A-Za-z0-9])(?:mailto',
+        'r"|(?:mailto',
+    ),
+    (
+        "a scheme without slashes has a word boundary",
+        'r"|(?<![A-Za-z0-9])(?:mailto',
+        r'r"|\b(?:mailto',
+    ),
+    ("javascript: is not a scheme", "|javascript|", "|"),
+    ("gov is not a top-level domain", "|edu|gov|", "|edu|"),
+    (".lock is not a file extension", "|conf|lock|", "|conf|"),
+    ("md5 is not a digest", "|sha512|md5)", "|sha512)"),
+    ("encoded data needs 24 characters", "{16,}", "{24,}"),
+    ("encoded data needs 17 characters", "{16,}", "{17,}"),
+    ("encoded data needs 15 characters", "{16,}", "{15,}"),
+    (
+        "~ is not a path character",
+        r'SLASHED = re.compile(r"[\w.~-]*/[\w./~-]*")',
+        r'SLASHED = re.compile(r"[\w.-]*/[\w./-]*")',
+    ),
+    ("~/ does not start a path", '("./", "../", "~/", "/")', '("./", "../", "/")'),
+    ("../ does not start a path", '("./", "../", "~/", "/")', '("./", "~/", "/")'),
+    (
+        "--fix rewrites a line left to right",
+        "in reversed(found):",
+        "in found:",
+    ),
+    (
+        "oesophagi is not generated",  # spelling-ok
+        '            "us",\n            "i",\n            "eal",',
+        '            "us",\n            "eal",',
+    ),
+    (
+        "is_text() reads 512 bytes",
+        "head = handle.read(1024)",
+        "head = handle.read(512)",
+    ),
+    (
+        "is_text() reads 2048 bytes",
+        "head = handle.read(1024)",
+        "head = handle.read(2048)",
+    ),
+    (
+        "BEL, BS, VT and FF make a file binary",
+        "{7, 8, 9, 10, 11, 12, 13, 27}",
+        "{9, 10, 13, 27}",
+    ),
+    # Words with an accent.
+    (
+        "accented letters are not letters",
+        'LETTERS = re.compile(r"[^\\W\\d_]+")',
+        'LETTERS = re.compile(r"[A-Za-zŒÆœæ]+")',
+    ),
+    (
+        "a word with an accent is read",
+        "        if not ENGLISH.issuperset(run.group(0)):\n            continue\n",
+        "",
+    ),
+    # Shapes.
+    (
+        "a word found by its shape is fixed",
+        "    if not listed:\n        return Left.SHAPE\n",
+        "",
+    ),
+    (
+        "a shape is matched in any case",
+        "    if not word.islower():\n        return None\n",
+        "",
+    ),
+    (
+        "a Latin ending is matched by shape",
+        "        if latin or key.startswith(SHAPE_EXCEPTIONS):",
+        "        if key.startswith(SHAPE_EXCEPTIONS):",
+    ),
+    (
+        "a prefix alone is a shape",
+        "key.startswith(prefix) and len(key) > len(prefix)",
+        "key.startswith(prefix)",
+    ),
+    (
+        "a suffix alone is a shape",
+        "key.endswith(suffix) and len(key) > len(suffix)",
+        "key.endswith(suffix)",
+    ),
+    ("-ous is a Latin ending", " and not key.endswith(NOT_LATIN)", ""),
+    (
+        "gynae is not a shape",  # spelling-ok
+        'SHAPE_WORDS = ("gynae",)',  # spelling-ok
+        "SHAPE_WORDS = ()",
+    ),
+    (
+        "an epithet found by its shape is reported",
+        "            if found[3] or not names(",
+        "            if True or not names(",
+    ),
+    (
+        "no word is excepted from the shapes",
+        'SHAPE_EXCEPTIONS = ("paedomorph", "paedogen")',
+        'SHAPE_EXCEPTIONS = ("-",)',
+    ),
+    ("the shape haem- is dropped", 'SHAPE_PREFIXES = ("haem", ', "SHAPE_PREFIXES = ("),
+    ("the shape gynae- is dropped", ', "anaes", "gynae")', ', "anaes")'),  # spelling-ok
+    ("the shape -aemic is dropped", '    "aemic",\n', ""),
+    ("the shape -litre is dropped", '    "litre",\n    "litres",\n', ""),  # spelling-ok
+    (
+        "the shape leuc- is added",
+        'SHAPE_PREFIXES = ("haem", ',
+        'SHAPE_PREFIXES = ("leuc", "haem", ',
+    ),
+    # The kinds of file --fix rewrites.
+    (
+        "a .py file is prose",
+        'PROSE_SUFFIXES = {".md": Kind.MARKDOWN,',
+        'PROSE_SUFFIXES = {".py": Kind.TEXT, ".md": Kind.MARKDOWN,',
+    ),
+    ("a suffix is read in its case", "path.suffix.lower()", "path.suffix"),
+    (
+        "the catalog is not prose",
+        "    if relative(path) == CATALOG:\n",
+        "    if False:\n",
+    ),
+    (
+        "a catalog's key is prose",
+        "        if not value or not value.start(1) <= start < end <= value.end(1):",
+        "        if not value:",
+    ),
+    (
+        "any line of the catalog is prose",
+        "        if not value or not value.start(1) <= start < end <= value.end(1):",
+        "        if False:",
+    ),
+    # Code in prose.
+    (
+        "a line of code is prose",
+        "    elif code or in_code(line, start):",
+        "    elif in_code(line, start):",
+    ),
+    ("a command is prose", "    if CODE_LINE.match(line):\n        return True\n", ""),
+    (
+        "inline code is prose",
+        "    return any(span.start() <= start < span.end() for span in spans)",
+        "    return False",
+    ),
+    ("a fence opens nothing", "                self.fence = fence.group(1)\n", ""),
+    (
+        "a fence never closes",
+        '                    self.fence = ""\n',
+        "                    pass\n",
+    ),
+    ("a shorter fence closes a longer one", "len(mark) >= len(self.fence)", "True"),
+    (
+        "an indented Markdown line is prose",
+        "            return bool(INDENTED.match(line))",
+        "            return False",
+    ),
+    (
+        "a literal block is prose",
+        'if directive or line.rstrip().endswith("::"):',
+        "if directive:",
+    ),
+    (
+        "a code directive is prose",
+        "directive = bool(RST_CODE.match(line))",
+        "directive = False",
+    ),
+    ("import is prose", "    if token.strip(", "    if False and token.strip("),
+    # Names.
+    (
+        "a word after a capitalized one is fixed",
+        "    if names(token):\n        return Left.AFTER_NAME\n",
+        "",
+    ),
+    (
+        "an abbreviated genus is no name",
+        "    if ABBREVIATION.fullmatch(token):\n        return True\n",
+        "",
+    ),
+    (
+        "a name is not carried across lines",
+        'previous = words[-1] if words else ""',
+        'previous = ""',
+    ),
+    (
+        "a blank line does not end a name",
+        'previous = words[-1] if words else ""',
+        "previous = words[-1] if words else previous",
+    ),
+    (
+        "a sentence's first word is a name",
+        "    return core.lower() not in OPENERS",
+        "    return True",
+    ),
+    (
+        "a word with a digit or punctuation is a name",
+        "    if not core.isalpha() or not core[0].isupper():",
+        "    if not core[:1].isupper():",
     ),
 ]
 

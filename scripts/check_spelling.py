@@ -21,30 +21,56 @@ The list is of roots, not of words: each root's inflections (plurals, -ed,
 because a list of exact forms missed "judgements" while it listed "judgement"
 (#169). The British medical spellings are roots too (MEDICAL: "haemorrhag-",
 "oedem-", "oesophag-", the -aemia words and the rest), each with a closed set of
-English endings and a few known prefixes. Every word is matched whole, never
-inside a longer word, so "phytoestrogen" and "proestrus" are not touched, and
-no Latin species epithet ("faecalis", "haemolyticus") is ever generated.
+English endings and a few known prefixes. A listed word is matched whole, so
+"phytoestrogen" and "proestrus" are not touched, and no listed form has a Latin
+ending, so "faecalis" is never listed.
 
-Only what is listed is caught. A British word whose root is not listed passes
+Beyond the list, a lowercase word is also reported by its shape: one that
+starts with a British medical segment (haem-, oesophag-, oestr-, foeto-, paed-,
+anaes-, gynae-) or ends with one (-aemia, -aemic, -rrhoea, -pnoea, -litre and
+their plurals), unless it has a Latin ending or is one of SHAPE_EXCEPTIONS. See
+by_shape(). A shape is never rewritten.
+
+A British word that neither the list nor a shape covers passes
 (tests/fixtures/spelling_corpus/unlisted.txt keeps a few), and so does a
-commit message, which the check does not read.
+commit message, which the check does not read. A word with an accented letter
+is not English and is not read ("décentre").
 
 Not prose, so neither reported nor rewritten: a URL (with "://", or one of the
-schemes written without it, such as mailto:, urn:, doi: and data:), an email
-address, a domain, a file name with a known extension, a path, a digest
-("sha384-..."), and a long run that looks like encoded data (see
-looks_encoded()). Hex needs no rule: a word is a run of letters, and no British
-word is spelled with the letters a-f alone.
+schemes written without it, such as mailto:, urn:, doi: and data:, starting
+after anything but a letter or digit), an email address, a domain, a file name
+with a known extension, a path, a digest ("sha384-..."), and a run of 16 or
+more characters that looks like encoded data (see looks_encoded()). Hex needs
+no rule: a word is a run of letters, and no British word is spelled with the
+letters a-f alone.
 
-Reported, but not rewritten by --fix: a word with a capital letter, unless it is
-part of an identifier (``getColourValue``, ``MAX_COLOURS``). It may be a name: a
-journal ("British Journal of Haematology"), a company, a place ("Sulphur,
-Oklahoma"), a genus ("Oestrus"), and no rule over the text tells a name from
-the first word of a sentence. --fix lists each one it leaves and exits 1, and a
-person respells it or marks the line ``spelling-ok``. See fixable().
+Every hit is reported. --fix rewrites a hit only where it cannot be wrong, since
+a false report costs a ``spelling-ok`` marker and a wrong rewrite corrupts the
+owner's file. It rewrites a word only when all of these hold (left_by()):
+
+* it is listed, not found by its shape;
+* it is all lowercase (a capitalized word may be a name: a journal, a company,
+  a place, a genus);
+* the file is Markdown, reStructuredText or plain text (.md, .rst, .txt), or
+  it is in a value of app/i18n/en.json; never code, configuration or data;
+* it is not in code: a fenced or indented Markdown block, a reStructuredText
+  literal block or code directive, text between backticks, a line that starts
+  with "import ", "from ... import ", "$ ", ">>> " or "... ", or the word after
+  "import", "require" or "library";
+* between it and the whitespace (or line end) around it there is nothing but,
+  before, any of ``( [ " ' *`` and, after, any of ``) ] " ' * , ; : . ! ?``. Any
+  other character next to it (a letter, accented ones too, a digit, "_", "-",
+  "/", "@", "=", "`" and the rest, or "." or ":" before it) leaves it;
+* the word before it (on the line before, if it is first on its line, unless a
+  blank line separates them) is not a capitalized word of letters alone that
+  is not a common sentence opener, nor an abbreviated genus such as "E.": the
+  word may be an epithet ("Tritrichomonas foetus").
+
+--fix lists each hit it leaves, with the reason, and exits 1; the check's
+report says the same of each.
 
 Words are read the way code writes them, so the parts of an identifier
-(``colourPicker``, ``MAX_COLOURS``, ``data-colour-id``) are checked too, in any
+(``colourPicker``, ``MAX_COLOURS``, ``data-colour-id``) are reported too, in any
 case, and the ligatures "œ" and "æ" are read as "oe" and "ae".
 tests/test_check_spelling.py pins all of this, against a corpus a verifier
 built (tests/fixtures/spelling_corpus/).
@@ -76,6 +102,7 @@ from __future__ import annotations
 
 import re
 import sys
+from enum import StrEnum
 from itertools import pairwise
 from pathlib import Path, PurePosixPath
 
@@ -125,10 +152,11 @@ QUOTED_VERBATIM = {
 # directly in it are skipped.
 CORPUS = "tests/fixtures/spelling_corpus"
 # The bytes a text file is made of, by the rule of identify, which pre-commit's
-# `types: [text]` uses for a file it cannot classify by its name: the printable
-# range and the usual control characters. A NUL, or any other control byte, in
-# the first KiB makes a file binary. Bytes 0x80-0xFF are text, so a Latin-1 file
-# is read, and reported as not UTF-8.
+# `types: [text]` uses for a file it cannot classify by its name: 0x20-0x7E,
+# 0x80-0xFF, and of the control bytes only BEL, BS, TAB, LF, VT, FF, CR and ESC.
+# Any other byte (NUL, another control byte, DEL) in the first 1024 bytes makes
+# a file binary. Bytes 0x80-0xFF are text, so a Latin-1 file is read, and
+# reported as not UTF-8.
 TEXT_BYTES = bytes(
     sorted({7, 8, 9, 10, 11, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7F})
 )
@@ -178,8 +206,9 @@ FAMILIES: dict[str, Family] = {
             ("ourised", "orized"),
             ("ourising", "orizing"),
             ("ourisation", "orization"),
+            ("ouration", "oration"),
         ),
-        ("", "mis", "dis", "un", "water", "multi"),
+        ("", "mis", "dis", "un", "water", "multi", "mal"),
         (
             "ard",
             "arm",
@@ -220,7 +249,20 @@ FAMILIES: dict[str, Family] = {
             ("red", "ered"),
             ("ring", "ering"),
         ),
-        ("", "kilo", "centi", "milli", "micro", "nano", "de", "re", "epi"),
+        (
+            "",
+            "kilo",
+            "centi",
+            "milli",
+            "micro",
+            "nano",
+            "deci",
+            "femto",
+            "pico",
+            "de",
+            "re",
+            "epi",
+        ),
         (
             "calib",
             "cent",
@@ -235,6 +277,7 @@ FAMILIES: dict[str, Family] = {
             "somb",
             "spect",
             "theat",
+            "tit",
         ),
     ),
     # defence -> defense.
@@ -285,6 +328,7 @@ FAMILIES: dict[str, Family] = {
         (
             # "anesthet": the American stem with the British ending. The
             # British stem ("anaesthetise") is in MEDICAL.
+            "aerosol",
             "anesthet",
             "anonym",
             "apolog",
@@ -307,6 +351,7 @@ FAMILIES: dict[str, Family] = {
             "digit",
             "emphas",
             "energ",
+            "epithelial",
             "equal",
             "familiar",
             "fantas",
@@ -320,6 +365,7 @@ FAMILIES: dict[str, Family] = {
             "homogen",
             "hospital",
             "human",
+            "hybrid",
             "hypnot",
             "hypothes",
             "ideal",
@@ -331,6 +377,7 @@ FAMILIES: dict[str, Family] = {
             "ion",
             "item",
             "jeopard",
+            "lateral",
             "legal",
             "legitim",
             "local",
@@ -353,6 +400,7 @@ FAMILIES: dict[str, Family] = {
             "neutral",
             "normal",
             "operational",
+            "opson",
             "optim",
             "organ",
             "oxid",
@@ -363,6 +411,7 @@ FAMILIES: dict[str, Family] = {
             "penal",
             "personal",
             "polar",
+            "polymer",
             "popular",
             "pressur",
             "priorit",
@@ -378,6 +427,7 @@ FAMILIES: dict[str, Family] = {
             "sensit",
             "serial",
             "social",
+            "solubil",
             "special",
             "stabil",
             "standard",
@@ -412,7 +462,7 @@ FAMILIES: dict[str, Family] = {
             ("ysers", "yzers"),
         ),
         ("", "re", "over", "psycho"),
-        ("anal", "catal", "dial", "electrol", "hydrol", "paral"),
+        ("anal", "autol", "catal", "dial", "electrol", "hydrol", "paral"),
     ),
     # travelled -> traveled. Only the forms that double the l in British and not
     # in American; "cancellation", "excelled", "controlled" are American too.
@@ -625,18 +675,25 @@ EXPLICIT: dict[str, str] = {
     "tumourigenic": "tumorigenic",
     "tumourigenicity": "tumorigenicity",
     "tumourigenesis": "tumorigenesis",
+    "spirochaete": "spirochete",
+    "spirochaetes": "spirochetes",
+    "neurone": "neuron",
+    "neurones": "neurons",
+    "caesium": "cesium",
+    # The English plural of "paraesthesia", which MEDICAL does not generate: no
+    # MEDICAL ending is Latin.
+    "paraesthesiae": "paresthesiae",
 }
 
 # British medical spellings, as whole words. Each entry is (British stem,
 # American stem, endings, prefixes): every prefix + stem + ending is generated,
-# and matched only as an entire word, never inside a longer one. An ending is a
-# string both spellings share, or a (British, American) pair where the ending is
-# British too ("anaesthetise"). The endings are a closed set of English ones:
-# none is a Latin ending such as -alis, -ium, -icus, -ica or -ae, so a species
-# epithet ("faecalis", "faecium", "haemolyticus", "gonorrhoeae") is never
-# generated and never matched, wherever it is written. A genus that is also an
-# English word ("Oestrus") is capitalized, and a capitalized word is reported
-# but never rewritten by --fix (see fixable()).
+# and matched only as an entire word. An ending is a string both spellings
+# share, or a (British, American) pair where the ending is British too
+# ("anaesthetise"). The endings are a closed set of English ones: none is a
+# Latin ending such as -alis, -ium, -icus, -ica or -ae, so a species epithet
+# ("faecalis", "faecium", "gonorrhoeae") is never listed. A genus that is also
+# an English word ("Oestrus") is capitalized, and a capitalized word is
+# reported but never rewritten by --fix (see left_by()).
 #
 # This is a list, so a British word whose stem is not here passes ("haem" alone,
 # "leucoplakia", "foetid" are not here). Add the stem, its endings and its
@@ -733,14 +790,15 @@ MEDICAL: tuple[Medical, ...] = (
             "us",
             "ous",
         ),
-        ("", "anti", "an", "di", "pro", "met"),
+        ("", "anti", "an", "di", "pro", "met", "xeno", "ethinyl"),
     ),
-    ("foet", "fet", ("us", "uses", "al", "icide", "oscopy"), ("",)),
+    ("foet", "fet", ("us", "uses", "al", "icide", "oscopy", "id"), ("",)),
     ("faec", "fec", ("es", "al", "aloma", "alith", "aliths"), ("",)),
     ("gynaecolog", "gynecolog", ("y", "ic", "ical", "ist", "ists"), ("", "uro")),
     ("gynaecomasti", "gynecomasti", ("a",), ("",)),
     ("anaem", "anem", AEMIA, ("", "non")),
     ("leukaem", "leukem", AEMIA, ("", "pre")),
+    ("leucaem", "leukem", AEMIA, ("",)),
     ("septicaem", "septicem", AEMIA, ("",)),
     ("ischaem", "ischem", AEMIA, ("", "non")),
     ("glycaem", "glycem", AEMIA, ("", "hypo", "hyper", "normo", "eu")),
@@ -774,6 +832,7 @@ MEDICAL: tuple[Medical, ...] = (
             "tics",
             "tist",
             "tists",
+            "tically",
             "siology",
             "siologist",
             "siologists",
@@ -793,10 +852,11 @@ MEDICAL: tuple[Medical, ...] = (
     ("synaesthesi", "synesthesi", ("a", "as"), ("",)),
     ("hyperaesthesi", "hyperesthesi", ("a",), ("",)),
     ("hypoaesthesi", "hypoesthesi", ("a",), ("",)),
+    ("hypaesthesi", "hypesthesi", ("a",), ("",)),
     ("kinaesthe", "kinesthe", ("sia", "tic"), ("",)),
     ("diarrhoe", "diarrhe", ("a", "as", "al", "ic"), ("",)),
     ("gonorrhoe", "gonorrhe", ("a", "al"), ("",)),
-    ("menorrhoe", "menorrhe", ("a",), ("a", "dys")),
+    ("menorrhoe", "menorrhe", ("a",), ("", "a", "dys", "oligo")),
     ("rhinorrhoe", "rhinorrhe", ("a",), ("",)),
     ("steatorrhoe", "steatorrhe", ("a",), ("",)),
     ("seborrhoe", "seborrhe", ("a", "ic"), ("",)),
@@ -807,6 +867,7 @@ MEDICAL: tuple[Medical, ...] = (
     ("paedophil", "pedophil", ("e", "es", "ia", "iac", "iacs", "ic"), ("",)),
     ("encyclopaedi", "encyclopedi", ("a", "as", "c", "st", "sts"), ("",)),
     ("coeliac", "celiac", ("", "s"), ("",)),
+    ("palaeontolog", "paleontolog", ("y", "ical", "ist", "ists"), ("",)),
     ("caesar", "cesar", ("ean", "eans", "ian", "ians"), ("",)),
     ("aetiolog", "etiolog", ("y", "ies", "ic", "ical", "ically"), ("",)),
     ("homoeopath", "homeopath", ("y", "ic", "s", "ist", "ists", "ically"), ("",)),
@@ -838,6 +899,13 @@ MEDICAL: tuple[Medical, ...] = (
             "asalazine",
             "amethoxazole",
             "adiazine",
+            "oxide",
+            "oxides",
+            ("ydryl", "hydryl"),
+            "adoxine",
+            "apyridine",
+            "ation",
+            "anilamide",
         ),
         ("", "bi", "di"),
     ),
@@ -877,15 +945,87 @@ LIGATURES = str.maketrans({"œ": "oe", "æ": "ae"})
 
 
 def american(word: str) -> str | None:
-    """The American spelling of `word`, lowercase, or None if it is not British.
+    """The American spelling of `word`, lowercase, or None if it is not listed.
     Only an entire word is looked up: nothing is matched inside a longer one."""
     return BRITISH.get(word.lower().translate(LIGATURES))
 
 
+# British spellings found by their shape, not by the list: a lowercase word that
+# starts or ends with a British medical segment ("haematoxylin", "acidaemia",
+# "otorrhoea"). These are reported, never rewritten: a shape is a guess, and its
+# American form (which the report suggests) is a guess too. A capitalized word is
+# never matched by shape, so "Haemonetics", "Oestreich" and "Haemophilus" pass;
+# nor is a word with a Latin ending, so "haemolyticus" and "haemophysalis" pass;
+# nor a word in SHAPE_EXCEPTIONS, which American biology spells this way too;
+# nor a lowercase word after what may be its genus (see hits()).
+SHAPE_PREFIXES = ("haem", "oesophag", "oestr", "foeto", "paed", "anaes", "gynae")
+SHAPE_SUFFIXES = (
+    "aemia",
+    "aemias",
+    "aemic",
+    "aemics",
+    "rrhoea",
+    "rrhoeal",
+    "pnoea",
+    "pnoeas",
+    "litre",
+    "litres",
+)
+SHAPE_EXCEPTIONS = ("paedomorph", "paedogen")
+# A word that is all segment: a prefix or suffix alone is not a shape ("haem" is
+# in a hash or an identifier as often as in prose), except these.
+SHAPE_WORDS = ("gynae",)
+# Not "-um" or "-ous": "haemoperitoneum" and "haematogenous" are English.
+LATIN_ENDINGS = ("us", "ae", "ii", "alis", "icus", "ica", "icum", "ensis")
+NOT_LATIN = ("ous",)
+# The suggestion: each British segment, respelled wherever it is in the word.
+SHAPE_RESPELL = (
+    ("oesophag", "esophag"),
+    ("haem", "hem"),
+    ("oestr", "estr"),
+    ("foet", "fet"),
+    ("paed", "ped"),
+    ("anaes", "anes"),
+    ("gynae", "gyne"),
+    ("aemi", "emi"),
+    ("rrhoe", "rrhe"),
+    ("pnoe", "pne"),
+    ("litre", "liter"),
+)
+
+
+def by_shape(word: str) -> str | None:
+    """A suggested American spelling of `word` if its shape is British, or None."""
+    if not word.islower():
+        return None
+    key = word.translate(LIGATURES)
+    if key not in SHAPE_WORDS:
+        latin = key.endswith(LATIN_ENDINGS) and not key.endswith(NOT_LATIN)
+        if latin or key.startswith(SHAPE_EXCEPTIONS):
+            return None
+        prefixed = any(
+            key.startswith(prefix) and len(key) > len(prefix)
+            for prefix in SHAPE_PREFIXES
+        )
+        suffixed = any(
+            key.endswith(suffix) and len(key) > len(suffix) for suffix in SHAPE_SUFFIXES
+        )
+        if not (prefixed or suffixed):
+            return None
+    for british, respelled in SHAPE_RESPELL:
+        key = key.replace(british, respelled)
+    return key
+
+
 MARKER = "spelling-ok"
-# A word, as the checker sees one: a run of letters, split where an identifier
-# changes case, so `colourPicker`, `MAX_COLOURS` and `data-colour-id` are each
-# read as their words. Underscores, digits and hyphens separate words.
+# A run of letters, any letters: "décentre" is one run, and "réanalyse" another.
+LETTERS = re.compile(r"[^\W\d_]+")
+# The letters of an English word. A run with any other letter in it (an accent)
+# is not English, and is not read: "décentre" is French, not "centre".
+ENGLISH = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZœæŒÆ")
+# A word, as the checker sees one: within a run of letters, split where an
+# identifier changes case, so `colourPicker`, `MAX_COLOURS` and `data-colour-id`
+# are each read as their words. Underscores, digits and hyphens separate words.
 WORD = re.compile(r"[A-ZŒÆ]+(?![a-zœæ])|[A-ZŒÆ]?[a-zœæ]+")
 # The whole run of letters, without splitting identifiers (kept for the tests'
 # mutation that shows the split matters).
@@ -895,12 +1035,14 @@ WHOLE = re.compile(r"[A-Za-zŒÆœæ]+")
 # reported nor rewritten: whatever is spelled there is someone else's, or is
 # not a word at all. Each is replaced by spaces of its length, so columns hold.
 #
-# A URL: a scheme and "://", or one of the schemes written without slashes.
-# A colon alone is not one ("note:colour" is prose).
+# A URL: a scheme and "://", or one of the schemes written without slashes. The
+# scheme starts after a character that is not a letter or digit, so a URL in
+# Markdown italics ("_ws://host/x_") is one, and "metadata:" is not "data:". A
+# colon alone is not one ("note:colour" is prose).
 URL = re.compile(
-    r"\b[A-Za-z][\w+.-]*://\S+"
-    r"|\b(?:mailto|urn|doi|data|tel|sms|news|blob|javascript|about|geo|magnet"
-    r"|cid|mid|pmid|arxiv|isbn):\S+",
+    r"(?<![A-Za-z0-9])[A-Za-z][\w+.-]*://\S+"
+    r"|(?<![A-Za-z0-9])(?:mailto|urn|doi|data|tel|sms|news|blob|javascript|about"
+    r"|geo|magnet|cid|mid|pmid|arxiv|isbn):\S+",
     re.IGNORECASE,
 )
 # An email address, and the user@host:path form of git.
@@ -919,10 +1061,10 @@ FILE_NAME = re.compile(
     r"|otf|env|caddy)\b",
     re.IGNORECASE,
 )
-# A run with a slash is a path only if it starts with "./", "../" or "/", or a
-# segment has a file extension: "colour/flavour" is prose. A run is matched from
-# its first character (a match starts at the leftmost place it can, and every
-# character a run is made of can start one), so no lookbehind is needed.
+# A run with a slash is a path only if it starts with "./", "../", "~/" or "/",
+# or a segment has a file extension: "colour/flavour" is prose. A run is matched
+# from its first character (a match starts at the leftmost place it can, and
+# every character a run is made of can start one), so no lookbehind is needed.
 SLASHED = re.compile(r"[\w.~-]*/[\w./~-]*")
 EXTENSION = re.compile(r"\w\.[A-Za-z0-9]+$")
 # A digest named by its algorithm (an SRI hash, a Docker digest).
@@ -941,7 +1083,7 @@ def blank(match: re.Match[str]) -> str:
 def blank_path(match: re.Match[str]) -> str:
     run = match.group(0)
     path = run.rstrip(".")
-    if path.startswith(("./", "../", "/")) or any(
+    if path.startswith(("./", "../", "~/", "/")) or any(
         EXTENSION.search(segment) for segment in path.split("/")
     ):
         return " " * len(run)
@@ -993,31 +1135,13 @@ def american_for(word: str, american: str) -> str:
     return american
 
 
-def fixable(line: str, start: int, word: str) -> bool:
-    """Whether --fix may rewrite `word`, found at `start` in `line`.
-
-    A lowercase word, yes. A word with a capital letter only when it is part of
-    an identifier: right after a letter, digit or underscore (`getColourValue`,
-    `MAX_COLOURS`), or right before an underscore or digit (`COLOUR_MAX`). Any
-    other capitalized word may be a name ("British Journal of Haematology",
-    "Haemonetics", "Oestrus ovis", "Sulphur, Oklahoma"), and no rule over the
-    text can tell a name from a word at the start of a sentence, so it is
-    reported and left for a human.
-    """
-    if word.islower():
-        return True
-    before = line[start - 1] if start > 0 else ""
-    end = start + len(word)
-    after = line[end] if end < len(line) else ""
-    return before.isalnum() or before == "_" or after.isdigit() or after == "_"
+# A word found: (column, British word, American word, whether it is listed). A
+# word that is not listed was found by its shape (by_shape()).
+Found = tuple[int, str, str, bool]
 
 
-# A hit: (column, British word, American word, whether --fix may rewrite it).
-Hit = tuple[int, str, str, bool]
-
-
-def find(line: str, allow: list[str]) -> list[Hit]:
-    """Each hit in one line.
+def find(line: str, allow: list[str]) -> list[Found]:
+    """Each British word in one line.
 
     `allow` is the phrases allowed in this file. A line with the marker is
     exempt. An allowed phrase exempts only itself, matched exactly: it is blanked
@@ -1030,21 +1154,244 @@ def find(line: str, allow: list[str]) -> list[Hit]:
     for phrase in allow:
         scannable = scannable.replace(phrase, " " * len(phrase))
     scannable = blank_unprose(scannable)
-    hits = []
-    for match in WORD.finditer(scannable):
-        word = match.group(0)
-        respelled = american(word)
-        if respelled is not None:
-            start = match.start()
-            hits.append(
-                (
-                    start,
-                    word,
-                    american_for(word, respelled),
-                    fixable(line, start, word),
+    found = []
+    for run in LETTERS.finditer(scannable):
+        if not ENGLISH.issuperset(run.group(0)):
+            continue
+        for match in WORD.finditer(scannable, run.start(), run.end()):
+            word = match.group(0)
+            respelled = american(word)
+            listed = respelled is not None
+            if not listed:
+                respelled = by_shape(word)
+            if respelled is not None:
+                found.append(
+                    (match.start(), word, american_for(word, respelled), listed)
                 )
-            )
-    return hits
+    return found
+
+
+# What --fix may rewrite. It rewrites a hit only when every one of these is
+# false, and the report names the first that is true, so a person knows why it
+# was left. A false report costs a `spelling-ok` marker; a wrong rewrite
+# corrupts the owner's file, so --fix rewrites only where it cannot be wrong.
+class Left(StrEnum):
+    SHAPE = "found by its shape, not listed, so its respelling is a guess"
+    CAPITALIZED = "capitalized, so it may be a name"
+    NOT_PROSE = (
+        "not prose: --fix rewrites only .md, .txt and .rst files and the "
+        "values of app/i18n/en.json"
+    )
+    CODE = "in code"
+    JOINED = "joined to other text, so it may be part of a name, a path or code"
+    AFTER_NAME = "after a capitalized word, so it may be part of a name"
+
+
+# The kinds of file --fix may rewrite, by suffix; every other file is reported
+# only. app/i18n/en.json is prose in its values (CATALOG).
+class Kind(StrEnum):
+    MARKDOWN = "markdown"
+    RST = "rst"
+    TEXT = "text"
+    CATALOG = "catalog"
+    OTHER = "other"
+
+
+PROSE_SUFFIXES = {".md": Kind.MARKDOWN, ".rst": Kind.RST, ".txt": Kind.TEXT}
+CATALOG = f"app/i18n/{Locale.EN}.json"
+# The whole line, `"key": "value",`; the value is group 1.
+CATALOG_VALUE = re.compile(r'^\s*"(?:[^"\\]|\\.)*"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,?\s*$')
+
+# What may stand next to a word --fix rewrites, between it and the whitespace
+# (or the start or end of the line) around it. Before: an opening bracket, a
+# quotation mark or Markdown's asterisk. After: those that close, and the
+# sentence's punctuation, "." and ":" among them. Nothing else: a letter
+# (accented ones too), a digit, "_", "-", "/", "@", "=", "<", "`", "~", "#",
+# "$", "%", "&", "+", "\\", "^", "{", "|", "}" or ">", and "." or ":" before
+# the word, each mean it is joined to something that may not be prose:
+# `task.cancelled()`, `@behaviour`, `GBIF:Oestrus_ovis`, `_colour_`,
+# `scale_colour_manual`, `colour-science`, `aes(colour=x)`, `Sulphur8`.
+BEFORE = frozenset("([\"'*")
+AFTER = frozenset(")]\"'*,;:.!?")
+# The text from the last whitespace to a position, and from a position to the
+# next whitespace.
+LEAD = re.compile(r"\S*$")
+TRAIL = re.compile(r"\S*")
+
+# Code, in a prose file. A Markdown fence (``` or ~~~) opens and closes a block;
+# a Markdown line indented four spaces or a tab is code; a reStructuredText
+# paragraph ending in "::", or a code directive, opens a literal block of the
+# lines indented further; and in any prose file, text between backticks is code,
+# and so is a line that reads as a command or an import.
+FENCE = re.compile(r" {0,3}(`{3,}|~{3,})")
+INDENTED = re.compile(r"(?: {4}|\t)")
+RST_CODE = re.compile(r"\s*\.\. (?:code-block|code|sourcecode)::")
+INLINE_CODE = re.compile(r"(`+).+?\1")
+CODE_LINE = re.compile(
+    r"\s*(?:[-*+>]\s+)*(?:import\s|from\s+\S+\s+import\s|\$\s|>>>\s|\.\.\.\s)"
+)
+
+# Capitalized words that open sentences. A lowercase British word after any
+# other capitalized word may be a species epithet ("Tritrichomonas foetus") or
+# part of a name, so --fix leaves it.
+OPENING_WORDS = """
+    a about after all also an and any are as at be because before both but by
+    can do each either every few for from had has have he her here his how i if
+    in into is it its many may more most much must my neither no nor not note of
+    on once one only or other our over per see she should since so some such
+    than that the their them then there these they this those though through to
+    two under unless until use was we were what when where whether which while
+    who why will with within without would yet you your
+"""
+OPENERS = frozenset(OPENING_WORDS.split())
+# Words after which a word is a module's name, not prose: "import colour".
+CODE_WORDS = frozenset({"import", "require", "library"})
+# An abbreviated genus: "E." in "E. faecalis".
+ABBREVIATION = re.compile(r"[(\[\"'*_]*[A-Z]\.")
+
+
+def names(token: str) -> bool:
+    """Whether a lowercase word after `token` may be part of a name: `token` is
+    an abbreviated genus, or a capitalized word of letters alone (no digit, and
+    no punctuation closing it) that is not a common opener of a sentence."""
+    if ABBREVIATION.fullmatch(token):
+        return True
+    core = token.lstrip("([\"'*_")
+    if not core.isalpha() or not core[0].isupper():
+        return False
+    return core.lower() not in OPENERS
+
+
+class Code:
+    """Where code is in a prose file, read line by line, in order."""
+
+    def __init__(self, kind: Kind) -> None:
+        self.kind = kind
+        self.fence = ""
+        # The indent of the line that opened a reStructuredText literal block.
+        self.literal: int | None = None
+
+    def whole_line(self, line: str) -> bool:
+        """Whether `line`, the next line of the file, is code throughout."""
+        if self.kind is Kind.MARKDOWN:
+            fence = FENCE.match(line)
+            if self.fence:
+                mark = fence.group(1) if fence else ""
+                if mark[:1] == self.fence[:1] and len(mark) >= len(self.fence):
+                    self.fence = ""
+                return True
+            if fence:
+                self.fence = fence.group(1)
+                return True
+            return bool(INDENTED.match(line))
+        if self.kind is Kind.RST:
+            indent = len(line) - len(line.lstrip())
+            if self.literal is not None:
+                if not line.strip() or indent > self.literal:
+                    return True
+                self.literal = None
+            directive = bool(RST_CODE.match(line))
+            if directive or line.rstrip().endswith("::"):
+                self.literal = indent
+            return directive
+        return False
+
+
+def lead_of(line: str, start: int) -> str:
+    """What stands between column `start` and the whitespace before it."""
+    return LEAD.search(line[:start]).group(0)
+
+
+def word_before(line: str, start: int, previous: str) -> str:
+    """The whitespace-separated word before the one at column `start`, or
+    `previous` (the last word of the line before) if it is first on its line."""
+    before = line[: start - len(lead_of(line, start))].split()
+    return before[-1] if before else previous
+
+
+def in_code(line: str, start: int) -> bool:
+    """Whether column `start` of a line of prose is code: the line reads as a
+    command or an import, or the column is between backticks."""
+    if CODE_LINE.match(line):
+        return True
+    spans = INLINE_CODE.finditer(line)
+    return any(span.start() <= start < span.end() for span in spans)
+
+
+def left_by(
+    line: str,
+    found: Found,
+    kind: Kind,
+    code: bool,
+    previous: str,
+) -> Left | None:
+    """Why --fix leaves `found` in `line`, or None if it rewrites it.
+
+    It rewrites a word only when the word is listed (not found by its shape), is
+    all lowercase, is in a prose file (Markdown, reStructuredText, plain text) or
+    a value of the English catalog, is not in code, stands alone between
+    whitespace with only BEFORE before it and AFTER after it, and does not follow
+    a capitalized word that may begin a name. `code` says the line is code
+    throughout; `previous` is the last word of the line before, for a name
+    broken across lines.
+    """
+    start, word, _, listed = found
+    end = start + len(word)
+    if not listed:
+        return Left.SHAPE
+    if not word.islower():
+        return Left.CAPITALIZED
+    if kind is Kind.OTHER:
+        return Left.NOT_PROSE
+    if kind is Kind.CATALOG:
+        value = CATALOG_VALUE.match(line)
+        if not value or not value.start(1) <= start < end <= value.end(1):
+            return Left.NOT_PROSE
+    elif code or in_code(line, start):
+        return Left.CODE
+    lead = lead_of(line, start)
+    trail = TRAIL.match(line, end).group(0)
+    if not BEFORE.issuperset(lead) or not AFTER.issuperset(trail):
+        return Left.JOINED
+    token = word_before(line, start, previous)
+    if token.strip("([\"'*") in CODE_WORDS:
+        return Left.CODE
+    if names(token):
+        return Left.AFTER_NAME
+    return None
+
+
+# A hit: (column, British word, American word, why --fix leaves it or None).
+Hit = tuple[int, str, str, Left | None]
+
+
+def kind_of(path: Path) -> Kind:
+    if relative(path) == CATALOG:
+        return Kind.CATALOG
+    return PROSE_SUFFIXES.get(path.suffix.lower(), Kind.OTHER)
+
+
+def hits(path: Path, text: str, allow: list[Allow]) -> list[tuple[int, str, list[Hit]]]:
+    """Each line of `text`, the text of `path`, with its hits: (line number, the
+    line with its ending, hits)."""
+    kind = kind_of(path)
+    phrases = allowed_in(path, allow)
+    code = Code(kind)
+    previous = ""
+    out = []
+    for number, line in enumerate(text.splitlines(keepends=True), 1):
+        whole = code.whole_line(line)
+        line_hits = [
+            (found[0], found[1], found[2], left_by(line, found, kind, whole, previous))
+            for found in find(line, phrases)
+            # A word found by its shape after what may be its genus is taken
+            # for a species epithet ("Schistosoma haematobium"), not reported.
+            if found[3] or not names(word_before(line, found[0], previous))
+        ]
+        out.append((number, line, line_hits))
+        words = line.split()
+        previous = words[-1] if words else ""
+    return out
 
 
 def relative(path: Path) -> str:
@@ -1132,8 +1479,12 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-# Said of a hit --fix will not rewrite.
-LEFT_FOR_A_HUMAN = " (capitalized, so it may be a name: --fix leaves it to you)"
+# Said of a hit --fix will not rewrite, with the reason (a Left).
+LEFT_FOR_A_HUMAN = "--fix leaves it to you"
+
+
+def left_note(reason: Left | None) -> str:
+    return "" if reason is None else f" ({LEFT_FOR_A_HUMAN}: {reason})"
 
 
 def check(path: Path, allow: list[Allow]) -> list[str]:
@@ -1144,14 +1495,13 @@ def check(path: Path, allow: list[Allow]) -> list[str]:
     except OSError as error:
         return [f"{path}: could not be read ({error.strerror}), so not checked"]
 
-    phrases = allowed_in(path, allow)
     problems = []
-    for number, line in enumerate(text.splitlines(), 1):
-        for column, word, respelled, can_fix in find(line, phrases):
+    for number, line, found in hits(path, text, allow):
+        for column, word, respelled, reason in found:
             problems.append(
                 f"{path}:{number}:{column + 1}: "
                 f"British spelling {word!r} -- use {respelled!r}"
-                f"{'' if can_fix else LEFT_FOR_A_HUMAN}\n"
+                f"{left_note(reason)}\n"
                 f"    {line.strip()[:100]}"
             )
     return problems
@@ -1183,26 +1533,25 @@ def targets(argv: list[str]) -> list[Path]:
 
 def fix(path: Path, allow: list[Allow]) -> tuple[int, list[str]]:
     """Rewrite British spellings in place. Returns how many were changed, and
-    the hits left for a human (each as "line:column: word").
+    the hits left for a person (each as "line:column: 'word' -- 'american'
+    (why)").
 
     Uses the same scan as check(), so it never touches what check() does not
     report: an exempt line, an allowed phrase, a URL, an email address, a
-    domain, a file name, a path, a digest or encoded data. Of what it
-    reports, it rewrites only what fixable() allows: a capitalized word that is
-    not part of an identifier may be a name, and is left as written. A file
-    that cannot be read raises, so the caller reports it.
+    domain, a file name, a path, a digest or encoded data. Of what it reports,
+    it rewrites only what left_by() allows. A file that cannot be read raises,
+    so the caller reports it.
     """
-    text = read(path)
-    phrases = allowed_in(path, allow)
-
     changed = 0
     left = []
     out = []
-    for number, line in enumerate(text.splitlines(keepends=True), 1):
+    for number, line, found in hits(path, read(path), allow):
         # Right to left, so an earlier column is not moved by a later change.
-        for column, word, respelled, can_fix in reversed(find(line, phrases)):
-            if not can_fix:
-                left.append(f"{number}:{column + 1}: {word!r} -- {respelled!r}")
+        for column, word, respelled, reason in reversed(found):
+            if reason is not None:
+                left.append(
+                    (number, column, f"{word!r} -- {respelled!r}{left_note(reason)}")
+                )
                 continue
             line = line[:column] + respelled + line[column + len(word) :]
             changed += 1
@@ -1210,7 +1559,7 @@ def fix(path: Path, allow: list[Allow]) -> tuple[int, list[str]]:
 
     if changed:
         path.write_text("".join(out), encoding="utf-8")
-    return changed, sorted(left, key=lambda h: tuple(map(int, h.split(":")[:2])))
+    return changed, [f"{n}:{c + 1}: {what}" for n, c, what in sorted(left)]
 
 
 def main(argv: list[str]) -> int:
@@ -1242,13 +1591,13 @@ def main(argv: list[str]) -> int:
                     print(f"  {n:3d}  {shown}")
                     total += n
                 for hit in left:
-                    print(f"  {shown}:{hit}{LEFT_FOR_A_HUMAN}", file=sys.stderr)
+                    print(f"  {shown}:{hit}", file=sys.stderr)
                 unfixed += len(left)
         print(f"\n{total} spelling(s) corrected")
         if unfixed:
             print(
-                f"{unfixed} left for you: respell each, or mark it `spelling-ok` "
-                "if it is a name.",
+                f"{unfixed} left for you: respell each, or mark the line "
+                "`spelling-ok` if it is a name or a quotation.",
                 file=sys.stderr,
             )
         return 1 if unread or unfixed else 0

@@ -6,6 +6,9 @@ version = "0.1.0"
 
 [dependencies]
 python = ">=3.11,<3.13"
+# The en_US dictionary: tests/test_check_spelling.py checks no spelling rule
+# matches an American word (#169, D-81). The checker does not read it.
+aoo-mozilla-en-dict-us = "==2024.3.1"
 
 [pypi-dependencies]
 zensical = "*"

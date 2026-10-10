@@ -942,14 +942,21 @@ honest answer and is a gap worth closing; see R-19.
   spelling.
 - Enforced by: `pixi run check-spelling` (pre-commit, and CI through the lint
   workflow's `prek run --all-files`), which generates each listed root's
-  inflections, the British medical roots among them, and matches only whole
-  words (D-81). The checker is itself tested by `pixi run test-check-spelling`
-  (CI and pre-commit), including a verifier's corpus and mutation tests
-  (#169).
+  inflections, the British medical roots among them, matches listed words only
+  whole, and also reports a lowercase word by a British medical shape (D-81).
+  `pixi run fix-spelling` rewrites a hit only when it is listed, all lowercase,
+  in a `.md`, `.rst` or `.txt` file or a value of `app/i18n/en.json`, not in
+  code, bounded by whitespace with only an opening bracket, a quotation mark or
+  `*` before it and only a closing one, `*` or `,;:.!?` after it, and not after
+  a capitalized word that may begin a name; everything else it reports and
+  leaves for a person, and exits 1. The checker is itself tested by `pixi run
+  test-check-spelling` (CI and pre-commit), including a verifier's corpus, the
+  en_US dictionary and mutation tests (#169).
 - Not enforced: commit messages (the check reads files, not messages); any
-  British word whose root is not on the list; and a capitalized British word
-  that is not part of an identifier, which the check reports but `--fix`
-  leaves for a person, since it may be a name. These rest on review.
+  British word whose root is not on the list and whose shape is not a rule;
+  and every hit `--fix` leaves (a capitalized word, a word in code or joined to
+  other text, a word after a name), which the check reports but a person must
+  respell or mark. These rest on review.
 
 ### R-18 A closed set of values has an enumerated type
 

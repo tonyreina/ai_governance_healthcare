@@ -138,6 +138,20 @@ def main() -> int:
         "a key the app asks for that does not exist", any("nosuch" in p for p in found)
     )
     check("a key nothing uses", any("unused" in p for p in found))
+    # A framework definition names catalog keys for its statuses and phases (#168).
+    defn = {"app/frameworks/x/framework.json": '{"phases": [{"msg": "phase.nosuch"}]}'}
+    found = ci.usage_problems({"@meta": {}, "phase.used": "x"}, defn)
+    check(
+        "a key a framework definition names that does not exist",
+        any("phase.nosuch" in p for p in found),
+    )
+    check(
+        "a key only a definition names is in use",
+        not ci.usage_problems(
+            {"@meta": {}, "phase.used": "x"},
+            {"d.json": '{"phases": [{"msg": "phase.used"}]}'},
+        ),
+    )
     check(
         "a CSS selector or an event name is not taken for a key",
         not ci.usage_problems(

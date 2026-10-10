@@ -29,6 +29,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CATALOGS = ROOT / "app" / "i18n"
 SOURCES = [ROOT / "app" / "index.html", *sorted((ROOT / "app" / "js").rglob("*.js"))]
+# Framework definitions name shell catalog keys for their statuses and phases (#168).
+DEFINITIONS = sorted((ROOT / "app" / "frameworks").glob("*/framework.json"))
+DEFINITION_MSG = re.compile(r'"msg"\s*:\s*"([^"]+)"')
 META = "@meta"
 
 
@@ -165,8 +168,9 @@ def usage_problems(source: dict, texts: dict[str, str]) -> list[str]:
     named: set[str] = set()
     for text in texts.values():
         attrs = set(re.findall(r'data-i18n(?:-\w+)?="([^"]+)"', text))
-        asked |= set(T_CALL.findall(text)) | attrs
-        named |= set(KEY_LITERAL.findall(text)) | attrs
+        msgs = set(DEFINITION_MSG.findall(text))
+        asked |= set(T_CALL.findall(text)) | attrs | msgs
+        named |= set(KEY_LITERAL.findall(text)) | attrs | msgs
     keys = {k for k in source if k != META}
     return [
         f"the app asks for {k!r}, which en.json lacks" for k in sorted(asked - keys)
@@ -311,7 +315,8 @@ def main() -> int:
     else:
         problems.append("app/i18n/framework/en.json is missing")
     texts = {str(p): p.read_text(encoding="utf-8") for p in SOURCES}
-    problems += usage_problems(source, texts)
+    definitions = {str(p): p.read_text(encoding="utf-8") for p in DEFINITIONS}
+    problems += usage_problems(source, {**texts, **definitions})
     problems += runtime_literal_problems(texts)
     problems += physical_direction_problems(
         {

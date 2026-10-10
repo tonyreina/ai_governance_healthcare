@@ -5,9 +5,10 @@ them. Each is tagged with the CHAI principle it serves.
 
 !!! info "Generated file"
 
-    This page is generated from the app by `scripts/gen_chai_checklist.py`
-    (`pixi run gen-docs`), so it cannot drift from the checklist the tool
-    actually enforces. Edit the criteria in `docs/app/index.html`, not here.
+    This page is generated from `app/frameworks/chai/framework.json` by
+    `scripts/gen_framework_docs.py` (`pixi run gen-docs`), so it cannot drift
+    from the checklist the tool actually enforces. Edit the criteria in
+    `app/frameworks/chai/framework.json`, not here.
 
     These criteria are original summaries written for this project. They
     are not the text of CHAI's Responsible AI Checklist — see

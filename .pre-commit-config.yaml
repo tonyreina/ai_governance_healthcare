@@ -75,6 +75,24 @@ repos:
         pass_filenames: false
         files: '^(app/i18n/|app/js/|app/index\.html$|scripts/check_i18n\.py$)'
 
+      # Framework definitions: the schema plus the rules it cannot state (unique
+      # ids, references that resolve, view ids and namespaces across the build,
+      # reserved names). The engine trusts what passes (#168, R-63).
+      - id: check-framework
+        name: check the framework definitions
+        entry: pixi run check-framework
+        language: system
+        pass_filenames: false
+        files: '^app/frameworks/|^app/frameworks\.json$|^app/i18n/en\.json$|^schema/framework|^scripts/check_framework'
+
+      # The checker's own mutation tests, whenever it, the schema or a definition changes.
+      - id: test-check-framework
+        name: test the framework definition checker
+        entry: pixi run test-check-framework
+        language: system
+        pass_filenames: false
+        files: '^app/frameworks/|^schema/framework|^scripts/check_framework|^tests/test_check_framework\.py$|^app/i18n/en\.json$|^app/js/10-frameworks/05-project/'
+
       # A closed set of values gets an enumerated type, not a bare string. It is
       # a ratchet: scripts/enum_baseline.json holds the existing uses, a new one
       # fails, and fixing one fails until the baseline is ratcheted down. Run
@@ -125,14 +143,16 @@ repos:
         pass_filenames: false
         files: '^(\.github/workflows/.*\.yml|pixi\.toml|compose\.yaml|tests/test_workflows\.py|tests/test_.*\.py)$'
 
-      # Regenerates the published CHAI checklist from the app. prek fails the
-      # run if this modifies the file, so the docs cannot drift from the app.
+      # Regenerates the published checklist pages from the framework definitions
+      # (app/frameworks/<id>/). prek fails the run if this modifies a page, so the
+      # docs cannot drift from the definitions. tests/test_framework_docs.py
+      # asserts this filter still matches a definition.
       - id: gen-checklists
         name: regenerate generated checklist pages
         entry: pixi run gen-docs
         language: system
         pass_filenames: false
-        files: '^(data/optica_items\.json|scripts/gen_.*\.py)$'
+        files: '^(app/frameworks/|scripts/gen_.*\.py$)'
 
       # Rebuilds the single-file dashboard from app/. prek fails the run if
       # this changes docs/app/index.html, so the generated file can never be

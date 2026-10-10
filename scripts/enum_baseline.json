@@ -40,16 +40,6 @@
       "project": 1,
       "retired": 1
     },
-    "app/js/10-frameworks/10-chai/10-rules.js": {
-      "High": 1,
-      "deployed": 2,
-      "met": 1,
-      "na": 1,
-      "notmet": 2,
-      "pilot": 1,
-      "red": 3,
-      "retired": 2
-    },
     "app/js/10-frameworks/10-chai/20-views.js": {
       "developer": 1,
       "met": 1,
@@ -63,10 +53,6 @@
       "card": 1,
       "gate": 1,
       "stage": 1
-    },
-    "app/js/10-frameworks/20-optica/10-rules.js": {
-      "declined": 1,
-      "na": 1
     },
     "app/js/10-frameworks/20-optica/20-views.js": {
       "declined": 1,

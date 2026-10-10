@@ -50,9 +50,20 @@ jobs:
       # Does CI run every test that exists, and does it fail when one cannot run?
       - run: pixi run test-workflows
 
+      # The build embeds exactly the configured frameworks, and refuses any other (#168).
+      - run: pixi run test-build-config
+
       - run: pixi run test-enums
       - run: pixi run test-check-injection
       - run: pixi run test-check-i18n
+
+      # The checklist pages are their framework definitions, byte for byte (#168).
+      - run: pixi run test-framework-docs
+
+      # Framework definitions: the real ones pass, and every rule of the checker
+      # is shown failing on a copy broken the way it guards against (#168).
+      - run: pixi run check-framework
+      - run: pixi run test-check-framework
 
       # The showcase video on the docs site: present, under its size cap,
       # first-party, and honest about which mode it shows.
@@ -230,6 +241,9 @@ jobs:
       - name: notes take a Markdown subset and nothing that carries markup
         if: ${{ !cancelled() }}
         run: pixi run test-markdown
+      - name: the framework engine's rules on stand-in definitions
+        if: ${{ !cancelled() }}
+        run: pixi run test-engine
       - name: what the default build shows and exports is pinned
         if: ${{ !cancelled() }}
         run: pixi run test-snapshot

@@ -1494,3 +1494,58 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   (`server/migrations/008_retention.sql`) decides retirement, and so when
   disposal is due, from CHAI's own "Stop" and "Retire" decisions.
 - Source: #168; R-63.
+
+### D-75 Frameworks are definitions, run by one engine (#168 PR A)
+
+- Status: Accepted (implements the owner's decision in #168, R-63; design v2 on
+  the issue)
+- **The definition** is `app/frameworks/<id>/framework.json`, with the shape in
+  `schema/framework.schema.json` and the rules a schema cannot state in
+  `scripts/check_framework.py` (pre-commit and CI; every rule shown failing in
+  `tests/test_check_framework.py`). Ids are explicit (never positional), match
+  one safe pattern, and are never a prototype or reserved record key. Every word
+  the engine acts on is a member of an engine enum: a status's class, a gate
+  option's class, a phase's role, a flag rule. A supplement may not declare
+  gates (the server attributes sign-off only on the primary's top-level
+  `gates`), and a primary with gates must have a stop or retire option, so a
+  project can always end and come due for disposal (R-56).
+- **The build** embeds the definitions `app/frameworks.json` selects as
+  `FRAMEWORK_DEFS`. The published build is pinned to CHAI plus OPTICA and any
+  other config is refused, until a build of other frameworks has a place of its
+  own to go (step 3). Rules across definitions (view ids, namespaces, requires,
+  file suffixes) apply to that build; a definition outside it is checked alone,
+  and the config must name exactly one primary.
+- **The engine** (`app/js/10-frameworks/01-engine/`) computes score, phase,
+  review and flags from a definition. CHAI's and OPTICA's rule functions now
+  delegate to it, and their content constants are derived from the JSON. These
+  are transitional, inside their own directories, until the generic renderers
+  replace them (PR B). The model card's and metrics' flags are code plug-ins,
+  placed in the flag list where the definition puts them.
+- **Proof that nothing a reader sees changed**: `tests/test_snapshot.py` pins
+  529 pieces (every view of every sample with OPTICA off and on, three
+  languages, read-only, the side panel and every export) from before the port,
+  and shows zero difference after it. `tests/test_engine.py` covers the engine's
+  rules on stand-in definitions CHAI and OPTICA never exercise.
+- **One generator writes every framework's checklist page**
+  (`scripts/gen_framework_docs.py`), from the definition plus the page's own
+  prose in `app/frameworks/<id>/docs.toml`. It replaces `gen_chai_checklist.py`
+  (which regex-scraped the built page), `gen_optica_checklist.py` and
+  `gen_optica_module.py`, and retires `data/optica_items.json`: OPTICA's
+  definition holds every field it had, checked field by field. The CHAI and
+  OPTICA pages are byte-identical except one sentence, which told editors to
+  edit a generated file.
+- **Tests that read JS now read the definitions**: the retention parity test
+  (`server/tests/test_retention.py`) and the translation drift test
+  (`tests/test_framework_i18n.py`). They stay tied to what the app runs because
+  `tests/test_build_config.py` and `tests/test_framework_docs.py` show the page
+  embeds exactly the definitions on disk, and `tests/test_engine.py` shows the
+  engine ends a project on exactly CHAI's stop and retire options.
+- **Rejected:** keeping JS copies of the content beside the JSON (two sources);
+  a looser schema that ignores unknown fields (a typo becomes a silent no-op);
+  checking every definition under `app/frameworks/` as one build (a custom
+  framework outside the published build would collide with CHAI's views);
+  rewriting the views and tests in the same change as the engine (a regression
+  could be written into the new assertions; PR B does that against the snapshot).
+- Found and filed: the OPTICA page's prose says there are no "equivalent" rows,
+  but the data has three (part of #174).
+- Source: #168; R-63; D-74.

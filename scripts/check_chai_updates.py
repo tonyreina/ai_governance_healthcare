@@ -159,17 +159,20 @@ recorded it.
 This project derives several things from CHAI, and none of them update
 themselves:
 
-- [ ] `docs/app/index.html` via `app/js/10-frameworks/10-chai/00-definition.js`
-      — the 41 paraphrased criteria and the six stages
-- [ ] `data/optica_items.json` — the OPTICA crosswalk cites CHAI criteria by
-      canonical id, so a renumbering breaks it
+- [ ] `app/frameworks/chai/framework.json` — the 41 paraphrased criteria and
+      the six stages. Until the engine reads it (#168), the app's own copy in
+      `app/js/10-frameworks/10-chai/00-definition.js` must change with it
+- [ ] `app/frameworks/optica/framework.json` — the OPTICA crosswalk cites CHAI
+      criteria by canonical id, so a renumbering breaks it (and, until #168's
+      engine, the app's copy in `app/js/10-frameworks/20-optica/00-definition.js`)
 - [ ] `docs/crosswalk.md` — coverage counts are stated as facts and will be
       wrong if CHAI's criteria changed
 - [ ] `docs/frameworks/chai.md` — the use case list and the T&E description
 - [ ] `NOTICE.md` and `docs/notice.md` — attribution and license terms
 
 After changing any of them, run `pixi run gen-docs` so the generated pages and
-the app's copy stay in step.
+the dashboard are rebuilt, and `pixi run test-framework-docs`, which fails if the
+app's copy and the definitions disagree.
 
 ## Not covered by this check
 

@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tonyreina.github.io/ai_governance_healthcare/schema/framework.schema.json",
+  "title": "Governance framework definition, schemaVersion 1",
+  "description": "One framework as data: app/frameworks/<id>/framework.json (#168, R-63). This schema is the shape; scripts/check_framework.py adds the rules a schema cannot state (unique ids, references that must exist, view ids across the build, reserved names).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "name", "version", "role", "namespaces", "statuses", "categories", "sections"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "id": {"$ref": "#/$defs/id", "description": "The framework's id: its directory name, its catalog namespace and, for a supplement, the record's top-level key."},
+    "name": {"$ref": "#/$defs/text"},
+    "version": {"$ref": "#/$defs/text"},
+    "role": {"enum": ["primary", "supplement"], "description": "Role in scripts/check_framework.py. Exactly one primary per build (D-74)."},
+    "optIn": {"type": "boolean", "description": "Supplements only: switched on per project."},
+    "requires": {"type": "array", "items": {"$ref": "#/$defs/id"}, "uniqueItems": true},
+    "notice": {"$ref": "#/$defs/text"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "title": {"$ref": "#/$defs/text"},
+        "doi": {"$ref": "#/$defs/text"},
+        "journal": {"$ref": "#/$defs/text"},
+        "year": {"type": "integer"},
+        "url": {"$ref": "#/$defs/text"}
+      }
+    },
+    "sourceNote": {"$ref": "#/$defs/text"},
+    "namespaces": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/id"}, "uniqueItems": true},
+    "keys": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "section": {"$ref": "#/$defs/id"},
+        "sectionBody": {"$ref": "#/$defs/id"},
+        "category": {"$ref": "#/$defs/id"}
+      }
+    },
+    "viewPrefix": {"type": "string", "pattern": "^[A-Za-z0-9_-]{0,16}$"},
+    "ui": {"type": "object", "propertyNames": {"$ref": "#/$defs/id"}, "additionalProperties": {"$ref": "#/$defs/text"}},
+    "statuses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "label", "class"],
+        "properties": {
+          "value": {"$ref": "#/$defs/id"},
+          "label": {"$ref": "#/$defs/text"},
+          "class": {"enum": ["done", "partial", "open", "declined", "excluded"], "description": "StatusClass in scripts/check_framework.py."},
+          "msg": {"$ref": "#/$defs/text"},
+          "reasonField": {"$ref": "#/$defs/id"}
+        }
+      }
+    },
+    "whos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "label"],
+        "properties": {
+          "value": {"$ref": "#/$defs/id"},
+          "label": {"$ref": "#/$defs/text"},
+          "msg": {"$ref": "#/$defs/text"},
+          "external": {"type": "boolean"}
+        }
+      }
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "name": {"$ref": "#/$defs/text"},
+          "msg": {"$ref": "#/$defs/text"}
+        }
+      }
+    },
+    "categoriesOn": {"enum": ["items", "sections"], "description": "CategoriesOn in scripts/check_framework.py. Default items."},
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "description": "Other string fields are allowed only under the name keys.sectionBody gives (CHAI blurb, OPTICA purpose); the checker enforces that.",
+        "required": ["id", "n", "title", "items"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "n": {"type": "integer", "minimum": 1},
+          "title": {"$ref": "#/$defs/text"},
+          "category": {"$ref": "#/$defs/id"},
+          "slots": {"type": "array", "items": {"$ref": "#/$defs/pluginName"}, "uniqueItems": true},
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "text"],
+              "properties": {
+                "id": {"$ref": "#/$defs/id"},
+                "text": {"$ref": "#/$defs/text"},
+                "category": {"$ref": "#/$defs/id"},
+                "num": {"$ref": "#/$defs/text"},
+                "who": {"$ref": "#/$defs/id"},
+                "attrs": {"type": "object", "propertyNames": {"$ref": "#/$defs/id"}, "additionalProperties": {"type": "string"}},
+                "crossRefs": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["framework", "relation", "ids"],
+                  "properties": {
+                    "framework": {"$ref": "#/$defs/id"},
+                    "relation": {"enum": ["equivalent", "partial", "optica-only"], "description": "CrossRefRelation in scripts/check_framework.py."},
+                    "ids": {"type": "array", "items": {"$ref": "#/$defs/id"}, "uniqueItems": true}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": {"type": "string"}
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "after", "title", "question", "options"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "after": {"$ref": "#/$defs/id"},
+          "title": {"$ref": "#/$defs/text"},
+          "question": {"$ref": "#/$defs/text"},
+          "help": {"$ref": "#/$defs/text"},
+          "options": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["value", "class"],
+              "properties": {
+                "value": {"$ref": "#/$defs/text", "description": "An immutable id that may contain spaces (CHAI: 'Proceed with conditions'); stored as the decision."},
+                "class": {"enum": ["go", "conditional", "revise", "stop", "retire"], "description": "GateClass in scripts/check_framework.py and app/js."},
+                "label": {"$ref": "#/$defs/text"},
+                "short": {"$ref": "#/$defs/text"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "label", "role"],
+        "properties": {
+          "key": {"$ref": "#/$defs/id"},
+          "label": {"$ref": "#/$defs/text"},
+          "msg": {"$ref": "#/$defs/text"},
+          "role": {"enum": ["planning", "build", "pilot", "live"], "description": "PhaseRole in scripts/check_framework.py."},
+          "reachedBy": {"$ref": "#/$defs/id"},
+          "section": {"$ref": "#/$defs/id"}
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate"],
+      "properties": {
+        "gate": {"$ref": "#/$defs/id"},
+        "anchors": {"type": "array", "items": {"$ref": "#/$defs/id"}, "uniqueItems": true},
+        "monthsByRiskTier": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+        "defaultMonths": {"type": "integer", "minimum": 1},
+        "dueSoonDays": {"type": "integer", "minimum": 0}
+      }
+    },
+    "flags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "rule": {"enum": ["pastDue", "openWhenLive", "review", "reviseAtReview", "approvalWithoutRationale", "idle"], "description": "FlagRule in scripts/check_framework.py."},
+          "gate": {"$ref": "#/$defs/id"},
+          "days": {"type": "integer", "minimum": 1},
+          "plugin": {"$ref": "#/$defs/pluginName"}
+        }
+      }
+    },
+    "plugins": {"type": "array", "items": {"$ref": "#/$defs/pluginName"}, "uniqueItems": true},
+    "export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaId", "fileSuffix"],
+      "properties": {
+        "schemaId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}-review/[1-9][0-9]*$"},
+        "fileSuffix": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"}
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
+      "not": {"enum": ["__proto__", "constructor", "prototype", "toString", "toLocaleString", "valueOf", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__"]},
+      "description": "ID_PATTERN and UNSAFE_NAMES in scripts/check_framework.py: no dots (a dot is a path separator in records and catalog keys), and no JavaScript prototype name (an id becomes an object key)."
+    },
+    "text": {"type": "string", "minLength": 1},
+    "pluginName": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}\\.[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"}
+  }
+}

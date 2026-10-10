@@ -15,7 +15,7 @@ function exportHTML(){
   const prov = storageNoteShown();
   return `<!DOCTYPE html><html lang="${esc(LOCALE)}" dir="${localeDir(LOCALE)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
-<title>${esc(S.meta.solution||t("export.untitled"))} – ${esc(t("export.titleSuffix"))}</title>
+<title>${esc(S.meta.solution||t("export.untitled"))} – ${esc(t(uiKey(UiSlot.TITLE_SUFFIX),uiName()))}</title>
 <!-- No webfont link. The exported report is the artifact that gets emailed
      around a hospital and opened on clinical workstations, and a stylesheet
      link meant every one of those opens contacted a third party, carrying the
@@ -87,23 +87,23 @@ function exportMD(){
   const fieldLine=(labelKey,value)=>t("md.fieldLine",{label:t(labelKey),value:line(value)});
   const shown=(map,v)=>v?(Object.hasOwn(map,v)?t(map[v]):v):"–";
   const prov=storageNoteShown();
-  L.push(`# ${m.solution?line(m.solution):t("project.untitled")}: ${t("export.titleSuffix")}`,"");
+  L.push(`# ${m.solution?line(m.solution):t("project.untitled")}: ${t(uiKey(UiSlot.TITLE_SUFFIX),uiName())}`,"");
   L.push(fieldLine("report.status",statusLabel(fw.status(S))),fieldLine("report.phase",phaseLabel(fw.phase(S))),fieldLine("report.org",m.org||"–"),fieldLine("report.developer",m.developer||"–"),fieldLine("report.sourcing",shown(SOURCING_KEY,m.sourcing)),fieldLine("report.riskTier",shown(RISK_KEY,m.riskTier)),fieldLine("report.sponsor",m.sponsor||"–"),fieldLine("report.nextReview",fw.nextReview(S)||"–"),fieldLine("md.team",m.reviewers||"–"),fieldLine("md.scope",m.scope||"–"),fieldLine("md.generated",TODAY()),fieldLine("md.language",LOCALE),fieldLine("md.storedIn",`${prov.label}. ${prov.note}`),"");
   const F=fw.flags(S); L.push(`## ${t("report.flags")}`,""); if(F.length) F.forEach(f=>L.push(`- **${t(f.sev==="red"?"status.red":"status.amber")}:** ${flagText(f)}`)); else L.push(t("md.none")); L.push("");
-  L.push(`## ${t("report.readiness")}`,"",t("md.overall",{pct:ov.pct,answered:ov.answered,total:ov.total}),"",`| ${t("report.col.principle")} | ${t("report.col.score")} |`,"|---|---|");
+  L.push(`## ${t("report.readiness")}`,"",t(uiKey(UiSlot.MD_OVERALL),{pct:ov.pct,answered:ov.answered,total:ov.total}),"",`| ${t(uiKey(UiSlot.COL_CATEGORY))} | ${t("report.col.score")} |`,"|---|---|");
   fw.categories().forEach(c=>L.push(`| ${line(fw.categoryLabel(c.id))} | ${fw.score(S,all.filter(it=>it.category===c.id)).pct}% |`));
-  L.push("",`## ${t("report.checkpoints")}`,"",`| ${t("report.col.checkpoint")} | ${t("gate.decision")} | ${t("gate.by")} | ${t("report.col.date")} | ${t("md.rationale")} |`,"|---|---|---|---|---|");
+  L.push("",`## ${t(uiKey(UiSlot.CHECKPOINTS))}`,"",`| ${t(uiKey(UiSlot.COL_GATE))} | ${t("gate.decision")} | ${t("gate.by")} | ${t("report.col.date")} | ${t("md.rationale")} |`,"|---|---|---|---|---|");
   fw.gates().forEach(gate=>{const k=gate.id, g=fw.gateRecord(S,k); L.push(`| ${line(fw.gateLabel(k))}: ${line(fw.gateQuestion(k))} | ${g.decision?line(fw.optionLabel(g.decision)):t("md.notDecided")} | ${line(g.by)}${g.signedBy?` (${t("report.recordedBy",{who:line(nm(g.signedBy))})})`:""} | ${line(g.date)} | ${mdInlineMarkdown(g.rationale||"")} |`);});
   L.push("",`## ${t("md.openGaps")}`,"");
   const gaps=all.filter(it=>{const s=(answers[it.id]||{}).status; return !s||s==="notmet"||s==="partial";});
-  if(gaps.length){ L.push(`| ${t("report.col.stage")} | ${t("report.col.criterion")} | ${t("report.status")} | ${t("ci.owner")} | ${t("ci.due")} |`,"|---|---|---|---|---|"); gaps.forEach(it=>{const d=answers[it.id]||{}; L.push(`| ${line(it.section.n)} | ${line(fw.itemLabel(it))} | ${st(d.status)} | ${line(d.owner)} | ${line(d.due)} |`);}); }
+  if(gaps.length){ L.push(`| ${t(uiKey(UiSlot.COL_SECTION))} | ${t(uiKey(UiSlot.COL_ITEM))} | ${t("report.status")} | ${t("ci.owner")} | ${t("ci.due")} |`,"|---|---|---|---|---|"); gaps.forEach(it=>{const d=answers[it.id]||{}; L.push(`| ${line(it.section.n)} | ${line(fw.itemLabel(it))} | ${st(d.status)} | ${line(d.owner)} | ${line(d.due)} |`);}); }
   else L.push(t("md.none"));
   L.push("");
   if(fw.markdownExtras) L.push(...fw.markdownExtras({line, p:S}));
   L.push(`## ${t("report.history")}`,""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${line(String(e.at||"").slice(0,10))}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push(t("md.none")); L.push("");
   L.push(`## ${t("report.appendix")}`,"");
   fw.sections().forEach(s=>{L.push(`### ${line(s.n)}. ${line(fw.sectionLabel(s))}`,""); all.filter(it=>it.section===s).forEach(it=>{const d=answers[it.id]||{}; L.push(`- [${line(it.category)}] ${line(fw.itemLabel(it))}: **${st(d.status)}**${d.evidence?` (${mdInlineMarkdown(d.evidence)})`:""}`); refsMarkdown(d,line).forEach(x=>L.push(`  - ${t("refs.title")}: ${x}`));}); L.push("");});
-  L.push("---",`_${t("md.footer")}_`,"",t("export.fingerprint",contentHashes(S)));
+  L.push("---",`_${t(uiKey(UiSlot.MD_FOOTER),uiName())}_`,"",t("export.fingerprint",contentHashes(S)));
   return L.join("\n");
 }
 /* What the fingerprint is computed over, so a reader can recompute it from the file
@@ -190,9 +190,9 @@ function openDeleteDialog(){
   const canPurge = typeof STORE.purgeVersions === "function";
   const heading = canPurge ? t("del.title") : t("del.titleForever");
   const consequence = canPurge
-    ? `<p>${esc(t("del.removes"))}</p>
+    ? `<p>${esc(t(uiKey(UiSlot.DEL_REMOVES)))}</p>
       <p><b>${esc(t("del.historyKeptTitle"))}</b> ${esc(t("del.historyKeptDetail"))}</p>`
-    : `<p>${esc(t("del.destroys"))}</p>`;
+    : `<p>${esc(t(uiKey(UiSlot.DEL_DESTROYS)))}</p>`;
   const purgeChoice = canPurge ? `
       <label style="display:flex;gap:8px;align-items:flex-start;margin:12px 0 2px">
         <input type="checkbox" id="delPurge" aria-describedby="delPurgeHint"

@@ -1117,3 +1117,28 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `tests/test_engine.py` ("OPTICA answers change nothing CHAI
   decides, on every sample", with a control that shows the comparison can fail)
   and `tests/test_optica.py` ("CHAI score unmoved by an OPTICA answer").
+
+### R-65 A developer's framework may bring only English
+
+- Status: Active
+- The owner's decisions, 2026-10-10 (#168): a developer's framework must have
+  English, which is its definition; any other language is optional; a language
+  it does supply must be complete (`check-i18n` names the missing keys), so a
+  screen is never half one language; and where a language is not supplied, the
+  framework's words show in English with a visible note saying so. This applies
+  to a developer's frameworks only: CHAI and OPTICA keep all eight languages,
+  required as before.
+- Amends R-55: a framework's translations may also live in
+  `app/frameworks/<id>/i18n/<locale>.json`. R-55's zh-Hans review covers CHAI's
+  and OPTICA's wording only; a developer's framework shows a neutral note that
+  names no reviewer.
+- A framework that names no catalog keys of its own reads in the engine's
+  neutral words (section, item, decision), translated in every language; the two
+  neutral report footers are safety-bearing and show in English in a language
+  until a reviewer is recorded, as R-55 already requires.
+- Source: the owner, this session (two answers on 2026-10-10); #168; D-78.
+- Enforced by: `tests/test_check_i18n.py` (a partial language, an extra key,
+  markup, an English file, an unknown language, CHAI's text moved out: each
+  refused), `tests/test_build_config.py` (a custom build ships no CHAI or OPTICA
+  text and records its languages), `tests/test_engine.py` (neutral wording, and
+  the note per framework, never naming a reviewer it does not have).

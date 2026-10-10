@@ -78,7 +78,7 @@ function renderSection(F, sectionId) {
     + (F.hasSlot(UiSlot.CHIP_NOTE) ? `. ${esc(t(F.slot(UiSlot.CHIP_NOTE)))}` : "");
   return `<p class="eyebrow">${esc(t(F.slot(UiSlot.SECTION_EYEBROW), {n: s.n, total: F.fw.sections.length, domain: s.category}))}</p><h1>${esc(F.sectionTitle(s))}</h1>
   ${body ? `<p class="lede">${esc(body)}</p>` : ""}
-  ${fwNoteHTML()}
+  ${fwNoteHTML(F)}
   ${sectionLegendHTML(F)}${external && F.hasSlot(UiSlot.EXTERNAL_COUNT) ? `<p style="font-size:13px;color:var(--muted)">${esc(t(F.slot(UiSlot.EXTERNAL_COUNT), {count: external, total: s.items.length}))}</p>` : ""}
   <ol class="checklist">${s.items.map(it => itemHTML(F, it)).join("")}</ol>
   <p style="font-size:13px;color:var(--muted);margin-top:10px">${answered}</p>
@@ -97,15 +97,15 @@ function renderGate(F, key) {
     .filter(it => fw.classOf((answers[it.id] || {}).status) === StatusClass.PARTIAL).length;
   let note = "";
   if (gaps.length) {
-    note = `<div class="note"><b>${esc(t("gate.gaps", {count: gaps.length, n: s.n}))}${partial ? esc(t("gate.andPartial", {count: partial})) : ""}.</b>${fw.advances(g.decision) ? ` ${esc(t("gate.recordConditions"))}` : ""}
-    <ul class="gaplist">${gaps.slice(0, 6).map(it => `<li>${esc(t("gate.gapItem", {n: it.section.n, text: F.itemText(it)}))} <em>(${esc(t((answers[it.id] || {}).status ? "gate.notMet" : "gate.unanswered"))})</em></li>`).join("")}${gaps.length > 6 ? `<li>${esc(t("dash.andMore", {count: gaps.length - 6}))}</li>` : ""}</ul></div>`;
-  } else if (partial) note = `<div class="note">${esc(t("gate.answeredPartial", {count: partial, n: s.n}))}</div>`;
-  else note = `<div class="note ok">${esc(t("gate.allMet", {n: s.n}))}</div>`;
+    note = `<div class="note"><b>${esc(t(F.slot(UiSlot.GATE_GAPS), {count: gaps.length, n: s.n}))}${partial ? esc(t("gate.andPartial", {count: partial})) : ""}.</b>${fw.advances(g.decision, key) ? ` ${esc(t("gate.recordConditions"))}` : ""}
+    <ul class="gaplist">${gaps.slice(0, 6).map(it => `<li>${esc(t(F.slot(UiSlot.GATE_GAP_ITEM), {n: it.section.n, text: F.itemText(it)}))} <em>(${esc(t((answers[it.id] || {}).status ? "gate.notMet" : "gate.unanswered"))})</em></li>`).join("")}${gaps.length > 6 ? `<li>${esc(t("dash.andMore", {count: gaps.length - 6}))}</li>` : ""}</ul></div>`;
+  } else if (partial) note = `<div class="note">${esc(t(F.slot(UiSlot.GATE_ANSWERED_PARTIAL), {count: partial, n: s.n}))}</div>`;
+  else note = `<div class="note ok">${esc(t(F.slot(UiSlot.GATE_ALL_MET), {n: s.n}))}</div>`;
   const isReview = fw.review && fw.review.gate === key;
   const nr = isReview ? fw.nextReview(S) : null;
-  return `<p class="eyebrow">${esc(t("gate.eyebrow", {title: F.gateTitle(key), n: s.n}))}</p><h1>${esc(F.gateQuestion(key))}</h1>
+  return `<p class="eyebrow">${esc(t(F.slot(UiSlot.GATE_EYEBROW), {title: F.gateTitle(key), n: s.n}))}</p><h1>${esc(F.gateQuestion(key))}</h1>
   <p class="lede">${esc(F.gateHelp(key))}</p>
-  ${fwNoteHTML()}
+  ${fwNoteHTML(F)}
   ${note}
   <div class="gate-panel">
     <p style="margin:0;font-weight:600">${esc(t("gate.decision"))}</p>
@@ -146,7 +146,7 @@ function renderOverview(F) {
   <p style="font-size:13px;color:var(--muted)">${esc(t(F.slot(UiSlot.RELAY)))}</p>
   <table class="tbl"><thead><tr><th>${esc(t(F.slot(UiSlot.COL_WHO)))}</th><th>${esc(t(F.slot(UiSlot.CARD_ANSWERED)))}</th><th>${esc(t(F.slot(UiSlot.COL_OUTSTANDING)))}</th></tr></thead><tbody>${rows}</tbody></table>` : "";
   return `<p class="eyebrow">${esc(F.def.name)}</p>
-  <h1>${esc(t(F.slot(UiSlot.OVERVIEW_TITLE)))}</h1>
+  <h1>${esc(t(F.slot(UiSlot.OVERVIEW_TITLE), {name: F.def.name}))}</h1>
   <p class="lede">${esc(t(F.slot(UiSlot.OVERVIEW_LEDE)))}</p>
 
   <div class="cards">
@@ -158,14 +158,14 @@ function renderOverview(F) {
   ${whos}
 
   <div class="note">
-    <p><b>${esc(t(F.slot(UiSlot.NEVER_TITLE)))}</b> ${esc(t(F.slot(UiSlot.NEVER_DETAIL)))}</p>
+    <p><b>${esc(t(F.slot(UiSlot.NEVER_TITLE), {primary: primaryFramework().label}))}</b> ${esc(t(F.slot(UiSlot.NEVER_DETAIL)))}</p>
   </div>
   ${pager()}`;
 }
 
 function renderOff(F) {
-  return `<p class="eyebrow">${esc(F.def.name)}</p><h1>${esc(t(F.slot(UiSlot.OVERVIEW_TITLE)))}</h1>
-  <p class="lede">${esc(t(F.slot(UiSlot.OFF)))}</p>
+  return `<p class="eyebrow">${esc(F.def.name)}</p><h1>${esc(t(F.slot(UiSlot.OVERVIEW_TITLE), {name: F.def.name}))}</h1>
+  <p class="lede">${esc(t(F.slot(UiSlot.OFF), {name: F.def.name}))}</p>
   <p>${tHtml(F.slot(UiSlot.TURN_ON), {}, {setup: `<button class="btn" data-go="setup">${esc(t("rail.setup"))}</button>`})}</p>`;
 }
 
@@ -189,7 +189,7 @@ function reportBody(F, names) {
   const counted = F.def.statuses.filter(s => [StatusClass.DONE, StatusClass.PARTIAL, StatusClass.OPEN].includes(s.class));
   const extras = F.extras.reportSections ? F.extras.reportSections() : "";
   return `<div class="r-head">
-      <p class="eyebrow">${esc(t("report.eyebrow"))}</p>
+      <p class="eyebrow">${esc(t(F.slot(UiSlot.REPORT_EYEBROW), {name: F.def.name}))}</p>
       <h1>${m.solution ? bdi(m.solution) : esc(t("project.untitled"))}</h1>
       <div class="r-meta">
         <div><b>${esc(t("report.status"))}</b>${esc(statusLabel(st))}</div><div><b>${esc(t("report.phase"))}</b>${esc(phaseLabel(fw.phase(S)))}</div>
@@ -201,25 +201,25 @@ function reportBody(F, names) {
       ${m.reviewers ? `<p style="font-size:13.5px;margin:10px 0 0"><b>${esc(t("report.team"))}</b> ${bdi(m.reviewers)}</p>` : ""}
       ${m.scope ? `<p style="font-size:13.5px;margin:4px 0 0"><b>${esc(t("report.scope"))}</b> ${bdi(m.scope)}</p>` : ""}
     </div>
-    ${fwNoteHTML()}
+    ${fwNoteHTML(F)}
     <h2>${esc(t("report.flags"))}</h2>
     ${Fl.length ? `<ul class="gaplist" style="font-size:14px">${Fl.map(f => `<li><span class="tag ${esc(f.sev === Severity.RED ? "notmet" : "partial")}">${esc(t(f.sev === Severity.RED ? "status.red" : "status.amber"))}</span> ${esc(flagText(f))}</li>`).join("")}</ul>` : `<p>${esc(t("report.noFlags"))}</p>`}
     <h2>${esc(t("report.readiness"))}</h2>
-    <div class="overall"><span class="big">${ov.pct}%</span><p>${esc(t("report.readinessDetail", {answered: ov.answered, total: ov.total}))}${unanswered ? esc(t("report.stillOpen", {count: unanswered})) : ""}.</p></div>
+    <div class="overall"><span class="big">${ov.pct}%</span><p>${esc(t(F.slot(UiSlot.READINESS_DETAIL), {answered: ov.answered, total: ov.total}))}${unanswered ? esc(t("report.stillOpen", {count: unanswered})) : ""}.</p></div>
     <div class="bars">${(F.def.categories || []).map(c => { const sc = F.score(all.filter(it => it.category === c.id), S); return `<div class="bar"><span>${esc(F.categoryLabel(c.id))}</span><span class="track"><span class="fill ${esc(barCls(sc.pct))}" style="width:${esc(sc.pct)}%;display:block"></span></span><span class="pct">${sc.pct}%</span></div>`; }).join("")}</div>
     <h2>${esc(t("report.lifecycle"))}</h2>
-    <div class="r-wrap"><table class="rtable"><thead><tr><th>${esc(t("report.col.stage"))}</th><th>${esc(t("report.col.answered"))}</th>${counted.map(s => `<th>${esc(F.statusLabel(s.value))}</th>`).join("")}<th>${esc(t("report.col.score"))}</th></tr></thead><tbody>
+    <div class="r-wrap"><table class="rtable"><thead><tr><th>${esc(t(F.slot(UiSlot.COL_SECTION)))}</th><th>${esc(t("report.col.answered"))}</th>${counted.map(s => `<th>${esc(F.statusLabel(s.value))}</th>`).join("")}<th>${esc(t("report.col.score"))}</th></tr></thead><tbody>
     ${fw.sections.map(s => { const cnt = v => s.items.filter(it => (answers[it.id] || {}).status === v).length; const sc = F.score(s.items, S);
       return `<tr><td>${s.n}. ${esc(F.sectionTitle(s))}</td><td>${sc.answered}/${sc.total}</td>${counted.map(c => `<td>${cnt(c.value)}</td>`).join("")}<td><b>${sc.pct}%</b></td></tr>`; }).join("")}
     </tbody></table></div>
-    <h2>${esc(t("report.checkpoints"))}</h2>
-    <div class="r-wrap"><table class="rtable"><thead><tr><th>${esc(t("report.col.checkpoint"))}</th><th>${esc(t("gate.decision"))}</th><th>${esc(t("gate.by"))}</th><th>${esc(t("report.col.date"))}</th><th>${esc(t("gate.rationale"))}</th></tr></thead><tbody>
+    <h2>${esc(t(F.slot(UiSlot.CHECKPOINTS)))}</h2>
+    <div class="r-wrap"><table class="rtable"><thead><tr><th>${esc(t(F.slot(UiSlot.COL_GATE)))}</th><th>${esc(t("gate.decision"))}</th><th>${esc(t("gate.by"))}</th><th>${esc(t("report.col.date"))}</th><th>${esc(t("gate.rationale"))}</th></tr></thead><tbody>
     ${fw.gates.map(gate => { const k = gate.id, g = (S.gates || {})[k] || {}; return `<tr><td>${esc(F.gateTitle(k))}<br><span style="color:var(--muted);font-size:12px">${esc(F.gateQuestion(k))}</span></td><td>${g.decision ? `<b>${esc(F.optionLabel(g.decision))}</b>` : `<span style="color:var(--muted)">${esc(t("report.notDecided"))}</span>`}</td><td>${bdi(g.by || "")}${g.signedBy ? `<br><span style="color:var(--muted);font-size:12px">${tHtml("report.recordedBy", {}, {who: nm(g.signedBy)})}</span>` : ""}</td><td>${esc(g.date || "")}</td><td class="md">${mdHTML(g.rationale || "")}</td></tr>`; }).join("")}
     </tbody></table></div>
     <h2>${esc(t("report.gaps"))}</h2>
-    ${gaps.length ? `<div class="r-wrap"><table class="rtable"><thead><tr><th>${esc(t("report.col.stage"))}</th><th>${esc(t("report.col.criterion"))}</th><th>${esc(t("report.col.principle"))}</th><th>${esc(t("report.status"))}</th><th>${esc(t("ci.owner"))}</th><th>${esc(t("ci.due"))}</th></tr></thead><tbody>
+    ${gaps.length ? `<div class="r-wrap"><table class="rtable"><thead><tr><th>${esc(t(F.slot(UiSlot.COL_SECTION)))}</th><th>${esc(t(F.slot(UiSlot.COL_ITEM)))}</th><th>${esc(t(F.slot(UiSlot.COL_CATEGORY)))}</th><th>${esc(t("report.status"))}</th><th>${esc(t("ci.owner"))}</th><th>${esc(t("ci.due"))}</th></tr></thead><tbody>
       ${gaps.map(it => { const d = answers[it.id] || {}; const late = d.due && parseDay(d.due) < parseDay(TODAY()); return `<tr><td>${it.section.n}</td><td>${esc(F.itemText(it))}${d.evidence ? `<div class="md md-note">${mdHTML(d.evidence)}</div>` : ""}${refsReportHTML(d)}</td><td>${it.category !== undefined ? esc(F.categoryLabel(it.category)) : ""}</td><td>${tag(d.status)}</td><td>${bdi(d.owner || "–")}</td><td${late ? ' style="color:var(--red);font-weight:700"' : ""}>${esc(d.due || "–")}</td></tr>`; }).join("")}
-    </tbody></table></div>` : `<p>${esc(t("report.noGaps"))}</p>`}
+    </tbody></table></div>` : `<p>${esc(t(F.slot(UiSlot.NO_GAPS)))}</p>`}
     ${extras}<h2>${esc(t("report.history"))}</h2>
     ${logWindowNote() ? `<p style="color:var(--muted);font-size:13px"><strong>${esc(logWindowNote())}</strong></p>` : ""}
     ${LOG.length ? `<div class="r-wrap"><table class="rtable"><tbody>${LOG.map(e => `<tr><td style="width:120px">${esc(fmtDay((e.at || "").slice(0, 10)))}</td><td>${bdi(e.text)}</td><td>${nm(e.by)}</td></tr>`).join("")}</tbody></table></div>` : `<p>${esc(t("report.noEvents"))}</p>`}
@@ -227,7 +227,7 @@ function reportBody(F, names) {
     ${fw.sections.map(s => `<h3 style="font-size:15px;margin:18px 0 6px">${s.n}. ${esc(F.sectionTitle(s))}</h3><div class="r-wrap"><table class="rtable"><tbody>
       ${s.items.map(it => { const d = answers[it.id] || {}; return `<tr><td style="width:46px">${it.category !== undefined ? `<span class="pchip">${esc(it.category)}</span>` : ""}</td><td>${esc(F.itemText(it))}${d.evidence ? `<div class="md md-note">${mdHTML(d.evidence)}</div>` : ""}${refsReportHTML(d)}</td><td style="width:110px">${tag(d.status)}</td></tr>`; }).join("")}
     </tbody></table></div>`).join("")}
-    <p class="disclaimer">${esc(t("report.disclaimer"))}</p>`;
+    <p class="disclaimer">${esc(t(F.slot(UiSlot.DISCLAIMER), {name: F.def.name}))}</p>`;
 }
 
 function renderReport(F) {

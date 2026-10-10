@@ -11,8 +11,8 @@ const GATE_PIP = Object.freeze({
 function lcTrack(p){
   const fw=spine(), ph=fw.phase(p);
   const pip=s=>{const c=fw.score(p,s.items); const frac=c.total?c.answered/c.total:0;
-    return `<span class="pip${frac===1?" full":""}${ph.stage===s.n?" cur":""}" title="${esc(t("dash.pipTitle",{n:s.n,answered:c.answered,total:c.total}))}"><i style="height:${Math.round(frac*100)}%"></i>${esc(s.n)}</span>`;};
-  const gd=g=>{const d=fw.gateRecord(p,g.id).decision||""; const c=fw.decisionClass(d); const cls=c?GATE_PIP[c]:""; return `<span class="gd ${cls}" title="${esc(fw.gateLabel(g.id))}: ${esc(d?fw.optionLabel(d):t("dash.gateOpen"))}"></span>`;};
+    return `<span class="pip${frac===1?" full":""}${ph.stage===s.n?" cur":""}" title="${esc(t(uiKey(UiSlot.PIP_TITLE),{n:s.n,answered:c.answered,total:c.total}))}"><i style="height:${Math.round(frac*100)}%"></i>${esc(s.n)}</span>`;};
+  const gd=g=>{const d=fw.gateRecord(p,g.id).decision||""; const c=fw.decisionClass(d,g.id); const cls=c?GATE_PIP[c]:""; return `<span class="gd ${cls}" title="${esc(fw.gateLabel(g.id))}: ${esc(d?fw.optionLabel(d):t("dash.gateOpen"))}"></span>`;};
   const gates=fw.gates();
   const track=fw.sections().map(s=>pip(s)+gates.filter(g=>g.after===s.id).map(gd).join("")).join("");
   return `<div class="lc" aria-hidden="true">${track}</div><div class="lc-label">${esc(phaseLabel(ph))}</div>`;
@@ -36,7 +36,7 @@ function renderDashboardShell(){
   m.innerHTML = `
     <div class="dash-head">
       <div><p class="eyebrow">${esc(t("dash.eyebrow"))}</p><h1>${esc(t("dash.title"))}</h1>
-      <p class="lede">${esc(t("dash.lede"))}</p></div>
+      <p class="lede">${esc(t(uiKey(UiSlot.DASH_LEDE),uiName()))}</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
         <button class="btn ro-hide" data-act="samples" title="${esc(t("dash.addSamplesTitle"))}">${esc(t("dash.addSamples"))}</button>
         <button class="btn primary ro-hide" data-act="new">${esc(t("dash.newProject"))}</button>

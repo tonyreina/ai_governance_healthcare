@@ -42,7 +42,7 @@ function registerDefinition(id) {
     const out = [];
     if (!F.primary) {
       out.push({
-        id, kind: ViewKind.OVERVIEW, label: t(F.slot(UiSlot.RAIL_OVERVIEW)), glyph: "◇", sep: "before",
+        id, kind: ViewKind.OVERVIEW, label: t(F.slot(UiSlot.RAIL_OVERVIEW), {name: def.name}), glyph: "◇", sep: "before",
         meta: meta(fw.items, p), metaCls: metaCls(fw.items, p), short: def.name,
       });
     }
@@ -57,7 +57,7 @@ function registerDefinition(id) {
           id: "g" + g.id, kind: ViewKind.GATE, gate: g.id, label: F.gateTitle(g.id), cls: "gate",
           numHTML: '<span class="diamond" aria-hidden="true"></span>',
           meta: () => { const d = ((p.gates || {})[g.id] || {}).decision || ""; return d ? esc(F.shortDecision(d)) : esc(t("dash.gateOpen")); },
-          metaCls: () => { const d = ((p.gates || {})[g.id] || {}).decision || ""; return !d ? "" : (fw.advances(d) ? "done" : "warn"); },
+          metaCls: () => { const d = ((p.gates || {})[g.id] || {}).decision || ""; return !d ? "" : (fw.advances(d, g.id) ? "done" : "warn"); },
         });
       });
     });
@@ -111,7 +111,10 @@ function registerDefinition(id) {
     gateQuestion: k => F.gateQuestion(k),
     optionLabel: o => F.optionLabel(o),
     gateRecord: (p, k) => (p.gates || {})[k] || {},
-    decisionClass: d => fw.decisionClass(d),
+    decisionClass: (d, gateId) => fw.decisionClass(d, gateId),
+    // A sentence's catalog key for this framework: its own, or the engine's.
+    uiKey: slot => F.slot(slot),
+    name: def.name,
     statusKnown: v => fw.classOf(v) !== null,
     statusLabel: v => F.statusLabel(v),
     answers: p => F.answers(p),

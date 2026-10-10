@@ -26,6 +26,10 @@ import sys
 from enum import StrEnum
 from pathlib import Path
 
+# check_framework holds the key rule the build and the engine share.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import check_framework as ck
+
 ROOT = Path(__file__).resolve().parent.parent
 CATALOGS = ROOT / "app" / "i18n"
 SOURCES = [ROOT / "app" / "index.html", *sorted((ROOT / "app" / "js").rglob("*.js"))]
@@ -294,6 +298,57 @@ def framework_problems(source: dict, catalogs: dict[str, dict]) -> list[str]:
     return problems
 
 
+def _where(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else str(path)
+
+
+def custom_framework_problems(frameworks: Path, shared_source: dict) -> list[str]:
+    """A developer's framework (#168, R-65): English is its definition, so it has no
+    en file; any other language it brings, app/frameworks/<id>/i18n/<locale>.json,
+    holds exactly the keys the definition implies, as plain text, or the check names
+    what is missing. A framework whose text lives in app/i18n/framework (CHAI,
+    OPTICA) keeps it there, in every language."""
+    problems = []
+    shared = {k.split(".", 1)[0] for k in shared_source}
+    for path in sorted(frameworks.glob("*/framework.json")):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        fid = doc["id"]
+        folder = path.parent / "i18n"
+        files = sorted(folder.glob("*.json")) if folder.is_dir() else []
+        if set(doc.get("namespaces", [fid])) & shared:
+            problems += [
+                f"{_where(p)}: {fid}'s text lives in app/i18n/framework/" for p in files
+            ]
+            continue
+        want = ck.framework_strings(doc)
+        for p in files:
+            where = _where(p)
+            if p.stem not in {str(loc) for loc in Locale} or p.stem == Locale.EN:
+                problems.append(
+                    f"{where}: not a translation (English is the definition itself)"
+                    if p.stem == Locale.EN
+                    else f"{where}: {p.stem!r} is not a language this app offers"
+                )
+                continue
+            catalog = json.loads(p.read_text(encoding="utf-8"))
+            missing = sorted(set(want) - set(catalog))
+            if missing:
+                problems.append(
+                    f"{where}: a supplied language must be complete; missing "
+                    f"{len(missing)}: {', '.join(missing[:6])}"
+                )
+            problems += [
+                f"{where}: {k!r} is not text {fid}'s definition has"
+                for k in sorted(set(catalog) - set(want))
+            ]
+            for key, value in catalog.items():
+                if not isinstance(value, str) or not value.strip():
+                    problems.append(f"{where}: {key!r} is empty")
+                elif "<" in value:
+                    problems.append(f"{where}: {key!r} holds markup")
+    return problems
+
+
 def main() -> int:
     files = sorted(CATALOGS.glob("*.json"))
     catalogs = {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in files}
@@ -312,6 +367,9 @@ def main() -> int:
     }
     if Locale.EN in fw:
         problems += framework_problems(fw[Locale.EN], fw)
+        problems += custom_framework_problems(
+            ROOT / "app" / "frameworks", fw[Locale.EN]
+        )
     else:
         problems.append("app/i18n/framework/en.json is missing")
     texts = {str(p): p.read_text(encoding="utf-8") for p in SOURCES}

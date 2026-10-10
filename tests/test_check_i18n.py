@@ -13,6 +13,7 @@ import copy
 import importlib.util
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -258,6 +259,77 @@ def main() -> int:
         "a nested file under app/i18n is checked (mutation)",
         not cs.is_translation("app/i18n/drafts/fr.json"),
     )
+
+    print("A developer's framework's own translations (R-65)")
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        zz = json.loads((ROOT / "app/frameworks/chai/framework.json").read_text())
+        zz.update(id="zz", namespaces=["zz"])
+        (root / "zz" / "i18n").mkdir(parents=True)
+        (root / "zz" / "framework.json").write_text(json.dumps(zz))
+        want = ci.ck.framework_strings(zz)
+        shared = {"chai.item.s1-1": "x", "optica.item.1-1": "y"}
+        check(
+            "English only: nothing to check",
+            not ci.custom_framework_problems(root, shared),
+        )
+        de = root / "zz" / "i18n" / "de.json"
+        de.write_text(json.dumps({k: "Text" for k in want}))
+        check(
+            "a complete language passes", not ci.custom_framework_problems(root, shared)
+        )
+        partial = dict.fromkeys(want, "Text")
+        partial.pop(next(iter(want)))
+        de.write_text(json.dumps(partial))
+        found = ci.custom_framework_problems(root, shared)
+        check(
+            "a partial language is refused, naming what is missing",
+            any("must be complete; missing 1" in p for p in found),
+            str(found[:2]),
+        )
+        de.write_text(json.dumps({**dict.fromkeys(want, "Text"), "zz.item.nope": "x"}))
+        found = ci.custom_framework_problems(root, shared)
+        check(
+            "a key the definition does not have",
+            any("nope" in p for p in found),
+            str(found),
+        )
+        de.write_text(
+            json.dumps({**dict.fromkeys(want, "Text"), next(iter(want)): "<b>x</b>"})
+        )
+        found = ci.custom_framework_problems(root, shared)
+        check(
+            "markup in a translation",
+            any("holds markup" in p for p in found),
+            str(found),
+        )
+        de.unlink()
+        (root / "zz" / "i18n" / "en.json").write_text("{}")
+        found = ci.custom_framework_problems(root, shared)
+        check(
+            "an English file (English is the definition)",
+            any("English is the definition" in p for p in found),
+            str(found),
+        )
+        (root / "zz" / "i18n" / "en.json").unlink()
+        (root / "zz" / "i18n" / "xx.json").write_text("{}")
+        found = ci.custom_framework_problems(root, shared)
+        check(
+            "a language the app does not offer",
+            any("'xx'" in p for p in found),
+            str(found),
+        )
+        (root / "zz" / "i18n" / "xx.json").unlink()
+        chai = json.loads((ROOT / "app/frameworks/chai/framework.json").read_text())
+        (root / "chai" / "i18n").mkdir(parents=True)
+        (root / "chai" / "framework.json").write_text(json.dumps(chai))
+        (root / "chai" / "i18n" / "de.json").write_text("{}")
+        found = ci.custom_framework_problems(root, shared)
+        check(
+            "CHAI's text stays in app/i18n/framework, all eight languages",
+            any("lives in app/i18n/framework" in p for p in found),
+            str(found),
+        )
 
     print()
     if failures:

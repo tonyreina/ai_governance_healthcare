@@ -50,7 +50,8 @@
     "off": "optica.off",
     "turnOn": "optica.turnOn",
     "toggleOnDetail": "fw.onDetail",
-    "toggleOffDetail": "fw.offDetail"
+    "toggleOffDetail": "fw.offDetail",
+    "fwNote": "fw.note"
   },
   "statuses": [
     {

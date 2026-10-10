@@ -1586,3 +1586,34 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   review); byte-identical output for OPTICA too (one template cannot reproduce
   two whitespace styles, and inter-block whitespace does not render).
 - Source: #168; R-63; D-74; D-75.
+
+### D-78 A framework's words: its own keys, or the engine's neutral ones
+
+- Status: Accepted (implements the owner's decisions in #168 and R-65)
+- **Every shell sentence a framework affects is a slot** (`UiSlot`, 52 of them):
+  the section and checkpoint screens, the report's headings and footer, the
+  portfolio's lede and track, setup, the delete dialog, three flags and the
+  translation note. A definition names a catalog key for a slot or leaves it to
+  the engine's neutral key (`engine.*`, in all eight catalogs). CHAI and OPTICA
+  name today's keys, so their wording and every translation are unchanged (the
+  snapshot shows zero difference). A definition with no slots at all is valid.
+- **No noun is pasted into a sentence** (the design review: it breaks grammar in
+  de, ru, he, hi and zh-Hans). A sentence that names the framework takes its
+  `name`, a proper noun. The English text of a flag in an export takes the
+  definition's `nouns` ("criterion" for CHAI, "item" by default).
+- **The note under translated framework text is per framework**: its own slot
+  (CHAI and OPTICA keep `fw.note`, whose zh-Hans text names its reviewer), the
+  engine's neutral note, or, when the framework has no translation into the
+  reader's language, a note that its words are in English. An English fallback
+  in a right-to-left page is isolated left to right, as `t()` already did.
+- **The build ships only the selected frameworks' text**: keys in a namespace
+  another framework owns are left out of both catalogs, a developer's
+  translation files are merged (a repeated key is refused), and
+  `FRAMEWORK_LOCALES` records each framework's languages.
+- **Rejected:** requiring every slot of a custom framework (an author would have
+  to edit the shell's catalogs in eight languages); moving the safety footers
+  into CHAI's catalog (the reviewer gate works only for shell keys, per the
+  design review), so CHAI keeps them and a custom build gets neutral ones that
+  start unreviewed; per-key fallback inside a supplied language (the owner chose
+  complete-if-supplied).
+- Source: #168; R-65; D-77.

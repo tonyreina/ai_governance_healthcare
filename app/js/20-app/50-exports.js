@@ -49,6 +49,12 @@ function exportPDF(){
   // the document's print dialog open.
   frame.setAttribute("sandbox", "allow-same-origin allow-modals");
   frame.style.cssText = "position:fixed;left:-9999px;top:0;width:820px;height:1160px;border:0";  // rtl-ok: off screen either way
+  document.body.appendChild(frame);
+  // srcdoc keeps it same-origin, so contentWindow.print() is reachable; a blob
+  // URL would be a different origin in some browsers and throw.
+  frame.srcdoc = exportHTML();   // xss-ok: the frame is sandboxed without allow-scripts (above); tests/test_injection.py
+  // Set only now: a frame fires `load` for its first, blank document the moment it
+  // is inserted, and a handler set before that printed a blank page first.
   frame.onload = () => {
     const win = frame.contentWindow;
     const go = () => {
@@ -63,10 +69,6 @@ function exportPDF(){
     if(fonts && fonts.ready) fonts.ready.then(go).catch(go);
     else setTimeout(go, 400);
   };
-  document.body.appendChild(frame);
-  // srcdoc keeps it same-origin, so contentWindow.print() is reachable; a blob
-  // URL would be a different origin in some browsers and throw.
-  frame.srcdoc = exportHTML();   // xss-ok: the frame is sandboxed without allow-scripts (above); tests/test_injection.py
   toast(t("toast.printOpening"));
 }
 

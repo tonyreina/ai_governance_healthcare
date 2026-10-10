@@ -8,14 +8,17 @@ dangling reference would show only as a blank page. A check that has never been
 seen to fail is a claim, not a control, so each rule is shown failing here:
 
 * unit: synthetic scripts with an undefined name, a read in the temporal dead
-  zone (directly, in an IIFE, and through functions called during load), and the
-  legitimate shapes next to them (a function body that runs later, `typeof` of an
-  optional name, browser globals, shadowing, patterns), which must pass;
+  zone (directly, in an IIFE, in a for-of head, before an `await`, and through
+  functions called during load), a duplicate, and the legitimate shapes next to
+  them (a function body that runs later, code after an `await`, `typeof` of an
+  optional name and the branch it guards, browser globals, shadowing,
+  patterns), which must pass;
 * integration: the published page and a build of the example framework pass;
   the browser globals the check accepts all exist in a real browser engine;
 * mutation: a copy of app/ with a definition deleted, with the boot module sorted
   first, and with shared code reading a CHAI-only name, each rebuilt for real by a
-  copy of scripts/build_app.py, must fail check-app naming the problem.
+  copy of scripts/build_app.py, must fail check-app naming the problem (module
+  and line); the same CHAI-only call behind a typeof guard must pass.
 
 Under REQUIRE_TESTS=1 (CI), a part that cannot run (no node, no browser) fails.
 
@@ -59,6 +62,17 @@ def cannot_run(name: str, why: str) -> None:
         print(f"  SKIP  {name}  <- {why}")
 
 
+def error_text(message: str) -> str:
+    """An error's whole message on one line. Playwright's launch error is a
+    header (`BrowserType.launch: `) with the reason on the lines below it, in a
+    box drawn with these characters, so its first line alone says nothing."""
+    parts = [line.strip().strip(BOX).strip() for line in message.splitlines()]
+    return " ".join(p for p in parts if p) or "(the error had no message)"
+
+
+BOX = "\u2554\u2557\u255a\u255d\u2550\u2551"
+
+
 def problems(js: str) -> list[str]:
     return check_app.check_script(js)
 
@@ -95,6 +109,76 @@ def unit() -> None:
         "a top-level `arguments` (outside any function) is reported",
         flags("const f = () => arguments;", "undefined name 'arguments'"),
     )
+    print("typeof guards: a name only some builds have")
+    guarded = """
+        function card(){
+          if (typeof chaiCardMarkdown === "function") return chaiCardMarkdown(1);
+          return "";
+        }
+        const STORE = null;
+        if (STORE && typeof plugA === "function") { plugA(); }
+        const r = typeof plugB === "function" ? plugB() : null;
+        typeof plugC === "function" && plugC.go && plugC();
+        if (typeof plugD !== "undefined") plugD.go();
+    """
+    check(
+        "a name used only inside a branch guarded by its own typeof passes",
+        problems(guarded) == [],
+        problems(guarded),
+    )
+    parens = """
+        const t = typeof (plugE);
+        if (typeof (plugF) === "function") (plugF)();
+    """
+    check(
+        "typeof with its operand in parentheses is a typeof too",
+        problems(parens) == [],
+        problems(parens),
+    )
+    check(
+        "the same name called outside the guarded branch is still reported",
+        flags(
+            "function card(){\n"
+            '  if (typeof chaiCardMarkdown === "function") chaiCardMarkdown(1);\n'
+            "  return chaiCardMarkdown(2);\n"
+            "}",
+            "undefined name 'chaiCardMarkdown'",
+            "(1 use)",
+        ),
+        problems(
+            'if (typeof chaiCardMarkdown === "function") chaiCardMarkdown(1);\n'
+            "chaiCardMarkdown(2);"
+        ),
+    )
+    check(
+        "a typeof guard of another name does not cover this one",
+        flags('if (typeof other === "function") plug();', "undefined name 'plug'"),
+    )
+    check(
+        "the else branch of a typeof guard is not covered",
+        flags('typeof plug === "function" ? 0 : plug();', "undefined name 'plug'"),
+    )
+    check(
+        '`typeof x === "undefined"` does not cover what follows it',
+        flags('typeof plug === "undefined" && plug();', "undefined name 'plug'"),
+    )
+    check(
+        "nothing wider: code after an early return, and a `||` form, are reported",
+        flags(
+            'function f(){ if (typeof plug !== "function") return; plug(); }\n'
+            'function g(){ return typeof cb !== "function" || cb(); }',
+            "undefined name 'plug'",
+            "undefined name 'cb'",
+        ),
+    )
+    check(
+        "a typeof guard does not excuse a read in the temporal dead zone",
+        flags(
+            'if (typeof later === "number") later;\nconst later = 1;',
+            "'later' is used before",
+        ),
+    )
+
     ok = """
         const f0 = 1, { a, b: [c, ...d], e = f0 } = window.cfg;
         function g(p, { q, r = p }, [s] = [], ...rest){
@@ -171,6 +255,74 @@ def unit() -> None:
         "a const read in its own initializer is reported",
         flags("const n = n + 1;", "'n' is used before"),
     )
+    check(
+        "a for-of reading its own binding on the right-hand side is reported",
+        flags("const o = {};\nfor (const a of a) {}", "'a' is used before"),
+        problems("const o = {};\nfor (const a of a) {}"),
+    )
+    check(
+        "a for-in reading its own binding on the right-hand side is reported",
+        flags("for (let k in k) {}", "'k' is used before"),
+    )
+    print("Async code: what runs after the first await runs after load")
+    check(
+        "a read after the first await of an async IIFE passes",
+        problems("(async () => { await null; x; })();\nconst x = 1;") == [],
+        problems("(async () => { await null; x; })();\nconst x = 1;"),
+    )
+    check(
+        "a read before the first await of an async IIFE is reported",
+        flags(
+            "(async () => { x; await null; })();\nconst x = 1;", "'x' is used before"
+        ),
+    )
+    check(
+        "the operand of the first await is read before it suspends: reported",
+        flags(
+            "(async () => { await fetch(x); })();\nconst x = 1;", "'x' is used before"
+        ),
+    )
+    check(
+        "a read after the first await, of a let declared later in that same async "
+        "function, is still reported",
+        flags("(async () => { await null; y; let y = 1; })();", "'y' is used before"),
+    )
+    check(
+        "an await in a nested function does not suspend the IIFE around it",
+        flags(
+            "(async () => { const g = async () => { await null; }; x; })();\n"
+            "const x = 1;",
+            "'x' is used before",
+        ),
+    )
+    check(
+        "an async function called during load: a read after its first await passes",
+        problems(
+            "async function boot(){ await null; return C + render(); }\n"
+            "function render(){ return C; }\n"
+            "boot();\n"
+            "const C = 1;"
+        )
+        == [],
+        problems(
+            "async function boot(){ await null; return C + render(); }\n"
+            "function render(){ return C; }\n"
+            "boot();\n"
+            "const C = 1;"
+        ),
+    )
+    check(
+        "an async function called during load: a read before its first await is "
+        "reported",
+        flags(
+            "async function boot(){ render(); await null; }\n"
+            "function render(){ return C; }\n"
+            "boot();\n"
+            "const C = 1;",
+            "'C' is used before",
+            "via boot() -> render()",
+        ),
+    )
     legit = """
         function render(){ return CONFIG.x + later(); }
         const handler = () => CONFIG.x;
@@ -212,10 +364,34 @@ def unit() -> None:
         ),
     )
     check(
+        "a block function that overrides a top-level function is reported",
+        flags(
+            "function f(){}\n{ function f(){} }", "duplicate top-level declaration 'f'"
+        ),
+        problems("function f(){}\n{ function f(){} }"),
+    )
+    check(
         "the same name declared in two functions is not a duplicate",
         problems("function a(){ const x = 1; } function b(){ const x = 2; }") == [],
     )
     check("a syntax error is reported", flags("const a = ;", "syntax error"))
+
+    print("A part that cannot run says why")
+    launch = (
+        "BrowserType.launch: \n"
+        "Executable doesn't exist at /ms-playwright/chromium-1/chrome\n"
+        "\u2554" + "\u2550" * 20 + "\u2557\n"
+        "\u2551 Please run: playwright install \u2551\n"
+        "\u255a" + "\u2550" * 20 + "\u255d\n"
+    )
+    shown = error_text(launch)
+    check(
+        "a Playwright launch error is reported with its reason, not just its header",
+        "Executable doesn't exist at /ms-playwright" in shown
+        and "playwright install" in shown
+        and "\n" not in shown,
+        shown,
+    )
 
     print("node --check honors REQUIRE_TESTS")
     which, require = check_app.shutil.which, check_app.REQUIRE_TESTS
@@ -276,7 +452,7 @@ def integration() -> None:
             )
             browser.close()
     except Error as exc:
-        cannot_run("the accepted globals exist in a browser", str(exc).splitlines()[0])
+        cannot_run("the accepted globals exist in a browser", error_text(str(exc)))
         return
     check(
         f"all {len(check_app.GLOBALS)} accepted globals exist in this engine",
@@ -316,8 +492,12 @@ def build_and_check(root: Path) -> dict[str, subprocess.CompletedProcess]:
         if built.returncode != 0:
             results[name] = built
             continue
+        # The copy's own check, whose app/js is the copy's: a message then names
+        # the module as the copy has it (a renamed file under its new name).
         results[name] = subprocess.run(
-            [sys.executable, str(CHECK), str(page)], capture_output=True, text=True
+            [sys.executable, str(root / "scripts" / "check_app.py"), str(page)],
+            capture_output=True,
+            text=True,
         )
     return results
 
@@ -341,7 +521,17 @@ def mutation() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = copy_tree(Path(tmp))
         js = root / "app" / "js"
-        (js / "20-app" / "80-boot.js").rename(js / "00-core" / "00-aa-boot.js")
+        boot = js / "00-core" / "00-aa-boot.js"
+        (js / "20-app" / "80-boot.js").rename(boot)
+        # The first read that throws: the boot module's top-level use of
+        # HeaderControl, which 02-i18n.js declares, now sorted after it.
+        lines = boot.read_text(encoding="utf-8").splitlines()
+        at = next(i for i, x in enumerate(lines, 1) if "HeaderControl." in x)
+        expected = (
+            f"app/js/00-core/00-aa-boot.js:{at}: 'HeaderControl' is used before its "
+            "declaration runs (read directly); it is declared at "
+            "app/js/00-core/02-i18n.js:"
+        )
         for name, res in build_and_check(root).items():
             check(
                 f"the boot module sorted first fails check-app ({name} build)",
@@ -349,9 +539,28 @@ def mutation() -> None:
                 res.stdout + res.stderr,
             )
             check(
-                f"... and names the module and line ({name} build)",
-                "app/js/20-app/" in res.stderr or "app/js/00-core/" in res.stderr,
-                res.stderr[:400],
+                f"... and names the module and line of the offending read ({name} "
+                "build)",
+                expected in res.stderr,
+                f"wanted {expected!r} in: {res.stderr[:600]}",
+            )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_tree(Path(tmp))
+        shell = root / "app" / "js" / "20-app" / "10-shell.js"
+        shell.write_text(
+            shell.read_text(encoding="utf-8") + "\nfunction cardExtras(){\n"
+            '  if (typeof chaiCardMarkdown === "function")\n'
+            "    return chaiCardMarkdown({});\n"
+            '  return "";\n}\n',
+            encoding="utf-8",
+        )
+        for name, res in build_and_check(root).items():
+            check(
+                f"shared code calling CHAI's code behind a typeof guard passes ({name} "
+                "build)",
+                res.returncode == 0,
+                res.stdout + res.stderr,
             )
 
     with tempfile.TemporaryDirectory() as tmp:

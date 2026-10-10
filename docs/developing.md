@@ -68,21 +68,41 @@ page. It parses the script with tree-sitter's JavaScript grammar and resolves
 every name through its scopes, and fails on:
 
 - a name nothing declares that is not a JavaScript or browser global. Shared
-  code may reach a name only some builds have only as `typeof name`, which asks
-  whether it was built. A new browser global goes in `BROWSER_GLOBALS` in
+  code may reach a name only some builds have only behind `typeof`, which asks
+  whether it was built: `typeof name` itself, or a use inside the branch a typeof
+  test of that name guards, as in
+  `if (typeof chaiCardMarkdown === "function") return chaiCardMarkdown(ctx);`
+  (the consequent of an `if` or `?:`, or the right of `&&`, tested with
+  `=== "function"` or another type, or `!== "undefined"`). Nothing wider: not the
+  else branch, not code after `if (typeof x !== "function") return;`, not a `||`
+  form. A new browser global goes in `BROWSER_GLOBALS` in
   `scripts/check_app.py`, and `pixi run test-check-app` must find it in each
   browser engine;
 - a `const`, `let` or `class` read before its declaration has run: earlier in
-  the same code (top level, an IIFE, a static block), or in a function that
-  top-level code calls before the declaration;
-- a name two modules declare at top level;
+  the same code (top level, an IIFE, a static block, the right-hand side of
+  `for (const a of ...)`), or in a function that top-level code calls before the
+  declaration;
+- a name two modules declare at top level, including a function declared in a
+  top-level block that replaces another module's function;
 - a syntax error, from the parse and from `node --check`. Without node the
-  check says it skipped `node --check`, which `REQUIRE_TESTS=1` makes a failure.
+  check says it skipped `node --check`, which `REQUIRE_TESTS=1` makes a failure
+  (CI's lint and test workflows both set it).
 
-Its limits (D-80): the call graph follows only calls of a plain name (`f()`,
-`new K()`), not methods, callbacks or events, and assumes every path through a
-called function runs, so it can miss a load-order bug reached another way. A
-function body that runs only after load is, correctly, never reported.
+Its limits (D-80), which are heuristics, not exact:
+
+- the call graph follows only calls of a plain name (`f()`, `new K()`), not
+  method calls, callbacks or events, and assumes every path through a called
+  function runs, so it can miss a load-order bug reached another way;
+- code after the first `await` of an async function (the boot module is an async
+  IIFE) is taken to run after load. "First" is first in the text, so an `await`
+  on a branch not taken hides a read that does run during load;
+- a name the app means to declare that is also a browser global (`open`,
+  `close`, `print`, `origin`, `history`, `Image`, ...) passes as the global if
+  its declaration goes missing;
+- a name a script adds to `window` at run time is reported if read bare, and
+  `window.x` is not checked at all.
+
+A function body that runs only after load is, correctly, never reported.
 
 A prek hook rebuilds on any change under `app/`, so the generated file can never
 go stale.

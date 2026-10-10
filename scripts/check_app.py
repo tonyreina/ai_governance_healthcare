@@ -12,31 +12,53 @@ built shows up the same way. This checks, for every page it is given:
    under REQUIRE_TESTS=1 (CI) that is a failure, because a skip exits 0 and reads
    as a pass (CLAUDE.md, "A skip is a failure").
 2. Undefined names. Every identifier the script reads or writes is resolved
-   through the scopes that enclose it. One that no scope declares, that is not an
-   ECMAScript or browser global (GLOBALS below), and that is not the operand of
-   `typeof` (the legitimate way to ask whether optional code was built) is
-   reported. Exact: it is scope analysis on a real parse, not a pattern.
+   through the scopes that enclose it. One that no scope declares and that is not
+   an ECMAScript or browser global (GLOBALS below) is reported, unless it is
+   asked about with `typeof`, the legitimate way to ask whether optional code was
+   built: the operand of `typeof` itself (`typeof x`, `typeof (x)`), and a use
+   inside the branch a typeof test of that same name guards, which is the
+   consequent of an `if` or `?:`, or the right operand of `&&`, whose condition
+   is (or has as an `&&` operand) `typeof x === "function"` or any other type,
+   or `typeof x !== "undefined"`. Nothing wider: the else branch, code after
+   `if (typeof x !== "function") return;`, and a `||` form are still reported.
+   The resolution is exact, scope analysis on a real parse, not a pattern. What
+   it cannot see: a name the app means to declare that is also a browser global
+   (`open`, `close`, `print`, `origin`, `history`, `Image`, `Option`, ...) passes
+   as that global if the declaration is missing, and a name a script adds at run
+   time as a property of `window` is reported if read bare (and not checked if
+   read as `window.x`).
 3. Use before declaration. A `const`, `let` or `class` binding read before its
-   declaration has run throws a ReferenceError (the temporal dead zone). Reported:
+   declaration has run throws a ReferenceError (the temporal dead zone), and
+   `typeof` does not protect it. Reported:
    * a read in the same execution context as the declaration (no function boundary
      between them, or only immediately run ones: an IIFE, a class static block, a
-     static field) that comes earlier in the text. This is exact: that code throws
-     whenever it runs, which for top-level code is always, on load.
+     static field) that comes earlier in the text, including the right-hand side
+     of `for (const a of ...)`, which runs with `a` already in its dead zone.
+     Exact: that code throws whenever it runs, which for top-level code is always,
+     on load. One heuristic narrows it: code after the first `await` of an async
+     function (an async IIFE, like the boot module's) runs after the script has
+     finished loading, so a read there of a name declared outside that function
+     is not reported. "First" is first in the text, so an `await` on a branch
+     that is not taken, or in a loop that runs no times, hides a read that does
+     run during load.
    * a read inside a function that top-level code calls, directly or through other
      functions, before the declaration. The call graph is followed only through
      calls of a plain name bound to a function (`f()`, `new K()`), and every path
-     through a function is assumed to run. So it can miss a call made another way
-     (a method, a callback, an event) and could report a read on a branch that
-     never runs during load. A read in a function body that is not called during
-     load is, correctly, never reported: it runs after every module has loaded.
-4. Duplicate top-level declarations: two modules defining one name.
+     through a function is assumed to run, except what follows its first `await`
+     (as above). So it misses a call made another way (a method call, a callback,
+     an event handler) and could report a read on a branch that never runs during
+     load. A read in a function body that is not called during load is,
+     correctly, never reported: it runs after every module has loaded.
+4. Duplicate top-level declarations: two modules defining one name, including a
+   function declared in a top-level block (`{ function f(){} }`), which replaces
+   a top-level function or var of that name when the block runs.
 
 Parsing is tree-sitter's JavaScript grammar (tree-sitter and
 tree-sitter-javascript, locked in pixi.lock), so it runs offline, without node,
 and understands the syntax the app is written in. The scope analysis on top of it
 is this file. What it does not model: `with` and direct `eval` (the app uses
-neither, and check_injection forbids eval), names a script adds at run time as
-properties of `window`, and a `switch` that jumps past a `let` in another case.
+neither, and check_injection forbids eval), and a `switch` that jumps past a
+`let` in another case.
 
     pixi run check-app                  the published page, and a build of every
                                         app/frameworks/*/build.json into a temp dir
@@ -109,12 +131,24 @@ class T(StrEnum):
     CALL_EXPRESSION = "call_expression"
     NEW_EXPRESSION = "new_expression"
     PARENTHESIZED_EXPRESSION = "parenthesized_expression"
+    IF_STATEMENT = "if_statement"
+    TERNARY_EXPRESSION = "ternary_expression"
+    BINARY_EXPRESSION = "binary_expression"
+    STRING = "string"
+    AWAIT_EXPRESSION = "await_expression"
     # Anonymous tokens: keywords that say which declaration or operator this is.
     TYPEOF = "typeof"
     CONST = "const"
     LET = "let"
     VAR = "var"
     STATIC = "static"
+    ASYNC = "async"
+    AWAIT = "await"
+    AND = "&&"
+    EQ = "=="
+    STRICT_EQ = "==="
+    NE = "!="
+    STRICT_NE = "!=="
 
 
 def kind(node: Node | None) -> T | None:
@@ -150,6 +184,14 @@ REFERENCES = frozenset(
     }
 )
 BINDING_LEAVES = frozenset({T.IDENTIFIER, T.SHORTHAND_PROPERTY_IDENTIFIER_PATTERN})
+EQUALS = frozenset({T.EQ, T.STRICT_EQ})
+NOT_EQUALS = frozenset({T.NE, T.STRICT_NE})
+
+
+class TypeofResult(StrEnum):
+    """What `typeof` evaluates to, as far as a guard asks: is the name defined?"""
+
+    UNDEFINED = "undefined"
 
 
 class ScopeKind(StrEnum):
@@ -257,6 +299,9 @@ class Binding:
     ready: int
     # The function it is bound to, when it is one: followed by the call graph.
     value: Node | None = None
+    # A function declared in a block that Annex B also binds in the enclosing
+    # function (or the program): `{ function f(){} }`.
+    annex_b: bool = False
 
 
 @dataclass(eq=False)
@@ -293,6 +338,7 @@ class Analysis:
         self.binding_nodes: set[int] = set()
         self.duplicates: list[tuple[Binding, Binding]] = []
         self.references: list[Reference] = []
+        self._awaits: dict[int, int | None] = {}
         limit = sys.getrecursionlimit()
         sys.setrecursionlimit(max(limit, 20000))
         try:
@@ -314,10 +360,14 @@ class Analysis:
     ) -> None:
         self.binding_nodes.add(name_node.id)
         name = name_node.text.decode("utf-8")
-        binding = Binding(name, bkind, scope, name_node, ready, value)
+        binding = Binding(name, bkind, scope, name_node, ready, value, annex_b=quiet)
         old = scope.names.get(name)
         if old is not None:
-            if scope is self.program and not quiet:
+            # A block function at top level overwrites a top-level function or var
+            # of the same name when its block runs (Annex B): a duplicate too. Two
+            # block functions of one name are left alone (only one block may run).
+            overrides = old.kind in (BindingKind.FUNCTION, BindingKind.VAR)
+            if scope is self.program and (not quiet or (overrides and not old.annex_b)):
                 self.duplicates.append((old, binding))
             if bkind is BindingKind.VAR or quiet:
                 return  # `var x` again, or Annex B: the first binding stands
@@ -390,7 +440,10 @@ class Analysis:
             if decl is T.VAR:
                 self._bind_pattern(left, BindingKind.VAR, scope.function)
             elif decl in DECLARATION_KIND:
-                self._bind_pattern(left, DECLARATION_KIND[decl], inner, left.end_byte)
+                # The right-hand side is evaluated with these bindings already in
+                # scope and not yet initialized: `for (const a of a)` throws.
+                right = node.child_by_field_name("right")
+                self._bind_pattern(left, DECLARATION_KIND[decl], inner, right.end_byte)
             self._declare_children(node, inner)
         elif k is T.CATCH_CLAUSE:
             inner = self._scope(node, ScopeKind.BLOCK, scope)
@@ -508,7 +561,12 @@ class Analysis:
     def undefined_names(self) -> list[Problem]:
         seen: dict[str, list[Reference]] = {}
         for ref in self.references:
-            if ref.binding is None and not ref.in_typeof and ref.name not in GLOBALS:
+            if (
+                ref.binding is None
+                and not ref.in_typeof
+                and ref.name not in GLOBALS
+                and not _guarded(ref.node, ref.name)
+            ):
                 seen.setdefault(ref.name, []).append(ref)
         return [
             Problem(
@@ -546,6 +604,7 @@ class Analysis:
                 and b.kind in LEXICAL
                 and ref.node.start_byte < b.ready
                 and ref.scope.context is b.scope.context
+                and not self._after_await(ref, b.scope.function)
             ):
                 report(ref, "read directly")
 
@@ -555,7 +614,7 @@ class Analysis:
             by_context.setdefault(ref.scope.context.node.id, []).append(ref)
         for ref in by_context.get(self.root.id, []):
             target = _called(ref)
-            if target is None:
+            if target is None or self._after_await(ref):
                 continue
             at = ref.node.start_byte
             chain = [ref.name]
@@ -567,6 +626,7 @@ class Analysis:
                         and b.scope is self.program
                         and b.kind in LEXICAL
                         and at < b.ready
+                        and not self._after_await(inner)
                     ):
                         report(
                             inner,
@@ -591,8 +651,36 @@ class Analysis:
                 yield body, path
                 for ref in by_context.get(body.id, []):
                     nxt = _called(ref)
-                    if nxt is not None:
+                    if nxt is not None and not self._after_await(ref):
                         todo.append((nxt, [*path, ref.name]))
+
+    def _await_end(self, fn: Node) -> int | None:
+        """Where an async function's code first suspends: the end of its first
+        `await` (its operand is evaluated before it suspends), or None."""
+        if fn.id not in self._awaits:
+            async_ = kind(fn) in FUNCTIONS and any(
+                kind(c) is T.ASYNC for c in fn.children
+            )
+            body = fn.child_by_field_name("body") if async_ else None
+            self._awaits[fn.id] = None if body is None else _first_await(body)
+        return self._awaits[fn.id]
+
+    def _after_await(self, ref: Reference, outer: Scope | None = None) -> bool:
+        """Whether a reference runs only after an async function it is in has
+        suspended, so after the rest of the script has loaded. Walks out from
+        the reference through functions run immediately, to its execution
+        context, stopping at `outer` (the function whose own code declares the
+        name, where suspending does not help: its declaration has not run)."""
+        at = ref.node.start_byte
+        s = ref.scope.function
+        while s is not outer:
+            end = self._await_end(s.node)
+            if end is not None and at >= end:
+                return True
+            if not s.immediate:
+                return False
+            s = s.parent.function
+        return False
 
     def duplicate_declarations(self) -> list[Problem]:
         return [
@@ -615,7 +703,8 @@ def lookup(scope: Scope | None, name: str) -> Binding | None:
 
 
 def _in_typeof(node: Node) -> bool:
-    parent = node.parent
+    """The operand of `typeof`, `typeof x` or `typeof (x)`."""
+    parent = _unparen(node).parent
     return (
         kind(parent) is T.UNARY_EXPRESSION
         and kind(parent.child_by_field_name("operator")) is T.TYPEOF
@@ -623,9 +712,94 @@ def _in_typeof(node: Node) -> bool:
 
 
 def _unparen(node: Node) -> Node:
+    """Out through enclosing parentheses: `x` in `((x))` to the outermost."""
     while kind(node.parent) is T.PARENTHESIZED_EXPRESSION:
         node = node.parent
     return node
+
+
+def _inner(node: Node | None) -> Node | None:
+    """In through parentheses: `((x))` to `x`."""
+    while kind(node) is T.PARENTHESIZED_EXPRESSION and node.named_child_count == 1:
+        node = node.named_children[0]
+    return node
+
+
+def _typeof_of(node: Node | None) -> str | None:
+    """The name `typeof name` asks about, or None if this is not one."""
+    node = _inner(node)
+    if not (
+        kind(node) is T.UNARY_EXPRESSION
+        and kind(node.child_by_field_name("operator")) is T.TYPEOF
+    ):
+        return None
+    arg = _inner(node.child_by_field_name("argument"))
+    return arg.text.decode("utf-8") if kind(arg) is T.IDENTIFIER else None
+
+
+def _says_defined(cond: Node | None, name: str) -> bool:
+    """Whether `cond` being true means `name` is defined: it is, or has as an
+    `&&` operand, `typeof name === "<anything but undefined>"` or
+    `typeof name !== "undefined"` (either way round, `==` and `!=` too)."""
+    cond = _inner(cond)
+    if kind(cond) is not T.BINARY_EXPRESSION:
+        return False
+    op = kind(cond.child_by_field_name("operator"))
+    left, right = cond.child_by_field_name("left"), cond.child_by_field_name("right")
+    if op is T.AND:
+        return _says_defined(left, name) or _says_defined(right, name)
+    if op not in EQUALS | NOT_EQUALS:
+        return False
+    for asked, other in ((left, right), (right, left)):
+        other = _inner(other)
+        if _typeof_of(asked) == name and kind(other) is T.STRING:
+            undefined = other.text[1:-1].decode("utf-8") == TypeofResult.UNDEFINED
+            return (op in EQUALS) is not undefined
+    return False
+
+
+def _guarded(node: Node, name: str) -> bool:
+    """Whether `node` sits in the branch a typeof test of `name` guards: the
+    consequent of an `if` or `?:` whose condition says it is defined, or the
+    right operand of an `&&` whose left does. Not the else branch, and not code
+    after an early return: that is all."""
+    child, parent = node, node.parent
+    while parent is not None:
+        k = kind(parent)
+        if k in (T.IF_STATEMENT, T.TERNARY_EXPRESSION):
+            if parent.child_by_field_name("consequence") == child and _says_defined(
+                parent.child_by_field_name("condition"), name
+            ):
+                return True
+        elif (
+            k is T.BINARY_EXPRESSION
+            and kind(parent.child_by_field_name("operator")) is T.AND
+            and parent.child_by_field_name("right") == child
+            and _says_defined(parent.child_by_field_name("left"), name)
+        ):
+            return True
+        child, parent = parent, parent.parent
+    return False
+
+
+def _first_await(node: Node) -> int | None:
+    """The end of the first `await` in this code, not counting nested functions
+    (they suspend themselves, not this one). `for await` suspends once its
+    right-hand side is evaluated."""
+    todo = [node]
+    while todo:
+        n = todo.pop()
+        k = kind(n)
+        if k is T.AWAIT_EXPRESSION:
+            return n.end_byte
+        if k in FUNCTIONS:
+            continue
+        if k is T.FOR_IN_STATEMENT and any(kind(c) is T.AWAIT for c in n.children):
+            right = n.child_by_field_name("right")
+            inner = _first_await(right)
+            return right.end_byte if inner is None else inner
+        todo.extend(reversed(n.children))
+    return None
 
 
 def _iife(fn: Node) -> bool:

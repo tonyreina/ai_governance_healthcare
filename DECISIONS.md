@@ -1671,10 +1671,12 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   into a temporary directory, and resolves every identifier through its scopes.
   It fails on a name nothing declares that is not an ECMAScript or browser
   global, on a `const`, `let` or `class` read before its declaration has run
-  (directly, in an IIFE or static block, or in a function that top-level code
+  (directly, in an IIFE or static block, in the right-hand side of a
+  `for (const a of ...)` reading `a`, or in a function that top-level code
   calls by name before the declaration), and on a name declared twice at top
-  level. `node --check` still runs, and its absence is a failure under
-  `REQUIRE_TESTS`.
+  level (a function in a top-level block that replaces another counts).
+  `node --check` still runs, and its absence is a failure under
+  `REQUIRE_TESTS`, which both the lint and the test workflows set.
 - **The parser is tree-sitter's JavaScript grammar**, two PyPI wheels locked
   with hashes in `pixi.lock`, and the scope analysis is the script's own. It
   runs offline, without node, and parses the syntax the app uses (`?.`, `??`,
@@ -1682,13 +1684,22 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - **What this asks of future code.** Shared code may reach a name only some
   builds have (a framework's own code, which a build of other frameworks leaves
   out) only behind `typeof name`, which the check accepts as the question "was
-  this built?". A new browser global the app uses goes in `BROWSER_GLOBALS`, and
+  this built?": the operand of `typeof` itself, and a use inside the branch a
+  typeof test of the same name guards (the consequent of an `if` or `?:`, or
+  the right of `&&`, tested `=== "<a type>"` or `!== "undefined"`), and nothing
+  wider (not the else branch, not code after an early return, not `||`). A new
+  browser global the app uses goes in `BROWSER_GLOBALS`, and
   `tests/test_check_app.py` must find it in Chromium, Firefox and WebKit.
 - **Its limits, stated in the script and in `docs/developing.md`:** the call
-  graph follows only calls of a plain name (`f()`, `new K()`), not methods,
+  graph follows only calls of a plain name (`f()`, `new K()`), not method calls,
   callbacks or events, and assumes every path through a called function runs;
-  `with`, direct `eval` and globals a script adds to `window` at run time are not
-  modeled; a `switch` jumping past a `let` in another case is not seen.
+  code after the first `await` (first in the text) of an async function is taken
+  to run after load, so an `await` on a branch not taken hides a read that runs
+  during load; a name the app means to declare that is also a browser global
+  (`open`, `print`, `origin`, ...) passes as that global if its declaration goes
+  missing; `with`, direct `eval` and globals a script adds to `window` at run
+  time are not modeled (read bare, one is reported; `window.x` is not checked);
+  a `switch` jumping past a `let` in another case is not seen.
 - **Rejected:** softening the docstring to what the old code did (#176 names it
   as a false claim, and a custom build makes the failure likely); ESLint's
   `no-undef` and `no-use-before-define` (npm packages pixi cannot lock here, and

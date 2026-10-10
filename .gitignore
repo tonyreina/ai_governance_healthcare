@@ -31,3 +31,6 @@ venv/
 # Local database dumps from `make backup`
 backups/
 build/
+
+# Agents' git worktrees (Claude Code): other checkouts, never committed.
+.claude/worktrees/

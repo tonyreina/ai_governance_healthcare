@@ -1661,3 +1661,32 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   build (a custom build would list, and could open, CHAI records it cannot
   read); a definition chosen at run time (R-63: a build is a reviewed change).
 - Source: #168; design v2; R-63; R-67.
+
+### D-80 The spelling guard lists roots and reads words the way code writes them
+
+- Status: Proposed (built for #169; the owner has not yet confirmed it)
+- **Roots, not words.** `scripts/check_spelling.py` holds British roots in
+  families (-our, -re, -ce, -ise, -yse, a doubled l), and generates each root's
+  inflections and prefixed forms (plural, -ed, -ing, -er, -able, -isation,
+  un-, re-, mis- and the like). Words in no family are listed with their
+  inflections spelled out. A list of exact forms missed a plural while it
+  listed the singular (#169), and every other unlisted inflection would have
+  passed the same way. A generated form that is not a real word is harmless:
+  each keeps the British part of its root, so it can only match a British
+  spelling. Forms that are American too ("analyses", "cancellation",
+  "enrolled", "programmed") are never generated.
+- **Words as code writes them.** The scan splits identifiers at underscores,
+  hyphens, digits and case changes, so each word of a camelCase or
+  SHOUTING_CASE name is checked (R-17 covers code), in any case.
+- **An allowed phrase exempts only itself.** A `.spelling-allow` phrase is
+  blanked before the scan, like a URL, so a British word elsewhere on the same
+  line is still caught. `spelling-ok` still exempts its whole line.
+- **Shown to fail:** `tests/test_check_spelling.py` checks every generated word
+  in eight contexts, a hand-written table of inflections, a list of American
+  look-alikes, both exemptions, the skips and `--fix`, and breaks a copy of the
+  checker twelve ways to show each is noticed.
+- **Rejected:** listing more exact forms (the failure #169 describes, repeated
+  for the next unlisted one); matching any word that contains a British stem
+  (flags "enrolled" and "fulfilled", and a checker that cries wolf gets
+  switched off); a dictionary dependency (a new install, and still a list).
+- Source: #169; R-17.

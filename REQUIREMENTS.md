@@ -940,7 +940,12 @@ honest answer and is a gap worth closing; see R-19.
 - American spelling in prose, code, comments, docstrings, commit messages and
   UI copy. Quoted material and third-party field names keep their original
   spelling.
-- Enforced by: `pixi run check-spelling` (pre-commit).
+- Enforced by: `pixi run check-spelling` (pre-commit, and CI through the lint
+  workflow's `prek run --all-files`), which generates each listed root's
+  inflections (D-80). The checker is itself tested by `pixi run
+  test-check-spelling` (CI and pre-commit), including mutation tests (#169).
+- Not enforced: commit messages (the check reads files, not messages), and any
+  British word whose root is not on the list. These rest on review.
 
 ### R-18 A closed set of values has an enumerated type
 

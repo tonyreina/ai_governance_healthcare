@@ -311,7 +311,12 @@ In short:
   that asserts a security property gets a row in [Security claims](security-claims.md)
   with the test that enforces it, and `pixi run check-claims` fails if a quoted
   sentence is no longer where the row says it is.
-- **American English** everywhere, checked by `pixi run check-spelling`.
+- **American English** everywhere, checked by `pixi run check-spelling`. It
+  lists British roots and generates their inflections, and reads identifiers
+  word by word (camelCase and SHOUTING_CASE). A quotation keeps its spelling
+  with `spelling-ok` on the line, or with the exact phrase in `.spelling-allow`,
+  which exempts that phrase and not the rest of its line. `pixi run
+  test-check-spelling` shows the checker failing.
 
 ## The documentation site
 

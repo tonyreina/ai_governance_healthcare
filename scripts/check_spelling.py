@@ -11,11 +11,18 @@ listed, and anything that is a word in both -- "specialist", "analysis",
 "practice" as a noun -- is left out, because a checker that cries wolf gets
 switched off.
 
+The list is of roots, not of words: each root's inflections (plurals, -ed,
+-ing, -er, the -isation family, un-, re- and the like) are generated from it,
+because a list of exact forms missed "judgements" while it listed "judgement"
+(#169). Words are read the way code writes them, so the parts of an identifier
+(``colourPicker``, ``MAX_COLOURS``, ``data-colour-id``) are checked too, in any
+case. tests/test_check_spelling.py pins all of this.
+
 Quoting a source that spells a word the British way is legitimate. Two escapes:
 
-* Put ``spelling-ok`` in a comment on the same line.
+* Put ``spelling-ok`` in a comment on the same line; that line is skipped.
 * Add the exact phrase to ``.spelling-allow`` in the repo root, one per line;
-  a line matching that phrase is skipped.
+  that phrase is skipped wherever it appears, and the rest of its line is not.
 
 Run via: pixi run check-spelling
 """
@@ -78,153 +85,465 @@ CHECK_SUFFIXES = {
 }
 CHECK_NAMES = {"Caddyfile", "Dockerfile", "Makefile"}
 
-# British -> American. Keys are matched case-insensitively on word boundaries.
-BRITISH: dict[str, str] = {
-    # -our
-    "behaviour": "behavior",
-    "behavioural": "behavioral",
-    "behaviourally": "behaviorally",
-    "colour": "color",
-    "coloured": "colored",
-    "colours": "colors",
-    "favour": "favor",
-    "favours": "favors",
-    "favourite": "favorite",
-    "honour": "honor",
-    "honours": "honors",
-    "labour": "labor",
-    "neighbour": "neighbor",
-    "rumour": "rumor",
-    "endeavour": "endeavor",
-    # -re
-    "centre": "center",
-    "centres": "centers",
-    "centred": "centered",
-    "metre": "meter",
-    "metres": "meters",
-    "theatre": "theater",
-    "fibre": "fiber",
-    # -ce nouns whose American form is -se
-    "defence": "defense",
-    "offence": "offense",
-    "licence": "license",
-    "pretence": "pretense",
-    # -ise / -isation
-    "organise": "organize",
-    "organised": "organized",
-    "organises": "organizes",
-    "organising": "organizing",
-    "organisation": "organization",
-    "organisations": "organizations",
-    "organisational": "organizational",
-    "recognise": "recognize",
-    "recognised": "recognized",
-    "recognises": "recognizes",
-    "normalise": "normalize",
-    "normalised": "normalized",
-    "normalises": "normalizes",
-    "normalising": "normalizing",
-    "normalisation": "normalization",
-    "serialise": "serialize",
-    "serialised": "serialized",
-    "serialising": "serializing",
-    "serialisation": "serialization",
-    "summarise": "summarize",
-    "summarised": "summarized",
-    "summarises": "summarizes",
-    "prioritise": "prioritize",
-    "prioritised": "prioritized",
-    "authorise": "authorize",
-    "authorised": "authorized",
-    "authorisation": "authorization",
-    "minimise": "minimize",
-    "minimised": "minimized",
-    "minimising": "minimizing",
-    "maximise": "maximize",
-    "maximised": "maximized",
-    "optimise": "optimize",
-    "optimised": "optimized",
-    "optimising": "optimizing",
-    "standardise": "standardize",
-    "standardised": "standardized",
-    "standardisation": "standardization",
-    "specialise": "specialize",
-    "specialised": "specialized",
-    "utilise": "utilize",
-    "utilised": "utilized",
-    "categorise": "categorize",
-    "categorised": "categorized",
-    "characterise": "characterize",
-    "characterised": "characterized",
-    "emphasise": "emphasize",
-    "emphasised": "emphasized",
-    "analyse": "analyze",
-    "analysed": "analyzed",
-    "analysing": "analyzing",
-    "apologise": "apologize",
-    "realise": "realize",
-    "realised": "realized",
-    "criticise": "criticize",
-    "criticised": "criticized",
-    "synthesise": "synthesize",
-    "synthesised": "synthesized",
-    "initialise": "initialize",
-    "initialised": "initialized",
-    "initialisation": "initialization",
-    # doubled consonants
-    "cancelled": "canceled",
-    "cancelling": "canceling",
-    "labelled": "labeled",
-    "labelling": "labeling",
-    "modelling": "modeling",
-    "modelled": "modeled",
-    "travelled": "traveled",
-    "travelling": "traveling",
-    "signalled": "signaled",
-    "fuelled": "fueled",
-    # miscellaneous
+# British -> American, by root. A word list of exact forms catches the forms
+# someone thought to type: "judgement" was listed and "judgements" was not, so
+# the plural passed (#169). So the list holds roots, and every inflection is
+# generated from a root by the endings its family takes, under the prefixes it
+# takes. A generated form that is not a real word is harmless: it can only ever
+# match a British spelling, because each one keeps the British part of its root.
+#
+# A family is (endings, prefixes, stems). Each ending is a (British, American)
+# pair appended to the stem; each prefix is prepended to both.
+Family = tuple[tuple[tuple[str, str], ...], tuple[str, ...], tuple[str, ...]]
+
+FAMILIES: dict[str, Family] = {
+    # colour -> color: the stem is everything before the "our".
+    "-our": (
+        (
+            ("our", "or"),
+            ("ours", "ors"),
+            ("oured", "ored"),
+            ("ouring", "oring"),
+            ("ourings", "orings"),
+            ("oural", "oral"),
+            ("ourally", "orally"),
+            ("ourable", "orable"),
+            ("ourably", "orably"),
+            ("ourite", "orite"),
+            ("ourites", "orites"),
+            ("ourer", "orer"),
+            ("ourers", "orers"),
+            ("ourful", "orful"),
+            ("ourfully", "orfully"),
+            ("ourless", "orless"),
+            ("ourly", "orly"),
+            ("ourhood", "orhood"),
+            ("ourhoods", "orhoods"),
+            ("ourism", "orism"),
+            ("ourist", "orist"),
+            ("ourists", "orists"),
+            ("oury", "ory"),
+            ("ourise", "orize"),
+            ("ourised", "orized"),
+            ("ourising", "orizing"),
+        ),
+        ("", "mis", "dis", "un", "water", "multi"),
+        (
+            "arm",
+            "behavi",
+            "cand",
+            "clam",
+            "col",
+            "endeav",
+            "fav",
+            "flav",
+            "harb",
+            "hon",
+            "hum",
+            "lab",
+            "neighb",
+            "od",
+            "parl",
+            "rig",
+            "rum",
+            "savi",
+            "sav",
+            "splend",
+            "tum",
+            "val",
+            "vap",
+            "vig",
+        ),
+    ),
+    # centre -> center: the stem is everything before the "re".
+    "-re": (
+        (
+            ("re", "er"),
+            ("res", "ers"),
+            ("red", "ered"),
+            ("ring", "ering"),
+        ),
+        ("", "kilo", "centi", "milli", "micro", "nano", "de", "re", "epi"),
+        ("calib", "cent", "fib", "lit", "meag", "met", "somb", "spect", "theat"),
+    ),
+    # defence -> defense.
+    "-ce": (
+        (
+            ("ce", "se"),
+            ("ces", "ses"),
+            ("ced", "sed"),
+            ("cing", "sing"),
+            ("celess", "seless"),
+        ),
+        ("", "sub", "self"),
+        ("defen", "licen", "offen", "preten"),
+    ),
+    # organise -> organize, and every form built on it. Only stems whose -ise
+    # form is British: "advertise", "exercise", "revise" and the like are
+    # American too, so they are not here.
+    "-ise": (
+        (
+            ("ise", "ize"),
+            ("ised", "ized"),
+            ("ises", "izes"),
+            ("ising", "izing"),
+            ("iser", "izer"),
+            ("isers", "izers"),
+            ("isable", "izable"),
+            ("isation", "ization"),
+            ("isations", "izations"),
+            ("isational", "izational"),
+        ),
+        ("", "re", "un", "de", "dis", "mis", "pre", "non", "over", "under"),
+        (
+            "anonym",
+            "apolog",
+            "author",
+            "capital",
+            "categor",
+            "central",
+            "character",
+            "civil",
+            "colon",
+            "conceptual",
+            "container",
+            "contextual",
+            "critic",
+            "custom",
+            "digit",
+            "emphas",
+            "energ",
+            "equal",
+            "familiar",
+            "fantas",
+            "final",
+            "formal",
+            "general",
+            "global",
+            "harmon",
+            "hospital",
+            "hypothes",
+            "ideal",
+            "incentiv",
+            "initial",
+            "internal",
+            "item",
+            "jeopard",
+            "legal",
+            "legitim",
+            "local",
+            "marginal",
+            "material",
+            "maxim",
+            "memor",
+            "minim",
+            "mobil",
+            "modern",
+            "monet",
+            "national",
+            "neutral",
+            "normal",
+            "operational",
+            "optim",
+            "organ",
+            "parameter",
+            "parametr",
+            "patron",
+            "penal",
+            "personal",
+            "polar",
+            "popular",
+            "priorit",
+            "privat",
+            "pseudonym",
+            "public",
+            "random",
+            "rational",
+            "real",
+            "recogn",
+            "sanit",
+            "scrutin",
+            "sensit",
+            "serial",
+            "social",
+            "special",
+            "stabil",
+            "standard",
+            "steril",
+            "subsid",
+            "summar",
+            "symbol",
+            "sympath",
+            "synchron",
+            "synthes",
+            "theor",
+            "token",
+            "trivial",
+            "util",
+            "vapor",
+            "victim",
+            "virtual",
+            "visual",
+            "weapon",
+        ),
+    ),
+    # analyse -> analyze. Not "-yses": "analyses" is the plural of "analysis".
+    "-yse": (
+        (
+            ("yse", "yze"),
+            ("ysed", "yzed"),
+            ("ysing", "yzing"),
+            ("yser", "yzer"),
+            ("ysers", "yzers"),
+        ),
+        ("", "re", "over", "psycho"),
+        ("anal", "catal", "dial", "electrol", "hydrol", "paral"),
+    ),
+    # travelled -> traveled. Only the forms that double the l in British and not
+    # in American; "cancellation", "excelled", "controlled" are American too.
+    "-ll": (
+        (
+            ("led", "ed"),
+            ("ling", "ing"),
+            ("ler", "er"),
+            ("lers", "ers"),
+            ("lings", "ings"),
+            ("lor", "or"),
+            ("lors", "ors"),
+            ("lous", "ous"),
+            ("lously", "ously"),
+            ("lery", "ry"),
+        ),
+        ("", "re", "un", "mis"),
+        (
+            "cancel",
+            "channel",
+            "counsel",
+            "dial",
+            "duel",
+            "enamel",
+            "equal",
+            "fuel",
+            "funnel",
+            "initial",
+            "jewel",
+            "label",
+            "level",
+            "libel",
+            "marvel",
+            "model",
+            "panel",
+            "pedal",
+            "quarrel",
+            "ravel",
+            "revel",
+            "rival",
+            "shovel",
+            "signal",
+            "snorkel",
+            "spiral",
+            "stencil",
+            "swivel",
+            "total",
+            "towel",
+            "travel",
+            "tunnel",
+            "yodel",
+        ),
+    ),
+}
+
+# Words that belong to no family, each with its own inflections spelled out.
+EXPLICIT: dict[str, str] = {
     "catalogue": "catalog",
+    "catalogues": "catalogs",
+    "catalogued": "cataloged",
+    "cataloguing": "cataloging",
+    "cataloguer": "cataloger",
+    "cataloguers": "catalogers",
     "grey": "gray",
+    "greys": "grays",
     "greyed": "grayed",
+    "greying": "graying",
+    "greyer": "grayer",
+    "greyest": "grayest",
+    "greyish": "grayish",
+    "greyness": "grayness",
+    "greyscale": "grayscale",
     "fulfil": "fulfill",
     "fulfils": "fulfills",
     "fulfilment": "fulfillment",
+    "fulfilments": "fulfillments",
     "enrol": "enroll",
+    "enrols": "enrolls",
     "enrolment": "enrollment",
+    "enrolments": "enrollments",
     "instalment": "installment",
+    "instalments": "installments",
+    "instil": "instill",
+    "instils": "instills",
     "skilful": "skillful",
+    "skilfully": "skillfully",
+    "unskilful": "unskillful",
+    "wilful": "willful",
+    "wilfully": "willfully",
     "acknowledgement": "acknowledgment",
     "acknowledgements": "acknowledgments",
     "judgement": "judgment",
     "judgements": "judgments",
+    "judgemental": "judgmental",
+    "misjudgement": "misjudgment",
+    "misjudgements": "misjudgments",
+    "abridgement": "abridgment",
     "towards": "toward",
     "amongst": "among",
     "whilst": "while",
     "programme": "program",
     "programmes": "programs",
     "storey": "story",
+    "storeys": "stories",
     "tyre": "tire",
+    "tyres": "tires",
     "plough": "plow",
+    "ploughs": "plows",
+    "ploughed": "plowed",
+    "ploughing": "plowing",
     "aluminium": "aluminum",
     "artefact": "artifact",
     "artefacts": "artifacts",
     "draught": "draft",
+    "draughts": "drafts",
+    "draughty": "drafty",
     "kerb": "curb",
+    "kerbs": "curbs",
     "manoeuvre": "maneuver",
+    "manoeuvres": "maneuvers",
+    "manoeuvred": "maneuvered",
+    "manoeuvring": "maneuvering",
+    "manoeuvrable": "maneuverable",
+    "manoeuvrability": "maneuverability",
     "mould": "mold",
+    "moulds": "molds",
+    "moulded": "molded",
+    "moulding": "molding",
+    "mouldings": "moldings",
+    "mouldy": "moldy",
     "moustache": "mustache",
+    "moustaches": "mustaches",
     "practise": "practice",
+    "practised": "practiced",
+    "practises": "practices",
+    "practising": "practicing",
+    "sceptic": "skeptic",
+    "sceptics": "skeptics",
     "sceptical": "skeptical",
+    "sceptically": "skeptically",
     "scepticism": "skepticism",
     "speciality": "specialty",
+    "specialities": "specialties",
+    "cheque": "check",
+    "cheques": "checks",
+    "jewellery": "jewelry",
+    "pyjamas": "pajamas",
+    "sulphur": "sulfur",
+    "aeroplane": "airplane",
+    "aeroplanes": "airplanes",
+    # Medicine, since this is aimed at US health systems.
+    "anaemia": "anemia",
+    "anaemic": "anemic",
+    "anaesthesia": "anesthesia",
+    "anaesthetic": "anesthetic",
+    "anaesthetics": "anesthetics",
+    "anaesthetist": "anesthetist",
+    "anaesthetists": "anesthetists",
+    "caesarean": "cesarean",
+    "diarrhoea": "diarrhea",
+    "encyclopaedia": "encyclopedia",
+    "foetal": "fetal",
+    "foetus": "fetus",
+    "gynaecological": "gynecological",
+    "gynaecologist": "gynecologist",
+    "gynaecology": "gynecology",
+    "haematologist": "hematologist",
+    "haematology": "hematology",
+    "haemoglobin": "hemoglobin",
+    "haemorrhage": "hemorrhage",
+    "ischaemia": "ischemia",
+    "ischaemic": "ischemic",
+    "leukaemia": "leukemia",
+    "oedema": "edema",
+    "oesophageal": "esophageal",
+    "oesophagus": "esophagus",
+    "oestrogen": "estrogen",
+    "orthopaedic": "orthopedic",
+    "orthopaedics": "orthopedics",
+    "paediatric": "pediatric",
+    "paediatrician": "pediatrician",
+    "paediatricians": "pediatricians",
+    "paediatrics": "pediatrics",
+    "septicaemia": "septicemia",
 }
 
-PATTERN = re.compile(
-    r"\b(" + "|".join(sorted(map(re.escape, BRITISH), key=len, reverse=True)) + r")\b",
-    re.I,
-)
+
+def generate(families: dict[str, Family], explicit: dict[str, str]) -> dict[str, str]:
+    """Every British form, lowercase, mapped to its American one."""
+    out: dict[str, str] = {}
+    for endings, prefixes, stems in families.values():
+        for stem in stems:
+            for prefix in prefixes:
+                for ending_b, ending_a in endings:
+                    out[prefix + stem + ending_b] = prefix + stem + ending_a
+    out.update(explicit)
+    return out
+
+
+BRITISH: dict[str, str] = generate(FAMILIES, EXPLICIT)
+
+MARKER = "spelling-ok"
+# A word, as the checker sees one: a run of letters, split where an identifier
+# changes case, so `colourPicker`, `MAX_COLOURS` and `data-colour-id` are each
+# read as their words. Underscores, digits and hyphens separate words.
+WORD = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+")
+# The whole run of letters, without splitting identifiers (kept for the tests'
+# mutation that shows the split matters).
+WHOLE = re.compile(r"[A-Za-z]+")
 # A URL or a path can legitimately contain any spelling; it is not prose.
 URLISH = re.compile(r"(https?://\S+|\b[\w.-]+/[\w./-]+)")
+
+
+def blank(match: re.Match[str]) -> str:
+    return " " * len(match.group(0))
+
+
+def american_for(word: str, american: str) -> str:
+    """The American spelling, in the case the British one was written in."""
+    if word.isupper() and len(word) > 1:
+        return american.upper()
+    if word[0].isupper():
+        return american[0].upper() + american[1:]
+    return american
+
+
+def find(line: str, allow: list[str]) -> list[tuple[int, str, str]]:
+    """(column, British word, American word) for each hit in one line.
+
+    A line with the marker is exempt. An allowed phrase exempts only itself: it
+    is blanked out before the scan, like a URL, so a British word elsewhere on
+    the same line is still caught.
+    """
+    if MARKER in line:
+        return []
+    scannable = line
+    for phrase in allow:
+        scannable = scannable.replace(phrase, " " * len(phrase))
+    scannable = URLISH.sub(blank, scannable)
+    hits = []
+    for match in WORD.finditer(scannable):
+        word = match.group(0)
+        american = BRITISH.get(word.lower())
+        if american is not None:
+            hits.append((match.start(), word, american_for(word, american)))
+    return hits
 
 
 def is_translation(rel: str) -> bool:
@@ -273,17 +592,9 @@ def check(path: Path, allow: list[str]) -> list[str]:
 
     problems = []
     for number, line in enumerate(text.splitlines(), 1):
-        if "spelling-ok" in line or any(phrase in line for phrase in allow):
-            continue
-        # Blank out URLs so a path like creativecommons.org/licenses cannot trip.
-        scannable = URLISH.sub(lambda m: " " * len(m.group(0)), line)
-        for match in PATTERN.finditer(scannable):
-            word = match.group(0)
-            american = BRITISH[word.lower()]
-            if word[0].isupper():
-                american = american.capitalize()
+        for column, word, american in find(line, allow):
             problems.append(
-                f"{path}:{number}:{match.start() + 1}: "
+                f"{path}:{number}:{column + 1}: "
                 f"British spelling {word!r} -- use {american!r}\n"
                 f"    {line.strip()[:100]}"
             )
@@ -303,7 +614,11 @@ def targets(argv: list[str]) -> list[Path]:
 
 
 def fix(path: Path, allow: list[str]) -> int:
-    """Rewrite British spellings in place. Returns how many were changed."""
+    """Rewrite British spellings in place. Returns how many were changed.
+
+    Uses the same scan as check(), so it changes exactly what check() reports:
+    never an exempt line, an allowed phrase or a URL.
+    """
     try:
         text = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
@@ -312,37 +627,11 @@ def fix(path: Path, allow: list[str]) -> int:
     changed = 0
     out = []
     for line in text.splitlines(keepends=True):
-        if "spelling-ok" in line or any(phrase in line for phrase in allow):
-            out.append(line)
-            continue
-
-        # Replace only outside URLs, so a path keeps whatever spelling it has.
-        pieces, last = [], 0
-        for m in URLISH.finditer(line):
-            pieces.append((line[last : m.start()], True))
-            pieces.append((m.group(0), False))
-            last = m.end()
-        pieces.append((line[last:], True))
-
-        rebuilt = []
-        for chunk, scan in pieces:
-            if not scan:
-                rebuilt.append(chunk)
-                continue
-
-            def swap(m: re.Match[str]) -> str:
-                nonlocal changed
-                changed += 1
-                word = m.group(0)
-                american = BRITISH[word.lower()]
-                if word.isupper():
-                    return american.upper()
-                if word[0].isupper():
-                    return american.capitalize()
-                return american
-
-            rebuilt.append(PATTERN.sub(swap, chunk))
-        out.append("".join(rebuilt))
+        # Right to left, so an earlier column is not moved by a later change.
+        for column, word, american in reversed(find(line, allow)):
+            line = line[:column] + american + line[column + len(word) :]
+            changed += 1
+        out.append(line)
 
     if changed:
         path.write_text("".join(out), encoding="utf-8")

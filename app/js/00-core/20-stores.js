@@ -1,6 +1,10 @@
 /* ============================================================
    Stores: the self-hosted server, or this browser
    ============================================================ */
+/* Browser storage keys of a build of other frameworks carry its primary's id, so
+   its saved work never mixes with the published build's on the same origin. Here,
+   not in 00-util.js, which server/tests/test_merge.py runs alone, with no BUILD. */
+const BUILD_SUFFIX = BUILD.published ? "" : `@${BUILD.primary}`;
 class LocalStore{
   constructor(){ this.k="chai-portfolio-local-v1"+BUILD_SUFFIX; this.d=this.load(); this.subs=[]; this.logSubs={}; }
   load(){ try{ return JSON.parse(localStorage.getItem(this.k)) || {projects:{},logs:{}}; }catch(e){ return {projects:{},logs:{}}; } }

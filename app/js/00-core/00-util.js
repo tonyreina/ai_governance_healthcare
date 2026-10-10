@@ -9,9 +9,6 @@ const bdi = s => `<bdi>${esc(s)}</bdi>`;
 /* The default of a switch over a closed set: a member added without a case here
    fails the first time it runs, not by quietly rendering nothing. */
 function assertNever(v){ throw new Error("unhandled member: " + String(v)); }
-/* Browser storage keys of a build of other frameworks carry its primary's id, so
-   its saved work never mixes with the published build's on the same origin. */
-const BUILD_SUFFIX = BUILD.published ? "" : `@${BUILD.primary}`;
 /* Fields of an item or answer that this code branches on by name. */
 const Field = Object.freeze({ REFS: "refs" });
 const clone = o => o==null ? o : JSON.parse(JSON.stringify(o));

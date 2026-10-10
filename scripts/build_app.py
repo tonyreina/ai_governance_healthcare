@@ -32,6 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from build_manifest import manifest_json
 from check_i18n import Locale
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -39,6 +40,10 @@ SRC = ROOT / "app"
 OUT = ROOT / "docs" / "app" / "index.html"
 # The proxy's Content-Security-Policy header, generated from the built page (#154).
 CSP_OUT = ROOT / "proxy" / "csp.caddy"
+# What the server needs from this build, beside the page (#168 PR C, D-76): each
+# framework's definition hash and the decisions that end a project, which the migrate
+# job loads into retirement_rule so disposal follows the same definition.
+MANIFEST_OUT = OUT.parent / "manifest.json"
 
 CSS_MARK = "/*@CSS@*/"
 JS_MARK = "/*@JS@*/"
@@ -192,7 +197,7 @@ def out_dir_problem(out: Path) -> str | None:
     so a symbolic link cannot point a write into them; and by the file system's own
     identity of each existing ancestor, so a case-insensitive file system cannot
     reach them by another spelling."""
-    targets = [out, out / "index.html", out / "csp.caddy"]
+    targets = [out, out / "index.html", out / "csp.caddy", out / "manifest.json"]
     for target in targets:
         resolved = target.resolve()
         for name in PROTECTED:
@@ -389,9 +394,10 @@ def main(argv: list[str] | None = None, frameworks: Path | None = None) -> int:
             return 2
         defs = framework_defs(args.config.resolve(), custom=True, frameworks=frameworks)
         out, csp_out = args.out / "index.html", args.out / "csp.caddy"
+        manifest_out = args.out / "manifest.json"
     else:
         defs = framework_defs()
-        out, csp_out = OUT, CSP_OUT
+        out, csp_out, manifest_out = OUT, CSP_OUT, MANIFEST_OUT
 
     shell = (SRC / "index.html").read_text(encoding="utf-8")
     for mark in (CSS_MARK, JS_MARK, CSP_MARK):
@@ -430,6 +436,10 @@ def main(argv: list[str] | None = None, frameworks: Path | None = None) -> int:
     out.write_text(html, encoding="utf-8")
 
     csp_out.write_text(csp_header(html), encoding="utf-8")
+    # The manifest goes beside the page it describes, so the server retires by the
+    # same definitions the page runs (D-76): DIR/manifest.json for a custom build.
+    primary = next(f for f, d in defs.items() if Role(d["role"]) is Role.PRIMARY)
+    manifest_out.write_text(manifest_json(defs, primary), encoding="utf-8")
 
     changed = "unchanged" if previous == html else "updated"
     shown = (

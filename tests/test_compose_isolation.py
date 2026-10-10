@@ -17,7 +17,10 @@ This reads the real compose.yaml and fails if the property is edited away:
 * the dev override (which DOES publish the API) is a named file, never
   compose.override.yaml, which a bare `docker compose up` would pick up silently;
 * the database lives on a named volume (so `down` keeps the data) and its image is
-  pinned to a major version (Postgres does not migrate its on-disk format).
+  pinned to a major version (Postgres does not migrate its on-disk format);
+* the page the proxy serves and the manifest the migrate job loads the retirement
+  rules from are one build directory, APP_DIR (D-76), read-only, with today's paths
+  as the defaults.
 
 Each rule has a mutation test: break a copy of the real file and demand it notice.
 
@@ -346,6 +349,73 @@ def emergency_setting_reaches_the_api(compose: dict) -> list[str]:
     return []
 
 
+APP_DIR_DEFAULT = "${APP_DIR:-./docs/app}"
+CSP_FILE_DEFAULT = "${CSP_FILE:-./proxy/csp.caddy}"
+MANIFEST_TARGET = "/etc/chai/manifest.json"
+
+
+def _bind(mount: object) -> tuple[str, str, bool, dict]:
+    """(source, target, read-only, the long syntax's `bind` options) of a mount."""
+    if isinstance(mount, dict):
+        return (
+            str(mount.get("source", "")),
+            str(mount.get("target", "")),
+            bool(mount.get("read_only")),
+            mount.get("bind") or {},
+        )
+    # From the right: a source may hold a colon of its own (${APP_DIR:-...}).
+    text = str(mount)
+    mode = ""
+    if text.endswith((":ro", ":rw")):
+        text, mode = text[:-3], text[-2:]
+    source, _, target = text.rpartition(":")
+    return source, target, mode == "ro", {}
+
+
+def one_build_for_page_and_rules(compose: dict) -> list[str]:
+    """The proxy serves the page, and the migrate job loads the retirement rules,
+    from ONE build directory (D-76). Were they two, a custom page could be served
+    while disposal followed CHAI's rules, or the other way round. Defaults are
+    today's paths, so a stack with no APP_DIR or CSP_FILE runs as it did."""
+    problems = []
+    proxy = {t: (s, ro) for s, t, ro, _ in map(_bind, service(compose, PROXY).get(
+        "volumes", []))}  # fmt: skip
+    if proxy.get("/srv/app") != (APP_DIR_DEFAULT, True):
+        problems.append(
+            f"the proxy does not serve the page read-only from {APP_DIR_DEFAULT}"
+        )
+    if proxy.get("/etc/caddy/csp.caddy") != (CSP_FILE_DEFAULT, True):
+        problems.append(
+            f"the proxy does not read its policy read-only from {CSP_FILE_DEFAULT}"
+        )
+    migrate = service(compose, MIGRATE)
+    env = migrate.get("environment", {})
+    mounts = [_bind(m) for m in migrate.get("volumes", [])]
+    manifest = [m for m in mounts if m[1] == MANIFEST_TARGET]
+    if env.get("RETIREMENT_MANIFEST") != MANIFEST_TARGET:
+        problems.append(f"migrate is not told the manifest is at {MANIFEST_TARGET}")
+    if not manifest:
+        problems.append("migrate does not mount the build's manifest")
+    else:
+        source, _, read_only, bind = manifest[0]
+        if source != f"{APP_DIR_DEFAULT}/manifest.json":
+            problems.append(
+                f"migrate's manifest ({source}) is not the one beside the served page"
+            )
+        if not read_only:
+            problems.append("migrate's manifest is mounted writable")
+        if bind.get("create_host_path") is not False:
+            problems.append(
+                "a missing manifest would be mounted as an empty directory "
+                "(set bind.create_host_path: false)"
+            )
+    if env.get("RETIREMENT_RULES_ACK") != "${RETIREMENT_RULES_ACK:-}":
+        problems.append("migrate does not receive RETIREMENT_RULES_ACK from .env")
+    if any(t != MANIFEST_TARGET for _, t, _, _ in mounts):
+        problems.append("migrate mounts more than the manifest")
+    return problems
+
+
 def every_rule(compose: dict) -> list[str]:
     return [
         *api_ports(compose),
@@ -362,6 +432,7 @@ def every_rule(compose: dict) -> list[str]:
         *emergency_setting_reaches_the_api(compose),
         *session_settings_reach_the_api(compose),
         *logs_are_capped(compose),
+        *one_build_for_page_and_rules(compose),
         *cloud_proxy_image_is_unprivileged(
             (ROOT / "proxy" / "Dockerfile").read_text(encoding="utf-8")
         ),
@@ -623,6 +694,67 @@ def main() -> int:
     hardening_mutation(
         "migrate with a writable root filesystem",
         lambda s: s[MIGRATE].update(read_only=False),
+    )
+
+    def build_mutation(label: str, mutate) -> None:
+        broken = copy.deepcopy(compose)
+        mutate(broken["services"])
+        check(f"{label} is noticed", bool(one_build_for_page_and_rules(broken)))
+
+    def proxy_mount(target: str, value: str):
+        def mutate(s: dict) -> None:
+            s[PROXY]["volumes"] = [
+                value if _bind(m)[1] == target else m for m in s[PROXY]["volumes"]
+            ]
+
+        return mutate
+
+    def manifest_mount(**changes):
+        def mutate(s: dict) -> None:
+            for m in s[MIGRATE]["volumes"]:
+                if isinstance(m, dict) and m.get("target") == MANIFEST_TARGET:
+                    m.update(changes)
+
+        return mutate
+
+    build_mutation(
+        "the page served from a fixed path, not APP_DIR",
+        proxy_mount("/srv/app", "./docs/app:/srv/app:ro"),
+    )
+    build_mutation(
+        "the page mounted writable",
+        proxy_mount("/srv/app", f"{APP_DIR_DEFAULT}:/srv/app"),
+    )
+    build_mutation(
+        "APP_DIR defaulting somewhere else",
+        proxy_mount("/srv/app", "${APP_DIR:-./site}:/srv/app:ro"),
+    )
+    build_mutation(
+        "the policy read from a fixed path, not CSP_FILE",
+        proxy_mount(
+            "/etc/caddy/csp.caddy", "./proxy/csp.caddy:/etc/caddy/csp.caddy:ro"
+        ),
+    )
+    build_mutation(
+        "the manifest taken from another directory than the page",
+        manifest_mount(source="./docs/app/manifest.json"),
+    )
+    build_mutation("the manifest mounted writable", manifest_mount(read_only=False))
+    build_mutation(
+        "a missing manifest mounted as an empty directory", manifest_mount(bind={})
+    )
+    build_mutation("the manifest not mounted", lambda s: s[MIGRATE].pop("volumes"))
+    build_mutation(
+        "migrate told the manifest is elsewhere",
+        lambda s: s[MIGRATE]["environment"].update(RETIREMENT_MANIFEST="/tmp/m.json"),
+    )
+    build_mutation(
+        "the acknowledgment not reaching migrate",
+        lambda s: s[MIGRATE]["environment"].pop("RETIREMENT_RULES_ACK"),
+    )
+    build_mutation(
+        "migrate mounting the whole build",
+        lambda s: s[MIGRATE]["volumes"].append(f"{APP_DIR_DEFAULT}:/srv/app:ro"),
     )
 
     real = (ROOT / "proxy" / "Dockerfile").read_text(encoding="utf-8")

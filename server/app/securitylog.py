@@ -64,6 +64,8 @@ class SecurityEvent(StrEnum):
     VERSIONS_PURGED = "versions.purged"
     HOLD_PLACED = "hold.placed"
     HOLD_LIFTED = "hold.lifted"
+    RETIREMENT_RULES_CHANGED = "retirement.rules_changed"
+    RETIREMENT_RULES_REFUSED = "retirement.rules_refused"
     RATELIMIT_TRIPPED = "ratelimit.tripped"
     STREAM_REFUSED = "stream.refused"
     STREAM_ATTACHED = "stream.attached"

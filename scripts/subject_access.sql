@@ -61,6 +61,9 @@ hit AS (
     SELECT 'retention_policy.changed_by', NULL, 'policy'
       FROM retention_policy rp, s WHERE lower(rp.changed_by) = lower(s.v)
     UNION ALL
+    SELECT 'retirement_rule_change.changed_by', NULL, rc.id::text
+      FROM retirement_rule_change rc, s WHERE lower(rc.changed_by) = lower(s.v)
+    UNION ALL
     SELECT 'principals', NULL, pr.id
       FROM principals pr, s
      WHERE lower(pr.id) = lower(s.v) OR lower(pr.email) = lower(s.v)

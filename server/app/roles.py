@@ -64,6 +64,11 @@ GRANTS: Mapping[str, tuple[str, ...]] = {
     "retention_policy": ("SELECT",),
     "retention_hold": ("SELECT", "INSERT"),
     "disposal_run": ("SELECT",),
+    # Which decisions end a project, and their history (D-76, 010). The API reads the
+    # active rule set for /api/health; only the migrate job, as the owner, changes
+    # them, so a compromised API cannot make a record come due for disposal early.
+    "retirement_rule": ("SELECT",),
+    "retirement_rule_change": ("SELECT",),
 }
 
 # Tables the API must never touch at all: the owner's migration bookkeeping.

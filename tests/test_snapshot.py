@@ -68,9 +68,14 @@ def wait_until(page, expr: str, timeout: float = 15.0) -> None:
 def settle(page) -> None:
     """Wait until the open project's history has stopped arriving: it loads, and
     a log write lands, asynchronously."""
+    # Quiet means no save pending or in flight and the history unchanged for
+    # 0.6 s: a slow runner lands a log write well after the change that caused it.
     last, same = None, 0
-    while same < 4:
-        now = page.evaluate("JSON.stringify([LOG.length, LOG.map(e => e.text)])")
+    while same < 15:
+        now = page.evaluate(
+            "JSON.stringify([Object.keys(pending).length,"
+            " Object.values(flushing).some(Boolean), LOG.length, LOG.map(e => e.text)])"
+        )
         same = same + 1 if now == last else 0
         last = now
         page.wait_for_timeout(40)
@@ -137,10 +142,12 @@ def capture() -> tuple[dict[str, str], list[str]]:
             n = page.evaluate("LOG.length")
             page.evaluate("setOpticaEnabled(true)")
             wait_until(page, f"LOG.length > {n}")
+            settle(page)
             views_of(page, pid, f"{key}/optica-on", out)
             n = page.evaluate("LOG.length")
             page.evaluate("setOpticaEnabled(false)")
             wait_until(page, f"LOG.length > {n}")
+            settle(page)
 
         page.evaluate("goHome()")
         out["en/export.csv"] = page.evaluate("exportCSV()")
@@ -173,6 +180,13 @@ def main(argv: list[str]) -> int:
         "it captured every sample, both OPTICA states, three languages",
         len(pieces) > 300,
         str(len(pieces)),
+    )
+    # Opening a project reloads it from the store, so capturing before a save lands
+    # once recorded "OPTICA on" with no OPTICA views at all.
+    check(
+        "the OPTICA-on pass shows OPTICA's chapters",
+        sum("/optica-on/view/o" in k for k in pieces) == 10 * 13,
+        str(sum("/optica-on/view/o" in k for k in pieces)),
     )
     now = digest(pieces)
     if update:

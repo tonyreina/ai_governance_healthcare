@@ -123,6 +123,8 @@ controls, and the CIDR check would be checking the attacker's own claim.
 | `APP_DATABASE_URL` | — | The restricted role's connection string. Wins over the pieces below. |
 | `APP_POSTGRES_USER` | `chai_app` | The restricted role's name. |
 | `APP_POSTGRES_PASSWORD` | — | Its password. With this set the API serves as that role, and `DATABASE_URL`/`POSTGRES_PASSWORD` (the owner's) belong to `python -m app.migrate` only. See `app/roles.py` for exactly what the role may do. |
+| `RETIREMENT_MANIFEST` | — | **`python -m app.migrate` only, required.** The build's `manifest.json`, from which it loads which checkpoint decisions retire a project (`app/retirement.py`, D-76). Missing or malformed fails the job. |
+| `RETIREMENT_RULES_ACK` | — | `python -m app.migrate` only. The new rule set's hash, which the job prints when a manifest would drop a retirement rule the database holds; without it, the job refuses (exit 3). |
 | `EVENTS_CHANNEL` | `chai_events` | `LISTEN`/`NOTIFY` channel. |
 | `LOG_LEVEL` | `info` | The application log's level. Security events are held at INFO whatever this says. |
 | `LOG_FORMAT` | `json` | `json`: one object per line, security events named and tagged `"stream": "security"`. `text`: the human-readable line. |
@@ -236,6 +238,14 @@ removes staff names no retained record refers to; it records the run in
 `disposal_run`. The API's role cannot execute it and has no `DELETE` on the read
 trail, and the read trail's trigger refuses a `DELETE` of a row younger than the
 period or belonging to a project under a hold.
+
+What counts as retired is data, not SQL (`migrations/010_retirement_rules.sql`,
+R-66): `retirement_rule` lists every (framework, checkpoint, decision) that
+ends a project, and `retention_due()` matches a record against the rows of its own
+framework (`meta.framework.id`; a record without one is CHAI's). `python -m
+app.migrate` loads the rows from the build's manifest, additively, refusing a
+removal unless `RETIREMENT_RULES_ACK` acknowledges it, and records every change
+in the append-only `retirement_rule_change`. The API's role may only read both.
 
 A hold is the one retention action the API performs: `POST /api/projects/{id}/hold`
 adds a row to the append-only `retention_hold` table, and a project whose latest

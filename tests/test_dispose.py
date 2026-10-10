@@ -102,6 +102,20 @@ def unit() -> None:
     check(
         "and the staff directory", "Staff names and emails: 2 person(s)" in text, text
     )
+    check(
+        "a report with no rule set says so, not nothing",
+        "Retirement rules: NONE recorded" in text,
+        text,
+    )
+    rules = {"rule_set_hash": "ab" * 32, "framework": "chai",
+             "at": "2026-10-10T00:00:00", "by": "chai"}  # fmt: skip
+    text = ds.render({**report, "rules": rules})
+    check(
+        "and names the retirement rule set that decided what is due (D-76)",
+        f"Retirement rules: chai's, rule set {'ab' * 32}, set 2026-10-10 by chai."
+        in text,
+        text,
+    )
 
 
 SEED = f"""
@@ -147,6 +161,14 @@ def integration() -> None:
             out,
         )
         check("it never prints what a record says", SECRET not in out, out)
+        manifest = json.loads(
+            (ROOT / "docs" / "app" / "manifest.json").read_text(encoding="utf-8")
+        )
+        check(
+            "it names the rule set the database retires by, the build's own",
+            f"rule set {manifest['ruleSetHash']}" in out,
+            out,
+        )
         check(
             "and changes nothing",
             tpl.psql(name, "SELECT count(*) FROM projects") == "2"

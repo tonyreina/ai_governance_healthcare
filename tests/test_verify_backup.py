@@ -192,6 +192,34 @@ def main() -> int:
         vb.problems_for(vb.Report({**good.counts, "projects": 0}, good.triggers, []))
         == [],
     )
+    # The retirement rules (D-76): required from the migration that made them a table.
+    ruled = [*good.migrations, vb.RULES_MIGRATION]
+    with_rules = {**good.counts, vb.RULES_TABLE: 4}
+    check(
+        "a restored database with its retirement rules has no problems",
+        vb.problems_for(vb.Report(with_rules, good.triggers, ruled)) == [],
+        str(vb.problems_for(vb.Report(with_rules, good.triggers, ruled))),
+    )
+    check(
+        "the rules table missing after its migration is a problem",
+        any(
+            vb.RULES_TABLE in p
+            for p in vb.problems_for(vb.Report(good.counts, good.triggers, ruled))
+        ),
+    )
+    check(
+        "an empty rules table is a problem: nothing would ever come due",
+        any(
+            "empty" in p
+            for p in vb.problems_for(
+                vb.Report({**with_rules, vb.RULES_TABLE: 0}, good.triggers, ruled)
+            )
+        ),
+    )
+    check(
+        "a dump from before that migration needs no rules table",
+        vb.problems_for(good) == [] and vb.RULES_MIGRATION not in good.migrations,
+    )
     check(
         "the throwaway database is the production major version",
         vb.production_image().startswith("postgres:17"),
@@ -217,7 +245,24 @@ def main() -> int:
             and "project_log" in done.stdout,
             done.stdout,
         )
+        check(
+            "and the retirement rules it restored (D-76)",
+            "retires on         chai: checkpoint D decided 'Retire'" in done.stdout
+            and "retirement_rule           4 row(s)" in done.stdout,
+            done.stdout,
+        )
         check("the throwaway container is gone", leftovers() == [], str(leftovers()))
+
+        # Every data row of the rules (and of their history) starts or holds
+        # "chai<TAB>"; nothing else in this dump does.
+        no_rules = make_dump(source, work / "no-rules.sql.gz.gpg", strip="chai\t")
+        empty = verify(str(no_rules))
+        check(
+            "a dump whose retirement rules came back empty fails",
+            empty.returncode != 0 and "retirement_rule is empty" in empty.stdout,
+            empty.stdout[-400:],
+        )
+        check("and leaves nothing running", leftovers() == [], str(leftovers()))
 
         print("Failures are failures")
         wrong = verify(str(dump), passphrase="not-the-passphrase")

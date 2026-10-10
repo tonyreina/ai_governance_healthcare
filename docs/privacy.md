@@ -65,8 +65,13 @@ every older backup until it expires.
 
 `make dispose` lists what is past its period, and changes nothing:
 
-- a retired project (a checkpoint decided "Stop" or "Retire") whose retirement date
-  and last change are both older than the record period;
+- a retired project whose retirement date and last change are both older than the
+  record period. Retired means a checkpoint holds a decision that the project's
+  framework ends a project on: in the published build, "Stop" at checkpoint A, B
+  or C, or "Retire" at D. A build of another framework retires on its own
+  decisions, which the database loads from that build
+  ([Self-hosting](self-hosting.md#which-build-it-serves-and-the-retirement-rules));
+  a record written before records carried their framework is read as CHAI's;
 - the history of a deleted project, counted from its deletion;
 - the read-trail rows older than the read-trail period;
 - the name and email (`principals`) of anyone who has not signed in for the
@@ -81,9 +86,10 @@ is recorded with who ran it and what it disposed of. Run it on a schedule your
 records officer approves (monthly is typical), and read the report first.
 
 Only the database owner can dispose. The API cannot: its database role has no
-right to delete the read trail and cannot run the disposal. The database refuses
-to delete a read-trail row younger than the period, even for the owner, unless
-the period itself is changed.
+right to delete the read trail and cannot run the disposal. Nor can it change
+which decisions retire a project: its role may only read those rules. The
+database refuses to delete a read-trail row younger than the period, even for
+the owner, unless the period itself is changed.
 
 The periods are in the `retention_policy` table (6 and 6 years by default). If
 your schedule differs, change them as the owner (`make psql`, then

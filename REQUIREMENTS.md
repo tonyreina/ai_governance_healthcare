@@ -660,7 +660,7 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-56 Records past their retention period are disposed of, unless held
 
-- Status: Active
+- Status: Active; what "retired" means is amended by R-66 (2026-10-10)
 - The owner's decision, 2026-10-08, on #57: the exception to the append-only
   rule (R-10, R-40) that applying R-54 needs is granted, on these terms.
 - **Disposal is a purge.** A retired project past its period loses its live
@@ -1100,3 +1100,40 @@ honest answer and is a gap worth closing; see R-19.
   OPTICA from their definitions through the engine (D-75); the snapshot
   (`tests/test_snapshot.py`) shows that changed nothing a reader sees. A build
   of other frameworks (the build switch) is step 3 of #168 and not yet built.
+
+### R-66 Retired means what the record's framework says ends a project
+
+- Status: Active
+- Amends R-56's definition of retired, which named CHAI's checkpoints and words.
+  R-56 is otherwise unchanged.
+- The owner's design for #168 (design v2, 2026-10-10, "Server (PR C)"): a build
+  may use its own framework (R-63), so the server decides when a project is
+  retired, and so when disposal is due, from the same definition the dashboard was
+  built with, and never changes disposal silently.
+- **Retired means** one of the project's checkpoints holds a decision that the
+  definition of the project's framework (`meta.framework.id`; a record without one
+  is CHAI's) gives a `stop` or `retire` class at that checkpoint. In the published
+  build that is still "Stop" at A, B or C or "Retire" at D. The clock starts as
+  R-56 says: at the later of those decisions' dates and the record's last change.
+- **The build is the unit.** The rules reach the database only from the manifest
+  built beside the page (`docs/app/manifest.json` by default), loaded by the
+  migrate job as the database owner. The API cannot change them.
+- **Never silently.** A rule a build adds is loaded. A rule the database holds and
+  a build drops is removed only when the operator acknowledges the new rule set
+  by its hash, after being shown the projects whose disposal would change. A missing
+  or malformed manifest, or a primary with no ending decision, stops the job.
+  Every change is recorded, append-only, with who and when.
+- Source: the owner's design v2 on #168; DECISIONS D-76. Numbered R-66 as that
+  design names it ("R-66 amends R-56"), leaving R-64 and R-65 to the entries it
+  assigns them.
+- Enforced by: `server/tests/test_retention.py` (real PostgreSQL and the real
+  migrate job: every option of CHAI's definition and of a stand-in primary is due
+  exactly when its class ends a project; additive sync; a removal refused without
+  the acknowledgment and applied with it; a stale manifest cannot undo a newer
+  one), `server/tests/test_retirement_rules.py` (a malformed or missing manifest
+  fails the job; the API role can only read the rules; their history is
+  append-only; `/api/health` reports the rule set), `tests/test_build_config.py`
+  (the manifest is the definitions' own), `tests/test_compose_isolation.py` (the
+  page and the manifest come from one build directory) and `tests/test_stack.py`
+  (the running stack retires by the served build's rule set). Security claims
+  C-88 and C-89.

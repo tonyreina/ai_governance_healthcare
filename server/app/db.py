@@ -164,6 +164,8 @@ class Database:
         self._pool: asyncpg.Pool | None = None
         self._ping_cache: tuple[float, bool] | None = None
         self._ping_lock = asyncio.Lock()
+        self._rules_cache: tuple[float, str | None] | None = None
+        self._rules_lock = asyncio.Lock()
 
     # --- lifecycle --------------------------------------------------------
 
@@ -341,3 +343,31 @@ class Database:
             alive = await self.ping()
             self._ping_cache = (time.monotonic(), alive)
             return alive
+
+    async def retirement_rules_cached(self, ttl: float = 30.0) -> str | None:
+        """The active retirement rule-set hash (D-76), at most once per ``ttl``.
+
+        For ``/api/health``, which is unauthenticated and not rate limited, so it is
+        cached for the reason :meth:`ping_cached` is. The rules change only when the
+        migrate job runs, which a deploy follows with a restart. ``None`` when it
+        cannot be read (no database, or a schema from before 010).
+        """
+        cached = self._rules_cache
+        if cached is not None and time.monotonic() - cached[0] < ttl:
+            return cached[1]
+        async with self._rules_lock:
+            cached = self._rules_cache
+            if cached is not None and time.monotonic() - cached[0] < ttl:
+                return cached[1]
+            try:
+                async with self.acquire() as conn:
+                    # The latest change's hash, as retirement.active_rule_set_hash.
+                    value = await conn.fetchval(
+                        "SELECT rule_set_hash FROM retirement_rule_change"
+                        " ORDER BY id DESC LIMIT 1"
+                    )
+            except (OSError, asyncpg.PostgresError, RuntimeError) as exc:
+                log.warning("cannot read the retirement rule set: %s", exc)
+                value = None
+            self._rules_cache = (time.monotonic(), value)
+            return value

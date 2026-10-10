@@ -62,6 +62,15 @@ class HealthOut(BaseModel):
     auth_mode: str = Field(
         description="'proxy-header' in a real deployment, 'DEV-INSECURE' otherwise"
     )
+    retirement_rules: str | None = Field(
+        default=None,
+        description=(
+            "SHA-256 of the retirement rule set the database decides disposal by "
+            "(D-76): the primary framework's decisions that end a project, as the "
+            "build's manifest.json states them. The page built with the same "
+            "definition carries the same hash. Null when it cannot be read."
+        ),
+    )
 
 
 class MeOut(BaseModel):

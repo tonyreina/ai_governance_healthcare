@@ -27,6 +27,7 @@ missing.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
@@ -50,7 +51,13 @@ REPORTED_TABLES = (
     "project_deletion",
     "principals",
     "access_event",
+    "retirement_rule",
 )
+# From this migration on, which decisions retire a project, and so when disposal is
+# due, is a table (D-76). A restore without its rows would treat no project as
+# retired, so it is required, and its rows are reported.
+RULES_MIGRATION = "010_retirement_rules.sql"
+RULES_TABLE = "retirement_rule"
 
 
 @dataclass
@@ -60,6 +67,7 @@ class Report:
     counts: dict[str, int] = field(default_factory=dict)
     triggers: dict[str, int] = field(default_factory=dict)
     migrations: list[str] = field(default_factory=list)
+    rules: list[tuple[str, str, str]] = field(default_factory=list)
 
 
 def problems_for(report: Report) -> list[str]:
@@ -74,6 +82,17 @@ def problems_for(report: Report) -> list[str]:
             problems.append(
                 f"{table} was restored WITHOUT its append-only trigger: this dump "
                 "has lost the guarantee that the history cannot be rewritten"
+            )
+    if RULES_MIGRATION in report.migrations:
+        if RULES_TABLE not in report.counts:
+            problems.append(
+                f"{RULES_TABLE} is missing although {RULES_MIGRATION} was applied: "
+                "the restored database cannot tell which projects are retired"
+            )
+        elif report.counts[RULES_TABLE] < 1:
+            problems.append(
+                f"{RULES_TABLE} is empty: the restored database would treat no "
+                "project as retired, so nothing would ever come due for disposal"
             )
     return problems
 
@@ -199,6 +218,18 @@ def inspect(container: str) -> Report:
         report.migrations = psql_value(
             container, "SELECT version FROM schema_migrations ORDER BY version"
         ).split()
+    if RULES_TABLE in present:
+        report.rules = [
+            tuple(r)
+            for r in json.loads(
+                psql_value(
+                    container,
+                    "SELECT coalesce(json_agg(json_build_array(framework_id, gate_id,"
+                    " decision) ORDER BY framework_id, gate_id, decision), '[]')"
+                    f" FROM {RULES_TABLE}",
+                )
+            )
+        ]
     return report
 
 
@@ -275,6 +306,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {table:<18} {count:>8} row(s)")
     if report.migrations:
         print(f"  schema at          {report.migrations[-1]}")
+    for framework, gate, decision in report.rules:
+        print(
+            f"  retires on         {framework}: checkpoint {gate} decided {decision!r}"
+        )
     if report.counts and not report.counts.get("projects"):
         print(
             "  note: the restored portfolio is empty. If that is not expected, this "

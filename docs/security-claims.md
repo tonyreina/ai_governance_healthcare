@@ -1154,3 +1154,37 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_markdown.py::with esc weakened the structure check would catch the tag`
   `tests/test_markdown.py::with safeUrl weakened the structure check would catch the hole`
   `tests/test_injection.py::an app that does not escape is rejected`
+
+### C-88 The server retires exactly what the build's definition marks ending
+
+- **Claim:** The database treats a project as retired, and starts its retention
+  clock (R-56), exactly when one of its checkpoints holds a decision that the
+  project's framework definition, as the deployed build's manifest states it,
+  gives a stop or retire class at that checkpoint. A record without a framework
+  stamp is CHAI's. The migrate job adds new ending decisions, refuses to drop one
+  without an acknowledgment naming the new rule set, and fails without a usable
+  manifest, so disposal never changes silently (R-66, D-76).
+- **Asserted in:** `docs/self-hosting.md` — "loads those decisions into the database, which decides from them when a project is retired"
+- **Asserted in:** `docs/privacy.md` — "A build of another framework retires on its own decisions"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_retention.py::test_every_chai_decision_retires_exactly_when_its_class_ends_a_project`
+  `server/tests/test_retention.py::test_a_stand_in_primary_retires_by_its_own_words_once_acknowledged`
+  `server/tests/test_retention.py::test_a_new_ending_decision_is_added_without_asking`
+  `server/tests/test_retention.py::test_a_stale_manifest_cannot_undo_a_newer_one`
+  `server/tests/test_retention.py::test_the_database_retires_by_the_table_not_by_literals`
+  `server/tests/test_retirement_rules.py::test_the_migrate_job_fails_closed_without_a_usable_manifest`
+  `server/tests/test_retirement_rules.py::test_a_manifest_the_server_would_misread_is_refused`
+  `tests/test_stack.py::the database retires by the served build's rule set`
+
+### C-89 The API's role cannot change which decisions retire a project
+
+- **Claim:** The API's database role can read the retirement rules and their
+  history and cannot insert, update, delete or truncate either, and the history
+  refuses an update or a delete even from the owner.
+- **Asserted in:** `docs/privacy.md` — "Nor can it change which decisions retire a project: its role may only read those rules."
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_retirement_rules.py::test_the_api_role_can_read_the_rules_and_not_change_them`
+  `server/tests/test_retirement_rules.py::test_the_rules_history_is_append_only_even_for_the_owner`
+  `server/tests/test_roles.py`

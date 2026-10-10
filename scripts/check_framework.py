@@ -48,6 +48,10 @@ from typing import Any, assert_never
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from framework_enums import ENDING_CLASSES, GateClass
+
 ROOT = Path(__file__).resolve().parent.parent
 FRAMEWORKS = ROOT / "app" / "frameworks"
 DEFINITION = "framework.json"
@@ -106,16 +110,6 @@ class StatusClass(StrEnum):
     OPEN = "open"
     DECLINED = "declined"
     EXCLUDED = "excluded"
-
-
-class GateClass(StrEnum):
-    """A decision's class: GateClass in app/js (D-74)."""
-
-    GO = "go"
-    CONDITIONAL = "conditional"
-    REVISE = "revise"
-    STOP = "stop"
-    RETIRE = "retire"
 
 
 class PhaseRole(StrEnum):
@@ -551,7 +545,7 @@ def definition_problems(where: str, doc: dict, folder: str | None = None) -> Rep
             r.add(where, ("gates", gi, "after"), f"no section {gate['after']!r}")
         for oi, option in enumerate(gate["options"]):
             cls = GateClass(option["class"])
-            ends = ends or cls in (GateClass.STOP, GateClass.RETIRE)
+            ends = ends or cls in ENDING_CLASSES
             path = ("gates", gi, "options", oi, "class")
             first = classes.setdefault(option["value"], (cls, path))
             if first[0] is not cls:

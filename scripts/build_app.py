@@ -30,6 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from build_manifest import manifest_json
 from check_i18n import Locale
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,6 +38,10 @@ SRC = ROOT / "app"
 OUT = ROOT / "docs" / "app" / "index.html"
 # The proxy's Content-Security-Policy header, generated from the built page (#154).
 CSP_OUT = ROOT / "proxy" / "csp.caddy"
+# What the server needs from this build, beside the page (#168 PR C, D-76): each
+# framework's definition hash and the decisions that end a project, which the migrate
+# job loads into retirement_rule so disposal follows the same definition.
+MANIFEST_OUT = OUT.parent / "manifest.json"
 
 CSS_MARK = "/*@CSS@*/"
 JS_MARK = "/*@JS@*/"
@@ -273,6 +278,9 @@ def main() -> int:
     OUT.write_text(html, encoding="utf-8")
 
     CSP_OUT.write_text(csp_header(html), encoding="utf-8")
+    defs = framework_defs()
+    primary = json.loads(FRAMEWORKS_CONFIG.read_text(encoding="utf-8"))["primary"]
+    MANIFEST_OUT.write_text(manifest_json(defs, primary), encoding="utf-8")
 
     changed = "unchanged" if previous == html else "updated"
     print(

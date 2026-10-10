@@ -1549,3 +1549,69 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Found and filed: the OPTICA page's prose says there are no "equivalent" rows,
   but the data has three (part of #174).
 - Source: #168; R-63; D-74.
+
+### D-76 Retirement rules are a table, loaded from the build's manifest
+
+- Status: Accepted (implements the owner's design v2 on #168, "Server (PR C)";
+  R-66)
+- **Why:** `008_retention.sql` decided retirement, and so disposal (R-56), from
+  CHAI's words written into `retention_due()` (found in D-74). A build of another
+  framework would never retire anything, or would read its words with CHAI's
+  meaning. Disposal destroys records, so the rule must follow the deployed
+  definition and must never change without someone choosing it.
+- **The table.** `retirement_rule(framework_id, gate_id, decision)`, migration
+  010, seeded with CHAI's four rows so a database that has not synced retires
+  exactly what 008 did. `retention_due()` keeps its signature, columns, kinds and
+  clock, and joins each live record to the rows of its framework
+  (`record_framework(doc)`: `meta.framework.id`, or `chai` when unstamped). The
+  checkpoint id is a JSON key read with `->`, never a path built from text.
+  `retired_under(...)` takes a rule set as arrays, so the sync can ask what a rule
+  set it has not applied would retire through the same SQL.
+- **The manifest is the deploy unit.** `scripts/build_app.py` writes
+  `manifest.json` beside the page (`scripts/build_manifest.py`, standard library
+  only): per framework its id, role, version, the SHA-256 of its canonical JSON
+  and its ending pairs, and the hash of the primary's rule set. Compose mounts
+  `${APP_DIR}/manifest.json` (read-only, `create_host_path: false`) into the
+  migrate service from the same directory the proxy serves (`APP_DIR`, default
+  `./docs/app`; `CSP_FILE`, default `./proxy/csp.caddy`), so page and rules are
+  one build. The API image stays framework-neutral.
+- **The sync is additive, with an acknowledgment.** Inside `python -m app.migrate`,
+  as the owner, in one transaction under `MIGRATION_LOCK_ID`: new pairs are
+  inserted; a pair the database holds and the manifest lacks is removed only when
+  `RETIREMENT_RULES_ACK` equals the new rule-set hash. Otherwise the job exits 3,
+  listing the removed rules and the projects whose disposal would change, and
+  changes nothing. This is also what stops an older build deployed over a newer
+  one from reverting it.
+- **Fail closed.** No `RETIREMENT_MANIFEST`, an unreadable or malformed manifest
+  (strict: unknown keys, bad ids, a supplement with pairs, a hash that does not
+  match its pairs), or a primary with no ending decision exits 1 before anything
+  is changed or provisioned, so the API, which waits for the job, does not start.
+  No fallback to CHAI's rules or to whatever the table holds.
+- **Recorded.** Each change appends to `retirement_rule_change` (who, when, the
+  rules before and after, the rule-set and definition hashes, whether a removal
+  was acknowledged), append-only by trigger; migration 011 adds its
+  `changed_by` to `principal_referenced` (R-54). Each change or refusal is a
+  security event (`retirement.rules_changed`, `retirement.rules_refused`). The
+  latest row's hash is the active rule set; `/api/health` reports it as
+  `retirement_rules`, and `make dispose` and `make verify-backup` print the
+  rules they found. The API's role has SELECT only on both tables.
+- **Rejected:** the client recording a retirement date in the document (the
+  server would trust a value any writer can set, and records written before it
+  would never retire); the server reading the definitions from the image (the
+  image would no longer be framework-neutral, and a rebuild of the page without
+  a rebuild of the image would split them); a sync that mirrors the manifest
+  exactly (a stale or wrong build would silently stop disposal of every record it
+  does not know); falling back to CHAI's rules when the manifest is missing (a
+  custom build would dispose by words it does not use).
+- **Not done here:** the dashboard's banner when its embedded hash differs from
+  `/api/health` (the client side of #168, another change); a tested recipe for
+  delivering the manifest to a cloud migrate job (docs/deploy.md says what it
+  needs). The API's own `RUN_MIGRATIONS=true` path (the single-role setup)
+  migrates but does not sync, so it retires by the seeded CHAI rows, which
+  `/api/health` shows.
+- **Found:** the engine's `phase()` looks a decision's class up by its value across
+  all checkpoints, while the rules here are per checkpoint. A stored decision its
+  own checkpoint does not offer (only by an import or a direct edit), but another
+  checkpoint offers as stop or retire, ends the project on screen and not in the
+  database, which keeps it longer. Left for the engine's owners (#168).
+- Source: #168 (design v2); R-56, R-63, R-66.

@@ -201,6 +201,7 @@ async def health(
         idle_lock_minutes=settings.idle_lock_minutes,
         sign_out_url=settings.sign_out_url,
         auth_mode=settings.auth_mode,
+        retirement_rules=(await db.retirement_rules_cached()) if database_up else None,
     )
 
 

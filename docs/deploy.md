@@ -256,7 +256,14 @@ holds the owner.
    It applies the migrations, then creates or updates the restricted role from
    `APP_POSTGRES_USER` (default `chai_app`) and `APP_POSTGRES_PASSWORD`. It is
    idempotent, so run it on every deploy; it also re-applies the password, so
-   rotating that is a re-run, not a manual `ALTER ROLE`.
+   rotating that is a re-run, not a manual `ALTER ROLE`. It also needs
+   `RETIREMENT_MANIFEST`, the path of the `manifest.json` built beside the page
+   you deploy (`docs/app/manifest.json` for the published build), from which it
+   loads which checkpoint decisions retire a project. The API image does not
+   carry it, so mount it into the job or copy it into a derived image. Without
+   it, or when the manifest would stop the database retiring projects on a
+   decision it retires on today, the job fails, unless `RETIREMENT_RULES_ACK` is
+   set to the hash it prints ([Self-hosting](self-hosting.md#which-build-it-serves-and-the-retirement-rules)).
 2. **The service** gets `APP_DATABASE_URL` (the restricted role, with
    `?sslmode=verify-full`) and `RUN_MIGRATIONS=false`, and **never** the owner's
    `DATABASE_URL`. If the secret store lets the service read both, the split does
@@ -430,6 +437,8 @@ recording that a project was deleted.
 | `versions.purged` | warning | `actor`, `project`, `revisions`, `log_entries`, `incarnation`, `purged_at`, `through_rev`, `through_seq` | A version history and its audit log were destroyed. Review every one. Keep these: they re-apply the purge after a restore. |
 | `hold.placed` | warning | `actor`, `project` | A litigation hold now stops this project's disposal. The reason is not logged; it is with the hold. |
 | `hold.lifted` | warning | `actor`, `project` | A litigation hold was lifted, so the project can be disposed of when due. Confirm counsel agreed. |
+| `retirement.rules_changed` | warning | `framework`, `added`, `removed`, `acknowledged`, `rule_set_hash` | The migrate job changed which checkpoint decisions end a project, from the build's manifest, so when disposal is due changed. Written by the migrate job, not the API. Review every one; `acknowledged` is true when a rule was removed. |
+| `retirement.rules_refused` | warning | `framework`, `removed`, `projects`, `rule_set_hash` | The migrate job refused a manifest that removes a retirement rule without `RETIREMENT_RULES_ACK`, and the stack did not start. Either an old build was deployed over a newer one, or the change needs an operator's acknowledgment. |
 | `ratelimit.tripped` | warning | `key`, `limit`, `window_seconds` | A client hit the rate limit. Once per client per window. |
 | `stream.refused` | warning | `actor` | Too many open event streams for one user. |
 | `stream.attached` | info | `actor`, `action`, `source_ip` | An event stream was opened. The read trail records it too. |

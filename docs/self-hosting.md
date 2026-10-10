@@ -77,6 +77,37 @@ proxy, the API, a one-shot migration job and PostgreSQL.
 | `.env.example` | Every variable, commented. Copy to `.env`; it is git-ignored. |
 | `Makefile` | The commands above. |
 
+### Which build it serves, and the retirement rules
+
+The proxy serves the dashboard from `APP_DIR` (default `./docs/app`, the
+published build) with the policy in `CSP_FILE` (default `./proxy/csp.caddy`,
+generated with it). Leave both unset to run the published build. A build of
+another framework is a directory holding its own `index.html` and
+`manifest.json`, and its own policy file.
+
+`manifest.json` is written by `pixi run build-app` beside the page. It names each
+framework in the build and the checkpoint decisions that end a project. Which
+decisions those are is the framework's own definition, not a fixed rule: in the
+published build, "Stop" at checkpoint A, B or C, or "Retire" at D. The `migrate`
+service reads the manifest beside the page the proxy serves and loads those
+decisions into the database, which decides from them when a project is retired
+and so when it comes due for disposal ([Privacy and retention](privacy.md#disposal-at-the-end-of-the-period)).
+
+- A decision the build adds is loaded without asking.
+- A decision the database retires on today and the build no longer has is
+  **not** dropped silently. `migrate` refuses, lists the projects whose disposal
+  would change, prints the new rule set's hash, and exits non-zero, so the API
+  does not start. If the change is intended, set `RETIREMENT_RULES_ACK` in `.env`
+  to that hash and run `docker compose up -d` again; then clear it. An older
+  build deployed over a newer one is refused the same way.
+- A missing or unreadable manifest also stops `migrate`. There is no fallback.
+
+Every change is recorded in the append-only `retirement_rule_change` table (who,
+when, the rules before and after) and as a `retirement.rules_changed` security
+event. `GET /api/health` reports the hash of the rule set in use as
+`retirement_rules`, which equals `ruleSetHash` in the manifest of the build that
+set it.
+
 ### Identity comes from the proxy
 
 The API does not authenticate anybody. The proxy deletes any

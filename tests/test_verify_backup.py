@@ -144,6 +144,82 @@ def make_dump(source: str, target: Path, *, strip: str | None = None) -> Path:
     return target
 
 
+IDENTITY = (
+    "SELECT cluster || ':' || database || ':' || history FROM retirement_ack_database()"
+)
+HISTORY = "SELECT json_agg(r ORDER BY id)::text FROM retirement_rule_change r"
+
+
+def psql_in(container: str, database: str, sql: str) -> str:
+    done = docker(
+        "exec", container, "psql", "-U", "chai", "-d", database, "-v",
+        "ON_ERROR_STOP=1", "-tAc", sql,
+    )  # fmt: skip
+    assert done.returncode == 0, done.stderr.decode()[-300:]
+    return done.stdout.decode().strip()
+
+
+def dump_into(source: str, target: str, database: str) -> None:
+    """pg_dump --clean of the source's database, restored with psql into
+    `database` of `target`: what `make backup` and `make restore` do."""
+    dump = docker(
+        "exec", source, "pg_dump", "-U", "chai", "-d", "chai", "--clean", "--if-exists"
+    ).stdout
+    done = docker(
+        "exec", "-i", target, "psql", "-U", "chai", "-d", database, "-q",
+        "-v", "ON_ERROR_STOP=1", "-f", "-",
+        stdin=dump,
+    )  # fmt: skip
+    assert done.returncode == 0, done.stderr.decode()[-400:]
+
+
+def identity_checks(source: str) -> None:
+    """A retirement-rule acknowledgment binds the database's identity (012, D-76),
+    so that a value printed for one database is refused by a copy made from its
+    dump. Shown here with a real pg_dump, as `make backup` makes it, restored into
+    another database of the same cluster, over the same database in place, and into
+    another cluster. server/tests/test_retention.py shows the refusal itself."""
+    print("A dump does not carry the database's identity (D-76)")
+    original = psql_in(source, "chai", IDENTITY)
+    history = psql_in(source, "chai", HISTORY)
+    cluster, database, table = original.split(":")
+
+    psql_in(source, "chai", "CREATE DATABASE chai_copy")
+    dump_into(source, source, "chai_copy")
+    copy = psql_in(source, "chai_copy", IDENTITY).split(":")
+    check(
+        "restored into another database of the same cluster: same history, "
+        "another database OID",
+        psql_in(source, "chai_copy", HISTORY) == history
+        and copy[0] == cluster
+        and copy[1] != database,
+        f"{original} -> {':'.join(copy)}",
+    )
+
+    dump_into(source, source, "chai")
+    in_place = psql_in(source, "chai", IDENTITY).split(":")
+    check(
+        "restored over the same database in place (make restore): same history "
+        "and database, a new history table",
+        psql_in(source, "chai", HISTORY) == history
+        and in_place[:2] == [cluster, database]
+        and in_place[2] != table,
+        f"{original} -> {':'.join(in_place)}",
+    )
+
+    other = start_source()
+    try:
+        dump_into(source, other, "chai")
+        elsewhere = psql_in(other, "chai", IDENTITY).split(":")
+        check(
+            "restored into another cluster: same history, another cluster",
+            psql_in(other, "chai", HISTORY) == history and elsewhere[0] != cluster,
+            f"{original} -> {':'.join(elsewhere)}",
+        )
+    finally:
+        docker("rm", "-f", other)
+
+
 def verify(*args: str, passphrase: str = PASSPHRASE):
     return subprocess.run(
         [sys.executable, str(SCRIPT), *args],
@@ -225,6 +301,21 @@ def main() -> int:
         "and so is a rule missing from them",
         any("last recorded" in p for p in fewer),
         str(fewer),
+    )
+    # The same number of rules, one of them another: a comparison of counts alone
+    # would pass this.
+    swapped = [*seed[:3], ("chai", "D", "Keep")]
+    substituted = vb.problems_for(rules_report(rules=swapped))
+    check(
+        "and so is one rule swapped for another, with the count unchanged",
+        len(swapped) == len(seed)
+        and any(
+            "last recorded" in p
+            and "chai: checkpoint D decided 'Keep' (not in the history)" in p
+            and "chai: checkpoint D decided 'Retire' (recorded, not in the table)" in p
+            for p in substituted
+        ),
+        str(substituted),
     )
     unread = vb.problems_for(rules_report(latest=None))
     check(
@@ -407,12 +498,53 @@ def main() -> int:
             disabled.stdout[-600:],
         )
         check("and leaves nothing running", leftovers() == [], str(leftovers()))
+
+        # Enabled only for replication (tgenabled R): it fires only in a session whose
+        # session_replication_role is "replica", which neither the API nor the owner
+        # sets, so it is as good as disabled, and pg_dump carries the state too.
+        psql(
+            source,
+            f"ALTER TABLE retirement_rule_change ENABLE REPLICA TRIGGER {trigger}",
+        )
+        replica_report = vb.inspect(source)
+        check(
+            "a trigger enabled only for replication counts as not enabled",
+            vb.RULES_HISTORY in replica_report.disabled_triggers
+            and vb.RULES_HISTORY not in replica_report.triggers,
+            f"{replica_report.triggers} {replica_report.disabled_triggers}",
+        )
+        replica = verify(str(make_dump(source, work / "replica.sql.gz.gpg")))
+        check(
+            "a dump whose rules' history trigger fires only on a replica fails",
+            replica.returncode != 0
+            and "retirement_rule_change was restored with its append-only trigger "
+            "DISABLED"
+            in replica.stdout,
+            replica.stdout[-600:],
+        )
+        check("and leaves nothing running", leftovers() == [], str(leftovers()))
+        # Mutation: count R as firing, and the same source shows no problem.
+        saved = vb.FIRING
+        vb.FIRING = (*saved, "R")
+        try:
+            mutated = vb.inspect(source)
+        finally:
+            vb.FIRING = saved
+        check(
+            "mutation: with R counted as firing, the replica-only trigger would pass",
+            vb.RULES_HISTORY in mutated.triggers
+            and not any(vb.RULES_HISTORY in p for p in vb.problems_for(mutated)),
+            str(vb.problems_for(mutated)),
+        )
+        psql(source, f"ALTER TABLE retirement_rule_change ENABLE TRIGGER {trigger}")
         recheck = verify(str(make_dump(source, work / "again.sql.gz.gpg")))
         check(
             "and the same source, set right again, verifies",
             recheck.returncode == 0,
             recheck.stdout[-600:],
         )
+
+        identity_checks(source)
 
         print("Failures are failures")
         wrong = verify(str(dump), passphrase="not-the-passphrase")

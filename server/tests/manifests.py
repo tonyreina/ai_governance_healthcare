@@ -152,12 +152,30 @@ Rules = set[tuple[str, str, str]]
 
 
 class Follows(NamedTuple):
-    """Where a change starts: the database's nonce (012) and the id and time of the
-    latest history row."""
+    """Where a change starts: the database's identity (012) and the id and time of
+    the latest history row."""
 
-    database: str
+    database: dict
     change_id: int
     at: str
+
+
+async def identity(conn: asyncpg.Connection) -> dict:
+    """The database's identity as the acknowledgment states it, read straight from
+    the catalogs rather than through 012's function: the cluster's system
+    identifier, the database's OID and the OID of retirement_rule_change."""
+    row = await conn.fetchrow(
+        "SELECT (SELECT system_identifier FROM pg_control_system()) AS cluster,"
+        " (SELECT oid FROM pg_database WHERE datname = current_database()) AS database,"
+        " (SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace"
+        "   WHERE c.relname = 'retirement_rule_change'"
+        "     AND n.nspname = current_schema()) AS history"
+    )
+    return {
+        "cluster": str(row["cluster"]),
+        "database": int(row["database"]),
+        "history": int(row["history"]),
+    }
 
 
 async def follows(db_url: str, change_id: int) -> Follows:
@@ -166,7 +184,7 @@ async def follows(db_url: str, change_id: int) -> Follows:
     be the latest, checked, so a test still says which point it means."""
     conn = await asyncpg.connect(db_url)
     try:
-        nonce = await conn.fetchval("SELECT nonce FROM retirement_ack_nonce")
+        database = await identity(conn)
         row = await conn.fetchrow(
             "SELECT id, at FROM retirement_rule_change ORDER BY id DESC LIMIT 1"
         )
@@ -174,7 +192,7 @@ async def follows(db_url: str, change_id: int) -> Follows:
         await conn.close()
     assert row["id"] == change_id, (row["id"], change_id)
     at = row["at"].astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    return Follows(str(nonce), change_id, at)
+    return Follows(database, change_id, at)
 
 
 def transition(
@@ -183,8 +201,9 @@ def transition(
     after: tuple[str, Rules],
 ) -> str:
     """The acknowledgment a change of retirement rules needs (D-76): SHA-256 of the
-    canonical JSON {"database": <the database's nonce>, "follows": <the latest
-    history row's id>, "at": <its time, UTC, microseconds, "Z">, "before":
+    canonical JSON {"database": {"cluster": <system identifier, text>, "database":
+    <the database's OID>, "history": <retirement_rule_change's OID>}, "follows":
+    <the latest history row's id>, "at": <its time, UTC, microseconds, "Z">, "before":
     {"primary", "rules"}, "after": {"primary", "rules"}}, each rule list every row of
     retirement_rule, sorted. ``before`` and ``after`` are (primary, rules). Written
     here independently of app.retirement, so the format is pinned by the test rather

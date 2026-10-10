@@ -263,6 +263,48 @@ def main() -> int:
             shown.get("primary") == "example",
             str(shown.get("primary")),
         )
+
+        # A config whose primary is not listed first: the manifest's primary, and
+        # the rule set the server retires by, are still the primary's, never the
+        # first framework's.
+        later = Path(tmp) / "later.json"
+        later.write_text(
+            json.dumps({"primary": "example", "frameworks": ["optica", "example"]})
+        )
+        code = build_app.main(["--config", str(later), "--out", str(Path(tmp) / "l")])
+        check("a config listing its primary second builds", code == 0, str(code))
+        out = Path(tmp) / "l" / "manifest.json"
+        got = json.loads(out.read_text("utf-8")) if out.exists() else {}
+        later_defs = build_app.framework_defs(later, custom=True)
+        example_pairs = {
+            (g["id"], o["value"])
+            for g in later_defs["example"]["gates"]
+            for o in g["options"]
+            if o["class"] in ("stop", "retire")
+        }
+        check(
+            "its manifest names that primary, and hashes that primary's rules",
+            [f["id"] for f in got.get("frameworks", [])] == ["optica", "example"]
+            and got.get("primary") == "example"
+            and got.get("ruleSetHash")
+            == bm.rule_set_hash(
+                "example",
+                [{"gate": g, "decision": d} for g, d in sorted(example_pairs)],
+            )
+            and bool(example_pairs),
+            str({k: got.get(k) for k in ("primary", "ruleSetHash")}),
+        )
+        # Mutation: taking the first framework listed as the primary would write
+        # another manifest (here none: OPTICA ends nothing, so the build would fail),
+        # which the check above tells apart.
+        try:
+            first = bm.manifest_json(later_defs, next(iter(later_defs)))
+        except SystemExit:
+            first = None
+        check(
+            "mutation: the first-listed framework's manifest is not this one",
+            out.exists() and first != out.read_text("utf-8"),
+        )
     check(
         "the published page and policy are untouched",
         all(p.read_bytes() == b for p, b in published.items()),

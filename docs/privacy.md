@@ -88,10 +88,11 @@ records officer approves (monthly is typical), and read the report first.
 Only the database owner can dispose. The API cannot: its database role has no
 right to delete the read trail and cannot run the disposal. Nor can it change
 which decisions retire a project: its role may only read those rules. Nor can a
-writer choose which framework's rules a record follows: the API accepts a record's
-framework only when it is the primary framework of the build the rules came from,
-and while that primary is not CHAI it refuses a new record that leaves its
-framework out (which would make it CHAI's) and a change that removes it.
+writer choose which framework's rules a record follows: the API accepts a new
+record's framework only when it is the primary framework of the build the rules
+came from, while that primary is not CHAI it refuses a new record that leaves its
+framework out (which would make it CHAI's), and it refuses any change that would
+move an existing record to another framework's rules.
 The report counts the records whose framework has no retirement rules, which
 never come due. The
 database refuses to delete a read-trail row younger than the period, even for

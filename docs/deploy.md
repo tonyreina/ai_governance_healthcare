@@ -265,6 +265,9 @@ holds the owner.
    decision it retires on today, start on one it does not, or change the primary
    framework, the job fails, unless
    `RETIREMENT_RULES_ACK` is set to the acknowledgment it prints ([Self-hosting](self-hosting.md#which-build-it-serves-and-the-retirement-rules)).
+   The acknowledgment is bound to the database through `pg_control_system()`,
+   which PostgreSQL lets every role call; a managed service that withholds it
+   from the job's role leaves the job refusing every change of the rules.
 2. **The service** gets `APP_DATABASE_URL` (the restricted role, with
    `?sslmode=verify-full`) and `RUN_MIGRATIONS=false`, and **never** the owner's
    `DATABASE_URL`. If the secret store lets the service read both, the split does

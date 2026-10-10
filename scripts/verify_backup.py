@@ -64,6 +64,10 @@ RULES_TABLE = "retirement_rule"
 # Their history, append-only by trigger from the same migration: "by which rule, set
 # when and by whom" must not be rewritable in a restored copy either.
 RULES_HISTORY = "retirement_rule_change"
+# pg_trigger.tgenabled states in which a trigger fires for the API and the owner:
+# O (origin, the default) and A (always). D is disabled; R fires only when
+# session_replication_role is "replica", which neither sets, so it counts as off.
+FIRING = ("O", "A")
 
 
 @dataclass
@@ -286,10 +290,11 @@ def inspect(container: str) -> Report:
             )
     # tgenabled: O fires in a normal session, A always; D (disabled) and R (replica
     # only) do not fire for the API or the owner, so they do not count as present.
+    firing = ", ".join(f"'{state}'" for state in FIRING)
     triggers = psql_value(
         container,
-        "SELECT c.relname || ' ' || count(*) FILTER (WHERE t.tgenabled IN ('O', 'A'))"
-        " || ' ' || count(*) FILTER (WHERE t.tgenabled NOT IN ('O', 'A'))"
+        f"SELECT c.relname || ' ' || count(*) FILTER (WHERE t.tgenabled IN ({firing}))"
+        f" || ' ' || count(*) FILTER (WHERE t.tgenabled NOT IN ({firing}))"
         " FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid"
         " WHERE NOT t.tgisinternal GROUP BY c.relname",
     )

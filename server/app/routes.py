@@ -84,11 +84,13 @@ from .principals import MAX_ID_LENGTH, MAX_LOOKUP
 from .principals import resolve as resolve_principals
 from .retention import HoldAction
 from .retirement import (
+    META_KEY,
+    STAMP_ID_KEY,
+    STAMP_KEY,
     UNSTAMPED_FRAMEWORK,
-    hold_off_rule_changes,
-    record_framework,
     sets_stamp,
     stamp_problem,
+    stored_frameworks,
     write_primary,
 )
 from .securitylog import SecurityEvent, emit
@@ -345,15 +347,35 @@ async def _check_new_record(conn: Any, document: dict[str, Any]) -> None:
         )
 
 
-async def _check_unstamped(conn: Any, document: dict[str, Any]) -> None:
-    primary = await write_primary(conn)
-    if record_framework(document) != primary:
+async def _check_framework_kept(
+    conn: Any, before: dict[str, Any], document: dict[str, Any], patch: Any
+) -> None:
+    """422 if a patch would change the framework an existing record follows, or set
+    its stamp to anything but exactly ``{"id": <that framework>}``.
+
+    A record's framework decides which decisions retire it, and so when it can be
+    disposed of; no acknowledgment lists a record that a write moves (R-66). So the
+    check is against the record's own framework before the patch, never against the
+    active primary: a pre-switch CHAI record stamped with the new primary would stop
+    coming due, and an acme record unstamped after a rollback to CHAI would start
+    following CHAI's rules. Both sides are read by 010's ``record_framework()``, the
+    function retention reads them with, so an absent or blank stamp is CHAI's here
+    exactly as it is there."""
+    was, now = await stored_frameworks(conn, before, document)
+    if was != now:
         raise HTTPException(
             422,
-            "this change removes the record's meta.framework, which would make it "
-            f"CHAI's record and retire it by CHAI's rules. Only {primary!r}, the "
-            "primary framework of the build this server retires by, may be set "
-            "(R-66).",
+            f"a patch cannot change a record's framework: this record follows "
+            f"{was!r}'s retirement rules and the patch would make it {now!r}'s. Its "
+            "framework decides which decisions retire it, and so when it can be "
+            "disposed of (R-66).",
+        )
+    if sets_stamp(patch) and document[META_KEY][STAMP_KEY] != {STAMP_ID_KEY: was}:
+        raise HTTPException(
+            422,
+            f'meta.framework, when a patch sets it, must be exactly {{"id": "{was}"}}, '
+            "the record's own framework: a patch cannot change a record's framework, "
+            "which decides which decisions retire it (R-66).",
         )
 
 
@@ -466,10 +488,6 @@ async def patch_project(
     """
     patch = body.root
     async with db.acquire() as conn, conn.transaction():
-        # Before the row lock: the stamp check below reads the active primary, and a
-        # sync must not change it under this write (R-66). Taken first, so a
-        # migration holding the lock never waits on a patch waiting for it.
-        await hold_off_rule_changes(conn)
         row = await conn.fetchrow(
             "SELECT doc, incarnation FROM projects WHERE id = $1 FOR UPDATE",
             project_id,
@@ -518,13 +536,10 @@ async def patch_project(
             document = merged(before, patch)
         except TooDeep as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-        # The stamp decides which rules retire the record (R-66). One the patch sets
-        # is checked as merged; one a patch drops by replacing `meta` must not move
-        # the record to rules other than the active primary's.
-        if sets_stamp(patch):
-            await _check_stamp(conn, document)
-        elif record_framework(document) != record_framework(before):
-            await _check_unstamped(conn, document)
+        # The record's framework decides which rules retire it (R-66): no patch
+        # changes it. Checked against the record, not the active primary, so this
+        # needs no lock against a sync.
+        await _check_framework_kept(conn, before, document, patch)
         rev = await conn.fetchval(
             """
                 UPDATE projects

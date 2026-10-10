@@ -106,15 +106,28 @@ and so when it comes due for disposal ([Privacy and retention](privacy.md#dispos
   one between the same primary rule sets, needs its own value. Once used it is
   spent, so one left set from an earlier deploy accepts nothing later, not even
   the same change again, and an older build deployed over a newer one is refused
-  the same way. It also belongs to the database that printed it: each database
-  holds a random value made when it was migrated, which the acknowledgment
-  includes, so another database refuses it even when its history is the same (a
-  value printed on staging does nothing on production).
-- Restoring a dump re-arms a value printed against that dump's state. A dump
-  carries the database's random value and the history with it, so the restored
-  database is, to `migrate`, the database the dump was taken from at that moment,
-  and a value printed then is accepted again. Clear `RETIREMENT_RULES_ACK` before
-  you restore, and read what `migrate` prints afterward.
+  the same way. It also belongs to the database that printed it: it includes the
+  cluster's system identifier, the database's internal id (OID) and the internal
+  id of the rules' history table, none of which a dump carries, so another
+  database refuses it even when its history is the same (a value printed on
+  staging does nothing on production), and so does a copy restored from a dump,
+  into another database or cluster or over the same database in place (`make
+  restore` creates every table again).
+- The value binds the rules and the primary, not the projects. The list is of the
+  projects as they stood when it was printed: a project decided or edited before
+  you run `migrate` again with the value is affected all the same, without having
+  been listed. Use the value promptly; to see the list as it stands, run `migrate`
+  without it.
+- A copy of the database's files is not a dump. A base backup, point-in-time
+  recovery, a volume or disk snapshot, or a promoted replica keeps the cluster's
+  identifier and both internal ids, so to `migrate` it is the database it was
+  copied from, and it accepts again a value printed against the state it holds.
+  Clear `RETIREMENT_RULES_ACK` before you restore one, and read what `migrate`
+  prints afterward.
+- The database's identity comes from `pg_control_system()`, which PostgreSQL lets
+  every role call. On a platform that withholds it, `migrate` cannot bind a value
+  to the database, so it refuses every change of the rules and says why; a build
+  that changes nothing still starts.
 - A build that changes nothing (the same rules and the same primary as the
   database) needs nothing: the published build on a new database starts without
   an acknowledgment.
@@ -130,17 +143,21 @@ event. `GET /api/health` reports the rule set in use as `retirement_rules`: its
 `primary` framework, and `synced`, which is `false` until a build's manifest has
 set or confirmed the rules.
 
-A record's framework is its `meta.framework.id`. The API accepts a record that
-sets it only when it is exactly `{"id": "<primary>"}`, the primary of the build
-the rules were loaded from, because the stamp decides when a record can be
-disposed of. A record without one is CHAI's, so while the primary is another
-framework the API refuses a new record without the stamp, and a change that would
-remove it; a record written before that primary keeps the framework it had. A
-build of another framework ([Bring your own framework](frameworks/custom.md))
+A record's framework is its `meta.framework.id`, and it decides when the record
+can be disposed of. The API accepts a new record that sets it only when it is
+exactly `{"id": "<primary>"}`, the primary of the build the rules were loaded
+from. A record without one is CHAI's, so while the primary is another framework
+the API refuses a new record without the stamp. No change to an existing record
+can change its framework: a change that would set, remove or blank the stamp, or
+replace `meta`, so that the record follows another framework's rules is refused,
+and a change that sets the stamp must name the record's own framework exactly. So
+a record written before a change of primary keeps the framework it had, and stays
+editable, and a record of a later primary keeps its framework after a rollback.
+A build of another framework ([Bring your own framework](frameworks/custom.md))
 stamps every record it creates with its primary; the published build stamps
-none, so its records are CHAI's. A change of primary waits for every write in
-flight, and a write that starts during it waits for it, so no record is checked
-against a primary that has just been replaced.
+none, so its records are CHAI's. A change of primary waits for every new record
+in flight, and a new record that starts during it waits for it, so no record is
+checked against a primary that has just been replaced.
 
 ### Identity comes from the proxy
 

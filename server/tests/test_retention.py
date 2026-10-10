@@ -1207,12 +1207,83 @@ async def test_a_primary_switch_over_the_same_rules_needs_an_ack(
     assert await rules_now() == both
 
 
+async def test_a_value_for_one_new_primary_is_refused_for_another_over_the_same_rules(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    # The database holds the rules of CHAI, acme and beta (as earlier builds could
+    # have left them). Making acme the primary and making beta the primary both add
+    # and remove no row, from the same point in the same history: only the primary
+    # after differs. A value printed for chai -> acme must not make beta the primary.
+    acme = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
+    beta = manifests.write(
+        tmp_path / "beta.json", {"beta": {**manifests.STAND_IN, "id": "beta"}}, "beta"
+    )
+    async with owner_connection() as conn:
+        await conn.executemany(
+            "INSERT INTO retirement_rule (framework_id, gate_id, decision)"
+            " VALUES ($1, $2, $3)",
+            sorted(manifest_rules(acme) | manifest_rules(beta)),
+        )
+    held = await rules_now()
+    for_acme = printed_ack(migrate(acme))
+    for_beta = printed_ack(migrate(beta))
+    assert for_acme != for_beta
+    assert for_beta == manifests.transition(
+        await manifests.follows(DB_URL, 1), ("chai", held), ("beta", held)
+    )
+    refused = migrate(beta, for_acme)
+    assert refused.returncode == 3, refused.stdout + refused.stderr
+    assert "the primary changes: chai -> beta" in refused.stderr
+    assert (await latest_change())["framework_id"] == "chai"
+    assert (await latest_change())["n"] == 1
+    assert await rules_now() == held
+    # Each value makes the change it was printed for.
+    done = migrate(acme, for_acme)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (await latest_change())["framework_id"] == "acme"
+
+
+async def test_the_new_primary_test_fails_when_the_value_omits_the_primary_after(
+    client: AsyncClient, tmp_path: Path, monkeypatch
+) -> None:
+    # Mutation: the value binds the rules and the primary before, not the primary
+    # after. The two switches are then one value, and acme's makes beta the primary.
+    from app import retirement
+
+    real = retirement.transition_ack
+
+    def without_primary_after(follows, before, after):
+        return real(follows, before, after._replace(primary=None))
+
+    monkeypatch.setattr(retirement, "transition_ack", without_primary_after)
+    acme = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
+    beta = manifests.write(
+        tmp_path / "beta.json", {"beta": {**manifests.STAND_IN, "id": "beta"}}, "beta"
+    )
+    async with owner_connection() as conn:
+        await conn.executemany(
+            "INSERT INTO retirement_rule (framework_id, gate_id, decision)"
+            " VALUES ($1, $2, $3)",
+            sorted(manifest_rules(acme) | manifest_rules(beta)),
+        )
+    value = await refused_value(retirement.load_manifest(str(acme)))
+    async with owner_connection() as conn:
+        synced = await retirement.sync_rules(
+            conn, retirement.load_manifest(str(beta)), value
+        )
+    assert synced.outcome is retirement.SyncOutcome.CHANGED
+    assert (await latest_change())["framework_id"] == "beta"
+
+
 # --- the acknowledgment belongs to one database ------------------------------------
 # It named only the history row it follows, a bigserial id, so a value printed for
 # one database was accepted by any other at the same point in the same history: a
 # staging value on production, or a fresh database built the same way (shown against
-# PostgreSQL 17 in review). It now also binds a random nonce each database is created
-# with (012) and the time of the change it follows.
+# PostgreSQL 17 in review). A random value stored in the database fixed that only for
+# databases built separately: a dump carries it, so staging restored from a
+# production dump accepted production's values (also shown in review). It now binds
+# what a dump does not copy (012): the cluster's system identifier, the database's
+# OID and the OID of the history table, which a restore in place recreates.
 
 OTHER_DB = "chai_test_other_database"
 
@@ -1307,17 +1378,18 @@ async def test_a_value_printed_for_one_database_is_refused_by_another(
         assert done.returncode == 0, done.stdout + done.stderr
 
 
-async def test_the_database_test_fails_without_the_nonce(
+async def test_the_database_test_fails_without_the_identity(
     client: AsyncClient, tmp_path: Path, monkeypatch
 ) -> None:
-    # Mutation: the acknowledgment without the database's nonce. The two databases'
-    # histories are identical, so a value printed for one is accepted by the other.
+    # Mutation: the acknowledgment without the database's identity. The two
+    # databases' histories are identical, so a value printed for one is accepted by
+    # the other.
     from app import retirement
 
-    async def no_nonce(conn) -> str:
-        return ""
+    async def no_identity(conn) -> retirement.DatabaseIdentity:
+        return retirement.DatabaseIdentity("", 0, 0)
 
-    monkeypatch.setattr(retirement, "database_nonce", no_nonce)
+    monkeypatch.setattr(retirement, "database_identity", no_identity)
     acme = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
     manifest = retirement.load_manifest(str(acme))
     async with another_database() as other:
@@ -1338,21 +1410,306 @@ async def test_the_database_test_fails_without_the_nonce(
         assert synced.outcome is retirement.SyncOutcome.CHANGED
 
 
-@pytest.mark.parametrize("part", ["database", "follows", "at", "before", "after"])
+# A dump, restored. pg_dump writes each table's rows with COPY and sets each sequence;
+# a restore runs the schema's DDL in the target (here: the real migrate job, which is
+# the schema the dump would carry) and copies the rows back. That is what these do,
+# with COPY, for the tables the acknowledgment reads. What a real pg_dump does to the
+# identity, across databases, clusters and an in-place --clean restore, is shown by
+# tests/test_verify_backup.py.
+DUMPED = ("retirement_rule", "retirement_rule_change", "projects")
+
+
+async def dump_rows(url: str) -> dict:
+    conn = await asyncpg.connect(url)
+    try:
+        rows = {t: await conn.fetch(f"SELECT * FROM {t}") for t in DUMPED}
+        sequence = await conn.fetchval(
+            "SELECT last_value FROM retirement_rule_change_id_seq"
+        )
+    finally:
+        await conn.close()
+    return {"rows": rows, "sequence": sequence}
+
+
+async def restore_rows(url: str, dump: dict) -> None:
+    conn = await asyncpg.connect(url)
+    try:
+        await conn.execute(f"TRUNCATE {', '.join(DUMPED)} CASCADE")
+        for table in DUMPED:
+            rows = dump["rows"][table]
+            if rows:
+                await conn.copy_records_to_table(
+                    table,
+                    records=[tuple(r) for r in rows],
+                    columns=list(rows[0].keys()),
+                )
+        await conn.execute(
+            "SELECT setval('retirement_rule_change_id_seq', $1)", dump["sequence"]
+        )
+    finally:
+        await conn.close()
+
+
+async def restore_in_place(url: str, dump: dict) -> None:
+    """`make restore`: the dump is pg_dump --clean, so each table is dropped and
+    created again in the same database before its rows are copied back."""
+    conn = await asyncpg.connect(url)
+    try:
+        await conn.execute("DROP TABLE retirement_rule_change, retirement_rule")
+        await conn.execute(RULES_MIGRATION)
+        # The restricted role's grants on the tables just made (a restore carries
+        # them; the migrate job provisions them).
+        from app.roles import provision
+
+        from .conftest import SUITE_PASSWORD, SUITE_ROLE
+
+        await provision(conn, SUITE_ROLE, SUITE_PASSWORD)
+    finally:
+        await conn.close()
+    await restore_rows(url, dump)
+
+
+async def identity_of(url: str) -> dict:
+    conn = await asyncpg.connect(url)
+    try:
+        return await manifests.identity(conn)
+    finally:
+        await conn.close()
+
+
+async def test_a_dump_restored_elsewhere_refuses_the_originals_value_both_ways(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    acme = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
+    # A history with more than the seed in it, so the copy carries a real one.
+    withdraw = manifests.write(
+        tmp_path / "w.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
+    )
+    assert migrate(withdraw, printed_ack(migrate(withdraw))).returncode == 0
+    async with another_database() as restored:
+        await restore_rows(restored, await dump_rows(DB_URL))
+        # The copy holds the same rules and the same history, row for row.
+        assert await history_of(restored) == await history_of(DB_URL)
+        assert await identity_of(restored) != await identity_of(DB_URL)
+
+        here = printed_ack(migrate(acme))
+        there = printed_ack(
+            manifests.run_migrate(restored, RETIREMENT_MANIFEST=str(acme))
+        )
+        follows_there = await manifests.follows(restored, 2)
+        assert here != there
+        unchanged = await history_of(restored)
+        # The original's value, on the restored copy: refused, nothing changed.
+        refused = manifests.run_migrate(
+            restored, RETIREMENT_MANIFEST=str(acme), RETIREMENT_RULES_ACK=here
+        )
+        assert refused.returncode == 3, refused.stdout + refused.stderr
+        assert printed_ack(refused) == there
+        assert await history_of(restored) == unchanged
+        # The copy's value, on the original: refused too.
+        mine = await history_of(DB_URL)
+        assert migrate(acme, there).returncode == 3
+        assert await history_of(DB_URL) == mine
+        # Each accepts its own.
+        assert migrate(acme, here).returncode == 0
+        done = manifests.run_migrate(
+            restored, RETIREMENT_MANIFEST=str(acme), RETIREMENT_RULES_ACK=there
+        )
+        assert done.returncode == 0, done.stdout + done.stderr
+        # The value each printed is the one an independent computation of the
+        # format gives with that database's own identity.
+        assert there == manifests.transition(
+            follows_there,
+            ("chai", manifest_rules(withdraw)),
+            ("acme", manifest_rules(withdraw) | manifest_rules(acme)),
+        )
+
+
+async def test_a_dump_restored_in_place_refuses_a_value_printed_before_it(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    acme = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
+    dump = await dump_rows(DB_URL)
+    before = printed_ack(migrate(acme))
+    identity = await identity_of(DB_URL)
+    await restore_in_place(DB_URL, dump)
+    # The same database, the same cluster, the same history row for row; only the
+    # history table is new.
+    after = await identity_of(DB_URL)
+    assert (after["cluster"], after["database"]) == (
+        identity["cluster"],
+        identity["database"],
+    )
+    assert after["history"] != identity["history"]
+    refused = migrate(acme, before)
+    assert refused.returncode == 3, refused.stdout + refused.stderr
+    assert (await latest_change())["framework_id"] == "chai"
+    again = printed_ack(refused)
+    assert again != before
+    assert migrate(acme, again).returncode == 0
+
+
+async def test_the_restore_tests_fail_without_the_history_table_in_the_identity(
+    client: AsyncClient, tmp_path: Path, monkeypatch
+) -> None:
+    # Mutation: the identity without the history table's OID. A restore in place
+    # keeps the cluster and the database, so the value printed before it is
+    # accepted after it: the restore re-armed it.
+    from app import retirement
+
+    real = retirement.database_identity
+
+    async def without_history(conn) -> retirement.DatabaseIdentity:
+        return (await real(conn))._replace(history=0)
+
+    monkeypatch.setattr(retirement, "database_identity", without_history)
+    acme = load_acme(tmp_path)
+    dump = await dump_rows(DB_URL)
+    value = await refused_value(acme)
+    await restore_in_place(DB_URL, dump)
+    conn = await asyncpg.connect(DB_URL)
+    try:
+        synced = await retirement.sync_rules(conn, acme, value)
+    finally:
+        await conn.close()
+    assert synced.outcome is retirement.SyncOutcome.CHANGED
+
+
+async def test_the_restore_tests_fail_without_the_database_oid_in_the_identity(
+    client: AsyncClient, tmp_path: Path, monkeypatch
+) -> None:
+    # Mutation: the identity without the database's OID. A dump restored into
+    # another database of the same cluster gets a new history table OID too, so
+    # this also leaves out that OID and shows the cluster alone is not enough:
+    # the copy accepts the original's value.
+    from app import retirement
+
+    real = retirement.database_identity
+
+    async def cluster_only(conn) -> retirement.DatabaseIdentity:
+        return (await real(conn))._replace(database=0, history=0)
+
+    monkeypatch.setattr(retirement, "database_identity", cluster_only)
+    acme = load_acme(tmp_path)
+    async with another_database() as restored:
+        await restore_rows(restored, await dump_rows(DB_URL))
+        value = await refused_value(acme)
+        conn = await asyncpg.connect(restored)
+        try:
+            synced = await retirement.sync_rules(conn, acme, value)
+        finally:
+            await conn.close()
+    assert synced.outcome is retirement.SyncOutcome.CHANGED
+
+
+def load_acme(tmp_path: Path):
+    from app import retirement
+
+    path = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
+    return retirement.load_manifest(str(path))
+
+
+async def refused_value(manifest) -> str:
+    from app import retirement
+
+    conn = await asyncpg.connect(DB_URL)
+    try:
+        with pytest.raises(retirement.RulesRefused) as refused:
+            await retirement.sync_rules(conn, manifest, "")
+    finally:
+        await conn.close()
+    found = re.search(r"RETIREMENT_RULES_ACK=([0-9a-f]{64})", str(refused.value))
+    assert found, str(refused.value)
+    return found.group(1)
+
+
+class NoIdentity:
+    """A connection on which 012's function fails, as on a platform that withholds
+    pg_control_system(). Everything else goes to the real connection."""
+
+    def __init__(self, conn: asyncpg.Connection) -> None:
+        self._conn = conn
+
+    def transaction(self):
+        return self._conn.transaction()
+
+    async def execute(self, query: str, *args):
+        return await self._conn.execute(query, *args)
+
+    async def fetch(self, query: str, *args):
+        return await self._conn.fetch(query, *args)
+
+    async def fetchval(self, query: str, *args):
+        return await self._conn.fetchval(query, *args)
+
+    async def fetchrow(self, query: str, *args):
+        if "retirement_ack_database" in query:
+            raise asyncpg.exceptions.InsufficientPrivilegeError(
+                "permission denied for function pg_control_system"
+            )
+        return await self._conn.fetchrow(query, *args)
+
+
+async def test_without_the_identity_a_change_is_refused_and_nothing_else_is(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    from app import retirement
+
+    acme = load_acme(tmp_path)
+    conn = await asyncpg.connect(DB_URL)
+    try:
+        with pytest.raises(retirement.RulesRefused) as refused:
+            await retirement.sync_rules(NoIdentity(conn), acme, "a" * 64)
+        assert "identity cannot be read" in str(refused.value)
+        assert "RETIREMENT_RULES_ACK=" not in str(refused.value)
+        # A sync that changes nothing needs no identity, and goes through.
+        default = retirement.load_manifest(str(manifests.DEFAULT_MANIFEST))
+        synced = await retirement.sync_rules(NoIdentity(conn), default, "")
+    finally:
+        await conn.close()
+    assert synced.outcome is retirement.SyncOutcome.CONFIRMED
+    assert (await latest_change())["framework_id"] == "chai"
+
+
+async def test_012_reads_the_identity_the_acknowledgment_states(
+    client: AsyncClient,
+) -> None:
+    # The function the job reads and the catalogs the independent computation
+    # reads agree.
+    async with owner_connection() as conn:
+        row = await conn.fetchrow("SELECT * FROM retirement_ack_database()")
+        assert dict(row) == await manifests.identity(conn)
+
+
+@pytest.mark.parametrize(
+    "part", ["cluster", "database", "history", "follows", "at", "before", "after"]
+)
 def test_every_part_of_the_acknowledgment_changes_it(part: str) -> None:
-    from app.retirement import Follows, RuleState, transition_ack
+    from app.retirement import DatabaseIdentity, Follows, RuleState, transition_ack
 
     rules = frozenset(manifests.CHAI_RULES)
     base = {
-        "follows": Follows("d1", 1, "2026-01-01T00:00:00.000000Z"),
+        "follows": Follows(
+            DatabaseIdentity("1", 2, 3), 1, "2026-01-01T00:00:00.000000Z"
+        ),
         "before": RuleState("chai", rules),
         "after": RuleState("acme", rules),
     }
     changed = dict(base)
     follows = base["follows"]
     match part:
+        case "cluster":
+            changed["follows"] = follows._replace(
+                database=follows.database._replace(cluster="9")
+            )
         case "database":
-            changed["follows"] = follows._replace(database="d2")
+            changed["follows"] = follows._replace(
+                database=follows.database._replace(database=9)
+            )
+        case "history":
+            changed["follows"] = follows._replace(
+                database=follows.database._replace(history=9)
+            )
         case "follows":
             changed["follows"] = follows._replace(change_id=2)
         case "at":

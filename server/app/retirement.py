@@ -15,14 +15,17 @@ The sync never changes disposal silently:
 * any change, a pair added or a pair removed or a new primary, is made only when
   ``RETIREMENT_RULES_ACK`` equals :func:`transition_ack` of that whole change: every
   rule the table holds before and after it, the primary before and after, the
-  history row it follows (its id and time) and the database's own nonce (012).
+  history row it follows (its id and time) and the database's identity (012).
   Otherwise the job refuses, names every project whose disposal would start or stop
   being due, prints the value to set, and exits non-zero. Because the value binds
   the change it was printed for, the row it follows and the database, it accepts
   that change once and nothing else: not a different change between the same
   primary rule sets, not a stale manifest undoing a newer one, not the same change
-  again later, and not another database with the same history (a database restored
-  from a dump is, to it, the one the dump came from);
+  again later, not another database with the same history, and not a database a
+  dump of this one was restored into, or restored over (a copy of the database's
+  files, such as a snapshot, is to it the database it was copied from). It binds
+  the rules, not the records: a project edited between the refusal and the
+  acknowledged run is affected without having been listed;
 * a sync that changes nothing (the same rows, the same primary) needs no
   acknowledgment, so the default build on a fresh database (whose seed is that
   build's rule set) starts without one;
@@ -316,12 +319,24 @@ class RuleState(NamedTuple):
     rules: frozenset[Rule]
 
 
-class Follows(NamedTuple):
-    """Where in which database's history a change starts: the database's nonce
-    (``retirement_ack_nonce``, 012), and the id and time of the latest
-    ``retirement_rule_change`` row."""
+class DatabaseIdentity(NamedTuple):
+    """What makes a database itself to an acknowledgment, read by 012's
+    ``retirement_ack_database()``: none of it is in a dump, so neither another
+    database nor a dump restored anywhere, in place too, shares it."""
 
-    database: str
+    # The cluster's system identifier (pg_control_system()), as text.
+    cluster: str
+    # This database's OID.
+    database: int
+    # The OID of retirement_rule_change, which a restore in place recreates.
+    history: int
+
+
+class Follows(NamedTuple):
+    """Where in which database's history a change starts: the database's identity,
+    and the id and time of the latest ``retirement_rule_change`` row."""
+
+    database: DatabaseIdentity
     # None only before 010's seed, which never happens once migrated.
     change_id: int | None
     at: str | None
@@ -329,9 +344,11 @@ class Follows(NamedTuple):
 
 def transition_ack(follows: Follows, before: RuleState, after: RuleState) -> str:
     """The value ``RETIREMENT_RULES_ACK`` must hold to make one change: SHA-256 of
-    the canonical JSON ::
+    the canonical JSON (sorted keys, no spaces, UTF-8) ::
 
-        {"database": <the database's nonce>,
+        {"database": {"cluster": <system identifier, text>,
+                      "database": <the database's OID>,
+                      "history": <the OID of retirement_rule_change>},
          "follows": <id of the latest retirement_rule_change row>,
          "at": <that row's time, UTC, "YYYY-MM-DDTHH:MM:SS.ffffffZ">,
          "before": {"primary": ..., "rules": [[framework, gate, decision], ...]},
@@ -344,15 +361,20 @@ def transition_ack(follows: Follows, before: RuleState, after: RuleState) -> str
     framework's rules) or a new primary over the same rows needs its own value. And
     because it names the history row it follows, which the change itself moves on,
     it is spent once used: a value left set never accepts a later change, even one
-    identical to it. The nonce makes it one database's: another database with the
-    same history (staging and production) refuses it. A database restored from a
-    dump has the dump's nonce and history, so it accepts a value printed against the
-    state in that dump.
+    identical to it. The database's identity (012) makes it one database's: another
+    database refuses it, with the same history or restored from a dump of this one,
+    and so does this database after a dump is restored over it. A copy of the
+    database's files (a base backup, a snapshot, a promoted replica) keeps the
+    identity, and accepts a value printed against the state it was copied in.
+
+    It binds the rules and the primary, not the records: the projects a refusal
+    lists are those at the moment it was printed, and one edited before the
+    acknowledged run is affected without having been listed.
     """
     return hashlib.sha256(
         canonical_json(
             {
-                "database": follows.database,
+                "database": follows.database._asdict(),
                 "follows": follows.change_id,
                 "at": follows.at,
                 "before": {"primary": before.primary, "rules": _as_json(before.rules)},
@@ -362,13 +384,28 @@ def transition_ack(follows: Follows, before: RuleState, after: RuleState) -> str
     ).hexdigest()
 
 
-async def database_nonce(conn: asyncpg.Connection) -> str:
-    """This database's nonce (012), made now if the row is missing: a fresh nonce
-    only ever makes a value printed earlier stop matching. Owner only."""
-    await conn.execute(
-        "INSERT INTO retirement_ack_nonce DEFAULT VALUES ON CONFLICT DO NOTHING"
+async def database_identity(conn: asyncpg.Connection) -> DatabaseIdentity:
+    """This database's identity, from 012's ``retirement_ack_database()``. If it
+    cannot be read (a platform that withholds ``pg_control_system()``), no change
+    can be acknowledged, so the change is refused and says why."""
+    try:
+        row = await conn.fetchrow("SELECT * FROM retirement_ack_database()")
+    except asyncpg.PostgresError as exc:
+        raise RulesRefused(
+            "the manifest changes the retirement rules, and this database's identity "
+            f"cannot be read ({exc}), so no acknowledgment can be bound to it. "
+            "retirement_ack_database() needs pg_control_system(), which PostgreSQL "
+            "grants to every role by default. Nothing was changed."
+        ) from exc
+    if row is None or None in tuple(row):
+        raise RulesRefused(
+            "the manifest changes the retirement rules, and this database's identity "
+            "came back incomplete, so no acknowledgment can be bound to it. Nothing "
+            "was changed."
+        )
+    return DatabaseIdentity(
+        str(row["cluster"]), int(row["database"]), int(row["history"])
     )
-    return str(await conn.fetchval("SELECT nonce FROM retirement_ack_nonce"))
 
 
 def _refusal(
@@ -461,10 +498,11 @@ async def hold_off_rule_changes(conn: asyncpg.Connection) -> None:
 
 
 async def write_primary(conn: asyncpg.Connection) -> str:
-    """The active primary, for a write whose stamp check depends on it (R-66), read
-    under :func:`hold_off_rule_changes`. Without it, under READ COMMITTED, a write
-    that read the old primary could commit, after an acknowledged switch, a record
-    the new primary forbids, which the acknowledgment never listed."""
+    """The active primary, for a create, whose stamp check depends on it (R-66),
+    read under :func:`hold_off_rule_changes`. Without it, under READ COMMITTED, a
+    create that read the old primary could commit, after an acknowledged switch, a
+    record the new primary forbids, which the acknowledgment never listed. A patch
+    does not read the primary: it may not change the record's framework at all."""
     await hold_off_rule_changes(conn)
     return await active_primary(conn)
 
@@ -490,6 +528,22 @@ def record_framework(doc: Any) -> str:
         return UNSTAMPED_FRAMEWORK
     text = value if isinstance(value, str) else json.dumps(value)
     return text or UNSTAMPED_FRAMEWORK
+
+
+async def stored_frameworks(
+    conn: asyncpg.Connection, *docs: dict[str, Any]
+) -> list[str]:
+    """The framework each document follows, read by 010's ``record_framework()``:
+    the function ``retention_due()`` reads it with, so a write and retention never
+    disagree about whose rules a record follows. ``conn`` encodes ``jsonb`` from a
+    dict (``db._init_connection``)."""
+    return list(
+        await conn.fetchval(
+            "SELECT array_agg(record_framework(d) ORDER BY n)"
+            " FROM unnest($1::jsonb[]) WITH ORDINALITY AS u(d, n)",
+            list(docs),
+        )
+    )
 
 
 def sets_stamp(body: Any) -> bool:
@@ -568,16 +622,18 @@ async def sync_rules(
         active = await active_rules(conn)
         old_hash = active.rule_set_hash if active else None
         old_primary = active.primary if active else None
-        nonce = await database_nonce(conn)
-        needed = transition_ack(
-            Follows(nonce, active.change_id, active.at)
-            if active
-            else Follows(nonce, None, None),
-            RuleState(old_primary, current),
-            RuleState(manifest.primary, after),
-        )
         primary_changes = old_primary != manifest.primary
         changes = bool(added or removed) or primary_changes
+        needed = ""
+        if changes:
+            database = await database_identity(conn)
+            needed = transition_ack(
+                Follows(database, active.change_id, active.at)
+                if active
+                else Follows(database, None, None),
+                RuleState(old_primary, current),
+                RuleState(manifest.primary, after),
+            )
         if changes and ack != needed:
             affected = await affected_projects(conn, current, after)
             emit(

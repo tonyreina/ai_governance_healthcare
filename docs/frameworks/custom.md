@@ -122,9 +122,10 @@ sentences) are translated in every language already.
     prints a value; if the change is intended, set `RETIREMENT_RULES_ACK` in
     `.env` to that value, run `docker compose up -d` again, then clear it
     ([Self-hosting](../self-hosting.md#which-build-it-serves-and-the-retirement-rules)).
-    Once your primary is the server's, the API accepts a record only with your
-    primary's stamp, so every record your build saves retires by your
-    definition. A record with no stamp is CHAI's and retires by CHAI's rules.
+    Once your primary is the server's, the API accepts a new record only with
+    your primary's stamp, so every record your build saves retires by your
+    definition, and no change moves a record to another framework's rules. A
+    record with no stamp is CHAI's and retires by CHAI's rules.
 
 `pixi run test-custom-build` builds the example and checks all of this in a
 real browser: every screen, the report and every export, with no word of CHAI or

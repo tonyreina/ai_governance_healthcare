@@ -495,6 +495,239 @@ async def test_under_another_primary_a_record_must_carry_its_stamp(
     assert "framework" not in (await stored_doc("legacy"))["meta"]
 
 
+# --- a write never changes an existing record's framework (R-66) ---------------------
+# A record's framework decides which rules retire it, so changing it decides when it
+# can be disposed of, and no acknowledgment lists it. Shown against PostgreSQL 17 in
+# review: under acme, a patch stamping a pre-switch CHAI record {"id": "acme"} was
+# accepted (it is the active primary's stamp) and the record stopped coming due; after
+# a rollback to CHAI, `{"meta": null}` on an acme record was accepted (CHAI is then the
+# primary, and an unstamped record is CHAI's) and it began following CHAI's rules.
+
+
+def printed_by(done) -> str:
+    found = re.search(r"RETIREMENT_RULES_ACK=([0-9a-f]{64})", done.stderr)
+    assert done.returncode == 3 and found, done.stdout + done.stderr
+    return found.group(1)
+
+
+def switch_to(path: Path) -> None:
+    """Make the change `path`'s manifest asks for, with the value the job prints,
+    as an operator does."""
+    value = printed_by(manifests.run_migrate(DB_URL, RETIREMENT_MANIFEST=str(path)))
+    done = manifests.run_migrate(
+        DB_URL, RETIREMENT_MANIFEST=str(path), RETIREMENT_RULES_ACK=value
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
+async def due_ids() -> set[str]:
+    async with owner_connection() as conn:
+        return {
+            r[0] for r in await conn.fetch("SELECT project_id FROM retention_due()")
+        }
+
+
+async def a_retired_chai_record(client: AsyncClient, pid: str) -> None:
+    """An unstamped (CHAI) record retired at D long enough ago to be due."""
+    async with owner_connection() as conn:
+        date = str(await conn.fetchval("SELECT (now() - interval '7 years')::date"))
+    created = await client.post(
+        f"/api/projects/{pid}",
+        json={
+            "meta": {"solution": pid},
+            "gates": {"D": {"decision": "Retire", "date": date}},
+        },
+    )
+    assert created.status_code == 201, created.text
+    async with owner_connection() as conn:
+        await conn.execute(
+            "UPDATE projects SET updated_at = now() - interval '7 years' WHERE id = $1",
+            pid,
+        )
+
+
+@requires_db
+async def test_a_patch_cannot_stamp_a_pre_switch_record_with_the_new_primary(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    await a_retired_chai_record(client, "legacy")
+    assert "legacy" in await due_ids()
+    switch_to(
+        manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
+    )
+    assert "legacy" in await due_ids()
+
+    patched = await client.patch(
+        "/api/projects/legacy", json={"meta": {"framework": {"id": "acme"}}}
+    )
+    assert patched.status_code == 422, patched.text
+    assert "cannot change a record's framework" in patched.json()["detail"]
+    assert record_framework(await stored_doc("legacy")) == "chai"
+    # Still CHAI's, so still due: the patch did not move it out of CHAI's rules.
+    assert "legacy" in await due_ids()
+
+
+@requires_db
+async def test_a_patch_cannot_unstamp_a_record_after_a_rollback(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    switch_to(
+        manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
+    )
+    created = await client.post(
+        "/api/projects/a", json={"meta": {"framework": {"id": "acme"}}}
+    )
+    assert created.status_code == 201, created.text
+    switch_to(manifests.DEFAULT_MANIFEST)  # back to CHAI as the primary
+
+    dropped = await client.patch("/api/projects/a", json={"meta": None})
+    assert dropped.status_code == 422, dropped.text
+    assert "cannot change a record's framework" in dropped.json()["detail"]
+    assert (await stored_doc("a"))["meta"]["framework"] == {"id": "acme"}
+
+
+# Patches that would change the framework of, or reshape the stamp on, a record
+# stamped acme (after a rollback to CHAI) and an unstamped CHAI record (under acme).
+STAMPED_ACME_PATCHES = {
+    "meta null": {"meta": None},
+    "meta replaced by text": {"meta": "text"},
+    "meta replaced by a list": {"meta": []},
+    "framework null": {"meta": {"framework": None}},
+    "framework empty text": {"meta": {"framework": ""}},
+    "framework id empty": {"meta": {"framework": {"id": ""}}},
+    "framework id null": {"meta": {"framework": {"id": None}}},
+    "framework chai": {"meta": {"framework": {"id": "chai"}}},
+    "framework with an extra key": {"meta": {"framework": {"version": "1"}}},
+}
+UNSTAMPED_CHAI_PATCHES = {
+    "framework acme": {"meta": {"framework": {"id": "acme"}}},
+    "framework acme with an extra key": {
+        "meta": {"framework": {"id": "acme", "version": "1"}}
+    },
+    "framework null": {"meta": {"framework": None}},
+    "framework empty text": {"meta": {"framework": ""}},
+    "framework id empty": {"meta": {"framework": {"id": ""}}},
+    "framework chai with an extra key": {
+        "meta": {"framework": {"id": "chai", "version": "1"}}
+    },
+}
+
+
+@requires_db
+async def test_no_patch_changes_a_records_framework_or_reshapes_its_stamp(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    acme = manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
+    assert (
+        await client.post("/api/projects/legacy", json={"meta": {"solution": "x"}})
+    ).status_code == 201
+    switch_to(acme)
+    assert (
+        await client.post(
+            "/api/projects/a", json={"meta": {"framework": {"id": "acme"}}}
+        )
+    ).status_code == 201
+
+    # Under acme, the pre-switch CHAI record.
+    for case, patch in UNSTAMPED_CHAI_PATCHES.items():
+        refused = await client.patch("/api/projects/legacy", json=patch)
+        assert refused.status_code == 422, (case, refused.text)
+        assert "framework" not in (await stored_doc("legacy"))["meta"], case
+    # Under CHAI again, the acme record.
+    switch_to(manifests.DEFAULT_MANIFEST)
+    for case, patch in STAMPED_ACME_PATCHES.items():
+        refused = await client.patch("/api/projects/a", json=patch)
+        assert refused.status_code == 422, (case, refused.text)
+        assert (await stored_doc("a"))["meta"]["framework"] == {"id": "acme"}, case
+
+
+@requires_db
+async def test_a_patch_that_keeps_a_records_framework_still_works(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    await a_retired_chai_record(client, "legacy")
+    switch_to(
+        manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
+    )
+    # An ordinary edit of the pre-switch record, under acme: allowed, and it stays
+    # CHAI's.
+    edited = await client.patch(
+        "/api/projects/legacy", json={"meta": {"solution": "y"}, "gates": {"A": {}}}
+    )
+    assert edited.status_code == 200, edited.text
+    # Naming its own framework exactly changes nothing it retires by: allowed.
+    same = await client.patch(
+        "/api/projects/legacy", json={"meta": {"framework": {"id": "chai"}}}
+    )
+    assert same.status_code == 200, same.text
+    assert record_framework(await stored_doc("legacy")) == "chai"
+
+    created = await client.post(
+        "/api/projects/a", json={"meta": {"framework": {"id": "acme"}}}
+    )
+    assert created.status_code == 201, created.text
+    switch_to(manifests.DEFAULT_MANIFEST)
+    # An acme record after the rollback, edited without touching its stamp, or
+    # naming it exactly: allowed, and it stays acme's.
+    for patch in ({"meta": {"solution": "z"}}, {"meta": {"framework": {"id": "acme"}}}):
+        kept = await client.patch("/api/projects/a", json=patch)
+        assert kept.status_code == 200, (patch, kept.text)
+    assert (await stored_doc("a"))["meta"]["framework"] == {"id": "acme"}
+
+
+@requires_db
+async def test_the_framework_check_fails_when_a_patch_is_checked_against_the_primary(
+    client: AsyncClient, tmp_path: Path, monkeypatch
+) -> None:
+    # Mutation: the patch's stamp checked against the active primary, as before, not
+    # against the record's own framework. Both review repros pass again.
+    from app import routes
+
+    async def against_the_primary(conn, before, document, patch) -> None:
+        if routes.sets_stamp(patch):
+            await routes._check_stamp(conn, document)
+
+    monkeypatch.setattr(routes, "_check_framework_kept", against_the_primary)
+    await a_retired_chai_record(client, "legacy")
+    switch_to(
+        manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
+    )
+    moved = await client.patch(
+        "/api/projects/legacy", json={"meta": {"framework": {"id": "acme"}}}
+    )
+    assert moved.status_code == 200, moved.text
+    assert record_framework(await stored_doc("legacy")) == "acme"
+
+
+@requires_db
+async def test_the_framework_check_fails_when_only_the_stamp_shape_is_checked(
+    client: AsyncClient, tmp_path: Path, monkeypatch
+) -> None:
+    # Mutation: only a patch that sets the stamp is checked, so one that replaces
+    # `meta` is not, and the acme record becomes CHAI's after the rollback.
+    from app import routes
+
+    original = routes._check_framework_kept
+
+    async def stamp_only(conn, before, document, patch) -> None:
+        if routes.sets_stamp(patch):
+            await original(conn, before, document, patch)
+
+    monkeypatch.setattr(routes, "_check_framework_kept", stamp_only)
+    switch_to(
+        manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
+    )
+    assert (
+        await client.post(
+            "/api/projects/a", json={"meta": {"framework": {"id": "acme"}}}
+        )
+    ).status_code == 201
+    switch_to(manifests.DEFAULT_MANIFEST)
+    dropped = await client.patch("/api/projects/a", json={"meta": None})
+    assert dropped.status_code == 200, dropped.text
+    assert record_framework(await stored_doc("a")) == "chai"
+
+
 @requires_db
 async def test_a_correctly_stamped_record_retires(client: AsyncClient) -> None:
     async with owner_connection() as conn:
@@ -764,14 +997,16 @@ async def test_the_lock_test_fails_when_the_lock_is_taken_after_the_reads(
     assert {tuple(r) for r in json.loads(recorded)} != await rules_now()
 
 
-# --- a write that reads the primary, racing a sync that changes it ----------------
-# The API checks a record's stamp against the active primary (R-66). Under READ
-# COMMITTED, a create or patch that read the old primary and committed after a sync
-# switched it would write a record the new primary forbids (an unstamped create, a
-# stamp of the old primary) that no acknowledgment covered. Shown against
-# PostgreSQL 17 in review. So the API takes the migration lock SHARED before it reads
-# the primary, and the sync, which takes it exclusively, waits for every write in
-# flight; a write that starts after the sync waits for it, and reads the new primary.
+# --- a create reads the primary, racing a sync that changes it ------------------
+# The API checks a new record's stamp against the active primary (R-66). Under READ
+# COMMITTED, a create that read the old primary and committed after a sync switched
+# it would write a record the new primary forbids (an unstamped one, or one stamped
+# with the old primary) that no acknowledgment covered. Shown against PostgreSQL 17
+# in review. So a create takes the migration lock SHARED before it reads the
+# primary, and the sync, which takes it exclusively, waits for every create in
+# flight; a create that starts after the sync waits for it, and reads the new
+# primary. A patch reads no primary (it may not change the record's framework at
+# all), so it takes no lock.
 
 
 def printed_value(refused: RulesRefused) -> str:
@@ -859,12 +1094,6 @@ CREATE_BLOCKER = (
     "INSERT INTO projects (id, doc, created_by, updated_by)"
     " VALUES ($1, '{}'::jsonb, 'h@x', 'h@x')"
 )
-PATCH_BLOCKER = (
-    "INSERT INTO project_version (project_id, incarnation, rev, doc, content_md5,"
-    " changed_by, access)"
-    " SELECT id, incarnation, rev + 1, '{}'::jsonb, 'x', 'h@x', '{}'::jsonb"
-    " FROM projects WHERE id = $1"
-)
 
 
 async def race_a_create(client: AsyncClient, tmp_path: Path):
@@ -878,28 +1107,11 @@ async def race_a_create(client: AsyncClient, tmp_path: Path):
     )
 
 
-async def race_a_patch(client: AsyncClient, tmp_path: Path):
-    # CHAI's stamp, accepted while CHAI is the primary and refused under acme.
-    assert (
-        await client.post("/api/projects/racer", json={"meta": {"solution": "x"}})
-    ).status_code == 201
-    return await race_a_write_with_a_switch(
-        tmp_path,
-        lambda: client.patch(
-            "/api/projects/racer", json={"meta": {"framework": {"id": "chai"}}}
-        ),
-        PATCH_BLOCKER,
-        "INSERT INTO project_version",
-        "racer",
-    )
-
-
 @requires_db
-@pytest.mark.parametrize("race", [race_a_create, race_a_patch])
 async def test_a_write_that_read_the_primary_holds_off_a_switch(
-    client: AsyncClient, tmp_path: Path, race
+    client: AsyncClient, tmp_path: Path
 ) -> None:
-    waited, response, result = await race(client, tmp_path)
+    waited, response, result = await race_a_create(client, tmp_path)
     # The sync waited for the write in flight, so the write, checked against CHAI,
     # committed before the switch: a record written before it, which keeps its
     # framework (R-66). Then the switch went through with its acknowledgment.
@@ -914,23 +1126,17 @@ async def test_a_write_that_read_the_primary_holds_off_a_switch(
 
 
 @requires_db
-@pytest.mark.parametrize("race", [race_a_create, race_a_patch])
 async def test_the_race_test_fails_without_the_shared_lock(
-    client: AsyncClient, tmp_path: Path, race, monkeypatch
+    client: AsyncClient, tmp_path: Path, monkeypatch
 ) -> None:
-    # Mutation: the API reads the primary without the lock (neither where it reads
-    # it nor at the start of a patch). The sync no longer
-    # waits; it switches to acme while the write is in flight, and the write,
+    # Mutation: the create reads the primary without the lock. The sync no longer
+    # waits; it switches to acme while the create is in flight, and the create,
     # checked against CHAI, commits after the switch a record acme forbids (no
-    # stamp, or CHAI's), which no acknowledgment listed.
+    # stamp), which no acknowledgment listed.
     from app import retirement, routes
 
-    async def no_lock(conn) -> None:
-        return None
-
     monkeypatch.setattr(routes, "write_primary", retirement.active_primary)
-    monkeypatch.setattr(routes, "hold_off_rule_changes", no_lock)
-    waited, response, result = await race(client, tmp_path)
+    waited, response, result = await race_a_create(client, tmp_path)
     assert not waited
     assert response.status_code in (200, 201), response.text
     assert result.outcome is SyncOutcome.CHANGED
@@ -938,15 +1144,95 @@ async def test_the_race_test_fails_without_the_shared_lock(
     assert record_framework(await stored_doc("racer")) == "chai"
 
 
-async def a_migration_meets_a_stamp_patch(client: AsyncClient) -> object:
+async def advisory_holders(conn: asyncpg.Connection) -> dict[str, int]:
+    """Who holds or waits for the migration lock now: granted shared locks, granted
+    exclusive ones, and requests not granted."""
+    rows = await conn.fetch(
+        "SELECT mode, granted FROM pg_locks WHERE locktype = 'advisory'"
+        " AND ((classid::bigint << 32) | objid::bigint) = $1",
+        MIGRATION_LOCK_ID,
+    )
+    return {
+        "shared": sum(r["granted"] and r["mode"] == "ShareLock" for r in rows),
+        "exclusive": sum(r["granted"] and r["mode"] == "ExclusiveLock" for r in rows),
+        "waiting": sum(not r["granted"] for r in rows),
+    }
+
+
+async def two_creates_in_flight(client: AsyncClient) -> dict[str, int]:
+    """Two creates, each held at its INSERT by an uncommitted row of the same id,
+    after each has taken the migration lock and read the primary. Returns who held
+    the lock while both were in flight; both creates then complete."""
+    holder = await asyncpg.connect(DB_URL)
+    watcher = await asyncpg.connect(DB_URL)
+    try:
+        await holder.execute("BEGIN")
+        for pid in ("one", "two"):
+            await holder.execute(CREATE_BLOCKER, pid)
+        requests = [
+            asyncio.create_task(
+                client.post(f"/api/projects/{pid}", json={"meta": {"solution": pid}})
+            )
+            for pid in ("one", "two")
+        ]
+        # Both are in flight: each waiting on its row, or one on the lock.
+        assert await wait_for(
+            watcher,
+            "SELECT count(*) = 2 FROM pg_stat_activity WHERE pid <> $1"
+            " AND wait_event_type = 'Lock'"
+            " AND (query ILIKE '%INSERT INTO projects%'"
+            "  OR query ILIKE '%pg_advisory_xact_lock%')",
+            holder.get_server_pid(),
+        ), "the two creates never got under way"
+        held = await advisory_holders(watcher)
+        await holder.execute("ROLLBACK")
+        for request in requests:
+            response = await asyncio.wait_for(request, 10)
+            assert response.status_code == 201, response.text
+        return held
+    finally:
+        await holder.close()
+        await watcher.close()
+
+
+@requires_db
+async def test_two_creates_hold_the_lock_at_once(client: AsyncClient) -> None:
+    # The lock a write takes is SHARED: writes never wait on one another for it,
+    # only a sync (or a migration) does.
+    assert await two_creates_in_flight(client) == {
+        "shared": 2,
+        "exclusive": 0,
+        "waiting": 0,
+    }
+
+
+@requires_db
+async def test_the_shared_lock_test_fails_with_an_exclusive_lock(
+    client: AsyncClient, monkeypatch
+) -> None:
+    # Mutation: a write takes the lock exclusively. The second create then waits
+    # for the first to finish, which the test above notices.
+    from app import retirement
+
+    async def exclusive(conn) -> None:
+        await conn.execute("SELECT pg_advisory_xact_lock($1)", MIGRATION_LOCK_ID)
+
+    monkeypatch.setattr(retirement, "hold_off_rule_changes", exclusive)
+    assert await two_creates_in_flight(client) == {
+        "shared": 0,
+        "exclusive": 1,
+        "waiting": 1,
+    }
+
+
+async def a_patch_while_a_migration_holds_the_lock(client: AsyncClient) -> object:
     """A migration holds the lock (as the migrate job does) when a patch that sets
-    the stamp arrives, then needs the projects table (as DDL does). Returns None when
-    it got the table at once, or the error it got waiting for it."""
+    the stamp arrives. Returns the patch's response, or the TimeoutError it got
+    waiting for it."""
     assert (
         await client.post("/api/projects/p", json={"meta": {"solution": "x"}})
     ).status_code == 201
     migration = await asyncpg.connect(DB_URL)
-    watcher = await asyncpg.connect(DB_URL)
     try:
         await migration.execute("BEGIN")
         await migration.execute("SELECT pg_advisory_xact_lock($1)", MIGRATION_LOCK_ID)
@@ -955,49 +1241,39 @@ async def a_migration_meets_a_stamp_patch(client: AsyncClient) -> object:
                 "/api/projects/p", json={"meta": {"framework": {"id": "chai"}}}
             )
         )
-        assert await wait_for(
-            watcher,
-            "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid <> $1"
-            " AND locktype = 'advisory' AND NOT granted)",
-            migration.get_server_pid(),
-        ), "the patch never waited for the lock"
-        # Shorter than deadlock_timeout (1s), so a wait shows as this error rather
-        # than as PostgreSQL aborting one side of the cycle.
-        await migration.execute("SET LOCAL lock_timeout = '300ms'")
         try:
-            await migration.execute("LOCK TABLE projects IN ACCESS EXCLUSIVE MODE")
-            outcome = None
-        except asyncpg.PostgresError as exc:
-            outcome = exc
-        await migration.execute("ROLLBACK")
-        response = await asyncio.wait_for(request, 10)
-        assert response.status_code == 200, response.text
-        return outcome
+            return await asyncio.wait_for(asyncio.shield(request), 3)
+        except TimeoutError as exc:
+            return exc
+        finally:
+            await migration.execute("ROLLBACK")
+            await asyncio.wait_for(request, 10)
     finally:
         await migration.close()
-        await watcher.close()
 
 
 @requires_db
-async def test_a_migration_holding_the_lock_never_waits_on_a_patch(
-    client: AsyncClient,
-) -> None:
-    # The patch asks for the lock before it locks its row, so while it waits it
-    # holds nothing a migration needs: no deadlock with a migration's DDL.
-    assert await a_migration_meets_a_stamp_patch(client) is None
+async def test_a_patch_never_waits_on_the_migration_lock(client: AsyncClient) -> None:
+    # A patch reads no primary, so it takes no lock: a migration holding it, which
+    # may then need the projects table, never waits on a patch waiting for it.
+    response = await a_patch_while_a_migration_holds_the_lock(client)
+    assert getattr(response, "status_code", None) == 200, response
 
 
 @requires_db
-async def test_the_lock_order_test_fails_when_the_patch_locks_its_row_first(
+async def test_the_no_wait_test_fails_when_a_patch_takes_the_lock(
     client: AsyncClient, monkeypatch
 ) -> None:
-    # Mutation: the patch takes the lock only when it reads the primary, after its
-    # row lock. The migration then waits on the patch, which waits on it.
-    from app import routes
+    # Mutation: the patch takes the lock, as it did when it read the primary.
+    from app import retirement, routes
 
-    async def not_first(conn) -> None:
-        return None
+    original = routes._check_framework_kept
 
-    monkeypatch.setattr(routes, "hold_off_rule_changes", not_first)
-    outcome = await a_migration_meets_a_stamp_patch(client)
-    assert isinstance(outcome, asyncpg.exceptions.LockNotAvailableError), outcome
+    async def locked(conn, before, document, patch) -> None:
+        await retirement.hold_off_rule_changes(conn)
+        await original(conn, before, document, patch)
+
+    monkeypatch.setattr(routes, "_check_framework_kept", locked)
+    assert isinstance(
+        await a_patch_while_a_migration_holds_the_lock(client), TimeoutError
+    )

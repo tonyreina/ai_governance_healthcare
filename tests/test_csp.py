@@ -135,8 +135,9 @@ def main() -> int:
         and "script-src 'unsafe-inline'" not in caddyfile,
     )
     check(
-        "compose mounts it",
-        "./proxy/csp.caddy:/etc/caddy/csp.caddy" in (ROOT / "compose.yaml").read_text(),
+        "compose mounts it (by default; CSP_FILE names another build's, #168)",
+        "${CSP_FILE:-./proxy/csp.caddy}:/etc/caddy/csp.caddy:ro"
+        in (ROOT / "compose.yaml").read_text(),
     )
     check(
         "and the cloud image copies it",

@@ -16,6 +16,7 @@ mlcroissant = ">=1.1.1, <2"
 playwright = ">=1.63.0, <2"
 ruff = ">=0.16.10, <0.17"
 scikit-learn = ">=1.9.1, <2"
+jsonschema = ">=4.23, <5"
 
 [tasks]
 docs-serve = "zensical serve"
@@ -144,6 +145,10 @@ check-spelling = "python scripts/check_spelling.py"
 # Every catalog has en.json's keys, placeholders and plural forms, and no markup (#80).
 check-i18n = "python scripts/check_i18n.py"
 test-check-i18n = "python tests/test_check_i18n.py"
+# Every framework definition (app/frameworks/*/framework.json) against
+# schema/framework.schema.json and the rules a schema cannot state (#168, R-63).
+check-framework = "python scripts/check_framework.py"
+test-check-framework = "python tests/test_check_framework.py"
 check-chai = "python scripts/check_chai_updates.py"
 check-chai-write = "python scripts/check_chai_updates.py --write"
 fix-spelling = "python scripts/check_spelling.py --fix"

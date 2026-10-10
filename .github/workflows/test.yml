@@ -57,9 +57,13 @@ jobs:
       - run: pixi run test-check-injection
       - run: pixi run test-check-i18n
 
-      # The checklist pages are their framework definitions, byte for byte, and the
-      # built dashboard's own copy of the criteria agrees with them (#168).
+      # The checklist pages are their framework definitions, byte for byte (#168).
       - run: pixi run test-framework-docs
+
+      # Framework definitions: the real ones pass, and every rule of the checker
+      # is shown failing on a copy broken the way it guards against (#168).
+      - run: pixi run check-framework
+      - run: pixi run test-check-framework
 
       # The showcase video on the docs site: present, under its size cap,
       # first-party, and honest about which mode it shows.

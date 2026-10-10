@@ -26,8 +26,12 @@ The samples are written in the definition itself.
 
 ## Make your own
 
-1. Copy `app/frameworks/example/` to `app/frameworks/<your-id>/`, and set
-   `id` in `framework.json` to the same name.
+1. Copy `app/frameworks/example/` to `app/frameworks/<your-id>/`, and replace
+   `example` with your id everywhere it names the framework: `id`,
+   `namespaces`, `export.schemaId` (`<your-id>-review/1`) and
+   `export.fileSuffix` in `framework.json`, and the start of every key in
+   `i18n/*.json` (or delete `i18n/` and ship English only). Rewrite
+   `docs.toml`, which holds the words of your checklist page.
 2. Edit the definition. `schema/framework.schema.json` describes every field,
    and `pixi run check-framework` checks it: the schema, then the rules a schema
    cannot state (ids are unique, every reference exists, a lifecycle can end,
@@ -47,7 +51,13 @@ The samples are written in the definition itself.
 
 `--out` writes `index.html` and `csp.caddy`, the proxy's policy for that page.
 The build refuses an `--out` under `docs/` or `proxy/`, where the published page
-and its policy live.
+and its policy live, or under `app/`, the sources.
+
+A definition under `app/frameworks/` also gets a checklist page,
+`docs/frameworks/<your-id>-checklist.md`, written from it by
+`pixi run gen-framework-docs` (a git hook runs it when the definition changes).
+Commit it with the definition; `pixi run test-framework-docs` fails if the page
+and the definition disagree.
 
 ### What a definition says
 

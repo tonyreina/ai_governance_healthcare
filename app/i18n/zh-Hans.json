@@ -58,7 +58,9 @@
   "dash.legacyUnnamed": "某个 AI 解决方案",
   "dash.legacyAdd": "将其添加到工作区",
   "dash.legacyDismiss": "忽略",
-  "dash.foreignHidden": "本构建未显示其他框架的 {count} 条记录",
+  "dash.foreignHidden": {
+    "other": "本构建未显示其他框架的 {count} 条记录"
+  },
   "dash.newName": "AI 解决方案名称",
   "dash.newNamePlaceholder": "AI 解决方案名称，例如：脓毒症早期预警",
   "dash.create": "创建项目",
@@ -565,5 +567,7 @@
   "engine.fw.offDetail": {
     "other": "{count} 个问题"
   },
-  "engine.dash.empty": "还没有 AI 项目。请添加贵机构正在评估的第一个解决方案，或加载 {count} 个示例项目，看看审查如何进行。"
+  "engine.dash.empty": {
+    "other": "还没有 AI 项目。请添加贵机构正在评估的第一个解决方案，或加载 {count} 个示例项目，看看审查如何进行。"
+  }
 }

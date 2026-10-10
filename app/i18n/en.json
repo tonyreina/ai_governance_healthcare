@@ -59,7 +59,10 @@
   "dash.legacyUnnamed": "an AI solution",
   "dash.legacyAdd": "Add it to the workspace",
   "dash.legacyDismiss": "Dismiss",
-  "dash.foreignHidden": "{count} records of another framework are not shown in this build",
+  "dash.foreignHidden": {
+    "one": "{count} record of another framework is not shown in this build",
+    "other": "{count} records of another framework are not shown in this build"
+  },
   "dash.newName": "Name of the AI solution",
   "dash.newNamePlaceholder": "Name of the AI solution, e.g. Sepsis early warning",
   "dash.create": "Create project",
@@ -578,5 +581,8 @@
     "one": "{count} question",
     "other": "{count} questions"
   },
-  "engine.dash.empty": "No AI projects yet. Add the first solution your organization is evaluating, or load {count} sample projects to see how a review works."
+  "engine.dash.empty": {
+    "one": "No AI projects yet. Add the first solution your organization is evaluating, or load {count} sample project to see how a review works.",
+    "other": "No AI projects yet. Add the first solution your organization is evaluating, or load {count} sample projects to see how a review works."
+  }
 }

@@ -23,6 +23,7 @@ import argparse
 import base64
 import hashlib
 import json
+import os
 import re
 import sys
 from enum import StrEnum
@@ -128,11 +129,24 @@ def framework_defs(
     return defs
 
 
+def js_json(value: object) -> str:
+    """JSON for the page's inline script. A definition or a catalog may hold any
+    text, and a "</script>" (or "<!--") inside the script would end it and turn the
+    rest into markup, so every "<" is written as its JSON escape. U+2028 and U+2029
+    are escaped too: they end a line in older JavaScript but not in JSON."""
+    return (
+        json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        .replace("<", "\\u003c")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
 def frameworks_js(defs: dict | None = None, published: bool = True) -> str:
     defs = framework_defs() if defs is None else defs
-    body = json.dumps(defs, ensure_ascii=False, separators=(",", ":"))
+    body = js_json(defs)
     primary = next(f for f, d in defs.items() if Role(d["role"]) is Role.PRIMARY)
-    build = json.dumps(
+    build = js_json(
         {
             "primary": primary,
             "frameworks": list(defs),
@@ -140,7 +154,6 @@ def frameworks_js(defs: dict | None = None, published: bool = True) -> str:
             # The framework of a record made before records were stamped.
             "legacy": DEFAULT_FRAMEWORKS["primary"],
         },
-        separators=(",", ":"),
     )
     return (
         "/* Generated from app/frameworks/<id>/framework.json"
@@ -168,13 +181,28 @@ def framework_code(path: Path, selected: set[str], src: Path = SRC) -> bool:
     return owner in SHARED_CODE or owner in selected
 
 
+PROTECTED = ("docs", "proxy", "app")
+
+
 def out_dir_problem(out: Path) -> str | None:
-    """A build of other frameworks never writes the published page or the proxy's
-    policy: refuse an --out under docs/ or proxy/."""
-    out = out.resolve()
-    for tracked in (ROOT / "docs", ROOT / "proxy"):
-        if out == tracked or out.is_relative_to(tracked):
-            return f"--out {out} is under {tracked.relative_to(ROOT)}/"
+    """A build of other frameworks never writes the published page, the proxy's
+    policy or the sources: refuse an --out under docs/, proxy/ or app/.
+
+    Checked on the files it would write as well as the directory, each resolved,
+    so a symbolic link cannot point a write into them; and by the file system's own
+    identity of each existing ancestor, so a case-insensitive file system cannot
+    reach them by another spelling."""
+    targets = [out, out / "index.html", out / "csp.caddy"]
+    for target in targets:
+        resolved = target.resolve()
+        for name in PROTECTED:
+            tracked = ROOT / name
+            if resolved == tracked or resolved.is_relative_to(tracked):
+                return f"--out {out} writes under {name}/"
+            for ancestor in [resolved, *resolved.parents]:
+                same = ancestor.exists() and tracked.exists()
+                if same and os.path.samefile(ancestor, tracked):
+                    return f"--out {out} writes under {name}/"
     return None
 
 
@@ -216,7 +244,7 @@ def catalogs_js(
     catalogs = {p.stem: keep(json.loads(p.read_text(encoding="utf-8"))) for p in files}
     if Locale.EN not in catalogs:
         raise SystemExit("error: app/i18n/en.json, the source catalog, is missing")
-    body = json.dumps(catalogs, ensure_ascii=False, separators=(",", ":"))
+    body = js_json(catalogs)
     # Framework content translations (D-60). English is the definitions themselves,
     # so only the other languages are embedded.
     framework = {
@@ -245,8 +273,8 @@ def catalogs_js(
         )
         for fid in defs
     }
-    fw = json.dumps(framework, ensure_ascii=False, separators=(",", ":"))
-    loc = json.dumps(locales, ensure_ascii=False, separators=(",", ":"))
+    fw = js_json(framework)
+    loc = js_json(locales)
     return (
         "/* Generated from app/i18n/*.json by scripts/build_app.py. */\n"
         f"const I18N_CATALOGS = Object.freeze({body});\n"
@@ -357,7 +385,7 @@ def main(argv: list[str] | None = None, frameworks: Path | None = None) -> int:
     if custom:
         problem = out_dir_problem(args.out)
         if problem:
-            print(f"error: {problem}, the published build's", file=sys.stderr)
+            print(f"error: {problem}, which the published build owns", file=sys.stderr)
             return 2
         defs = framework_defs(args.config.resolve(), custom=True, frameworks=frameworks)
         out, csp_out = args.out / "index.html", args.out / "csp.caddy"

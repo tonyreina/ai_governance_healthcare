@@ -103,10 +103,17 @@ def main() -> int:
         tracked: build_app.main(
             ["--config", str(example), "--out", str(ROOT / tracked)]
         )
-        for tracked in ("docs", "docs/app", "proxy")
+        for tracked in ("docs", "docs/app", "proxy", "app")
     }
+    # A directory elsewhere whose index.html is a link to the published page.
+    (ROOT / "build").mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=ROOT / "build") as tmp:
+        (Path(tmp) / "index.html").symlink_to(ROOT / "docs" / "app" / "index.html")
+        codes["a link to the published page"] = build_app.main(
+            ["--config", str(example), "--out", tmp]
+        )
     check(
-        "an --out under docs/ or proxy/ is refused",
+        "an --out into docs/, proxy/ or app/ is refused",
         all(code == 2 for code in codes.values()),
         str(codes),
     )

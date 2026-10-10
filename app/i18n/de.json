@@ -48,7 +48,10 @@
   "dash.legacyUnnamed": "einer KI-Lösung",
   "dash.legacyAdd": "Zum Arbeitsbereich hinzufügen",
   "dash.legacyDismiss": "Verwerfen",
-  "dash.foreignHidden": "{count} Datensätze eines anderen Frameworks werden in diesem Build nicht angezeigt",
+  "dash.foreignHidden": {
+    "one": "{count} Datensatz eines anderen Frameworks wird in diesem Build nicht angezeigt",
+    "other": "{count} Datensätze eines anderen Frameworks werden in diesem Build nicht angezeigt"
+  },
   "dash.newName": "Name der KI-Lösung",
   "dash.newNamePlaceholder": "Name der KI-Lösung, z. B. Sepsis-Frühwarnung",
   "dash.create": "Projekt erstellen",
@@ -567,5 +570,8 @@
     "one": "{count} Frage",
     "other": "{count} Fragen"
   },
-  "engine.dash.empty": "Noch keine KI-Projekte. Fügen Sie die erste Lösung hinzu, die Ihre Organisation bewertet, oder laden Sie {count} Beispielprojekte, um zu sehen, wie eine Prüfung abläuft."
+  "engine.dash.empty": {
+    "one": "Noch keine KI-Projekte. Fügen Sie die erste Lösung hinzu, die Ihre Organisation bewertet, oder laden Sie {count} Beispielprojekt, um zu sehen, wie eine Prüfung abläuft.",
+    "other": "Noch keine KI-Projekte. Fügen Sie die erste Lösung hinzu, die Ihre Organisation bewertet, oder laden Sie {count} Beispielprojekte, um zu sehen, wie eine Prüfung abläuft."
+  }
 }

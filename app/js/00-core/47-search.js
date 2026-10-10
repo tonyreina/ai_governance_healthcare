@@ -22,6 +22,9 @@ function idsNamed(q){
     .map(([id]) => id.toLowerCase());
 }
 /* Where in this project the text appears, as labels a reader recognizes. */
+/* The record's framework stamp is the build's, not anything a person wrote: a
+   search for part of the framework's id must not match every record (#168). */
+const NOT_SEARCHED = new Set(["meta.framework"]);
 function textHits(p, query){
   const q = String(query || "").trim().toLowerCase();
   if(!q || !p) return [];
@@ -37,6 +40,7 @@ function textHits(p, query){
     } else if(Array.isArray(v)){
       v.forEach(x => walk(x, path));          // a list's position is not a place a reader knows
     } else if(v && typeof v === "object"){
+      if(NOT_SEARCHED.has(path)) return;
       for(const k of Object.keys(v)) if(safeKey(k)) walk(v[k], path ? `${path}.${k}` : k);
     }
   };

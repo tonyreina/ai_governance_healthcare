@@ -53,7 +53,10 @@ FOREIGN = re.compile(
     r"|model card|chai-review|optica-review)\b",
     re.I,
 )
-PAYLOAD = '<img src=x onerror="window.__pwned=1">'
+# Ends an inline script if embedded raw, then makes elements a test can look for.
+# (An inline handler is refused by the page's policy anyway, so "nothing runs" is
+# shown by no element being made, not by the handler's silence.)
+PAYLOAD = '</script><b id="pwn">x</b><img src=x onerror="window.__pwned=1">'
 
 failures: list[str] = []
 
@@ -132,7 +135,9 @@ def open_page(browser, index: Path, init: str = ""):
     if init:
         page.add_init_script(init)
     page.goto(index.as_uri())
-    page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=15000)
+    page.wait_for_function(
+        "() => typeof LOADED !== 'undefined' && LOADED", timeout=15000
+    )
     return page, errors, foreign_requests
 
 
@@ -152,7 +157,7 @@ def sweep_app(browser, index: Path) -> None:
     check("the empty portfolio names no other framework", not words, str(words))
 
     page.evaluate("spine().samples.loadAll()")
-    page.wait_for_function("PROJECTS && PROJECTS.size === 2", timeout=15000)
+    page.wait_for_function("() => PROJECTS && PROJECTS.size === 2", timeout=15000)
     settle(page)
     names = sorted(page.evaluate("[...PROJECTS.values()].map(p => p.meta.solution)"))
     check(
@@ -181,6 +186,21 @@ def sweep_app(browser, index: Path) -> None:
     )
     page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
     settle(page)
+    keys = page.evaluate("Object.keys(localStorage)")
+    check(
+        "its view state is stored under the example's key, not the published build's",
+        "chai-ui-v2@example" in keys and "chai-ui-v2" not in keys,
+        str(keys),
+    )
+    hits = page.evaluate(
+        "[...PROJECTS.values()].map(p => [textHits(p, 'xam').length,"
+        " textHits(p, 'fall').length])"
+    )
+    check(
+        "searching all text never matches a record by its framework stamp",
+        all(stamp == 0 for stamp, _ in hits) and any(own for _, own in hits),
+        str(hits),
+    )
     views = page.evaluate("activeViews().map(v => v.id)")
     want = {"example-plan", "example-test", "example-run", "ggo", "gyearly", "report"}
     check(
@@ -237,7 +257,7 @@ def sweep_app(browser, index: Path) -> None:
     own["_state"]["meta"]["solution"] = "Reimported"
     path.write_text(json.dumps(own), encoding="utf-8")
     page.set_input_files("#importFile", str(path))
-    page.wait_for_function("PROJECTS.size === 3", timeout=10000)
+    page.wait_for_function("() => PROJECTS.size === 3", timeout=10000)
     check("the example's own export is accepted", True)
 
     print("Records of another framework")
@@ -283,6 +303,7 @@ FOREIGN_SEED = """
       a: rec('Theirs, unstamped', {}),
       b: rec('Theirs, other', {framework: {id: 'other'}}),
       c: rec('Ours', {framework: {id: 'example'}}),
+      d: rec('Sample: fall-risk score', {framework: {id: 'other'}}),
     }, logs: {}}));
   localStorage.setItem('seeded', '1');
 })()
@@ -292,7 +313,7 @@ FOREIGN_SEED = """
 def foreign_records(browser, index: Path) -> None:
     print("Records of another framework in the store")
     page, errors, _ = open_page(browser, index, FOREIGN_SEED)
-    page.wait_for_function("PROJECTS.size === 3", timeout=10000)
+    page.wait_for_function("() => PROJECTS.size === 4", timeout=10000)
     page.wait_for_timeout(200)
     rows = page.evaluate("dashData().map(r => r.p.meta.solution)")
     check("the portfolio lists only the example's record", rows == ["Ours"], str(rows))
@@ -300,9 +321,17 @@ def foreign_records(browser, index: Path) -> None:
         page.inner_text("#foreignNote") if page.query_selector("#foreignNote") else ""
     )
     check(
-        "a note says two records of another framework are not shown",
-        "2" in note and "another framework" in note,
+        "a note says three records of another framework are not shown",
+        "3" in note and "another framework" in note,
         note,
+    )
+    one = page.evaluate(
+        "[t('dash.foreignHidden', {count: 1}), t(uiKey(UiSlot.DASH_EMPTY), {count: 1})]"
+    )
+    check(
+        "a count of one reads in the singular",
+        one[0].startswith("1 record ") and "1 sample project " in one[1],
+        str(one),
     )
     page.evaluate("openProject('a', 'setup')")
     page.wait_for_timeout(200)
@@ -318,8 +347,48 @@ def foreign_records(browser, index: Path) -> None:
     page.evaluate("openProject('c', 'setup')")
     page.wait_for_timeout(200)
     check("its own record opens", page.evaluate("!!S && S.meta.solution === 'Ours'"))
+    page.evaluate("goHome()")
+    page.evaluate("spine().samples.loadAll()")
+    settle(page)
+    page.wait_for_timeout(500)
+    mine = page.evaluate("dashData().map(r => r.p.meta.solution).sort()")
+    check(
+        "a hidden record of another framework does not stand in for a sample",
+        "Sample: fall-risk score" in mine,
+        str(mine),
+    )
     check("no page errors", not errors, str(errors[:3]))
     page.close()
+
+
+def legacy(browser, index: Path) -> None:
+    """The review saved by the first single-browser version (chai-review-v1) is the
+    published build's: a custom build offers no banner for it and will not import
+    it, even if asked directly."""
+    print("The earlier single-browser review")
+    for stamp, own in (({}, False), ({"framework": {"id": "example"}}, True)):
+        record = {"meta": {"solution": "Earlier review", **stamp}, "items": {"x": {}}}
+        seed = (
+            f"localStorage.setItem('chai-review-v1', {json.dumps(json.dumps(record))})"
+        )
+        page, errors, _ = open_page(browser, index, seed)
+        page.wait_for_timeout(300)
+        banner = bool(page.query_selector("#legacyBanner"))
+        page.evaluate(
+            "document.body.insertAdjacentHTML('beforeend',"
+            ' \'<button id="pressLegacy" data-act="legacy">x</button>\')'
+        )
+        page.click("#pressLegacy")
+        page.wait_for_timeout(400)
+        size = page.evaluate("PROJECTS.size")
+        if own:
+            check("control: its own earlier review is offered", banner)
+            check("control: and imports", size == 1, str(size))
+        else:
+            check("an unstamped earlier review is not offered", not banner)
+            check("and pressing import anyway adds nothing", size == 0, str(size))
+        check(f"no page errors ({'own' if own else 'unstamped'})", not errors)
+        page.close()
 
 
 def languages(browser, index: Path) -> None:
@@ -335,10 +404,10 @@ def languages(browser, index: Path) -> None:
             key = page.evaluate("LOCALE_KEY")
             page.evaluate(f"localStorage.setItem({json.dumps(key)}, '{loc}')")
             page.reload()
-            page.wait_for_function("typeof LOADED !== 'undefined' && LOADED")
+            page.wait_for_function("() => typeof LOADED !== 'undefined' && LOADED")
         check(f"the page is in {loc}", page.evaluate("LOCALE") == loc)
         page.evaluate("spine().samples.loadAll()")
-        page.wait_for_function("PROJECTS.size === 2", timeout=15000)
+        page.wait_for_function("() => PROJECTS.size === 2", timeout=15000)
         settle(page)
         pid = page.evaluate("[...PROJECTS.keys()][0]")
         page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
@@ -380,14 +449,23 @@ def poisoned(browser, work: Path) -> None:
     doc["gates"][0]["options"][1]["short"] = PAYLOAD
     doc["phases"][0]["label"] = PAYLOAD
     doc["samples"][0]["name"] = PAYLOAD
+    # An approval with no rationale: a flag that names the poisoned checkpoint.
+    doc["samples"][0]["decisions"][doc["gates"][0]["id"]][2] = ""
     path.write_text(json.dumps(doc), encoding="utf-8")
     index = build(work / "poisoned", frameworks=frameworks)
+    html_page = index.read_text(encoding="utf-8")
+    check(
+        "no definition text is in the page raw, where it could end the script",
+        PAYLOAD not in html_page and "</script><b" not in html_page,
+    )
 
     page, errors, _ = open_page(browser, index)
+    made = "() => !!document.querySelector('#pwn, img[src=\"x\"]')"
     page.evaluate("spine().samples.loadAll()")
-    page.wait_for_function("PROJECTS.size === 2", timeout=15000)
+    page.wait_for_function("() => PROJECTS.size === 2", timeout=15000)
     settle(page)
-    shown = PAYLOAD in visible_text(page)
+    seen = {"portfolio": PAYLOAD in visible_text(page)}
+    elements = ["portfolio"] if page.evaluate(made) else []
     find = f"p => p.meta.solution === {json.dumps(PAYLOAD)}"
     pid = page.evaluate(f"[...PROJECTS.values()].find({find}).id")
     page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
@@ -395,22 +473,42 @@ def poisoned(browser, work: Path) -> None:
     for vid in page.evaluate("activeViews().map(v => v.id)"):
         page.evaluate(f"go({json.dumps(vid)})")
         page.wait_for_timeout(30)
-        shown = shown or PAYLOAD in visible_text(page)
+        seen[vid] = PAYLOAD in visible_text(page)
+        if page.evaluate(made):
+            elements.append(vid)
+    gate = doc["gates"][0]["id"]
+    want = ["portfolio", "example-plan", f"g{gate}", "report"]
+    check(
+        "the markup shows as text, on every screen that shows it",
+        all(seen.get(v) for v in want),
+        str({v: seen.get(v) for v in want}),
+    )
+    check("no screen makes an element it names", not elements, str(elements))
+    flagged = page.evaluate(
+        f"spine().flags(S).some(f => f.msg && (f.msg[1] || {{}}).gateKey === '{gate}')"
+    )
+    check("a flag names the poisoned checkpoint", flagged)
     md = page.evaluate("exportMD()")
     html = page.evaluate("exportHTML()")
     page.evaluate("exportCSV(); projectJSON(S)")
     page.wait_for_timeout(300)
-    check("the HTML export holds no tag from it", "<img" not in html)
+    check(
+        "the HTML export holds no tag from it",
+        "<img" not in html and "<b id" not in html,
+    )
     # Markdown escapes a character with a backslash: an unescaped < is a tag.
-    tags = re.finditer(r"(?<!\\)<img", md)
+    tags = re.finditer(r"(?<!\\)<(img|b id|/script)", md)
     raw = [md[max(0, m.start() - 40) : m.end()] for m in tags]
     check("the Markdown export holds no tag from it", not raw, str(raw[:3]))
-    check("the markup shows as text", shown)
-    check("none of it runs", page.evaluate("window.__pwned === undefined"))
-    check(
-        "no element it names is made",
-        page.evaluate("!document.querySelector('img[src=\"x\"]')"),
+    flag_line = next(
+        (ln for ln in md.splitlines() if ln.startswith("- **") and "pwn" in ln), ""
     )
+    check(
+        "the flag's checkpoint name is escaped in the Markdown",
+        bool(flag_line) and "\\<img" in flag_line,
+        flag_line,
+    )
+    check("none of it runs", page.evaluate("window.__pwned === undefined"))
     check("no page errors", not errors, str(errors[:3]))
     page.close()
 
@@ -421,7 +519,7 @@ def control(browser) -> None:
     print("Control: the sweep, on the published build")
     page, _, _ = open_page(browser, ROOT / "docs" / "app" / "index.html")
     page.evaluate("spine().samples.loadAll()")
-    page.wait_for_function("PROJECTS.size > 0", timeout=15000)
+    page.wait_for_function("() => PROJECTS.size > 0", timeout=15000)
     settle(page)
     pid = page.evaluate("[...PROJECTS.keys()][0]")
     page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
@@ -459,6 +557,7 @@ def main() -> int:
             control(browser)
             sweep_app(browser, index)
             foreign_records(browser, index)
+            legacy(browser, index)
             languages(browser, index)
             poisoned(browser, work)
             browser.close()

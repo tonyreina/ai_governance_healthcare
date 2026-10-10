@@ -53,7 +53,9 @@ function dataSamples(F) {
     count: () => specs.length,
     loadAll: async () => {
       const now = new Date();
-      const have = new Set([...PROJECTS.values()].map(p => (p.meta.solution || "").trim()));
+      // Only this build's records: a hidden record of another framework with a
+      // sample's name must not stop the sample being added.
+      const have = new Set([...PROJECTS.values()].filter(isOwnRecord).map(p => (p.meta.solution || "").trim()));
       const missing = specs.filter(spec => !have.has(spec.name));
       if (!missing.length) { toast(t("toast.samplesHere")); return; }
       for (const spec of missing) await createProject(build(spec, now), "Sample project added");

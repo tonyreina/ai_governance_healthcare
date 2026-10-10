@@ -1625,9 +1625,10 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   --out DIR` builds the frameworks `FILE` names into `DIR/index.html` and
   `DIR/csp.caddy`. Without them the build is the published one, and refuses any
   config other than `app/frameworks.json`'s pinned CHAI plus OPTICA. An `--out`
-  under `docs/` or `proxy/` is refused, so a custom build can never overwrite the
-  published page or the proxy's policy. `pixi run build-example` builds the
-  example into the ignored `build/`.
+  that would write under `docs/`, `proxy/` or `app/` is refused, checked on the
+  files it writes after following links, so a custom build can never overwrite
+  the published page, the proxy's policy or the sources. `pixi run
+  build-example` builds the example into the ignored `build/`.
 - **The example framework** (`app/frameworks/example/`) is made up, small, and
   not in the published build. It is the thing to copy, the thing
   `tests/test_custom_build.py` drives, and its checklist page is published
@@ -1640,6 +1641,12 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - **Samples can be data** (`samples` in a definition: names, metadata, answers,
   and decisions as `[option, day offset, rationale]`), checked by
   `check-framework`, for a framework with no code. CHAI keeps its plug-in.
+- **Everything embedded in the page's script is escaped for it** (`js_json`):
+  every `<` in a definition or a catalog is written as `\u003c`, so no text can
+  end the inline script and become markup. The published page is unchanged (its
+  text has no `<`).
+- **The stamp is not content**: searching all text skips `meta.framework`, so a
+  search for part of the framework's id does not match every record.
 - **The side panel is hidden when the primary has none**, so a custom build
   carries no landmark naming CHAI's model card.
 - **A definition's words are escaped in the Markdown export** like a value a

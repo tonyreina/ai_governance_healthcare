@@ -265,7 +265,14 @@ def main() -> int:
 
         print("The built dashboard runs exactly these definitions")
         html = APP_HTML.read_text(encoding="utf-8")
-        definitions = gen.load_definitions(FRAMEWORKS)
+        # The published build's frameworks: a definition outside it (the example)
+        # is built only by --config, never into this page.
+        published = json.loads((ROOT / "app" / "frameworks.json").read_text("utf-8"))
+        definitions = {
+            fid: d
+            for fid, d in gen.load_definitions(FRAMEWORKS).items()
+            if fid in published["frameworks"]
+        }
         check(
             "the dashboard embeds CHAI's and OPTICA's definitions",
             {"chai", "optica"} <= set(app_definitions(html)),

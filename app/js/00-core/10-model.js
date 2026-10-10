@@ -6,7 +6,11 @@
 const blankMeta = ()=>({solution:"",org:"",developer:"",sourcing:"",sponsor:"",reviewers:"",riskTier:"",reviewCadence:"",startDate:"",scope:"",chaiUseCase:""});
 function blankProject(name){
   const now=new Date().toISOString();
-  return {meta:{...blankMeta(),solution:name||""}, ...frameworkBlank(), metrics:[], card:{},
+  // A build of other frameworks stamps every record it makes with its primary, and
+  // opens and imports only records stamped so (isOwnRecord, R-67); a record with
+  // none is the published build's. The server does not check the stamp yet.
+  const stamp = BUILD.published ? {} : {framework: {id: BUILD.primary}};
+  return {meta:{...blankMeta(),solution:name||"",...stamp}, ...frameworkBlank(), metrics:[], card:{},
     access: ME.id ? {owners:[ME.id], writers:[], readers:[]} : blankAccess(),
     archived:false, createdAt:now, createdBy:ME.id||null, updatedAt:now, updatedBy:ME.id||null, cardUpdatedAt:null};
 }

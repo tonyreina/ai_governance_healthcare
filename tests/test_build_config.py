@@ -13,6 +13,7 @@ a different framework. This shows the embedding is exact and each refusal fires.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import sys
@@ -83,6 +84,64 @@ def main() -> int:
         finally:
             build_app.SRC = saved
         check("a primary whose definition is a supplement", "not a primary" in why, why)
+
+    print("A build of other frameworks goes where --out says, and nowhere else")
+    example = ROOT / "app" / "frameworks" / "example" / "build.json"
+    published = {
+        p: p.read_bytes()
+        for p in (ROOT / "docs" / "app" / "index.html", ROOT / "proxy" / "csp.caddy")
+    }
+    check(
+        "--config without --out is refused",
+        build_app.main(["--config", str(example)]) == 2,
+    )
+    check(
+        "--out without --config is refused",
+        build_app.main(["--out", "somewhere"]) == 2,
+    )
+    codes = {
+        tracked: build_app.main(
+            ["--config", str(example), "--out", str(ROOT / tracked)]
+        )
+        for tracked in ("docs", "docs/app", "proxy", "app")
+    }
+    # A directory elsewhere whose index.html is a link to the published page.
+    (ROOT / "build").mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=ROOT / "build") as tmp:
+        (Path(tmp) / "index.html").symlink_to(ROOT / "docs" / "app" / "index.html")
+        codes["a link to the published page"] = build_app.main(
+            ["--config", str(example), "--out", tmp]
+        )
+    check(
+        "an --out into docs/, proxy/ or app/ is refused",
+        all(code == 2 for code in codes.values()),
+        str(codes),
+    )
+    # Inside the repository (build/ is ignored): the crash was there.
+    (ROOT / "build").mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=ROOT / "build") as tmp:
+        cwd = Path.cwd()
+        os.chdir(tmp)
+        try:
+            # A relative --out crashed after writing the page (shown its path
+            # relative to the repository, which a relative path is not).
+            code = build_app.main(["--config", str(example), "--out", "out"])
+        except ValueError as e:
+            code = f"ValueError: {e}"
+        finally:
+            os.chdir(cwd)
+        check("a relative --out builds", code == 0, str(code))
+        page = Path(tmp) / "out" / "index.html"
+        check(
+            "the page and its proxy policy are written there",
+            page.exists() and (Path(tmp) / "out" / "csp.caddy").exists(),
+        )
+        html = page.read_text(encoding="utf-8") if page.exists() else ""
+        check("it is the example's build", '"primary":"example"' in html)
+    check(
+        "the published page and policy are untouched",
+        all(p.read_bytes() == b for p, b in published.items()),
+    )
 
     print("Only the selected frameworks' text ships, with their languages")
 

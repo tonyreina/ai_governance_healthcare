@@ -58,6 +58,9 @@
   "dash.legacyUnnamed": "某个 AI 解决方案",
   "dash.legacyAdd": "将其添加到工作区",
   "dash.legacyDismiss": "忽略",
+  "dash.foreignHidden": {
+    "other": "本构建未显示其他框架的 {count} 条记录"
+  },
   "dash.newName": "AI 解决方案名称",
   "dash.newNamePlaceholder": "AI 解决方案名称，例如：脓毒症早期预警",
   "dash.create": "创建项目",
@@ -341,6 +344,7 @@
   "del.goPurge": "删除并销毁历史记录",
   "del.deleting": "正在删除…",
   "toast.samplesHere": "所有示例项目均已存在",
+  "toast.foreignRecord": "此记录是 {name} 审查，本构建不会打开它",
   "toast.ownerArchive": "只有所有者可以归档此项目",
   "toast.restored": "项目已恢复",
   "toast.keepOwner": "项目必须至少保留一位所有者",
@@ -562,5 +566,8 @@
   "engine.fw.onDetail": "其视图显示在侧栏中主框架视图的下方",
   "engine.fw.offDetail": {
     "other": "{count} 个问题"
+  },
+  "engine.dash.empty": {
+    "other": "还没有 AI 项目。请添加贵机构正在评估的第一个解决方案，或加载 {count} 个示例项目，看看审查如何进行。"
   }
 }

@@ -48,6 +48,11 @@
   "dash.legacyUnnamed": "una solución de IA",
   "dash.legacyAdd": "Añadirla al espacio de trabajo",
   "dash.legacyDismiss": "Descartar",
+  "dash.foreignHidden": {
+    "one": "{count} registro de otro marco no se muestra en esta compilación",
+    "many": "{count} de registros de otro marco no se muestran en esta compilación",
+    "other": "{count} registros de otro marco no se muestran en esta compilación"
+  },
   "dash.newName": "Nombre de la solución de IA",
   "dash.newNamePlaceholder": "Nombre de la solución de IA, p. ej., alerta temprana de sepsis",
   "dash.create": "Crear proyecto",
@@ -343,6 +348,7 @@
   "del.goPurge": "Eliminar y destruir el historial",
   "del.deleting": "Eliminando…",
   "toast.samplesHere": "Ya están todos los proyectos de ejemplo",
+  "toast.foreignRecord": "Este registro es una revisión de {name}, que esta compilación no abre",
   "toast.ownerArchive": "Solo un propietario puede archivar este proyecto",
   "toast.restored": "Proyecto restaurado",
   "toast.keepOwner": "Un proyecto debe conservar al menos un propietario",
@@ -576,5 +582,10 @@
     "one": "{count} pregunta",
     "many": "{count} preguntas",
     "other": "{count} preguntas"
+  },
+  "engine.dash.empty": {
+    "one": "Aún no hay proyectos de IA. Agregue la primera solución que su organización está evaluando o cargue {count} proyecto de ejemplo para ver cómo funciona una revisión.",
+    "many": "Aún no hay proyectos de IA. Agregue la primera solución que su organización está evaluando o cargue {count} de proyectos de ejemplo para ver cómo funciona una revisión.",
+    "other": "Aún no hay proyectos de IA. Agregue la primera solución que su organización está evaluando o cargue {count} proyectos de ejemplo para ver cómo funciona una revisión."
   }
 }

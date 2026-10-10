@@ -87,7 +87,7 @@ document.addEventListener("click",async e=>{
     return;
   }
   if(a==="legacy"){
-    try{ const j=JSON.parse(localStorage.getItem("chai-review-v1")); const p=normalize(Object.assign(blankProject(j.meta.solution),{meta:j.meta,items:j.items||{},gates:j.gates||{},metrics:j.metrics||[],card:j.card||{}}));
+    try{ const j=JSON.parse(localStorage.getItem("chai-review-v1")); if(!isOwnRecord(j)) throw new Error("another framework's record"); const p=normalize(Object.assign(blankProject(j.meta.solution),{meta:j.meta,items:j.items||{},gates:j.gates||{},metrics:j.metrics||[],card:j.card||{}}));
       Object.values(p.items).forEach(x=>{ if(x) delete x._open; });
       const id=await createProject(p,"Imported from a review saved in this browser"); if(id){ localStorage.setItem("chai-legacy-imported","1"); document.getElementById("legacyBanner")?.remove(); toast(t("toast.legacyImported")); }
     }catch(err){ toast(t("toast.legacyFailed")); }
@@ -184,12 +184,15 @@ document.getElementById("importFile").onchange=async e=>{
     const p=normalize(Object.assign(blankProject(st.meta.solution), clone(st))); delete p.id;
     Object.values(p.items).forEach(x=>{ if(x) delete x._open; }); delete p.view;
     p.updatedAt=new Date().toISOString(); p.updatedBy=ME.id||null;
+    if(!isOwnRecord(p)){ toast(t("toast.foreignRecord",{name:String(recordFramework(p)).slice(0,64)})); e.target.value=""; return; }
     const id=await createProject(p,"Imported from a JSON export");
     if(id) toast(t("toast.imported"));
   }catch(err){ toast(t("toast.badImport")); }
   e.target.value="";
 };
 const panel=document.getElementById("panel");
+// A primary with no side panel (a build of other frameworks) has none to land on.
+panel.hidden=!hasPanel();
 document.getElementById("openPreview").onclick=()=>{ renderPanel(); panel.classList.add("open"); document.getElementById("closePreview").focus(); };
 document.getElementById("closePreview").onclick=()=>panel.classList.remove("open");
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") panel.classList.remove("open"); });

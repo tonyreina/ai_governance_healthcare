@@ -199,7 +199,7 @@ function exampleInto(p){
    duplicating what is already there. */
 async function loadSamples(){
   const now=new Date();
-  const have=new Set([...PROJECTS.values()].map(p=>(p.meta.solution||"").trim()));
+  const have=new Set([...PROJECTS.values()].filter(isOwnRecord).map(p=>(p.meta.solution||"").trim()));
   const missing=SAMPLES.filter(spec=>!have.has(spec.name));
   if(!missing.length){ toast(t("toast.samplesHere")); return; }
   for(const spec of missing) await createProject(buildSample(spec, now), "Sample project added");

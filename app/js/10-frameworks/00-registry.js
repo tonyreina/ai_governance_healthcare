@@ -128,12 +128,14 @@ function frameworkNormalize(p) {
    a date parameter is formatted in the reader's language here. */
 const phaseLabel = ph => ph.msg ? t(ph.msg) : tf(ph.tfKey, ph.label);
 const statusLabel = st => t(st.msg);
-function flagText(f){
+/* A flag's sentence. `quote` is applied to the definition's words put into it (a
+   checkpoint's name), as the Markdown export escapes them. */
+function flagText(f, quote = s => s){
   if(!f.msg) return f.text;
   const [key, params] = f.msg;
   const p = Object.assign({}, params);
   if(p.date) p.date = fmtDay(p.date);
-  if(p.gateKey){ p.gate = spine().gateLabel(p.gateKey); delete p.gateKey; }
+  if(p.gateKey){ p.gate = quote(spine().gateLabel(p.gateKey)); delete p.gateKey; }
   return t(key, p);
 }
 
@@ -164,3 +166,9 @@ function frameworkExtras(id, extras) { FRAMEWORK_EXTRAS[id] = Object.assign(FRAM
    neutral one (UiSlot). Its params always include the framework's name. */
 const uiKey = slot => spine().uiKey(slot);
 const uiName = () => ({ name: spine().name });
+
+/* A record's framework: its stamp, or, for a record made before records were
+   stamped, the published build's primary (BUILD.legacy). This build opens, shows
+   and imports only its own primary's records (#168). */
+const recordFramework = p => ((((p || {}).meta || {}).framework) || {}).id || BUILD.legacy;
+const isOwnRecord = p => recordFramework(p) === BUILD.primary;

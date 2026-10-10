@@ -19,9 +19,11 @@ Run via: pixi run build-app
 
 from __future__ import annotations
 
+import argparse
 import base64
 import hashlib
 import json
+import os
 import re
 import sys
 from enum import StrEnum
@@ -83,19 +85,29 @@ DEFAULT_FRAMEWORKS = {"primary": "chai", "frameworks": ["chai", "optica"]}
 FRAMEWORKS_CONFIG = SRC / "frameworks.json"
 
 
-def framework_defs(config: Path = FRAMEWORKS_CONFIG) -> dict:
+def framework_defs(
+    config: Path = FRAMEWORKS_CONFIG,
+    custom: bool = False,
+    frameworks: Path | None = None,
+) -> dict:
     """The selected framework definitions, in the config's order, checked against
-    the config: the primary is listed, and its definition says it is the primary."""
+    the config: the primary is listed, its definition says it is the primary, and it
+    is the only one.
+
+    The published build (custom=False) must be the default config; a build of other
+    frameworks (custom=True, from --config) writes only to its own --out directory.
+    `frameworks` is where the definitions are read from: app/frameworks/, unless a
+    test builds a copy it has altered."""
     cfg = json.loads(config.read_text(encoding="utf-8"))
-    if cfg != DEFAULT_FRAMEWORKS:
+    if not custom and cfg != DEFAULT_FRAMEWORKS:
         raise SystemExit(
             f"error: {config} must be "
             f"{json.dumps(DEFAULT_FRAMEWORKS)} for the published build; "
-            "a build of other frameworks is not supported yet"
+            "build other frameworks with --config FILE --out DIR"
         )
     defs = {}
     for fid in cfg["frameworks"]:
-        path = SRC / "frameworks" / fid / "framework.json"
+        path = (frameworks or SRC / "frameworks") / fid / "framework.json"
         if not path.exists():
             raise SystemExit(f"error: {path} is missing")
         defs[fid] = json.loads(path.read_text(encoding="utf-8"))
@@ -107,16 +119,91 @@ def framework_defs(config: Path = FRAMEWORKS_CONFIG) -> dict:
         raise SystemExit(
             f"error: {cfg['primary']} is not a primary framework definition"
         )
+    others = [
+        f
+        for f, d in defs.items()
+        if f != cfg["primary"] and Role(d.get("role")) is Role.PRIMARY
+    ]
+    if others:
+        raise SystemExit(f"error: a build has one primary; {others} are primaries too")
     return defs
 
 
-def frameworks_js() -> str:
-    body = json.dumps(framework_defs(), ensure_ascii=False, separators=(",", ":"))
+def js_json(value: object) -> str:
+    """JSON for the page's inline script. A definition or a catalog may hold any
+    text, and a "</script>" (or "<!--") inside the script would end it and turn the
+    rest into markup, so every "<" is written as its JSON escape. U+2028 and U+2029
+    are escaped too: they end a line in older JavaScript but not in JSON."""
+    return (
+        json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        .replace("<", "\\u003c")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
+def frameworks_js(defs: dict | None = None, published: bool = True) -> str:
+    defs = framework_defs() if defs is None else defs
+    body = js_json(defs)
+    primary = next(f for f, d in defs.items() if Role(d["role"]) is Role.PRIMARY)
+    build = js_json(
+        {
+            "primary": primary,
+            "frameworks": list(defs),
+            "published": published,
+            # The framework of a record made before records were stamped.
+            "legacy": DEFAULT_FRAMEWORKS["primary"],
+        },
+    )
     return (
         "/* Generated from app/frameworks/<id>/framework.json"
         " by scripts/build_app.py. */\n"
-        f"const FRAMEWORK_DEFS = Object.freeze({body});"
+        f"const FRAMEWORK_DEFS = Object.freeze({body});\n"
+        "/* Which build this is: the published one (CHAI and OPTICA), or one of\n"
+        "   other frameworks built with --config (#168). */\n"
+        f"const BUILD = Object.freeze({build});"
     )
+
+
+# The engine and the project setup serve every framework; any other directory under
+# app/js/10-frameworks/ is one framework's own code, named <nn>-<id>.
+FRAMEWORK_CODE_DIR = "10-frameworks"
+SHARED_CODE = frozenset({"engine", "project"})
+
+
+def framework_code(path: Path, selected: set[str], src: Path = SRC) -> bool:
+    """Whether a source file belongs in a build of `selected` frameworks."""
+    parts = path.relative_to(src / "js").parts
+    if len(parts) < 3 or parts[0] != FRAMEWORK_CODE_DIR:
+        return True
+    m = re.match(r"^\d+-(.+)$", parts[1])
+    owner = m.group(1) if m else parts[1]
+    return owner in SHARED_CODE or owner in selected
+
+
+PROTECTED = ("docs", "proxy", "app")
+
+
+def out_dir_problem(out: Path) -> str | None:
+    """A build of other frameworks never writes the published page, the proxy's
+    policy or the sources: refuse an --out under docs/, proxy/ or app/.
+
+    Checked on the files it would write as well as the directory, each resolved,
+    so a symbolic link cannot point a write into them; and by the file system's own
+    identity of each existing ancestor, so a case-insensitive file system cannot
+    reach them by another spelling."""
+    targets = [out, out / "index.html", out / "csp.caddy"]
+    for target in targets:
+        resolved = target.resolve()
+        for name in PROTECTED:
+            tracked = ROOT / name
+            if resolved == tracked or resolved.is_relative_to(tracked):
+                return f"--out {out} writes under {name}/"
+            for ancestor in [resolved, *resolved.parents]:
+                same = ancestor.exists() and tracked.exists()
+                if same and os.path.samefile(ancestor, tracked):
+                    return f"--out {out} writes under {name}/"
+    return None
 
 
 def namespace_owners(src: Path = SRC) -> dict[str, str]:
@@ -129,7 +216,9 @@ def namespace_owners(src: Path = SRC) -> dict[str, str]:
     return owners
 
 
-def catalogs_js(defs: dict | None = None, src: Path = SRC) -> str:
+def catalogs_js(
+    defs: dict | None = None, src: Path = SRC, frameworks: Path | None = None
+) -> str:
     """The message catalogs, app/i18n/<locale>.json, as one frozen object (#80).
 
     Embedded rather than fetched: the dashboard is one file that must work opened from
@@ -155,7 +244,7 @@ def catalogs_js(defs: dict | None = None, src: Path = SRC) -> str:
     catalogs = {p.stem: keep(json.loads(p.read_text(encoding="utf-8"))) for p in files}
     if Locale.EN not in catalogs:
         raise SystemExit("error: app/i18n/en.json, the source catalog, is missing")
-    body = json.dumps(catalogs, ensure_ascii=False, separators=(",", ":"))
+    body = js_json(catalogs)
     # Framework content translations (D-60). English is the definitions themselves,
     # so only the other languages are embedded.
     framework = {
@@ -164,7 +253,8 @@ def catalogs_js(defs: dict | None = None, src: Path = SRC) -> str:
         if p.stem != Locale.EN
     }
     for fid in defs:
-        for path in sorted((src / "frameworks" / fid / "i18n").glob("*.json")):
+        own = (frameworks or src / "frameworks") / fid / "i18n"
+        for path in sorted(own.glob("*.json")):
             if path.stem == Locale.EN:
                 continue
             entries = json.loads(path.read_text(encoding="utf-8"))
@@ -183,8 +273,8 @@ def catalogs_js(defs: dict | None = None, src: Path = SRC) -> str:
         )
         for fid in defs
     }
-    fw = json.dumps(framework, ensure_ascii=False, separators=(",", ":"))
-    loc = json.dumps(locales, ensure_ascii=False, separators=(",", ":"))
+    fw = js_json(framework)
+    loc = js_json(locales)
     return (
         "/* Generated from app/i18n/*.json by scripts/build_app.py. */\n"
         f"const I18N_CATALOGS = Object.freeze({body});\n"
@@ -283,7 +373,26 @@ def csp_meta(html: str) -> str:
     return f'<meta http-equiv="Content-Security-Policy" content="{policy}">'
 
 
-def main() -> int:
+def main(argv: list[str] | None = None, frameworks: Path | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Build the dashboard from app/.")
+    parser.add_argument("--config", type=Path, help="a build of other frameworks")
+    parser.add_argument("--out", type=Path, help="where it goes (with --config)")
+    args = parser.parse_args(argv)
+    custom = args.config is not None
+    if custom != (args.out is not None):
+        print("error: --config and --out go together", file=sys.stderr)
+        return 2
+    if custom:
+        problem = out_dir_problem(args.out)
+        if problem:
+            print(f"error: {problem}, which the published build owns", file=sys.stderr)
+            return 2
+        defs = framework_defs(args.config.resolve(), custom=True, frameworks=frameworks)
+        out, csp_out = args.out / "index.html", args.out / "csp.caddy"
+    else:
+        defs = framework_defs()
+        out, csp_out = OUT, CSP_OUT
+
     shell = (SRC / "index.html").read_text(encoding="utf-8")
     for mark in (CSS_MARK, JS_MARK, CSP_MARK):
         if mark not in shell:
@@ -291,7 +400,7 @@ def main() -> int:
             return 1
 
     css_files = ordered(SRC / "css", ".css")
-    js_files = ordered(SRC / "js", ".js")
+    js_files = [p for p in ordered(SRC / "js", ".js") if framework_code(p, set(defs))]
     if not css_files or not js_files:
         print("error: no sources found under app/", file=sys.stderr)
         return 1
@@ -301,7 +410,10 @@ def main() -> int:
     css = "\n\n".join(p.read_text(encoding="utf-8").strip("\n") for p in css_files)
     js = (
         "\n\n".join(
-            [catalogs_js(), frameworks_js()]
+            [
+                catalogs_js(defs, frameworks=frameworks),
+                frameworks_js(defs, published=not custom),
+            ]
             + [p.read_text(encoding="utf-8").strip("\n") for p in js_files]
         )
         + "\n"
@@ -313,15 +425,18 @@ def main() -> int:
     if not html.startswith("<!--"):
         html = BANNER + html
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    previous = OUT.read_text(encoding="utf-8") if OUT.exists() else None
-    OUT.write_text(html, encoding="utf-8")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    previous = out.read_text(encoding="utf-8") if out.exists() else None
+    out.write_text(html, encoding="utf-8")
 
-    CSP_OUT.write_text(csp_header(html), encoding="utf-8")
+    csp_out.write_text(csp_header(html), encoding="utf-8")
 
     changed = "unchanged" if previous == html else "updated"
+    shown = (
+        out.resolve().relative_to(ROOT) if out.resolve().is_relative_to(ROOT) else out
+    )
     print(
-        f"{changed}: {OUT.relative_to(ROOT)} "
+        f"{changed}: {shown} "
         f"({len(html):,} bytes from {len(css_files)} css + {len(js_files)} js)"
     )
     return 0

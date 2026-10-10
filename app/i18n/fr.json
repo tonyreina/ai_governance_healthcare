@@ -48,6 +48,11 @@
   "dash.legacyUnnamed": "une solution d'IA",
   "dash.legacyAdd": "L'ajouter à l'espace de travail",
   "dash.legacyDismiss": "Ignorer",
+  "dash.foreignHidden": {
+    "one": "{count} enregistrement d'un autre cadre n'est pas affiché dans cette version",
+    "many": "{count} d'enregistrements d'un autre cadre ne sont pas affichés dans cette version",
+    "other": "{count} enregistrements d'un autre cadre ne sont pas affichés dans cette version"
+  },
   "dash.newName": "Nom de la solution d'IA",
   "dash.newNamePlaceholder": "Nom de la solution d'IA, p. ex. alerte précoce de sepsis",
   "dash.create": "Créer le projet",
@@ -343,6 +348,7 @@
   "del.goPurge": "Supprimer et détruire l'historique",
   "del.deleting": "Suppression…",
   "toast.samplesHere": "Tous les projets d'exemple sont déjà là",
+  "toast.foreignRecord": "Cet enregistrement est une revue {name}, que cette version n'ouvre pas",
   "toast.ownerArchive": "Seul un propriétaire peut archiver ce projet",
   "toast.restored": "Projet restauré",
   "toast.keepOwner": "Un projet doit conserver au moins un propriétaire",
@@ -576,5 +582,10 @@
     "one": "{count} question",
     "many": "{count} de questions",
     "other": "{count} questions"
+  },
+  "engine.dash.empty": {
+    "one": "Aucun projet d'IA pour l'instant. Ajoutez la première solution que votre organisation évalue, ou chargez {count} projet d'exemple pour voir comment se déroule une revue.",
+    "many": "Aucun projet d'IA pour l'instant. Ajoutez la première solution que votre organisation évalue, ou chargez {count} de projets d'exemple pour voir comment se déroule une revue.",
+    "other": "Aucun projet d'IA pour l'instant. Ajoutez la première solution que votre organisation évalue, ou chargez {count} projets d'exemple pour voir comment se déroule une revue."
   }
 }

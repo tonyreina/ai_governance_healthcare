@@ -1,0 +1,21 @@
+# The published checklist page's own words: docs/frameworks/example-checklist.md,
+# written by scripts/gen_framework_docs.py (`pixi run gen-docs`). The checks
+# themselves come from framework.json beside this file.
+
+title = "Example checklist"
+count_noun = "checks"
+item_column = "Check"
+
+intro = '''
+The $total checks of the example framework, which shows how to
+[bring your own](custom.md).
+
+!!! warning "A made-up framework"
+
+    This is not a standard and is not guidance. It exists to be copied.
+
+!!! info "Generated file"
+
+    This page is generated from `$definition` by
+    `scripts/gen_framework_docs.py` (`pixi run gen-docs`). Edit the
+    definition, not this page.'''

@@ -1102,7 +1102,16 @@ honest answer and is a gap worth closing; see R-19.
   (`tests/test_snapshot.py`) shows that changed nothing a reader sees. The
   boundary test now also covers the engine, the setup screen and the
   registration, and string literals that name a framework. A build of other
-  frameworks (the build switch) is step 3 of #168 and not yet built.
+  frameworks is `build_app.py --config FILE --out DIR` (D-79):
+  `tests/test_build_config.py` shows it writes only to `--out`, never under
+  `docs/` or `proxy/`, and leaves the published page untouched; and
+  `tests/test_custom_build.py` builds the example framework and shows every
+  screen, the report and every export name nothing of CHAI or OPTICA, with a
+  control that finds their words in the published build. A custom build can run
+  behind the server: its `--out` holds the `manifest.json` the server retires by
+  (R-66; `tests/test_build_config.py` shows it is written there, for the build's
+  own primary, and the server tests in R-66 show a stand-in primary's manifest
+  loaded, acknowledged and retired by).
 
 ### R-64 A supplement never feeds the primary
 
@@ -1199,3 +1208,32 @@ honest answer and is a gap worth closing; see R-19.
   directory) and `tests/test_stack.py` (the running stack's rules are the served
   default build's, confirmed by a sync; it cannot show a different rule set,
   which the server tests do). Security claims C-88 to C-90.
+
+### R-67 A build opens only its own framework's records
+
+- Status: Active
+- Every record a build of other frameworks makes is stamped with its primary
+  (`meta.framework.id`). A record with no stamp was made by the published build
+  and belongs to its primary, CHAI. A build lists, opens and imports only records
+  of its own primary: another framework's record is left off the portfolio, with
+  a note saying how many, and refused when opened or imported, saying whose it
+  is. Its answers are never read against another framework's items.
+- In local mode a build of other frameworks keeps its records and its view state
+  under browser storage keys suffixed with its primary's id, so its work and the
+  published build's never mix on one origin.
+- The published build writes no stamp, so its records, exports and fingerprints
+  are unchanged (the snapshot shows it).
+- Source: #168 design v2 ("Records and identity"), implementing R-63; D-79.
+- Enforced by: `tests/test_custom_build.py` ("every record it makes is stamped
+  with its primary", "its records are stored under the example's key, not the
+  published build's", "the portfolio lists only the example's record", "opening
+  an unstamped record is refused", "opening another primary's record is
+  refused", the import refusals, and "the example's own export is accepted");
+  `tests/test_snapshot.py` (the published build unchanged). The server checks
+  the stamp against its build (R-66): it accepts a record's `meta.framework` only
+  as exactly its active primary's, and under a primary other than CHAI refuses a
+  new record without it (`server/tests/test_retirement_rules.py`:
+  `test_the_api_refuses_a_stamp_that_is_not_the_active_primary`,
+  `test_under_another_primary_a_record_must_carry_its_stamp`; C-90), and
+  `tests/test_build_config.py` shows a `--config` build writes its own
+  `manifest.json` beside its page, the file the server loads its primary from.

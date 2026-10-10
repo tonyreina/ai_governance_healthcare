@@ -6,7 +6,7 @@
       "id": "chai",
       "role": "primary",
       "version": "1",
-      "sha256": "8a01e088afa373f9fc67de83cd62dead99e5fa7cdefc5a301f4da2443ae7ad65",
+      "sha256": "e909c03a549c5cdcc83caac5600cdf5ebacf71ec603b2bc60222e6b3397e8103",
       "retire": [
         {
           "gate": "A",

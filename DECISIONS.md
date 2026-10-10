@@ -1575,7 +1575,10 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   `${APP_DIR}/manifest.json` (read-only, `create_host_path: false`) into the
   migrate service from the same directory the proxy serves (`APP_DIR`, default
   `./docs/app`; `CSP_FILE`, default `./proxy/csp.caddy`), so page and rules are
-  one build. The API image stays framework-neutral.
+  one build. A build of other frameworks (`--config FILE --out DIR`, D-79) writes
+  `DIR/manifest.json` beside `DIR/index.html`, never the published one, and is
+  served by pointing `APP_DIR` and `CSP_FILE` at it (`tests/test_build_config.py`).
+  The API image stays framework-neutral.
 - **Every change is acknowledged, by the whole change.** Inside
   `python -m app.migrate`, as the owner, in one transaction under
   `MIGRATION_LOCK_ID`, taken before anything is read. A manifest governs the rules
@@ -1616,8 +1619,9 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   with no stamp is CHAI's, so while the active primary is not CHAI the API also
   refuses a create that leaves the stamp out: omitting it would otherwise choose
   CHAI's rules. A record written before the switch keeps the framework it had and
-  stays editable. The published dashboard does not stamp records yet, so a build
-  with another primary needs one that does (the client side of #168). Stamps
+  stays editable. A build of other frameworks stamps every record it makes with
+  its primary (R-67, D-79); the published build stamps none, which reads as
+  CHAI's. Stamps
   written before this check, or by the owner directly, are not re-checked;
   `make dispose` and `make verify-backup` count the records whose framework has
   no rules, which never come due.
@@ -1763,3 +1767,47 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   start unreviewed; per-key fallback inside a supplied language (the owner chose
   complete-if-supplied).
 - Source: #168; R-65; D-77.
+
+### D-79 A build of other frameworks: `--config` with `--out`, and stamped records
+
+- Status: Accepted (implements the owner's decision in #168, R-63; R-67)
+- **The switch is two flags that go together.** `build_app.py --config FILE
+  --out DIR` builds the frameworks `FILE` names into `DIR/index.html` and
+  `DIR/csp.caddy`. Without them the build is the published one, and refuses any
+  config other than `app/frameworks.json`'s pinned CHAI plus OPTICA. An `--out`
+  that would write under `docs/`, `proxy/` or `app/` is refused, checked on the
+  files it writes after following links, so a custom build can never overwrite
+  the published page, the proxy's policy or the sources. `pixi run
+  build-example` builds the example into the ignored `build/`.
+- **The example framework** (`app/frameworks/example/`) is made up, small, and
+  not in the published build. It is the thing to copy, the thing
+  `tests/test_custom_build.py` drives, and its checklist page is published
+  beside the guide (`docs/frameworks/custom.md`). It supplies Spanish only, so it
+  also shows R-65 both ways.
+- **Records carry their framework** (R-67): stamped only in a custom build, so
+  the published build's records, exports and fingerprints do not change, and an
+  unstamped record is read as `BUILD.legacy` (CHAI). The shell reads the build's
+  own primary from the embedded `BUILD`, never from a literal.
+- **Samples can be data** (`samples` in a definition: names, metadata, answers,
+  and decisions as `[option, day offset, rationale]`), checked by
+  `check-framework`, for a framework with no code. CHAI keeps its plug-in.
+- **Everything embedded in the page's script is escaped for it** (`js_json`):
+  every `<` in a definition or a catalog is written as `\u003c`, so no text can
+  end the inline script and become markup. The published page is unchanged (its
+  text has no `<`).
+- **The stamp is not content**: searching all text skips `meta.framework`, so a
+  search for part of the framework's id does not match every record.
+- **The side panel is hidden when the primary has none**, so a custom build
+  carries no landmark naming CHAI's model card.
+- **A definition's words are escaped in the Markdown export** like a value a
+  person typed: a framework's name, a status label, a checkpoint's name in a
+  flag. The published build's export is unchanged (its words have nothing to
+  escape); a custom definition's could have carried markup into a viewer that
+  renders HTML. Found by `tests/test_custom_build.py`.
+- **Rejected:** stamping every record, the published build's too (it would
+  change every existing export and fingerprint for no gain, since unstamped
+  already means CHAI); stamping an unstamped record when it is loaded (a build
+  would silently claim the published build's records); one storage key for every
+  build (a custom build would list, and could open, CHAI records it cannot
+  read); a definition chosen at run time (R-63: a build is a reviewed change).
+- Source: #168; design v2; R-63; R-67.

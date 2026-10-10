@@ -31,6 +31,44 @@ function setFrameworkEnabled(id, on) {
   else renderProject(false);
 }
 
+/* Worked examples written as data in a definition (`samples`), for a framework with
+   no code of its own: each a project with some answers and dated decisions. */
+function dataSamples(F) {
+  const specs = F.def.samples || [];
+  if (!specs.length) return undefined;
+  const build = (spec, now) => {
+    const d = n => ymd(addDays(now, n)), iso = n => addDays(now, n).toISOString();
+    const p = blankProject(spec.name);
+    Object.assign(p.meta, spec.meta || {});
+    Object.entries(spec.answers || {}).forEach(([itemId, status]) => {
+      p.items[itemId] = {status, evidence: "", owner: "", due: ""};
+    });
+    Object.entries(spec.decisions || {}).forEach(([gateId, [decision, day, rationale]]) => {
+      p.gates[gateId] = {decision, by: spec.by || "", date: d(day), rationale: rationale || "",
+        signedBy: ME.id || null, signedAt: iso(day)};
+    });
+    return p;
+  };
+  return {
+    count: () => specs.length,
+    loadAll: async () => {
+      const now = new Date();
+      // Only this build's records: a hidden record of another framework with a
+      // sample's name must not stop the sample being added.
+      const have = new Set([...PROJECTS.values()].filter(isOwnRecord).map(p => (p.meta.solution || "").trim()));
+      const missing = specs.filter(spec => !have.has(spec.name));
+      if (!missing.length) { toast(t("toast.samplesHere")); return; }
+      for (const spec of missing) await createProject(build(spec, now), "Sample project added");
+      toast(t("toast.samplesAdded", {count: missing.length}));
+    },
+    fill: p => {
+      const filled = build(specs[0], new Date());
+      p.items = filled.items; p.gates = filled.gates;
+      return {items: clone(p.items), gates: clone(p.gates)};
+    },
+  };
+}
+
 function registerDefinition(id) {
   const F = FACADES[id];
   const fw = F.fw, def = F.def, extras = FRAMEWORK_EXTRAS[id] || {};
@@ -131,7 +169,7 @@ function registerDefinition(id) {
     schemaId: (def.export || {}).schemaId || `${id}-review/1`,
     markdownExtras: extras.markdownExtras,
     jsonExtras: extras.jsonExtras,
-    samples: extras.samples,
+    samples: extras.samples || dataSamples(F),
   } : undefined;
 
   registerFramework({

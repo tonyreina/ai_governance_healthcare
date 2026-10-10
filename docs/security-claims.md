@@ -1186,6 +1186,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   against a real PostgreSQL and the real migrate job.
 - **Asserted in:** `docs/self-hosting.md` — "loads those decisions into the database, which decides from them when a project is retired"
 - **Asserted in:** `docs/privacy.md` — "A build of another framework retires on its own decisions"
+- **Asserted in:** `docs/frameworks/custom.md` — "from the checkpoint options your definition classes `stop` or `retire`"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_retention.py::test_every_chai_decision_retires_exactly_when_its_class_ends_a_project`
@@ -1237,6 +1238,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   and `make dispose` and `make verify-backup` count the records whose framework
   has no rules (R-66, D-76).
 - **Asserted in:** `docs/privacy.md` — "Nor can a writer choose which framework's rules a record follows"
+- **Asserted in:** `docs/frameworks/custom.md` — "the API accepts a record only with your primary's stamp"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_retirement_rules.py::test_the_api_refuses_a_stamp_that_is_not_the_active_primary`
@@ -1247,3 +1249,55 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_retirement_rules.py::test_the_sql_reads_a_stamp_as_the_api_does`
   `tests/test_dispose.py`
   `tests/test_verify_backup.py`
+
+### C-91 A framework definition's text is never run
+
+- **Claim:** Whatever characters a framework definition holds (a name, an item,
+  a status, a checkpoint, a sample), the dashboard shows them as text and runs
+  none of them, on every screen and in the HTML and Markdown exports.
+- **Asserted in:** `docs/frameworks/custom.md` — "A definition's text is never run as code"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_custom_build.py::no definition text is in the page raw, where it could end the script`
+  `tests/test_custom_build.py::the markup shows as text, on every screen that shows it`
+  `tests/test_custom_build.py::no screen makes an element it names`
+  `tests/test_custom_build.py::the flag's checkpoint name is escaped in the Markdown`
+  `tests/test_custom_build.py::the HTML export holds no tag from it`
+  `tests/test_custom_build.py::the Markdown export holds no tag from it`
+
+### C-92 A build opens only its own framework's records
+
+- **Claim:** A build of other frameworks lists, opens and imports only records
+  stamped with its own primary; a record of another framework, including an
+  unstamped one from the published build, is left off the portfolio and refused
+  when opened or imported (R-67).
+- **Asserted in:** `docs/frameworks/custom.md` — "Your build lists, opens and imports only its own records"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_custom_build.py::the portfolio lists only the example's record`
+  `tests/test_custom_build.py::opening an unstamped record is refused`
+  `tests/test_custom_build.py::opening another primary's record is refused`
+  `tests/test_custom_build.py::every record it makes is stamped with its primary`
+
+### C-93 A custom build's saved work is kept apart from the published build's
+
+- **Claim:** In local mode a build of other frameworks stores its records under
+  browser storage keys carrying its primary's id, never the published build's
+  keys.
+- **Asserted in:** `docs/frameworks/custom.md` — "your build saves under browser storage keys that carry your primary's id"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_custom_build.py::its records are stored under the example's key, not the published build's`
+  `tests/test_custom_build.py::its view state is stored under the example's key, not the published build's`
+
+### C-94 A custom build cannot overwrite the published page or its policy
+
+- **Claim:** `build_app.py --config` refuses an `--out` that would write under
+  `docs/`, `proxy/` or `app/` (following links), and a custom build leaves the published dashboard and the proxy's
+  policy byte for byte as they were.
+- **Asserted in:** `docs/frameworks/custom.md` — "The build refuses an `--out` under `docs/` or `proxy/`"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_build_config.py::the published page and policy are untouched`
+  `tests/test_build_config.py::an --out into docs/, proxy/ or app/ is refused`
+  `tests/test_build_config.py::--config without --out is refused`

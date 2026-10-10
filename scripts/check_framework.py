@@ -28,7 +28,9 @@ gate in front of that trust. It checks:
     reserved top-level record key, a namespace includes the id and is not another
     definition's or the shell catalog's, and `export.schemaId` is `<id>-review/<n>`
     ("chai-review/" belongs to CHAI's records alone);
-  - review.monthsByRiskTier is keyed by the risk tiers setup stores.
+  - review.monthsByRiskTier is keyed by the risk tiers setup stores;
+  - samples belong to a primary and name items, statuses, gates, options and
+    risk tiers that exist.
 
 Each problem is one line naming the file and the JSON path. Exit 1 if any.
 
@@ -152,6 +154,7 @@ class UiSlot(StrEnum):
     GATE_ALL_MET = "gateAllMet"
     GATE_GAP_ITEM = "gateGapItem"
     DASH_LEDE = "dashLede"
+    DASH_EMPTY = "dashEmpty"
     SETUP_EYEBROW = "setupEyebrow"
     FW_LEDE = "fwLede"
     DEL_REMOVES = "delRemoves"
@@ -807,6 +810,43 @@ def definition_problems(where: str, doc: dict, folder: str | None = None) -> Rep
             r.add(where, (*path, "gate"), f"no gate {flag['gate']!r}")
         if rule is FlagRule.OPEN_WHEN_LIVE and live_at is None:
             r.add(where, path, "rule openWhenLive needs a live phase")
+
+    # Samples name what exists, and only a primary has them (a supplement's
+    # answers live under its own key, which a sample does not write).
+    samples = doc.get("samples", [])
+    if samples and role is not Role.PRIMARY:
+        r.add(where, ("samples",), "only a primary framework has samples")
+    item_ids = {it["id"] for _, it in _items(doc)}
+    status_values = {s["value"] for s in statuses}
+    options = {g["id"]: {o["value"] for o in g["options"]} for g in gates}
+    _duplicates(
+        r,
+        where,
+        ((("samples", i, "name"), s["name"]) for i, s in enumerate(samples)),
+        "sample name",
+    )
+    for si, sample in enumerate(samples):
+        for item, status in sample.get("answers", {}).items():
+            if item not in item_ids:
+                r.add(where, ("samples", si, "answers", item), f"no item {item!r}")
+            elif status not in status_values:
+                r.add(where, ("samples", si, "answers", item), f"no status {status!r}")
+        for gate, decision in sample.get("decisions", {}).items():
+            if gate not in options:
+                r.add(where, ("samples", si, "decisions", gate), f"no gate {gate!r}")
+            elif decision[0] not in options[gate]:
+                r.add(
+                    where,
+                    ("samples", si, "decisions", gate, 0),
+                    f"gate {gate!r} has no option {decision[0]!r}",
+                )
+        tier = sample.get("meta", {}).get("riskTier")
+        if tier is not None and tier not in set(RiskTier):
+            r.add(
+                where,
+                ("samples", si, "meta", "riskTier"),
+                f"not a risk tier setup stores ({', '.join(RiskTier)})",
+            )
 
     # Namespaces and the export id.
     if fid not in doc["namespaces"]:

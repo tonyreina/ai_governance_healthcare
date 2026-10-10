@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "id": "example",
+  "name": "Example",
+  "title": "Example algorithm review",
+  "version": "1",
+  "role": "primary",
+  "notice": "A made-up framework that shows how to bring your own. It is not a standard and is not guidance.",
+  "namespaces": ["example"],
+  "keys": {"section": "step", "sectionBody": "summary", "category": "theme"},
+  "nouns": {"item": ["check", "checks"]},
+  "statuses": [
+    {"value": "done", "label": "Done", "class": "done"},
+    {"value": "started", "label": "Started", "class": "partial"},
+    {"value": "todo", "label": "To do", "class": "open"},
+    {"value": "skip", "label": "Does not apply", "class": "excluded"}
+  ],
+  "categories": [
+    {"id": "benefit", "name": "Benefit"},
+    {"id": "risk", "name": "Risk"},
+    {"id": "oversight", "name": "Oversight"}
+  ],
+  "sections": [
+    {
+      "id": "plan", "n": 1, "title": "Plan",
+      "summary": "Say what the tool is for and who answers for it.",
+      "items": [
+        {"id": "plan-purpose", "category": "benefit", "text": "The intended use is written down and agreed"},
+        {"id": "plan-owner", "category": "oversight", "text": "A named person is accountable for the tool"},
+        {"id": "plan-harm", "category": "risk", "text": "Foreseeable harms are listed with a mitigation for each"}
+      ]
+    },
+    {
+      "id": "test", "n": 2, "title": "Test",
+      "summary": "Check the tool works here, for the people it will serve.",
+      "items": [
+        {"id": "test-local", "category": "benefit", "text": "Performance is measured on local data"},
+        {"id": "test-groups", "category": "risk", "text": "Results are compared across patient groups"},
+        {"id": "test-fallback", "category": "oversight", "text": "Staff know what to do when the tool is wrong or down"}
+      ]
+    },
+    {
+      "id": "run", "n": 3, "title": "Run",
+      "summary": "Watch the tool in use and decide, on a schedule, whether to keep it.",
+      "items": [
+        {"id": "run-monitor", "category": "risk", "text": "Drift and errors are monitored, with a named reviewer"},
+        {"id": "run-feedback", "category": "oversight", "text": "Users can report a problem and get an answer"}
+      ]
+    }
+  ],
+  "gates": [
+    {
+      "id": "go", "after": "test", "title": "Go-live decision",
+      "question": "May the tool be used with patients?",
+      "options": [
+        {"value": "Approve", "class": "go"},
+        {"value": "Approve with conditions", "class": "conditional", "short": "Conditional"},
+        {"value": "Not yet", "class": "revise"},
+        {"value": "Reject", "class": "stop"}
+      ]
+    },
+    {
+      "id": "yearly", "after": "run", "title": "Yearly review",
+      "question": "Keep the tool?",
+      "help": "Record a new review each year; the next one is due a year after it.",
+      "options": [
+        {"value": "Keep", "class": "go"},
+        {"value": "Keep with changes", "class": "conditional", "short": "Changes"},
+        {"value": "Fix first", "class": "revise"},
+        {"value": "Retire", "class": "retire"}
+      ]
+    }
+  ],
+  "phases": [
+    {"key": "planning", "label": "Planning and testing", "role": "planning", "section": "plan"},
+    {"key": "inuse", "label": "In use", "role": "live", "reachedBy": "go", "section": "run"}
+  ],
+  "review": {"gate": "yearly", "anchors": ["yearly", "go"], "monthsByRiskTier": {"High": 6}, "defaultMonths": 12, "dueSoonDays": 30},
+  "flags": [
+    {"rule": "pastDue"},
+    {"rule": "openWhenLive"},
+    {"rule": "approvalWithoutRationale"},
+    {"rule": "idle", "days": 90}
+  ],
+  "samples": [
+    {
+      "name": "Sample: fall-risk score",
+      "by": "Quality committee",
+      "meta": {"org": "Sample hospital", "developer": "In-house analytics", "riskTier": "High"},
+      "answers": {"plan-purpose": "done", "plan-owner": "done", "plan-harm": "done", "test-local": "done", "test-groups": "started", "test-fallback": "done", "run-monitor": "todo"},
+      "decisions": {"go": ["Approve with conditions", -200, "Group comparison to finish within 90 days."]}
+    },
+    {
+      "name": "Sample: note summarizer",
+      "meta": {"org": "Sample hospital", "developer": "Vendor", "riskTier": "Moderate"},
+      "answers": {"plan-purpose": "done", "plan-owner": "todo"}
+    }
+  ],
+  "export": {"schemaId": "example-review/1", "fileSuffix": "example-review"}
+}

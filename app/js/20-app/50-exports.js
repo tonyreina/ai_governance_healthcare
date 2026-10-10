@@ -75,7 +75,9 @@ function exportPDF(){
 function exportMD(){
   // The Markdown report reads in the reader's language (D-60), like the HTML one.
   const fw=spine(), all=fw.items(), ov=fw.score(S), m=S.meta, L=[], answers=fw.answers(S);
-  const st=s=>fw.statusKnown(s) ? fw.statusLabel(s) : t("report.unanswered");
+  // A definition's words are text too: a framework's name, a status label and a
+  // checkpoint's name in a flag are escaped like a value a person typed.
+  const st=s=>fw.statusKnown(s) ? line(fw.statusLabel(s)) : t("report.unanswered");
   // Every value a person typed goes through here. It ends the line (a value cannot
   // start a heading, a quotation or a table row) and backslash-escapes what Markdown
   // reads as structure: emphasis, links and images, code, tables and raw HTML. The
@@ -83,13 +85,13 @@ function exportMD(){
   // an escaped backslash and a live pipe that ends the cell (#124). A viewer that
   // renders HTML would otherwise run a colleague's markup (#155).
   const line=s=>String(s??"").replace(/[\r\n\u2028\u2029]+/g," ").replace(/[\\`*_\[\]()<>|!~]/g,c=>"\\"+c);
-  const nm=id=>displayName(id);
+  const nm=id=>displayName(id), named={name:line(fw.name)};
   const fieldLine=(labelKey,value)=>t("md.fieldLine",{label:t(labelKey),value:line(value)});
   const shown=(map,v)=>v?(Object.hasOwn(map,v)?t(map[v]):v):"–";
   const prov=storageNoteShown();
-  L.push(`# ${m.solution?line(m.solution):t("project.untitled")}: ${t(uiKey(UiSlot.TITLE_SUFFIX),uiName())}`,"");
+  L.push(`# ${m.solution?line(m.solution):t("project.untitled")}: ${t(uiKey(UiSlot.TITLE_SUFFIX),named)}`,"");
   L.push(fieldLine("report.status",statusLabel(fw.status(S))),fieldLine("report.phase",phaseLabel(fw.phase(S))),fieldLine("report.org",m.org||"–"),fieldLine("report.developer",m.developer||"–"),fieldLine("report.sourcing",shown(SOURCING_KEY,m.sourcing)),fieldLine("report.riskTier",shown(RISK_KEY,m.riskTier)),fieldLine("report.sponsor",m.sponsor||"–"),fieldLine("report.nextReview",fw.nextReview(S)||"–"),fieldLine("md.team",m.reviewers||"–"),fieldLine("md.scope",m.scope||"–"),fieldLine("md.generated",TODAY()),fieldLine("md.language",LOCALE),fieldLine("md.storedIn",`${prov.label}. ${prov.note}`),"");
-  const F=fw.flags(S); L.push(`## ${t("report.flags")}`,""); if(F.length) F.forEach(f=>L.push(`- **${t(f.sev==="red"?"status.red":"status.amber")}:** ${flagText(f)}`)); else L.push(t("md.none")); L.push("");
+  const F=fw.flags(S); L.push(`## ${t("report.flags")}`,""); if(F.length) F.forEach(f=>L.push(`- **${t(f.sev==="red"?"status.red":"status.amber")}:** ${flagText(f,line)}`)); else L.push(t("md.none")); L.push("");
   L.push(`## ${t("report.readiness")}`,"",t(uiKey(UiSlot.MD_OVERALL),{pct:ov.pct,answered:ov.answered,total:ov.total}),"",`| ${t(uiKey(UiSlot.COL_CATEGORY))} | ${t("report.col.score")} |`,"|---|---|");
   fw.categories().forEach(c=>L.push(`| ${line(fw.categoryLabel(c.id))} | ${fw.score(S,all.filter(it=>it.category===c.id)).pct}% |`));
   L.push("",`## ${t(uiKey(UiSlot.CHECKPOINTS))}`,"",`| ${t(uiKey(UiSlot.COL_GATE))} | ${t("gate.decision")} | ${t("gate.by")} | ${t("report.col.date")} | ${t("md.rationale")} |`,"|---|---|---|---|---|");
@@ -103,7 +105,7 @@ function exportMD(){
   L.push(`## ${t("report.history")}`,""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${line(String(e.at||"").slice(0,10))}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push(t("md.none")); L.push("");
   L.push(`## ${t("report.appendix")}`,"");
   fw.sections().forEach(s=>{L.push(`### ${line(s.n)}. ${line(fw.sectionLabel(s))}`,""); all.filter(it=>it.section===s).forEach(it=>{const d=answers[it.id]||{}; L.push(`- [${line(it.category)}] ${line(fw.itemLabel(it))}: **${st(d.status)}**${d.evidence?` (${mdInlineMarkdown(d.evidence)})`:""}`); refsMarkdown(d,line).forEach(x=>L.push(`  - ${t("refs.title")}: ${x}`));}); L.push("");});
-  L.push("---",`_${t(uiKey(UiSlot.MD_FOOTER),uiName())}_`,"",t("export.fingerprint",contentHashes(S)));
+  L.push("---",`_${t(uiKey(UiSlot.MD_FOOTER),named)}_`,"",t("export.fingerprint",contentHashes(S)));
   return L.join("\n");
 }
 /* What the fingerprint is computed over, so a reader can recompute it from the file

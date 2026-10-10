@@ -1,0 +1,518 @@
+{
+  "schemaVersion": 1,
+  "id": "chai",
+  "name": "CHAI",
+  "version": "1",
+  "role": "primary",
+  "notice": "Checklist items are this project's paraphrased summaries organized around the CHAI six-stage lifecycle and five principles. They are not the official CHAI Responsible AI Checklist text.",
+  "namespaces": [
+    "chai",
+    "te"
+  ],
+  "keys": {
+    "section": "stage",
+    "sectionBody": "blurb",
+    "category": "principle"
+  },
+  "viewPrefix": "",
+  "statuses": [
+    {
+      "value": "met",
+      "label": "Met",
+      "class": "done",
+      "msg": "status.met"
+    },
+    {
+      "value": "partial",
+      "label": "Partial",
+      "class": "partial",
+      "msg": "status.partial"
+    },
+    {
+      "value": "notmet",
+      "label": "Not met",
+      "class": "open",
+      "msg": "status.notmet"
+    },
+    {
+      "value": "na",
+      "label": "N/A",
+      "class": "excluded",
+      "msg": "status.na"
+    }
+  ],
+  "categories": [
+    {
+      "id": "U",
+      "name": "Usefulness, usability & efficacy"
+    },
+    {
+      "id": "F",
+      "name": "Fairness"
+    },
+    {
+      "id": "S",
+      "name": "Safety & reliability"
+    },
+    {
+      "id": "T",
+      "name": "Transparency & accountability"
+    },
+    {
+      "id": "P",
+      "name": "Security & privacy"
+    }
+  ],
+  "sections": [
+    {
+      "id": "s1",
+      "n": 1,
+      "title": "Define the problem & plan",
+      "blurb": "Agree on the clinical or operational problem, confirm AI is the right tool, and name who is accountable before anything is built or bought.",
+      "items": [
+        {
+          "id": "s1-1",
+          "category": "U",
+          "text": "Problem statement and target outcome agreed with clinical and operational stakeholders"
+        },
+        {
+          "id": "s1-2",
+          "category": "U",
+          "text": "Current-state or root-cause analysis shows AI is an appropriate intervention, not just a possible one"
+        },
+        {
+          "id": "s1-3",
+          "category": "U",
+          "text": "Success measures and a baseline to compare against are defined"
+        },
+        {
+          "id": "s1-4",
+          "category": "F",
+          "text": "Affected patient populations identified, including groups at risk of being underserved or harmed"
+        },
+        {
+          "id": "s1-5",
+          "category": "S",
+          "text": "Potential harms and failure modes listed, with severity and likelihood"
+        },
+        {
+          "id": "s1-6",
+          "category": "T",
+          "text": "Accountable owner, governance body, and decision rights named"
+        },
+        {
+          "id": "s1-7",
+          "category": "P",
+          "text": "Data needs, privacy, consent, and regulatory constraints scoped"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "n": 2,
+      "title": "Design the AI system",
+      "blurb": "Specify how the system fits into care: who uses it, where in the workflow, what it outputs, and what happens when it is wrong.",
+      "items": [
+        {
+          "id": "s2-1",
+          "category": "U",
+          "text": "End users took part in workflow and interface design"
+        },
+        {
+          "id": "s2-2",
+          "category": "U",
+          "text": "Intended use, users, and care setting documented, with out-of-scope uses listed"
+        },
+        {
+          "id": "s2-3",
+          "category": "F",
+          "text": "Subgroups and fairness criteria for evaluation pre-specified"
+        },
+        {
+          "id": "s2-4",
+          "category": "S",
+          "text": "Decision thresholds defined and clinically justified"
+        },
+        {
+          "id": "s2-5",
+          "category": "S",
+          "text": "Human oversight and override path designed into the workflow"
+        },
+        {
+          "id": "s2-6",
+          "category": "T",
+          "text": "Pathway for reporting safety issues and harms drafted, naming who reports to whom"
+        },
+        {
+          "id": "s2-7",
+          "category": "P",
+          "text": "Threat model, access controls, and data flows designed"
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "n": 3,
+      "title": "Engineer the AI solution",
+      "blurb": "Build or configure the model with traceable data and documented choices, so the assessment stage has something it can verify.",
+      "items": [
+        {
+          "id": "s3-1",
+          "category": "T",
+          "text": "Data provenance and known data limitations documented"
+        },
+        {
+          "id": "s3-2",
+          "category": "F",
+          "text": "Demographic and socio-demographic make-up of development data characterized"
+        },
+        {
+          "id": "s3-3",
+          "category": "F",
+          "text": "Bias mitigation approach chosen and documented"
+        },
+        {
+          "id": "s3-4",
+          "category": "S",
+          "text": "Data quality checks and handling of missing data documented"
+        },
+        {
+          "id": "s3-5",
+          "category": "T",
+          "text": "Version control in place for datasets, code, and model artifacts"
+        },
+        {
+          "id": "s3-6",
+          "category": "P",
+          "text": "De-identification or other privacy-enhancing techniques applied where appropriate"
+        },
+        {
+          "id": "s3-7",
+          "category": "S",
+          "text": "People responsible for monitoring data and model behavior designated"
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "n": 4,
+      "title": "Assess",
+      "blurb": "Validate the solution locally before patients are exposed to it. Record key metrics below; they flow into the model card.",
+      "slots": [
+        "chai.metrics"
+      ],
+      "items": [
+        {
+          "id": "s4-1",
+          "category": "U",
+          "text": "Performance validated on local data representative of the deployment population"
+        },
+        {
+          "id": "s4-2",
+          "category": "F",
+          "text": "Performance compared across demographic subgroups, with gaps explained"
+        },
+        {
+          "id": "s4-3",
+          "category": "S",
+          "text": "Calibration checked, not only discrimination"
+        },
+        {
+          "id": "s4-4",
+          "category": "S",
+          "text": "Silent (shadow) evaluation run in the live environment"
+        },
+        {
+          "id": "s4-5",
+          "category": "S",
+          "text": "Installation qualification completed, where applicable"
+        },
+        {
+          "id": "s4-6",
+          "category": "T",
+          "text": "Explanations of outputs are suited to the intended users"
+        },
+        {
+          "id": "s4-7",
+          "category": "P",
+          "text": "Security review or vendor security assessment completed"
+        },
+        {
+          "id": "s4-8",
+          "category": "T",
+          "text": "Safety reporting pathway updated with what assessment revealed"
+        }
+      ]
+    },
+    {
+      "id": "s5",
+      "n": 5,
+      "title": "Pilot",
+      "blurb": "Run a small, time-boxed pilot to learn whether the solution helps in real care, for whom, and at what cost to staff.",
+      "items": [
+        {
+          "id": "s5-1",
+          "category": "U",
+          "text": "Pilot scope, sites, duration, and stop rules defined"
+        },
+        {
+          "id": "s5-2",
+          "category": "U",
+          "text": "Usability and workflow fit assessed with frontline users"
+        },
+        {
+          "id": "s5-3",
+          "category": "U",
+          "text": "Real-world effect on outcomes or process measured against baseline"
+        },
+        {
+          "id": "s5-4",
+          "category": "F",
+          "text": "Pilot results checked for differences across patient groups"
+        },
+        {
+          "id": "s5-5",
+          "category": "S",
+          "text": "Adverse events and near misses tracked and reviewed"
+        },
+        {
+          "id": "s5-6",
+          "category": "T",
+          "text": "Users trained, and the approach to patient disclosure decided"
+        }
+      ]
+    },
+    {
+      "id": "s6",
+      "n": 6,
+      "title": "Deploy & monitor",
+      "blurb": "Scale up with monitoring, change control, and a plan for when to retrain or retire.",
+      "items": [
+        {
+          "id": "s6-1",
+          "category": "S",
+          "text": "Performance and drift monitoring live, with alert thresholds and an owner"
+        },
+        {
+          "id": "s6-2",
+          "category": "F",
+          "text": "Subgroup performance monitored on an ongoing basis"
+        },
+        {
+          "id": "s6-3",
+          "category": "T",
+          "text": "Audit schedule and change control set, with a revised model card for each version"
+        },
+        {
+          "id": "s6-4",
+          "category": "S",
+          "text": "Incident response, rollback, and retirement criteria documented"
+        },
+        {
+          "id": "s6-5",
+          "category": "P",
+          "text": "Access reviews and security patching scheduled"
+        },
+        {
+          "id": "s6-6",
+          "category": "U",
+          "text": "Value to patients and staff re-evaluated periodically"
+        }
+      ]
+    }
+  ],
+  "gates": [
+    {
+      "id": "A",
+      "after": "s1",
+      "title": "Checkpoint A",
+      "question": "Approve moving to design?",
+      "help": "Is the problem worth solving with AI, and is the plan sound enough to start design?",
+      "options": [
+        {
+          "value": "Proceed",
+          "class": "go"
+        },
+        {
+          "value": "Proceed with conditions",
+          "class": "conditional",
+          "short": "Conditional"
+        },
+        {
+          "value": "Revise and resubmit",
+          "class": "revise",
+          "short": "Revise"
+        },
+        {
+          "value": "Stop",
+          "class": "stop"
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "after": "s4",
+      "title": "Checkpoint B",
+      "question": "Approve a pilot?",
+      "help": "Has local assessment shown the solution is safe, effective, and fair enough to expose a small group of patients to it?",
+      "options": [
+        {
+          "value": "Proceed",
+          "class": "go"
+        },
+        {
+          "value": "Proceed with conditions",
+          "class": "conditional",
+          "short": "Conditional"
+        },
+        {
+          "value": "Revise and resubmit",
+          "class": "revise",
+          "short": "Revise"
+        },
+        {
+          "value": "Stop",
+          "class": "stop"
+        }
+      ]
+    },
+    {
+      "id": "C",
+      "after": "s5",
+      "title": "Checkpoint C",
+      "question": "Approve deployment at scale?",
+      "help": "Did the pilot show real benefit without unacceptable harm or disparity?",
+      "options": [
+        {
+          "value": "Proceed",
+          "class": "go"
+        },
+        {
+          "value": "Proceed with conditions",
+          "class": "conditional",
+          "short": "Conditional"
+        },
+        {
+          "value": "Revise and resubmit",
+          "class": "revise",
+          "short": "Revise"
+        },
+        {
+          "value": "Stop",
+          "class": "stop"
+        }
+      ]
+    },
+    {
+      "id": "D",
+      "after": "s6",
+      "title": "Checkpoint D",
+      "question": "Periodic review decision",
+      "help": "Based on monitoring, should the solution continue as is, change, or be retired? Record a new review each cycle; the next due date is set from it.",
+      "options": [
+        {
+          "value": "Continue",
+          "class": "go"
+        },
+        {
+          "value": "Continue with changes",
+          "class": "conditional",
+          "short": "Changes"
+        },
+        {
+          "value": "Retrain or revise",
+          "class": "revise",
+          "short": "Retrain"
+        },
+        {
+          "value": "Retire",
+          "class": "retire"
+        }
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "key": "intake",
+      "label": "Intake & planning",
+      "msg": "phase.intake",
+      "role": "planning",
+      "section": "s1"
+    },
+    {
+      "key": "build",
+      "label": "Design, build & assess",
+      "msg": "phase.build",
+      "role": "build",
+      "reachedBy": "A",
+      "section": "s2"
+    },
+    {
+      "key": "pilot",
+      "label": "Pilot",
+      "msg": "phase.pilot",
+      "role": "pilot",
+      "reachedBy": "B",
+      "section": "s5"
+    },
+    {
+      "key": "deployed",
+      "label": "Deployed",
+      "msg": "phase.deployed",
+      "role": "live",
+      "reachedBy": "C",
+      "section": "s6"
+    }
+  ],
+  "review": {
+    "gate": "D",
+    "anchors": [
+      "D",
+      "C"
+    ],
+    "monthsByRiskTier": {
+      "High": 6
+    },
+    "defaultMonths": 12,
+    "dueSoonDays": 30
+  },
+  "flags": [
+    {
+      "rule": "pastDue"
+    },
+    {
+      "rule": "openWhenLive"
+    },
+    {
+      "rule": "review",
+      "gate": "C"
+    },
+    {
+      "rule": "reviseAtReview",
+      "gate": "D"
+    },
+    {
+      "plugin": "chai.modelCard"
+    },
+    {
+      "plugin": "chai.metrics"
+    },
+    {
+      "rule": "approvalWithoutRationale"
+    },
+    {
+      "rule": "idle",
+      "days": 90
+    }
+  ],
+  "plugins": [
+    "chai.modelCard",
+    "chai.metrics",
+    "chai.teMetrics",
+    "chai.samples"
+  ],
+  "export": {
+    "schemaId": "chai-review/2",
+    "fileSuffix": "chai-review"
+  }
+}

@@ -111,95 +111,24 @@ def first_item(defn: dict) -> dict:
     return defn["sections"][0]["items"][0]
 
 
-# --- the built app's own copy (until the engine reads the definitions) -------
+# --- the built app's copy --------------------------------------------------
 
-STAGE_RE = re.compile(
-    r'\{id:"(s\d)",n:(\d),title:"(.*?)",blurb:"(.*?)",items:\[(.*?)\]'
-    r"(?:\s*,\s*metrics:true)?\s*\}",
-    re.S,
-)
-ITEM_RE = re.compile(r'\["(\w)","(.*?)"\]')
-PRINCIPLE_RE = re.compile(r'(\w):\{name:"(.*?)"\}')
-OPTICA_RE = re.compile(r"^const OPTICA = (\{.*\});$", re.M)
+DEFS_RE = re.compile(r"const FRAMEWORK_DEFS = Object\.freeze\((\{.*?\})\);\n", re.S)
 
 
-def app_chai(html: str) -> dict:
-    principles = dict(
-        PRINCIPLE_RE.findall(
-            html[html.index("const PRINCIPLES") : html.index("const STAGES")]
-        )
-    )
-    stages = [
-        {
-            "id": sid,
-            "n": int(n),
-            "title": title,
-            "blurb": blurb,
-            "items": ITEM_RE.findall(items),
-        }
-        for sid, n, title, blurb, items in STAGE_RE.findall(
-            html[html.index("const STAGES") : html.index("const GATES")]
-        )
-    ]
-    return {"categories": principles, "sections": stages}
-
-
-def definition_chai(defn: dict) -> dict:
-    return {
-        "categories": {c["id"]: c["name"] for c in defn["categories"]},
-        "sections": [
-            {
-                "id": s["id"],
-                "n": s["n"],
-                "title": s["title"],
-                "blurb": s["blurb"],
-                "items": [(i["category"], i["text"]) for i in s["items"]],
-            }
-            for s in defn["sections"]
-        ],
-    }
-
-
-def app_optica(html: str) -> dict:
-    match = OPTICA_RE.search(html)
+def app_definitions(html: str) -> dict:
+    """The definitions the built dashboard embeds and runs (FRAMEWORK_DEFS, #168)."""
+    match = DEFS_RE.search(html)
     return json.loads(match.group(1)) if match else {}
 
 
-def definition_optica(defn: dict) -> dict:
-    """The definition in the shape the app's OPTICA module has always had."""
-    return {
-        "domains": {c["id"]: c["name"] for c in defn["categories"]},
-        "chapters": [
-            {
-                "n": s["n"],
-                "domain": s["category"],
-                "title": s["title"],
-                "purpose": s.get("purpose", ""),
-                "items": [
-                    {
-                        "key": i["id"],
-                        "num": i["num"],
-                        "text": i["text"],
-                        "who": i.get("who", ""),
-                        "stage": i["attrs"]["stage"],
-                        "rel": i["crossRefs"]["relation"],
-                        "chai": i["crossRefs"]["ids"],
-                    }
-                    for i in s["items"]
-                ],
-            }
-            for s in defn["sections"]
-        ],
-    }
-
-
 def app_drift(html: str, definitions: dict[str, dict]) -> list[str]:
-    problems = []
-    if app_chai(html) != definition_chai(definitions["chai"]):
-        problems.append("CHAI: the built app's criteria differ from the definition")
-    if app_optica(html) != definition_optica(definitions["optica"]):
-        problems.append("OPTICA: the built app's items differ from the definition")
-    return problems
+    embedded = app_definitions(html)
+    return [
+        f"{fid}: the built app runs a different definition"
+        for fid in sorted(definitions)
+        if embedded.get(fid) != definitions[fid]
+    ]
 
 
 # --- the suite ---------------------------------------------------------------
@@ -334,11 +263,13 @@ def main() -> int:
             "CHAI" not in page and "OPTICA" not in page,
         )
 
-        print("The built dashboard agrees with the definitions (until #168 step 2)")
+        print("The built dashboard runs exactly these definitions")
         html = APP_HTML.read_text(encoding="utf-8")
         definitions = gen.load_definitions(FRAMEWORKS)
-        check("the parsers find the app's copy", len(app_chai(html)["sections"]) == 6)
-        check("and OPTICA's", len(app_optica(html).get("chapters", [])) == 13)
+        check(
+            "the dashboard embeds CHAI's and OPTICA's definitions",
+            {"chai", "optica"} <= set(app_definitions(html)),
+        )
         drift = app_drift(html, definitions)
         check("the app and the definitions agree", not drift, "; ".join(drift))
         for fid in ("chai", "optica"):
@@ -369,11 +300,6 @@ def main() -> int:
             check(f"runs on {path}", bool(pattern.search(path)))
         check("does not run on an unrelated file", not pattern.search("README.md"))
         check("runs the generator", hook.get("entry") == "pixi run gen-docs")
-        old = re.compile(r"^(data/optica_items\.json|scripts/gen_.*\.py)$")
-        check(
-            "the retired filter would miss a definition (mutation)",
-            not old.search("app/frameworks/chai/framework.json"),
-        )
 
     print()
     if failures:

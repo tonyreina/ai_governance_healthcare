@@ -1495,47 +1495,57 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   disposal is due, from CHAI's own "Stop" and "Retire" decisions.
 - Source: #168; R-63.
 
-### D-75 One generator writes every framework's checklist page from its definition
+### D-75 Frameworks are definitions, run by one engine (#168 PR A)
 
-- Status: Accepted
-- Part of #168 PR A (design v2: "gen_framework_docs byte-identical"; R-63).
-  `docs/frameworks/<id>-checklist.md` is written by
-  `scripts/gen_framework_docs.py` from `app/frameworks/<id>/framework.json`, for
-  every definition there. It replaces `gen_chai_checklist.py` (which
-  regex-scraped CHAI's criteria back out of the built `docs/app/index.html`),
-  `gen_optica_checklist.py` and `gen_optica_module.py`, and retires
-  `data/optica_items.json`: OPTICA's definition holds every field that file had,
-  checked field by field before it was deleted, so it is the single source.
-- **The page's own prose sits beside the definition**, in
-  `app/frameworks/<id>/docs.toml` (title, introduction, a few column labels, a
-  citation template, a footer). The definition keeps only what the app needs.
-  A definition without a `docs.toml` still gets a page, in neutral words, and
-  an unknown key in one is an error rather than a silently ignored setting.
-- **The definition decides the page's shape**: `keys` name the headings,
-  `categoriesOn: "sections"` groups sections by category, `whos` adds a "Who
-  answers" column, `crossRefs` add a column named for the other framework, and
-  `source` adds a citation.
-- The CHAI and OPTICA pages it writes are byte-identical to the pages the old
-  scripts wrote, except one sentence: the CHAI page told editors to edit
-  `docs/app/index.html`, a generated file; it now names the definition.
-- **Until the engine reads the definitions** (#168 step 2), the app still
-  carries its own copy of CHAI's criteria and OPTICA's items in `app/js/`, now
-  maintained by hand, since `gen_optica_module.py` is gone. So the page's
-  "cannot drift from the checklist the tool actually enforces" stays true only
-  because `tests/test_framework_docs.py` compares the built dashboard's copy
-  with the definitions and fails when they differ.
-- **Rejected:** keeping two generators (each framework would need its own, so a
-  developer's framework would get no page); putting the page prose in
-  `framework.json` (the build embeds the definition in the app, and admonitions
-  and documentation links do not belong there); per-framework prose keyed by id
-  inside the generator (a new framework would mean editing the generator).
-- Known gap: the header comment of
-  `app/js/10-frameworks/20-optica/00-definition.js` still says it is generated
-  by the deleted `scripts/gen_optica_module.py`. That directory was being
-  rewritten in parallel, so this change did not touch it.
-- Source: #168; design v2; R-63; D-74.
-- Enforced by: `tests/test_framework_docs.py` (`pixi run test-framework-docs`,
-  the workflows job of `test.yml`): a fresh run equals the committed pages byte
-  for byte, and mutations show that an edited item, a missing page, an orphaned
-  page, a misspelled `docs.toml` key and app drift are each noticed; and the
-  `gen-checklists` pre-commit hook, whose filter now matches `app/frameworks/`.
+- Status: Accepted (implements the owner's decision in #168, R-63; design v2 on
+  the issue)
+- **The definition** is `app/frameworks/<id>/framework.json`, with the shape in
+  `schema/framework.schema.json` and the rules a schema cannot state in
+  `scripts/check_framework.py` (pre-commit and CI; every rule shown failing in
+  `tests/test_check_framework.py`). Ids are explicit (never positional), match
+  one safe pattern, and are never a prototype or reserved record key. Every word
+  the engine acts on is a member of an engine enum: a status's class, a gate
+  option's class, a phase's role, a flag rule. A supplement may not declare
+  gates (the server attributes sign-off only on the primary's top-level
+  `gates`), and a primary with gates must have a stop or retire option, so a
+  project can always end and come due for disposal (R-56).
+- **The build** embeds the definitions `app/frameworks.json` selects as
+  `FRAMEWORK_DEFS`. The published build is pinned to CHAI plus OPTICA and any
+  other config is refused, until a build of other frameworks has a place of its
+  own to go (step 3). Rules across definitions (view ids, namespaces, requires,
+  file suffixes) apply to that build; a definition outside it is checked alone,
+  and the config must name exactly one primary.
+- **The engine** (`app/js/10-frameworks/01-engine/`) computes score, phase,
+  review and flags from a definition. CHAI's and OPTICA's rule functions now
+  delegate to it, and their content constants are derived from the JSON. These
+  are transitional, inside their own directories, until the generic renderers
+  replace them (PR B). The model card's and metrics' flags are code plug-ins,
+  placed in the flag list where the definition puts them.
+- **Proof that nothing a reader sees changed**: `tests/test_snapshot.py` pins
+  529 pieces (every view of every sample with OPTICA off and on, three
+  languages, read-only, the side panel and every export) from before the port,
+  and shows zero difference after it. `tests/test_engine.py` covers the engine's
+  rules on stand-in definitions CHAI and OPTICA never exercise.
+- **One generator writes every framework's checklist page**
+  (`scripts/gen_framework_docs.py`), from the definition plus the page's own
+  prose in `app/frameworks/<id>/docs.toml`. It replaces `gen_chai_checklist.py`
+  (which regex-scraped the built page), `gen_optica_checklist.py` and
+  `gen_optica_module.py`, and retires `data/optica_items.json`: OPTICA's
+  definition holds every field it had, checked field by field. The CHAI and
+  OPTICA pages are byte-identical except one sentence, which told editors to
+  edit a generated file.
+- **Tests that read JS now read the definitions**: the retention parity test
+  (`server/tests/test_retention.py`) and the translation drift test
+  (`tests/test_framework_i18n.py`). They stay tied to what the app runs because
+  `tests/test_build_config.py` and `tests/test_framework_docs.py` show the page
+  embeds exactly the definitions on disk, and `tests/test_engine.py` shows the
+  engine ends a project on exactly CHAI's stop and retire options.
+- **Rejected:** keeping JS copies of the content beside the JSON (two sources);
+  a looser schema that ignores unknown fields (a typo becomes a silent no-op);
+  checking every definition under `app/frameworks/` as one build (a custom
+  framework outside the published build would collide with CHAI's views);
+  rewriting the views and tests in the same change as the engine (a regression
+  could be written into the new assertions; PR B does that against the snapshot).
+- Found and filed: the OPTICA page's prose says there are no "equivalent" rows,
+  but the data has three (part of #174).
+- Source: #168; R-63; D-74.

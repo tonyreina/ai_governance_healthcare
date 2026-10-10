@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tonyreina.github.io/ai_governance_healthcare/schema/framework.schema.json",
   "title": "Governance framework definition, schemaVersion 1",
-  "description": "One framework as data: app/frameworks/<id>/framework.json (#168, R-63). This schema is the shape; scripts/check_framework.py adds the rules a schema cannot state (unique ids, references that must exist, view ids across the build, reserved names). Every string here is definition text, which the app treats as untrusted input.",
+  "description": "One framework as data: app/frameworks/<id>/framework.json (#168, R-63). This schema is the shape; scripts/check_framework.py adds the rules a schema cannot state (unique ids, references that must exist, view ids across the build, reserved names).",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "id", "name", "version", "role", "namespaces", "statuses", "categories", "sections"],

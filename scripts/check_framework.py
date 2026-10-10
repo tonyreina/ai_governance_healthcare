@@ -53,6 +53,11 @@ FRAMEWORKS = ROOT / "app" / "frameworks"
 DEFINITION = "framework.json"
 SCHEMA = ROOT / "schema" / "framework.schema.json"
 SHELL_CATALOG = ROOT / "app" / "i18n" / "en.json"
+# The frameworks the published build contains, and its primary (#168). The rules
+# across definitions (views, namespaces, requires) apply to this build; a definition
+# outside it is checked on its own.
+CONFIG = ROOT / "app" / "frameworks.json"
+CONFIG_LABEL = "app/frameworks.json"
 SCHEMA_VERSION = 1
 
 # The id rule, in the schema as $defs.id.pattern; schema_drift() keeps them equal.
@@ -191,6 +196,9 @@ DOCUMENT_KEY_OWNER: dict[str, str] = {DocumentKey.OPTICA: "optica"}
 # Shell catalog prefixes a definition owns (its keys already live in app/i18n/*.json).
 SHELL_PREFIX_OWNER: dict[str, str] = {"chai": "chai", "te": "chai", "optica": "optica"}
 SCHEMA_ID_SUFFIX = "-review/"
+# An export file name's suffix CHAI's exports carry, so no other framework's files
+# can be taken for a CHAI review.
+FILE_SUFFIX_OWNER = {"chai-review": "chai"}
 # A schema id prefix that only one framework's records may carry: CHAI's exports
 # have said "chai-review/" since before frameworks were data.
 SCHEMA_ID_OWNER: dict[str, str] = {"chai-review/": "chai"}
@@ -681,6 +689,14 @@ def definition_problems(where: str, doc: dict, folder: str | None = None) -> Rep
                     f"{prefix!r} is reserved to {owner!r}",
                 )
 
+    if export is not None and "fileSuffix" in export:
+        suffix = export["fileSuffix"]
+        owner = FILE_SUFFIX_OWNER.get(suffix)
+        if owner is not None and owner != fid:
+            r.add(
+                where, ("export", "fileSuffix"), f"{suffix!r} is reserved to {owner!r}"
+            )
+
     # A supplement's id is its records' top-level key.
     if (
         role is Role.SUPPLEMENT
@@ -720,6 +736,20 @@ def build_problems(defs: dict[str, dict], prefixes: frozenset[str]) -> Report:
             else:
                 views[view] = f"{where} {jpath(path)}"
 
+    suffixes: dict[str, str] = {}
+    for where, doc in defs.items():
+        suffix = (doc.get("export") or {}).get("fileSuffix")
+        if suffix is None:
+            continue
+        if suffix in suffixes:
+            r.add(
+                where,
+                ("export", "fileSuffix"),
+                f"{suffix!r} is also the file suffix of {suffixes[suffix]}",
+            )
+        else:
+            suffixes[suffix] = where
+
     owners: dict[str, str] = {}
     for where, doc in defs.items():
         fid = doc["id"]
@@ -749,7 +779,7 @@ def build_problems(defs: dict[str, dict], prefixes: frozenset[str]) -> Report:
                 r.add(
                     where,
                     ("requires", ri),
-                    f"no framework {other!r} in app/frameworks/",
+                    f"no framework {other!r} in the build ({CONFIG_LABEL})",
                 )
         named: set[str] = set()  # one line per missing target, not one per item
         for path, item in _items(doc):
@@ -757,6 +787,13 @@ def build_problems(defs: dict[str, dict], prefixes: frozenset[str]) -> Report:
             if ref is None:
                 continue
             target = ref["framework"]
+            relation = CrossRefRelation(ref["relation"])
+            if relation is CrossRefRelation.EQUIVALENT and not ref["ids"]:
+                r.add(
+                    where,
+                    (*path, "crossRefs", "ids"),
+                    "an equivalent crossRef names no item",
+                )
             if target not in by_id:
                 if target not in named:
                     named.add(target)
@@ -787,11 +824,50 @@ def build_problems(defs: dict[str, dict], prefixes: frozenset[str]) -> Report:
 # ---------------------------------------------------------------- entry points
 
 
+def load_config(path: Path = CONFIG) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def config_problems(config: Any, defs: dict[str, dict]) -> list[str]:
+    """The build config names frameworks that exist, its primary among them, and
+    exactly one primary-role definition: the one it names."""
+    where = CONFIG_LABEL
+    if not isinstance(config, dict) or not isinstance(config.get("frameworks"), list):
+        return [f"{where}: $: must be an object with a list of frameworks"]
+    selected = config["frameworks"]
+    primary = config.get("primary")
+    out = []
+    by_id = {doc["id"]: doc for doc in defs.values()}
+    for i, fid in enumerate(selected):
+        if fid not in by_id:
+            out.append(f"{where}: $.frameworks[{i}]: no valid definition {fid!r}")
+    if len(set(selected)) != len(selected):
+        out.append(f"{where}: $.frameworks: lists a framework twice")
+    if primary not in selected:
+        out.append(f"{where}: $.primary: {primary!r} is not in frameworks")
+    primaries = [
+        fid
+        for fid in selected
+        if fid in by_id and Role(by_id[fid]["role"]) is Role.PRIMARY
+    ]
+    if len(primaries) != 1:
+        out.append(
+            f"{where}: $.frameworks: a build needs exactly one primary, found "
+            f"{len(primaries)} ({', '.join(primaries) or 'none'})"
+        )
+    elif primaries[0] != primary:
+        out.append(
+            f"{where}: $.primary: {primary!r} is not the primary; {primaries[0]!r} is"
+        )
+    return out
+
+
 def problems(
     defs: dict[str, Any],
     schema: dict | None = None,
     prefixes: frozenset[str] | None = None,
     folders: dict[str, str] | None = None,
+    config: Any = None,
 ) -> list[str]:
     """Every problem in a set of definitions, keyed by where each came from.
 
@@ -810,7 +886,11 @@ def problems(
         folder = (folders or {}).get(where, Path(where).parent.name)
         out += definition_problems(where, doc, folder).lines
         valid[where] = doc
-    out += build_problems(valid, prefixes).lines
+    config = load_config() if config is None else config
+    out += config_problems(config, valid)
+    selected = set(config.get("frameworks", [])) if isinstance(config, dict) else set()
+    build = {w: d for w, d in valid.items() if d["id"] in selected}
+    out += build_problems(build, prefixes).lines
     return out
 
 

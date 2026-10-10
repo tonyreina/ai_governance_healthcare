@@ -83,7 +83,7 @@ repos:
         entry: pixi run check-framework
         language: system
         pass_filenames: false
-        files: '^app/frameworks/|^schema/framework|^scripts/check_framework'
+        files: '^app/frameworks/|^app/frameworks\.json$|^app/i18n/en\.json$|^schema/framework|^scripts/check_framework'
 
       # The checker's own mutation tests, whenever it, the schema or a definition changes.
       - id: test-check-framework

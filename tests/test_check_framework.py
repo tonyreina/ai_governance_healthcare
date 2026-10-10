@@ -740,6 +740,130 @@ def main() -> int:
         finally:
             ck.FRAMEWORKS = saved
 
+    print("Rules shown failing that were not before (review of PR A)")
+    notices(
+        "a plugin flag takes no parameters",
+        lambda c, o: c["flags"].append({"plugin": "chai.modelCard", "gate": "A"}),
+        CHAI,
+        "$.flags[8].gate",
+        "takes no parameters",
+    )
+
+    def long_views(c: dict, o: dict) -> None:
+        o["viewPrefix"] = "v" * 16
+        o["sections"][0]["id"] = "x" * 60
+
+    found = run(long_views)
+    check(
+        "a view id longer than an id may be is not a safe id",
+        any("is not a safe id" in line for line in found),
+        str(found[:3]),
+    )
+    for name in sorted(ck.UNSAFE_NAMES):
+        found = run(lambda c, o, n=name: setv(c["sections"][0], "id", n))
+        check(
+            f"the section id {name!r} is refused",
+            any(line.startswith(f"{CHAI}: $.sections[0].id") for line in found),
+            str(found[:2]),
+        )
+    for key in sorted(k for k in ck.DocumentKey if k != ck.DocumentKey.OPTICA):
+        defs = copy.deepcopy(REAL)
+        defs[OPTICA]["id"] = str(key)
+        defs[OPTICA]["namespaces"] = [str(key)]
+        found = ck.problems(defs, schema=SCHEMA, folders={OPTICA: str(key)})
+        check(
+            f"a supplement may not be called {str(key)!r}",
+            any(line.startswith(f"{OPTICA}: $.id:") for line in found),
+            str(found[:2]),
+        )
+
+    print("The build is what app/frameworks.json selects")
+    base = {"primary": "chai", "frameworks": ["chai", "optica"]}
+
+    def with_config(config: dict, mutate=lambda c, o: None) -> list:
+        defs = copy.deepcopy(REAL)
+        mutate(defs[CHAI], defs[OPTICA])
+        return ck.problems(defs, schema=SCHEMA, config=config)
+
+    check("the default config is clean", not with_config(base))
+    found = with_config(base, lambda c, o: setv(o, "role", "primary"))
+    check(
+        "two primaries in one build",
+        any("exactly one primary, found 2" in line for line in found),
+        str(found[:3]),
+    )
+    found = with_config({"primary": "chai", "frameworks": ["optica"]})
+    check(
+        "no primary in the build",
+        any("exactly one primary, found 0" in line for line in found),
+        str(found[:3]),
+    )
+    found = with_config({"primary": "optica", "frameworks": ["chai", "optica"]})
+    check(
+        "a config naming a supplement as primary",
+        any("is not the primary" in line for line in found),
+        str(found[:3]),
+    )
+    found = with_config({"primary": "chai", "frameworks": ["chai", "nosuch"]})
+    check(
+        "a config naming a framework with no definition",
+        any("no valid definition 'nosuch'" in line for line in found),
+        str(found[:3]),
+    )
+    defs = copy.deepcopy(REAL)
+    other = copy.deepcopy(REAL[CHAI])
+    other.update(id="zz", namespaces=["zz"])
+    other["export"] = {"schemaId": "zz-review/1", "fileSuffix": "zz-review"}
+    other["plugins"] = []
+    other["flags"] = [f for f in other["flags"] if "plugin" not in f]
+    for section in other["sections"]:
+        section.pop("slots", None)
+    defs["app/frameworks/zz/framework.json"] = other
+    found = ck.problems(defs, schema=SCHEMA, config=base)
+    check(
+        "a definition outside the build is checked alone, not against its views",
+        not found,
+        str(found[:3]),
+    )
+    inside = {"primary": "chai", "frameworks": ["chai", "zz"]}
+    found = ck.problems(defs, schema=SCHEMA, config=inside)
+    check(
+        "the same definition inside the build collides with CHAI's views",
+        any("already used" in line for line in found),
+        str(found[:3]),
+    )
+
+    print("Export files and crossRefs")
+    optica_export = {"schemaId": "optica-review/1", "fileSuffix": "chai-review"}
+    found = run(lambda c, o: setv(o, "export", optica_export))
+    check(
+        "chai-review is CHAI's file suffix",
+        any("'chai-review' is reserved to 'chai'" in line for line in found),
+        str(found[:3]),
+    )
+
+    def same_suffix(c: dict, o: dict) -> None:
+        o["export"] = {"schemaId": "optica-review/1", "fileSuffix": "same"}
+        c["export"] = {"schemaId": "chai-review/2", "fileSuffix": "same"}
+
+    found = run(same_suffix)
+    check(
+        "two frameworks in a build share a file suffix",
+        any("is also the file suffix" in line for line in found),
+        str(found[:3]),
+    )
+
+    def equivalent_empty(c: dict, o: dict) -> None:
+        ref = o["sections"][0]["items"][0]["crossRefs"]
+        ref["relation"], ref["ids"] = "equivalent", []
+
+    found = run(equivalent_empty)
+    check(
+        "an equivalent crossRef that names no item",
+        any("equivalent crossRef names no item" in line for line in found),
+        str(found[:3]),
+    )
+
     if failures:
         print(f"\n{len(failures)} failed: {', '.join(failures)}")
         return 1

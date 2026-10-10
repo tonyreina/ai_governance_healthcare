@@ -170,6 +170,29 @@ def main() -> int:
             str(texts),
         )
 
+        print("CHAI, every decision: retired exactly on a stop or retire option")
+        # The server's retention SQL holds the same set (server/tests/test_retention.py
+        # reads it from the definition); this is the dashboard's side, on the engine.
+        rows = page.evaluate(
+            """() => CHAI_DEF.gates.flatMap(g => g.options.map(o => {
+                 const ph = ENGINES.chai.phase({gates: {[g.id]: {decision: o.value}},
+                                                items: {}, meta: {}});
+                 return [g.id, o.value, o.class, ph.key];
+               }))"""
+        )
+        wrong = [r for r in rows if (r[3] == "retired") != (r[2] in ("stop", "retire"))]
+        check(
+            f"all {len(rows)} of CHAI's gate options",
+            len(rows) == 16 and not wrong,
+            str(wrong or len(rows)),
+        )
+        ending = sorted((r[0], r[1]) for r in rows if r[3] == "retired")
+        check(
+            "and the ending ones are the four the server retires",
+            ending == [("A", "Stop"), ("B", "Stop"), ("C", "Stop"), ("D", "Retire")],
+            str(ending),
+        )
+
         print("A plain checklist with no lifecycle")
         ph = page.evaluate("PL.phase(proj())")
         check("has no phase, and does not throw", ph["key"] == "", str(ph))

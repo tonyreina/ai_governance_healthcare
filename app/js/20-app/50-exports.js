@@ -23,7 +23,7 @@ function exportHTML(){
      assessments and clinical rationale. STANDALONE_CSS() goes to real trouble
      to inline everything else; this was the one hole left in it. The font
      stacks below end in system-ui. -->
-<style>${STANDALONE_CSS()}</style></head><body><main class="report">${reportBody(true)}<p class="disclaimer" data-provenance><strong>${esc(t("export.storedIn",{label:prov.label}))}</strong> ${esc(prov.note)}</p><p class="disclaimer" data-fingerprint>${esc(t("export.fingerprint",contentHashes(S)))}</p></main></body></html>`;
+<style>${STANDALONE_CSS()}</style></head><body><main class="report">${spine().reportBody(true)}<p class="disclaimer" data-provenance><strong>${esc(t("export.storedIn",{label:prov.label}))}</strong> ${esc(prov.note)}</p><p class="disclaimer" data-fingerprint>${esc(t("export.fingerprint",contentHashes(S)))}</p></main></body></html>`;
 }
 /* PDF, via the browser's own print-to-PDF.
 
@@ -72,7 +72,7 @@ function exportPDF(){
 
 function exportMD(){
   // The Markdown report reads in the reader's language (D-60), like the HTML one.
-  const all=allItems(), ov=scoreOf(all), m=S.meta, L=[];
+  const fw=spine(), all=fw.items(), ov=fw.score(S), m=S.meta, L=[], answers=fw.answers(S);
   const st=s=>t(Object.hasOwn(STATUS_KEY,s)?STATUS_KEY[s]:"report.unanswered");
   // Every value a person typed goes through here. It ends the line (a value cannot
   // start a heading, a quotation or a table row) and backslash-escapes what Markdown
@@ -86,23 +86,21 @@ function exportMD(){
   const shown=(map,v)=>v?(Object.hasOwn(map,v)?t(map[v]):v):"–";
   const prov=storageNoteShown();
   L.push(`# ${m.solution?line(m.solution):t("project.untitled")}: ${t("export.titleSuffix")}`,"");
-  L.push(fieldLine("report.status",statusLabel(statusOf(S))),fieldLine("report.phase",phaseLabel(phase(S))),fieldLine("report.org",m.org||"–"),fieldLine("report.developer",m.developer||"–"),fieldLine("report.sourcing",shown(SOURCING_KEY,m.sourcing)),fieldLine("report.riskTier",shown(RISK_KEY,m.riskTier)),fieldLine("report.sponsor",m.sponsor||"–"),fieldLine("report.nextReview",nextReview(S)||"–"),fieldLine("md.team",m.reviewers||"–"),fieldLine("md.scope",m.scope||"–"),fieldLine("md.generated",TODAY()),fieldLine("md.language",LOCALE),fieldLine("md.storedIn",`${prov.label}. ${prov.note}`),"");
-  const F=flags(S); L.push(`## ${t("report.flags")}`,""); if(F.length) F.forEach(f=>L.push(`- **${t(f.sev==="red"?"status.red":"status.amber")}:** ${flagText(f)}`)); else L.push(t("md.none")); L.push("");
+  L.push(fieldLine("report.status",statusLabel(fw.status(S))),fieldLine("report.phase",phaseLabel(fw.phase(S))),fieldLine("report.org",m.org||"–"),fieldLine("report.developer",m.developer||"–"),fieldLine("report.sourcing",shown(SOURCING_KEY,m.sourcing)),fieldLine("report.riskTier",shown(RISK_KEY,m.riskTier)),fieldLine("report.sponsor",m.sponsor||"–"),fieldLine("report.nextReview",fw.nextReview(S)||"–"),fieldLine("md.team",m.reviewers||"–"),fieldLine("md.scope",m.scope||"–"),fieldLine("md.generated",TODAY()),fieldLine("md.language",LOCALE),fieldLine("md.storedIn",`${prov.label}. ${prov.note}`),"");
+  const F=fw.flags(S); L.push(`## ${t("report.flags")}`,""); if(F.length) F.forEach(f=>L.push(`- **${t(f.sev==="red"?"status.red":"status.amber")}:** ${flagText(f)}`)); else L.push(t("md.none")); L.push("");
   L.push(`## ${t("report.readiness")}`,"",t("md.overall",{pct:ov.pct,answered:ov.answered,total:ov.total}),"",`| ${t("report.col.principle")} | ${t("report.col.score")} |`,"|---|---|");
-  Object.keys(PRINCIPLES).forEach(k=>L.push(`| ${principleName(k)} | ${scoreOf(all.filter(it=>it.p===k)).pct}% |`));
+  fw.categories().forEach(c=>L.push(`| ${line(fw.categoryLabel(c.id))} | ${fw.score(S,all.filter(it=>it.category===c.id)).pct}% |`));
   L.push("",`## ${t("report.checkpoints")}`,"",`| ${t("report.col.checkpoint")} | ${t("gate.decision")} | ${t("gate.by")} | ${t("report.col.date")} | ${t("md.rationale")} |`,"|---|---|---|---|---|");
-  Object.keys(GATES).forEach(k=>{const g=S.gates[k]||{}; L.push(`| ${gateTitle(k)}: ${gateQuestion(k)} | ${g.decision?line(optionText(g.decision)):t("md.notDecided")} | ${line(g.by)}${g.signedBy?` (${t("report.recordedBy",{who:line(nm(g.signedBy))})})`:""} | ${line(g.date)} | ${mdInlineMarkdown(g.rationale||"")} |`);});
+  fw.gates().forEach(gate=>{const k=gate.id, g=fw.gateRecord(S,k); L.push(`| ${line(fw.gateLabel(k))}: ${line(fw.gateQuestion(k))} | ${g.decision?line(fw.optionLabel(g.decision)):t("md.notDecided")} | ${line(g.by)}${g.signedBy?` (${t("report.recordedBy",{who:line(nm(g.signedBy))})})`:""} | ${line(g.date)} | ${mdInlineMarkdown(g.rationale||"")} |`);});
   L.push("",`## ${t("md.openGaps")}`,"");
-  const gaps=all.filter(it=>{const s=(S.items[it.id]||{}).status; return !s||s==="notmet"||s==="partial";});
-  if(gaps.length){ L.push(`| ${t("report.col.stage")} | ${t("report.col.criterion")} | ${t("report.status")} | ${t("ci.owner")} | ${t("ci.due")} |`,"|---|---|---|---|---|"); gaps.forEach(it=>{const d=S.items[it.id]||{}; L.push(`| ${it.stage.n} | ${line(itemText(it))} | ${st(d.status)} | ${line(d.owner)} | ${line(d.due)} |`);}); }
+  const gaps=all.filter(it=>{const s=(answers[it.id]||{}).status; return !s||s==="notmet"||s==="partial";});
+  if(gaps.length){ L.push(`| ${t("report.col.stage")} | ${t("report.col.criterion")} | ${t("report.status")} | ${t("ci.owner")} | ${t("ci.due")} |`,"|---|---|---|---|---|"); gaps.forEach(it=>{const d=answers[it.id]||{}; L.push(`| ${line(it.section.n)} | ${line(fw.itemLabel(it))} | ${st(d.status)} | ${line(d.owner)} | ${line(d.due)} |`);}); }
   else L.push(t("md.none"));
-  L.push("",`## ${t("card.title")}`,"");
-  if(frameworkTranslated()) L.push(`_${t("fw.note")}_`,"");
-  CARD.forEach(sec=>{L.push(`### ${cardSecName(sec)}`,""); sec.fields.forEach(f=>L.push(`- **${cardLabel(f[0])}:** ${line(cardValOf(S,f[0]))||`_${t("label.notProvided")}_`}`)); L.push("");
-    if(sec.sec==="Trust ingredients"){ L.push(`### ${t("metrics.title")}`,""); if(S.metrics.length){L.push(`| ${t("metrics.col.category")} | ${t("metrics.col.metric")} | ${t("metrics.col.value")} | ${t("metrics.col.ci")} | ${t("md.population")} |`,"|---|---|---|---|---|"); S.metrics.forEach(x=>L.push(`| ${line(metricCatName(x.cat))} | ${line(x.name)} | ${line(x.value)} | ${line(x.ci)} | ${line(x.pop)} |`));} else L.push(`_${t("md.noneEntered")}_`); L.push("");}});
+  L.push("");
+  if(fw.markdownExtras) L.push(...fw.markdownExtras({line, p:S}));
   L.push(`## ${t("report.history")}`,""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${line(String(e.at||"").slice(0,10))}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push(t("md.none")); L.push("");
   L.push(`## ${t("report.appendix")}`,"");
-  STAGES.forEach(s=>{L.push(`### ${s.n}. ${stageTitle(s)}`,""); s.items.forEach(it=>{const d=S.items[it.id]||{}; L.push(`- [${it.p}] ${itemText(it)}: **${st(d.status)}**${d.evidence?` (${mdInlineMarkdown(d.evidence)})`:""}`); refsMarkdown(d,line).forEach(x=>L.push(`  - ${t("refs.title")}: ${x}`));}); L.push("");});
+  fw.sections().forEach(s=>{L.push(`### ${line(s.n)}. ${line(fw.sectionLabel(s))}`,""); all.filter(it=>it.section===s).forEach(it=>{const d=answers[it.id]||{}; L.push(`- [${line(it.category)}] ${line(fw.itemLabel(it))}: **${st(d.status)}**${d.evidence?` (${mdInlineMarkdown(d.evidence)})`:""}`); refsMarkdown(d,line).forEach(x=>L.push(`  - ${t("refs.title")}: ${x}`));}); L.push("");});
   L.push("---",`_${t("md.footer")}_`,"",t("export.fingerprint",contentHashes(S)));
   return L.join("\n");
 }
@@ -110,16 +108,16 @@ function exportMD(){
    (examples/load_export.py does). */
 const FINGERPRINT_OF = "The project record, including its id, as canonical JSON in UTF-8: keys sorted at every level, with updatedAt, updatedBy, cardUpdatedAt, _state, contentHash and generated left out.";
 function projectJSON(p){
-  const all=allItems();
+  const fw=spine(), all=fw.items(), answers=fw.answers(p);
   const state=clone(p); delete state.id;
   return {
     schema:"chai-review/2", generated:new Date().toISOString(), storage:storageNote(),
     project_id:p.id||null, fingerprint:{...contentHashes(p), of:FINGERPRINT_OF},
-    status:statusOf(p).label, phase:phase(p).label, next_review:nextReview(p), flags:flags(p),
+    status:fw.status(p).label, phase:fw.phase(p).label, next_review:fw.nextReview(p), flags:fw.flags(p),
     meta:p.meta, gates:p.gates, metrics:p.metrics,
-    model_card:Object.fromEntries(CARD_FIELDS.map(k=>[k,cardValOf(p,k)])),
-    checklist:all.map(it=>({id:it.id,stage:it.stage.n,principle:it.p,criterion:it.text,...(({status,evidence,owner,due})=>({status:status||null,evidence:evidence||"",owner:owner||"",due:due||""}))(p.items[it.id]||{}), references:refsData(p.items[it.id])})),
-    scores:{overall:scoreOf(all,p.items).pct,...Object.fromEntries(Object.keys(PRINCIPLES).map(k=>[k,scoreOf(all.filter(it=>it.p===k),p.items).pct]))},
+    ...(fw.jsonExtras ? fw.jsonExtras(p) : {}),
+    checklist:all.map(it=>({id:it.id,stage:it.section.n,principle:it.category,criterion:it.text,...(({status,evidence,owner,due})=>({status:status||null,evidence:evidence||"",owner:owner||"",due:due||""}))(answers[it.id]||{}), references:refsData(answers[it.id])})),
+    scores:{overall:fw.score(p).pct,...Object.fromEntries(fw.categories().map(c=>[c.id,fw.score(p,all.filter(it=>it.category===c.id)).pct]))},
     _state:state
   };
 }
@@ -151,7 +149,7 @@ function csvField(value){
 function exportCSV(){
   const q=csvField;
   const head=["Project","Developer","Clinical sponsor","Risk tier","Lifecycle phase","Status","Readiness %","Next review","Flags","Archived","Last updated","Stored in"];
-  const rows=dashData().map(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.riskTier,phase(r.p).label,r.st.label,r.score,r.nr||"",r.f.map(f=>f.text).join("; "),r.p.archived?"yes":"",(r.p.updatedAt||"").slice(0,10),storageNote().label]);
+  const rows=dashData().map(r=>[r.p.meta.solution,r.p.meta.developer,r.p.meta.sponsor,r.p.meta.riskTier,spine().phase(r.p).label,r.st.label,r.score,r.nr||"",r.f.map(f=>f.text).join("; "),r.p.archived?"yes":"",(r.p.updatedAt||"").slice(0,10),storageNote().label]);
   return [head,...rows].map(r=>r.map(q).join(",")).join("\r\n");
 }
 const slug = s=> (s||"ai-solution").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,60) || "ai-solution";

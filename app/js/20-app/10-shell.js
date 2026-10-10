@@ -49,11 +49,13 @@ function renderMain(focusTop) {
 
 function renderProject(focusTop) {
   document.body.classList.remove("home");
-  renderRail(); renderMain(focusTop); renderLabel();
+  renderRail(); renderMain(focusTop); renderPanel();
+  // A framework with no side panel has no button to open one.
+  document.getElementById("openPreview").hidden = !hasPanel();
 }
 
 function softRefresh() {
-  renderRail(); renderLabel();
+  renderRail(); renderPanel();
   if (editingInMain()) syncInputs();
   else { const y = window.scrollY; renderMain(false); window.scrollTo(0, y); }
 }

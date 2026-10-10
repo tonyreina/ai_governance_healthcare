@@ -78,6 +78,7 @@
   "dash.searchNote": "Searching the current text of every project you can open, archived ones included. Earlier versions and the audit log are not searched.",
   "dash.searchNoteServer": "An administrator can search those with make subject-access.",
   "dash.empty": "No AI projects yet. Add the first solution your organization is evaluating, or load {count} sample projects, one per CHAI use case, to see how compliance flags work.",
+  "dash.emptyNoSamples": "No AI projects yet. Add the first solution your organization is evaluating.",
   "dash.loadSamples": "Load sample projects",
   "dash.noTextMatch": "No project contains that text.",
   "dash.noMatch": "No projects match. Clear the search or choose another status.",

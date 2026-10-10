@@ -1457,3 +1457,40 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - **Rejected:** running every browser suite in all three engines (most test the
   app's logic, which does not vary by engine, and would triple CI time).
 - Source: #160.
+
+### D-74 The shell asks one primary framework through a spine
+
+- Status: Accepted
+- Step 1 of #168 (R-63). The portfolio, the exports, the change history and
+  the events used CHAI's definitions directly (about thirty places), so CHAI
+  could be joined by another framework but not replaced.
+- **One primary per build.** The registry requires exactly one framework marked
+  `primary`, and throws at boot otherwise. The portfolio needs one status, and
+  folding two frameworks' judgments into one number would be meaningless (the
+  same reason OPTICA never feeds CHAI's status, docs/crosswalk.md).
+- **The spine** (`app/js/10-frameworks/00-registry.js`) is what the shell may
+  ask: items, sections, categories, gates and their labels, a decision's class,
+  the answers, phase, flags, status, next review, score, the report body, and
+  optional Markdown and JSON extras and worked examples. CHAI implements it in
+  `10-chai/25-spine.js`; the generic engine of step 2 will implement it from a
+  definition.
+- **Hooks for a framework's own controls.** A side panel (`panel`), clicks and
+  changes the framework handles (`onClick`, `onChange`), an opt-in switch
+  (`toggle`), and the change history's words for its keys (`describePath`,
+  `statusName`). A framework without a panel hides the button that opens it.
+- **Decisions have a class.** `GateClass` (go, conditional, revise, stop,
+  retire) replaces regular expressions over the English option names, which
+  the enum rule forbids and which a framework with other words would break.
+- **What changed that a reader can see:** in the Markdown report, framework
+  text (criteria, stage and checkpoint names) now goes through the same
+  escaping as typed text, so a parenthesis in a criterion is written `\(`.
+  This is safer for a definition written by someone else and renders the same.
+- **Rejected:** a shell that asks every framework and merges the answers (two
+  statuses for one project); leaving CHAI's names in the shell behind
+  `typeof` checks (a framework could still not be removed).
+- Found and left for step 2: catalog strings use CHAI's nouns for generic
+  parts ("Stage {n}" on the portfolio track, "Checkpoints", "Principle"); and
+  the server is not framework-neutral, because the retention SQL
+  (`server/migrations/008_retention.sql`) decides retirement, and so when
+  disposal is due, from CHAI's own "Stop" and "Retire" decisions.
+- Source: #168; R-63.

@@ -37,7 +37,7 @@ document.addEventListener("click",async e=>{
   if(btn.dataset.go){ go(btn.dataset.go); return; }
   if(btn.dataset.framework && !RO){
     const f=frameworkById(btn.dataset.framework);
-    if(f && f.id==="optica") setOpticaEnabled(!f.enabled(S));
+    if(f && f.toggle) f.toggle(!f.enabled(S));
     return;
   }
   if(btn.dataset.filter){ UI.filter=btn.dataset.filter; saveUI(); updateDashboard(); document.querySelector(`[data-filter="${CSS.escape(UI.filter)}"]`)?.focus(); return; }
@@ -65,34 +65,19 @@ document.addEventListener("click",async e=>{
     const patch={gates:{[k]:{decision:val, signedBy:val?(ME.id||null):null, signedAt:val?now:null, date: val ? (g.date||TODAY()) : (g.date||"")}}};
     deepMerge(S,patch); const st=stamp(); Object.assign(S,st);
     queuePatch(CUR, Object.assign(patch,st));
-    writeLog(CUR, val?`${GATES[k].title}: ${val}`:`${GATES[k].title}: decision cleared`);
+    const title=(spine().gates().find(x=>x.id===k)||{title:k}).title;
+    writeLog(CUR, val?`${title}: ${val}`:`${title}: decision cleared`);
     renderRail(); renderMain(false); return;
   }
-  // Add a CHAI-recommended metric. Name and category only: the value, the
-  // interval and the population are measurements the organization has to make,
-  // and pre-filling them would be inventing results.
   if(btn.dataset.holdAction){ openHoldDialog(btn.dataset.holdAction); return; }
-  if(btn.dataset.te && !RO){
-    const name=btn.dataset.te;
-    if(!S.metrics.some(m=>(m.name||"").trim().toLowerCase()===name.trim().toLowerCase())){
-      S.metrics.push({cat:btn.dataset.teCat||METRIC_CATS[0],name,value:"",ci:"",pop:""});
-      saveMetrics();
-    }
-    renderMain(false); renderLabel();
-    // Put the cursor where the user now has to type.
-    const rows=[...document.querySelectorAll('.mtable input[data-bind$=".name"]')];
-    const row=rows.find(i=>i.value===name);
-    if(row) row.closest("tr").querySelector('input[data-bind$=".value"]').focus();
-    return;
-  }
-  if(btn.dataset.delmetric!=null && !RO){ S.metrics.splice(+btn.dataset.delmetric,1); saveMetrics(); renderMain(false); renderLabel(); return; }
+  if(frameworkClick(btn)) return;
   const a=btn.dataset.act; if(!a) return;
   if(a===Act.UNLOCK){ location.reload(); return; }
   if(a==="new"){ const f=document.getElementById("newform"); if(f){ f.hidden=false; document.getElementById("newname").focus(); } return; }
   if(a==="new-cancel"){ document.getElementById("newform").hidden=true; return; }
   if(a==="samples"){
     btn.disabled=true;
-    try{ await loadSamples(); }
+    try{ const s=spine().samples; if(s) await s.loadAll(); }
     finally{ btn.disabled=false; }
     return;
   }
@@ -123,8 +108,7 @@ document.addEventListener("click",async e=>{
     S.access=accessPatch(S,id,role); queuePatch(CUR,Object.assign({access:S.access},stamp()));
     writeLog(CUR,`Granted ${ROLE_LABEL[role].toLowerCase()} to ${id}`); renderMain(false); toast(t("toast.accessGranted")); return;
   }
-  if(a==="addmetric"){ S.metrics.push({cat:METRIC_CATS[0],name:"",value:"",ci:"",pop:""}); saveMetrics(); renderMain(false); const ins=document.querySelectorAll('.mtable input[data-bind$=".name"]'); ins[ins.length-1]?.focus(); }
-  else if(a==="example"){ exampleInto(S); const st=stamp(); queuePatch(CUR,Object.assign({meta:clone(S.meta),items:clone(S.items),gates:clone(S.gates),metrics:clone(S.metrics),card:clone(S.card),cardUpdatedAt:S.cardUpdatedAt},st)); writeLog(CUR,"Example data filled in"); renderProject(false); toast(t("toast.exampleFilled")); }
+  else if(a==="example" && spine().samples){ const patch=spine().samples.fill(S); const st=stamp(); queuePatch(CUR,Object.assign(patch,st)); writeLog(CUR,"Example data filled in"); renderProject(false); toast(t("toast.exampleFilled")); }
   else if(a==="archive"){ if(!canOwn(S)){ toast(t("toast.ownerArchive")); return; } const v=!S.archived; S.archived=v; queuePatch(CUR,Object.assign({archived:v},stamp())); writeLog(CUR,v?"Archived":"Restored"); renderMain(false); toast(v?t("toast.archived"):t("toast.restored")); }
   else if(a==="delete"){ if(!canOwn(S)){ toast(t("toast.ownerDelete")); return; } openDeleteDialog(); }
   else if(a==="newreview"){ const now=new Date().toISOString(); const patch={gates:{D:{date:TODAY(),signedBy:ME.id||null,signedAt:now}}}; deepMerge(S,patch); queuePatch(CUR,Object.assign(patch,stamp())); writeLog(CUR,`Checkpoint D: periodic review recorded (${S.gates.D.decision})`); renderRail(); renderMain(false); toast(t("toast.reviewRecorded")); }
@@ -158,7 +142,7 @@ document.addEventListener("input",e=>{
   // finished rather than describing each keystroke.
   setTyping(true);
   try{ edit(p, el.value); } finally { setTyping(false); }
-  if(p.startsWith("meta.")||p.startsWith("card.")||p.startsWith("metrics.")) renderLabel();
+  if(p.startsWith("meta.")||p.startsWith("card.")||p.startsWith("metrics.")) renderPanel();
   if(p==="meta.solution"||p.startsWith("card.")) renderRail();
 });
 /* A text edit is finished when focus leaves the field. Capture phase, because
@@ -172,12 +156,10 @@ document.addEventListener("blur", e=>{
 
 document.addEventListener("change",e=>{
   const el=e.target;
-  // The use-case picker is stored on the project, so the chosen framework
-  // persists and the suggestions are there next time someone opens stage 4.
-  if(el.dataset && el.dataset.teUse!=null && S && !RO){ edit("meta.chaiUseCase", el.value); renderMain(false); return; }
+  if(frameworkChange(el)) return;
   if(el.dataset && el.dataset.bind && S && !RO && (el.tagName==="SELECT" || el.type==="date")){
     edit(el.dataset.bind, el.value);   // discrete: edit() flushes it already
-    renderLabel(); renderRail();
+    renderPanel(); renderRail();
   }
 });
 /* An edit still in the buffer when the page goes away would never be
@@ -203,7 +185,7 @@ document.getElementById("importFile").onchange=async e=>{
   e.target.value="";
 };
 const panel=document.getElementById("panel");
-document.getElementById("openPreview").onclick=()=>{ renderLabel(); panel.classList.add("open"); document.getElementById("closePreview").focus(); };
+document.getElementById("openPreview").onclick=()=>{ renderPanel(); panel.classList.add("open"); document.getElementById("closePreview").focus(); };
 document.getElementById("closePreview").onclick=()=>panel.classList.remove("open");
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") panel.classList.remove("open"); });
 window.addEventListener("pagehide",()=>{ Object.keys(pending).forEach(flush); });

@@ -69,6 +69,7 @@
   "dash.searchNote": "Durchsucht wird der aktuelle Text aller Projekte, die Sie öffnen können, einschließlich archivierter. Frühere Versionen und das Prüfprotokoll werden nicht durchsucht.",
   "dash.searchNoteServer": "Eine Administratorin oder ein Administrator kann sie mit make subject-access durchsuchen.",
   "dash.empty": "Noch keine KI-Projekte. Fügen Sie die erste Lösung hinzu, die Ihre Organisation bewertet, oder laden Sie {count} Beispielprojekte, eines pro CHAI-Anwendungsfall, um zu sehen, wie Konformitätshinweise funktionieren.",
+  "dash.emptyNoSamples": "Noch keine KI-Projekte. Fügen Sie die erste Lösung hinzu, die Ihre Organisation bewertet.",
   "dash.loadSamples": "Beispielprojekte laden",
   "dash.noTextMatch": "Kein Projekt enthält diesen Text.",
   "dash.noMatch": "Keine passenden Projekte. Löschen Sie die Suche oder wählen Sie einen anderen Status.",

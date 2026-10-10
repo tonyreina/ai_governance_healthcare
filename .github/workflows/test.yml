@@ -230,6 +230,9 @@ jobs:
       - name: notes take a Markdown subset and nothing that carries markup
         if: ${{ !cancelled() }}
         run: pixi run test-markdown
+      - name: the shell never names a framework
+        if: ${{ !cancelled() }}
+        run: pixi run test-framework-boundary
       - name: CHAI metric picker
         if: ${{ !cancelled() }}
         run: pixi run test-te

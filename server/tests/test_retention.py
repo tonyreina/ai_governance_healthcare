@@ -371,23 +371,38 @@ async def test_an_empty_read_trail_reports_nothing_due(client: AsyncClient) -> N
     assert (report["events"], report["held"]) == (0, 0)
 
 
-RULES_JS = (
-    Path(__file__).resolve().parents[2]
-    / "app" / "js" / "10-frameworks" / "10-chai" / "10-rules.js"
-)  # fmt: skip
+CHAI_DIR = (
+    Path(__file__).resolve().parents[2] / "app" / "js" / "10-frameworks" / "10-chai"
+)
+RULES_JS = CHAI_DIR / "10-rules.js"
+DEFINITION_JS = CHAI_DIR / "00-definition.js"
+
+# The decision classes phase() treats as retired (#168: decisions carry a
+# GateClass; the rule reads the class, never the wording).
+ENDING = ("STOP", "RETIRE")
 
 
-def retiring_decisions_js(source: str) -> set[tuple[str, str]]:
-    """(checkpoint, decision) pairs that make phase() return "retired"."""
+def ending_classes_js(rules: str) -> set[str]:
+    """The GateClass members phase() returns "retired" for."""
+    found: set[str] = set()
+    for line in rules.splitlines():
+        if 'key:"retired"' in line and "return" in line:
+            found |= set(re.findall(r"includes\(GateClass\.(\w+)\)", line))
+    return found
+
+
+def retiring_decisions_js(definition: str, rules: str) -> set[tuple[str, str]]:
+    """(checkpoint, decision) pairs that make phase() return "retired": every
+    option of every gate whose class is one phase() treats as ending."""
+    classes = dict(re.findall(r'"([^"]+)":\s*GateClass\.(\w+)', definition))
+    ending = ending_classes_js(rules)
     found: set[tuple[str, str]] = set()
-    for line in source.splitlines():
-        if 'key:"retired"' not in line or "return" not in line:
-            continue
-        if m := re.search(r"\[([^\]]*)\]\.includes\(\"(\w+)\"\)", line):
-            for gate in re.findall(r'dec\(p,"(\w)"\)', m.group(1)):
-                found.add((gate, m.group(2)))
-        for gate, decision in re.findall(r'dec\(p,"(\w)"\)==="(\w+)"', line):
-            found.add((gate, decision))
+    for gate, options in re.findall(
+        r"^\s*(\w):\{after:.*?options:\[([^\]]*)\]", definition, re.M
+    ):
+        for option in re.findall(r'"([^"]+)"', options):
+            if classes.get(option) in ending:
+                found.add((gate, option))
     return found
 
 
@@ -401,18 +416,32 @@ def retiring_decisions_sql(source: str) -> set[tuple[str, str]]:
 
 
 def test_retired_means_the_same_in_the_database_and_the_dashboard() -> None:
-    js = retiring_decisions_js(RULES_JS.read_text(encoding="utf-8"))
+    definition = DEFINITION_JS.read_text(encoding="utf-8")
+    rules = RULES_JS.read_text(encoding="utf-8")
+    assert ending_classes_js(rules) == set(ENDING)
+    js = retiring_decisions_js(definition, rules)
     assert js == {("A", "Stop"), ("B", "Stop"), ("C", "Stop"), ("D", "Retire")}
     assert retiring_decisions_sql(MIGRATION) == js
 
 
 def test_the_rule_comparison_notices_a_difference() -> None:
     # Mutation: a new way to retire in the dashboard, or one dropped from the SQL.
-    js = RULES_JS.read_text(encoding="utf-8").replace(
-        'if(dec(p,"D")==="Retire") return {key:"retired"',
-        'if(dec(p,"D")==="Retire"||dec(p,"C")==="Withdraw") return {key:"retired"',
+    rules = RULES_JS.read_text(encoding="utf-8")
+    definition = (
+        DEFINITION_JS.read_text(encoding="utf-8")
+        .replace(
+            '"Revise and resubmit","Stop"]},\n  D:',
+            '"Revise and resubmit","Stop","Withdraw"]},\n  D:',
+        )
+        .replace(
+            '"Retire": GateClass.RETIRE,',
+            '"Retire": GateClass.RETIRE,\n  "Withdraw": GateClass.STOP,',
+        )
     )
-    assert ("C", "Withdraw") in retiring_decisions_js(js)
+    assert ("C", "Withdraw") in retiring_decisions_js(definition, rules)
+    # Or a class phase() stops treating as ending.
+    weaker = rules.replace("classes.includes(GateClass.RETIRE)", "false")
+    assert ending_classes_js(weaker) == {"STOP"}
     sql = MIGRATION.replace("OR g.d ->> 'decision' = 'Retire'", "")
     assert ("D", "Retire") not in retiring_decisions_sql(sql)
 

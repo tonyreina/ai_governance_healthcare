@@ -18,6 +18,19 @@ function normalize(p){
 }
 const cardValOf = (p,k) => ((p.card||{})[k]||"").trim() || (k==="name"?(p.meta.solution||"").trim():"") || (k==="developer"?(p.meta.developer||"").trim():"");
 
+/* What a checkpoint decision means, whatever a framework calls it. A framework
+   classes each of its options; the engine reads only the class, so "Proceed" and
+   "Continue" both advance and "Stop" and "Retire" both end, with no wording
+   compared anywhere (#168). */
+const GateClass = Object.freeze({
+  GO: "go",                    // approved: advances the lifecycle
+  CONDITIONAL: "conditional",  // approved with conditions: advances, conditions owed
+  REVISE: "revise",            // sent back: does not advance
+  STOP: "stop",                // ended before going live
+  RETIRE: "retire",            // taken out of service after going live
+});
+const ADVANCES = Object.freeze(new Set([GateClass.GO, GateClass.CONDITIONAL]));
+
 const STATUS = {met:"Met",partial:"Partial",notmet:"Not met",na:"N/A"};   // English: exports
 const STATUS_KEY = Object.freeze({met:"status.met",partial:"status.partial",notmet:"status.notmet",na:"status.na"});
 const VAL = {met:1,partial:.5,notmet:0};

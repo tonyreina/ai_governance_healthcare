@@ -63,3 +63,16 @@ function opticaByProducer(p) {
 }
 
 const opticaOutstanding = p => OPTICA_ITEMS.filter(it => !(opticaAnswer(p, it.key).status));
+
+/* The change history's words for OPTICA's own keys (optica.answers.<key>.<field>). */
+const OpticaKey = Object.freeze({ ROOT: "optica", ANSWERS: "answers" });
+const OPTICA_FIELD = Object.freeze({ status: "status", evidence: "evidence", owner: "owner",
+  due: "due date", declineReason: "reason for declining" });
+function opticaDescribePath(parts){
+  if(parts[0] !== OpticaKey.ROOT || parts[1] !== OpticaKey.ANSWERS) return null;
+  const key = parts[2];
+  const item = OPTICA_ITEMS.find(i => i.key === key);
+  const what = parts[3] === Field.REFS ? "evidence reference"
+    : (Object.hasOwn(OPTICA_FIELD, parts[3]) ? OPTICA_FIELD[parts[3]] : parts[3]);
+  return item ? `OPTICA ${item.num}: ${what}` : `OPTICA ${key}: ${what}`;
+}

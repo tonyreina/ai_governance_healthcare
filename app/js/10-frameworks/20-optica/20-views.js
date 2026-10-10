@@ -26,7 +26,7 @@ function opticaItemHTML(it) {
     ? `<span class="pchip" title="${esc(t("optica.coveredBy", {ids: it.chai.join(", ")}))}">${esc(it.chai[0])}</span>`
     : `<span class="pchip" title="${esc(t("optica.notCovered"))}">—</span>`;
 
-  return `<li class="ci${open ? " open" : ""}" data-item="${esc(it.key)}">
+  return `<li class="ci${open ? " open" : ""}" data-item="${esc(it.key)}" data-reason-for="declined">
     <div class="ci-row">
       ${chai}
       <div class="ci-text">${esc(opticaItemText(it))}<button class="more" data-toggle="${esc(it.key)}" aria-expanded="${open}">${esc(t(open ? "ci.hide" : "ci.more"))}</button>${notes}</div>

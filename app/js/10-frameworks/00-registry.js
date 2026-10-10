@@ -72,8 +72,14 @@ function frameworkDescribePath(parts) {
   }
   return null;
 }
-const frameworkStatusName = value => {
-  for (const f of FRAMEWORKS) { const n = f.statusName ? f.statusName(value) : undefined; if (n) return n; }
+/* A stored status's English name, from the framework that owns the path: OPTICA's
+   "met" is "Answered", CHAI's is "Met". Asking the first framework that knew the
+   value logged OPTICA answers in CHAI's words (#173). */
+const frameworkStatusName = (path, value) => {
+  const parts = String(path).split(".");
+  for (const f of FRAMEWORKS) {
+    if (f.describePath && f.describePath(parts) && f.statusName) return f.statusName(value);
+  }
   return undefined;
 };
 

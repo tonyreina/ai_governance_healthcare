@@ -57,7 +57,7 @@ function describeValue(path, value) {
 
   const text = String(value);
   if (/\.status$/.test(path)) {
-    return frameworkStatusName(text) || text;
+    return frameworkStatusName(path, text) || text;
   }
   return text.length > 60 ? `“${text.slice(0, 57)}…”` : `“${text}”`;
 }

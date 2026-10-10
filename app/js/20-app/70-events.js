@@ -48,6 +48,11 @@ document.addEventListener("click",async e=>{
     edit(`${store}.${id}.status`, val);
     const li=btn.closest(".ci");
     li.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.s===val)));
+    // A status that asks for a reason (OPTICA's Declined) adds or removes a field,
+    // so the item is drawn again, open, with the field in place (#172). The item
+    // names that status itself; the shell compares two values it was given.
+    const reasonFor=li.dataset.reasonFor;
+    if(reasonFor && (val===reasonFor || cur===reasonFor)){ openItems.add(id); renderMain(false); renderRail(); return; }
     if((val==="partial"||val==="notmet") && !openItems.has(id)){ openItems.add(id); li.classList.add("open"); const m=li.querySelector(".more"); m.textContent=t("ci.hide"); m.setAttribute("aria-expanded","true"); }
     renderRail(); return;
   }

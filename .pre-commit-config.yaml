@@ -75,6 +75,24 @@ repos:
         pass_filenames: false
         files: '^(app/i18n/|app/js/|app/index\.html$|scripts/check_i18n\.py$)'
 
+      # Framework definitions: the schema plus the rules it cannot state (unique
+      # ids, references that resolve, view ids and namespaces across the build,
+      # reserved names). The engine trusts what passes (#168, R-63).
+      - id: check-framework
+        name: check the framework definitions
+        entry: pixi run check-framework
+        language: system
+        pass_filenames: false
+        files: '^app/frameworks/|^schema/framework|^scripts/check_framework'
+
+      # The checker's own mutation tests, whenever it, the schema or a definition changes.
+      - id: test-check-framework
+        name: test the framework definition checker
+        entry: pixi run test-check-framework
+        language: system
+        pass_filenames: false
+        files: '^app/frameworks/|^schema/framework|^scripts/check_framework|^tests/test_check_framework\.py$|^app/i18n/en\.json$|^app/js/10-frameworks/05-project/'
+
       # A closed set of values gets an enumerated type, not a bare string. It is
       # a ratchet: scripts/enum_baseline.json holds the existing uses, a new one
       # fails, and fixing one fails until the baseline is ratcheted down. Run

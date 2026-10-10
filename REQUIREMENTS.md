@@ -1093,5 +1093,9 @@ honest answer and is a gap worth closing; see R-19.
 - Source: the owner, this session; issue #168; DECISIONS D-74.
 - Enforced by: `tests/test_framework_boundary.py` (the shell names no CHAI or
   OPTICA identifier, and a stand-in primary drives the portfolio and every
-  export). The engine, the definition schema and the build switch are steps 2
-  and 3 of #168 and not yet built.
+  export). A definition (`app/frameworks/<id>/framework.json`) is checked by
+  `pixi run check-framework` (pre-commit and CI) against
+  `schema/framework.schema.json` and the rules a schema cannot state, each rule
+  shown failing in `tests/test_check_framework.py`. The app does not read the
+  definitions yet: the engine and the build switch are steps 2 and 3 of #168
+  and not yet built.

@@ -1049,6 +1049,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_fingerprint.py::an edited record fails to verify`
   `tests/test_fingerprint.py::the HTML report (which the PDF prints) has both digests`
   `tests/test_fingerprint.py::the notice says a SHA-256 travels in the JSON export, and now it does`
+  `tests/test_export_schema.py::a record keyed by numbers: fingerprint recomputed (regression)`
+  `tests/test_export_schema.py::answers keyed by numbers: fingerprint recomputed (regression)`
+  `tests/test_export_schema.py::load_export.py reads it and says the fingerprint matches`
+  `tests/test_fingerprint_skip.py::all six places name the same fields`
 
 ### C-82 Text a person types stays text, on every screen and in every export
 
@@ -1205,3 +1209,17 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_build_config.py::the published page and policy are untouched`
   `tests/test_build_config.py::an --out into docs/, proxy/ or app/ is refused`
   `tests/test_build_config.py::--config without --out is refused`
+
+### C-95 A revision's fingerprint is the record's, as the dashboard shows it
+
+- **Claim:** The server hashes each revision in the version history by the rule
+  the dashboard and `examples/load_export.py` use (the same fields left out, keys
+  in the same order, the project's id included), so the same record has one
+  fingerprint on the setup page, in an export and in the history.
+- **Asserted in:** `docs/exports.md` — "a revision's fingerprint is the one the setup page and an export showed for that record"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_fingerprint.py::test_the_server_gives_the_record_the_dashboards_fingerprint`
+  `server/tests/test_fingerprint.py::TestARevisionCarriesTheRecordsFingerprint::test_the_version_history_agrees_with_an_export`
+  `tests/test_export_schema.py::the shared record's fingerprint is the one the server and`
+  `tests/test_fingerprint_skip.py::all six places name the same fields`

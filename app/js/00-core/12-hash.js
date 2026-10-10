@@ -23,30 +23,42 @@
    substantive did is a hash nobody will trust. See CANON_SKIP.
    ============================================================ */
 
-/* Excluded from the fingerprint, each for a reason:
+/* Excluded from the fingerprint, at every depth, each for a reason:
      updatedAt/updatedBy  touched by every save, including a no-op
      cardUpdatedAt        same
      _state               the app's working copy, not the record
-     contentHash          cannot hash a document containing its own hash */
+     contentHash          cannot hash a document containing its own hash
+     generated            an export's own time stamp, not the record's
+   The same list is _HASH_SKIP in server/app/routes.py, CANON_SKIP in
+   examples/load_export.py, and the words of FINGERPRINT_OF and docs/exports.md:
+   tests/test_fingerprint_skip.py fails if any of them differs (#177). */
 const CANON_SKIP = new Set([
   "updatedAt", "updatedBy", "cardUpdatedAt", "_state", "contentHash", "generated",
 ]);
 
-/* Deterministic JSON: keys sorted at every level, volatile fields
-   dropped, undefined treated as absent. */
-function canonicalize(value) {
-  if (value === null || typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.map(canonicalize);
-  const out = {};
-  for (const key of Object.keys(value).sort()) {
-    if (CANON_SKIP.has(key)) continue;
-    const v = value[key];
-    if (v !== undefined) out[key] = canonicalize(v);
-  }
-  return out;
-}
+/* Deterministic JSON: keys sorted at every level (by UTF-16 code unit, which is
+   what sort() does), volatile fields dropped, undefined treated as absent.
 
-const canonicalJSON = doc => JSON.stringify(canonicalize(doc));
+   Written out rather than built as an object and handed to JSON.stringify: an
+   object lists integer-like keys ("9", "10") first, in numeric order, whatever
+   order they were added in, so the sorted order did not survive. A record keyed
+   by numbers (a framework whose item ids are "1".."12") then hashed differently
+   from the rule every reader recomputes it by, and examples/load_export.py
+   reported a true record as altered (#177). */
+function canonicalJSON(doc) {
+  const write = value => {
+    if (value === null || typeof value !== "object") return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(v => write(v) ?? "null").join(",")}]`;
+    const parts = [];
+    for (const key of Object.keys(value).sort()) {
+      if (CANON_SKIP.has(key)) continue;
+      const text = write(value[key]);
+      if (text !== undefined) parts.push(`${JSON.stringify(key)}:${text}`);
+    }
+    return `{${parts.join(",")}}`;
+  };
+  return write(doc);
+}
 
 /* MD5, implemented here because browsers do not provide it:
    crypto.subtle offers SHA family digests only, and deliberately so.

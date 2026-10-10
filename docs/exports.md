@@ -50,9 +50,17 @@ python examples/load_export.py my-project-chai-review.json
 
 It recomputes both digests from the file alone, over the record (the `_state` and
 the project id) as compact canonical JSON in UTF-8: keys sorted at every level,
-with the volatile fields `updatedAt`, `updatedBy`, `cardUpdatedAt`, `_state`,
-`contentHash` and `generated` left out. An export from before fingerprints were
-added reports that it has none.
+by UTF-16 code unit as JavaScript sorts them (so `"10"` comes before `"9"`, and
+an emoji before a character from U+E000 to U+FFFF), with the volatile fields
+`updatedAt`, `updatedBy`, `cardUpdatedAt`, `_state`, `contentHash` and
+`generated` left out. An export from before fingerprints were added reports that
+it has none. It reads the export of a build of any framework, not only CHAI's.
+
+On the shared server, each revision in the version history carries the MD5 of
+the record as it was, computed by the same rule, so a revision's fingerprint is
+the one the setup page and an export showed for that record. Revisions saved
+before this rule was fixed (#177) were hashed without the project's id, and their
+fingerprints do not match.
 
 On the shared server, the dashboard reports each export it produces, so it
 appears in the read trail beside the reads that fetched the data
@@ -105,13 +113,24 @@ unavailable, since it goes through the print dialog rather than a download API.
 
 ## Project data (JSON)
 
-Each project exports as JSON, validated by
-[`schema/project.schema.json`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/schema/project.schema.json)
-(`chai-review/2`). The file holds the status, phase, next review date and flags
+Each project exports as JSON, described by
+[`schema/project.schema.json`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/schema/project.schema.json).
+The file holds the status, phase, next review date and flags
 as computed at export time; the project's `meta`, checkpoint decisions and metrics;
 the model card; the whole checklist with each criterion's status, evidence, owner,
 due date and `references`; the scores; and `_state`, the project as the tool
 stores it.
+
+The `schema` field names the framework: `chai-review/2` for the published
+build, and the definition's own id, of the form `<id>-review/<n>`, for a
+[build of another framework](frameworks/custom.md). One schema describes every
+framework's export, because the structure is the same. Where a value comes from
+the framework's definition (item ids, statuses, categories, phases and
+checkpoints), the schema lists it for CHAI only; another framework's values are
+the ones in its definition. Every export the published build and the example
+framework's build produce, in every language, with hostile text in every typed
+field, is validated against the schema in CI, which also fails on a field the
+export writes and the schema does not describe.
 
 Only `_state` is read back. Everything else is derived for the reader's
 convenience. **Import project JSON** on the home page reads `_state` and creates
@@ -137,7 +156,8 @@ Four scripts in `examples/` work on exports. Run them from the repository root.
 python examples/load_export.py my-project-chai-review.json
 ```
 
-prints a summary of the project and, if pandas is installed, its open gaps.
+prints a summary of the project, checks its fingerprint and, for a CHAI export
+with pandas installed, lists its open gaps.
 
 ### Feeding evaluation metrics back in
 

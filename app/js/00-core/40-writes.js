@@ -243,9 +243,12 @@ async function createProject(data,logText){
     await STORE.create(id,data);
     // Goes through the same queue as every other entry, so a transient
     // failure here is retried rather than dropped. See writeLog().
+    // The hash is the record's with its id, as every later entry, the setup page
+    // and the exports compute it; without the id it was a different number for
+    // the same record (#177).
     enqueueLog(id, {
       at:new Date().toISOString(), by:ME.id||null,
-      text:logText||"Project created", hash:contentHash(data)});
+      text:logText||"Project created", hash:contentHash({...data, id})});
     return id;
   }
   catch(e){ toast(e&&e.code==="quota_exceeded"?t("toast.full"):t("toast.createFailed")); return null; }

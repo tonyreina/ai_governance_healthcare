@@ -1,18 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tonyreina.github.io/ai_governance_healthcare/schema/project.schema.json",
-  "title": "CHAI governance review: project export",
-  "description": "One project as written by 'Download project data (JSON)'. Fields other than _state are derived for convenience; import reads _state.",
+  "title": "Governance review: project export",
+  "description": "One project as written by 'Download project data (JSON)', from the published build (CHAI, 'chai-review/2') or a build of any other framework ('<id>-review/<n>', D-79). The structure is the same for every framework; where a value comes from the framework's definition (its item ids, statuses, categories, phases and checkpoints), this schema states it for the published framework only, under the 'chai-review/2' condition at the end (D-82). Fields other than _state are derived for convenience; import reads _state. tests/test_export_schema.py validates real exports against this file, and also with every object closed, so a field the export writes and this file does not describe fails.",
   "type": "object",
-  "required": [
-    "schema",
-    "meta",
-    "checklist",
-    "_state"
-  ],
+  "required": ["schema", "meta", "checklist", "_state"],
   "properties": {
     "schema": {
-      "const": "chai-review/2"
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}-review/[1-9][0-9]*$",
+      "description": "The framework's export id: 'chai-review/2' for the published build, the definition's export.schemaId for any other (the pattern is the one schema/framework.schema.json gives it)."
     },
     "generated": {
       "type": "string",
@@ -46,122 +43,63 @@
       }
     },
     "status": {
-      "enum": [
-        "Out of compliance",
-        "Needs update",
-        "On track",
-        "Retired",
-        "Stopped"
-      ]
+      "description": "The engine's, the same for every framework.",
+      "enum": ["Out of compliance", "Needs update", "On track", "Retired", "Stopped"]
     },
     "phase": {
-      "enum": [
-        "Intake & planning",
-        "Design, build & assess",
-        "Pilot",
-        "Deployed",
-        "Retired",
-        "Stopped"
-      ]
+      "type": "string",
+      "description": "The label of one of the framework's phases, or 'Retired' or 'Stopped'."
     },
     "next_review": {
-      "type": [
-        "string",
-        "null"
-      ],
+      "type": ["string", "null"],
       "format": "date"
     },
     "flags": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "sev",
-          "text"
-        ],
+        "required": ["sev", "text"],
         "properties": {
-          "sev": {
-            "enum": [
-              "red",
-              "amber"
-            ]
-          },
-          "text": {
-            "type": "string"
+          "sev": {"enum": ["red", "amber"]},
+          "text": {"type": "string", "description": "The flag, in English."},
+          "msg": {
+            "type": "array",
+            "description": "The dashboard's catalog key for the flag and its parameters, which the dashboard uses to show it in the reader's language. The key is the dashboard's, not a stable identifier; read text.",
+            "prefixItems": [{"type": "string"}, {"type": "object"}],
+            "minItems": 2,
+            "maxItems": 2
           }
         }
       }
     },
-    "meta": {
-      "$ref": "#/$defs/meta"
-    },
-    "gates": {
-      "$ref": "#/$defs/gates"
-    },
+    "meta": {"$ref": "#/$defs/meta"},
+    "gates": {"$ref": "#/$defs/gates"},
     "metrics": {
       "type": "array",
-      "items": {
-        "$ref": "#/$defs/metric"
-      }
+      "items": {"$ref": "#/$defs/metric"}
     },
     "model_card": {
       "type": "object",
-      "additionalProperties": {
-        "type": "string"
-      }
+      "description": "The published framework's applied model card. Absent from another framework's export.",
+      "additionalProperties": {"type": "string"}
     },
     "checklist": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "id",
-          "stage",
-          "principle",
-          "criterion",
-          "status"
-        ],
+        "required": ["id", "stage", "principle", "criterion", "status"],
         "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^s[1-6]-[0-9]+$"
-          },
-          "stage": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 6
-          },
-          "principle": {
-            "enum": [
-              "U",
-              "F",
-              "S",
-              "T",
-              "P"
-            ],
-            "description": "U usefulness, F fairness, S safety, T transparency, P security & privacy"
-          },
-          "criterion": {
-            "type": "string"
-          },
+          "id": {"type": "string", "description": "The item's id in the framework's definition."},
+          "stage": {"type": "integer", "minimum": 1, "description": "The number of the item's section."},
+          "principle": {"type": "string", "description": "The id of the item's category."},
+          "criterion": {"type": "string"},
           "status": {
-            "enum": [
-              "met",
-              "partial",
-              "notmet",
-              "na",
-              null
-            ]
+            "type": ["string", "null"],
+            "description": "One of the framework's status values, or null when unanswered."
           },
-          "evidence": {
-            "type": "string"
-          },
-          "owner": {
-            "type": "string"
-          },
-          "due": {
-            "type": "string"
-          },
+          "evidence": {"type": "string"},
+          "owner": {"type": "string"},
+          "due": {"type": "string"},
           "references": {
             "type": "array",
             "description": "Evidence references: links and file fingerprints. A file is never included, only its name, size and SHA-256.",
@@ -187,188 +125,161 @@
     },
     "scores": {
       "type": "object",
+      "description": "Readiness in percent: overall, and one per category id of the framework.",
+      "required": ["overall"],
       "properties": {
-        "overall": {
-          "type": "integer"
-        },
-        "U": {
-          "type": "integer"
-        },
-        "F": {
-          "type": "integer"
-        },
-        "S": {
-          "type": "integer"
-        },
-        "T": {
-          "type": "integer"
-        },
-        "P": {
-          "type": "integer"
-        }
-      }
+        "overall": {"type": "integer"}
+      },
+      "additionalProperties": {"type": "integer"}
     },
     "_state": {
       "type": "object",
       "description": "The stored project document. This is what import reads.",
-      "required": [
-        "meta",
-        "items"
-      ],
+      "required": ["meta", "items"],
       "properties": {
-        "meta": {
-          "$ref": "#/$defs/meta"
-        },
+        "meta": {"$ref": "#/$defs/meta"},
         "items": {
-          "type": "object"
+          "type": "object",
+          "description": "The primary framework's answers, keyed by item id.",
+          "additionalProperties": {"type": "object"}
         },
-        "gates": {
-          "$ref": "#/$defs/gates"
-        },
+        "gates": {"$ref": "#/$defs/gates"},
         "metrics": {
           "type": "array",
-          "items": {
-            "$ref": "#/$defs/metric"
+          "items": {"$ref": "#/$defs/metric"}
+        },
+        "card": {"type": "object"},
+        "access": {
+          "type": "object",
+          "description": "Who may open the project, by user id. Empty lists mean unrestricted.",
+          "properties": {
+            "owners": {"type": "array", "items": {"type": "string"}},
+            "writers": {"type": "array", "items": {"type": "string"}},
+            "readers": {"type": "array", "items": {"type": "string"}}
           }
         },
-        "card": {
-          "type": "object"
-        },
-        "archived": {
-          "type": "boolean"
-        },
-        "createdAt": {
-          "type": "string"
-        },
-        "updatedAt": {
-          "type": "string"
-        },
-        "cardUpdatedAt": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
+        "archived": {"type": "boolean"},
+        "createdAt": {"type": "string"},
+        "createdBy": {"type": ["string", "null"]},
+        "updatedAt": {"type": "string"},
+        "updatedBy": {"type": ["string", "null"]},
+        "cardUpdatedAt": {"type": ["string", "null"]}
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/supplement",
+        "description": "Any other key is a supplementary framework's record, under its id (OPTICA's is 'optica')."
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "required": ["schema"],
+        "properties": {"schema": {"const": "chai-review/2"}}
+      },
+      "then": {"$ref": "#/$defs/chai"}
+    }
+  ],
   "$defs": {
     "meta": {
       "type": "object",
       "properties": {
-        "solution": {
-          "type": "string"
-        },
-        "org": {
-          "type": "string"
-        },
-        "developer": {
-          "type": "string"
-        },
-        "sourcing": {
-          "type": "string"
-        },
-        "sponsor": {
-          "type": "string"
-        },
-        "reviewers": {
-          "type": "string"
-        },
-        "riskTier": {
-          "enum": [
-            "",
-            "Low",
-            "Moderate",
-            "High"
-          ]
-        },
-        "reviewCadence": {
-          "type": "string"
-        },
-        "startDate": {
-          "type": "string"
-        },
-        "scope": {
-          "type": "string"
-        },
+        "solution": {"type": "string"},
+        "org": {"type": "string"},
+        "developer": {"type": "string"},
+        "sourcing": {"type": "string"},
+        "sponsor": {"type": "string"},
+        "reviewers": {"type": "string"},
+        "riskTier": {"enum": ["", "Low", "Moderate", "High"]},
+        "reviewCadence": {"type": "string"},
+        "startDate": {"type": "string"},
+        "scope": {"type": "string"},
         "chaiUseCase": {
           "type": "string",
-          "description": "CHAI use case slug whose Testing & Evaluation framework this project draws suggested metrics from."
+          "description": "CHAI use case slug whose Testing & Evaluation framework this project draws suggested metrics from. Empty in another framework's export."
+        },
+        "framework": {
+          "type": "object",
+          "description": "The build's primary framework, stamped on every record a build of other frameworks makes (R-67). Absent from the published build's records, which are CHAI's.",
+          "required": ["id"],
+          "properties": {
+            "id": {"type": "string"}
+          }
         }
       }
     },
     "gate": {
       "type": "object",
       "properties": {
-        "decision": {
-          "type": "string"
-        },
-        "by": {
-          "type": "string"
-        },
-        "date": {
-          "type": "string"
-        },
-        "rationale": {
-          "type": "string"
-        },
-        "signedBy": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "signedAt": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
+        "decision": {"type": "string"},
+        "by": {"type": "string"},
+        "date": {"type": "string"},
+        "rationale": {"type": "string"},
+        "signedBy": {"type": ["string", "null"]},
+        "signedAt": {"type": ["string", "null"]}
       }
     },
     "gates": {
       "type": "object",
-      "properties": {
-        "A": {
-          "$ref": "#/$defs/gate"
-        },
-        "B": {
-          "$ref": "#/$defs/gate"
-        },
-        "C": {
-          "$ref": "#/$defs/gate"
-        },
-        "D": {
-          "$ref": "#/$defs/gate"
-        }
-      }
+      "description": "Checkpoint decisions, keyed by the framework's checkpoint ids.",
+      "additionalProperties": {"$ref": "#/$defs/gate"}
     },
     "metric": {
       "type": "object",
-      "required": [
-        "cat",
-        "name",
-        "value"
-      ],
+      "required": ["cat", "name", "value"],
       "properties": {
-        "cat": {
-          "enum": [
-            "Usefulness, usability & efficacy",
-            "Fairness & equity",
-            "Safety & reliability"
-          ]
+        "cat": {"type": "string"},
+        "name": {"type": "string"},
+        "value": {"type": "string"},
+        "ci": {"type": "string"},
+        "pop": {"type": "string"}
+      }
+    },
+    "supplement": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean", "description": "Whether the project uses it (an opt-in supplement such as OPTICA)."},
+        "answers": {
+          "type": "object",
+          "description": "Its answers, keyed by its item ids.",
+          "additionalProperties": {"type": "object"}
+        }
+      }
+    },
+    "chai": {
+      "description": "What the published framework's definition (app/frameworks/chai/framework.json) fixes. tests/test_export_schema.py checks each list here against the definition.",
+      "properties": {
+        "phase": {
+          "enum": ["Intake & planning", "Design, build & assess", "Pilot", "Deployed", "Retired", "Stopped"]
         },
-        "name": {
-          "type": "string"
+        "gates": {
+          "propertyNames": {"enum": ["A", "B", "C", "D"]}
         },
-        "value": {
-          "type": "string"
+        "metrics": {
+          "items": {
+            "properties": {
+              "cat": {
+                "enum": ["Usefulness, usability & efficacy", "Fairness & equity", "Safety & reliability"]
+              }
+            }
+          }
         },
-        "ci": {
-          "type": "string"
+        "checklist": {
+          "items": {
+            "properties": {
+              "id": {"pattern": "^s[1-6]-[0-9]+$"},
+              "stage": {"maximum": 6},
+              "principle": {
+                "enum": ["U", "F", "S", "T", "P"],
+                "description": "U usefulness, F fairness, S safety, T transparency, P security & privacy"
+              },
+              "status": {"enum": ["met", "partial", "notmet", "na", null]}
+            }
+          }
         },
-        "pop": {
-          "type": "string"
+        "scores": {
+          "required": ["overall", "U", "F", "S", "T", "P"],
+          "propertyNames": {"enum": ["overall", "U", "F", "S", "T", "P"]}
         }
       }
     }

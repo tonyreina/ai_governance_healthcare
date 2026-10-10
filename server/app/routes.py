@@ -587,6 +587,7 @@ async def delete_project(
 # app/js/00-core/12-hash.js, or the browser and the server will disagree about
 # what the same record hashes to -- which is worse than having no hash, because
 # it looks like evidence of a change that did not happen.
+# tests/test_fingerprint_skip.py fails if they differ (#177).
 _HASH_SKIP = frozenset(
     {"updatedAt", "updatedBy", "cardUpdatedAt", "_state", "contentHash", "generated"}
 )
@@ -603,8 +604,8 @@ def _canonical(value: Any, _depth: int = 0) -> Any:
         raise TooDeep(f"document nests deeper than {MERGE_MAX_DEPTH} levels")
     if isinstance(value, dict):
         return {
-            k: _canonical(v, _depth + 1)
-            for k, v in sorted(value.items())
+            k: _canonical(value[k], _depth + 1)
+            for k in sorted(value, key=_utf16)
             if k not in _HASH_SKIP
         }
     if isinstance(value, list):
@@ -612,17 +613,31 @@ def _canonical(value: Any, _depth: int = 0) -> Any:
     return value
 
 
+def _utf16(key: str) -> bytes:
+    """The order the browser sorts keys in: by UTF-16 code unit, not code point.
+
+    They differ when one key has a character from U+E000 to U+FFFF where another
+    has one above U+FFFF (an emoji): Python put the emoji last, the browser first,
+    and the same record hashed to two values (#177).
+    """
+    return key.encode("utf-16-be", "surrogatepass")
+
+
 def content_md5(doc: dict[str, Any]) -> str:
     """The same fingerprint the browser computes, over the same canonical form.
+
+    ``doc`` is the record as the browser holds it, its id included (``_snapshot``
+    adds it), so a revision's fingerprint is the one the setup page and the
+    exports show for the same record.
 
     MD5 because that is what the record is labeled with; it answers "is this
     the same version?" and nothing stronger. It is not a tamper seal, and
     anything that presents it as one is wrong -- see the note in the app's
     changelog view.
     """
-    canon = _json.dumps(
-        _canonical(doc), sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    )
+    # Not sort_keys: _canonical has put the keys in the browser's order already,
+    # and sorting again would put them back in Python's.
+    canon = _json.dumps(_canonical(doc), separators=(",", ":"), ensure_ascii=False)
     return hashlib.md5(canon.encode("utf-8")).hexdigest()
 
 
@@ -658,7 +673,7 @@ async def _snapshot(
         incarnation,
         rev,
         doc,
-        content_md5(doc),
+        content_md5({**doc, "id": project_id}),
         by,
         access,
     )

@@ -44,9 +44,10 @@ app/
     10-frameworks/
       00-registry.js           the framework contract
       05-project/              project setup (not owned by any framework)
-      10-chai/                 definition, T&E metrics, rules, views, spine,
-                               examples, its own controls, registration
-      20-optica/               the same files, independently
+      01-engine/               the engine: rules, screens, a framework's words
+      10-chai/                 CHAI's plug-ins: model card, metrics, T&E picker,
+                               samples, its own controls
+      90-register.js           registers every definition in the build
     20-app/                    shell, dashboard, exports, session, events, boot
                                (none of which names a framework)
 ```
@@ -100,25 +101,24 @@ service, add a class implementing the six methods and select it at boot.
 
 ## Adding a framework
 
-A framework is a directory under `app/js/10-frameworks/` whose last file calls
-`registerFramework()` with:
+A framework is a **definition**, `app/frameworks/<id>/framework.json`, in the
+shape `schema/framework.schema.json` describes: its sections and items, the
+statuses an item can take (each with a class the engine scores by), its
+checkpoints (each option with a class: go, conditional, revise, stop or
+retire), its phases, review and flags, and the catalog keys its screens use.
+`pixi run check-framework` checks it, with rules a schema cannot state.
 
-| Field | Purpose |
-|---|---|
-| `id`, `label` | identity, used in data keys and the UI |
-| `enabled(p)` | is it switched on for this project? |
-| `views(p)` | rail entries, in order |
-| `render(view, p)` | markup for one view |
-| `blank()` | extra keys for a new project |
-| `normalize(p)` | repair shape on load; must be idempotent |
-| `primary` | `true` on exactly one framework per build (below) |
-| `spine` | the primary's answers to what the shell asks (below) |
-| `describePath(parts)`, `statusName(v)` | the change history's words for its own keys |
-| `panel()`, `onClick(btn)`, `onChange(el)`, `toggle(on)` | optional: a side panel, its own controls, an opt-in switch |
+One engine (`app/js/10-frameworks/01-engine/`) draws every screen and computes
+every status from a definition, and `10-frameworks/90-register.js` registers
+each one in the build. A framework needs code only for something no definition
+can say: CHAI's model card, its key metrics, its T&E picker and its samples
+live in `app/js/10-frameworks/10-chai/` and reach the engine through
+`frameworkExtras()` and `registerPlugin()`. OPTICA has no code at all.
 
-Nothing else in the app names a framework. The rail, the router and the pager
-read only the registry, and `pixi run test-framework-boundary` fails if a file
-in `00-core/` or `20-app/` names anything CHAI or OPTICA defines.
+Nothing else in the app names a framework. `pixi run test-framework-boundary`
+fails if the shell, the engine, the setup screen or the registration names
+anything a framework's own code defines, or says a framework's name in a
+string (browser storage keys aside).
 
 !!! warning "One framework owns the status"
 
@@ -141,8 +141,10 @@ in `00-core/` or `20-app/` names anything CHAI or OPTICA defines.
     Evidence can be cited in both; a judgment in one is never a judgment in
     the other.
 
-    Replacing CHAI with a framework of your own, defined as data and chosen at
-    build time, is in progress (#168).
+    Building with a framework of your own in place of CHAI is in progress:
+    the definition format and the engine are done; neutral wording for a
+    framework without its own catalog keys, and a build that selects other
+    frameworks, are the rest of #168.
 
 ## Languages
 

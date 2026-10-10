@@ -158,7 +158,7 @@ const SAMPLES=[
   },
 ];
 
-function fillItems(p, stages, status){ STAGES.filter(s=>stages.includes(s.n)).forEach(s=>s.items.forEach(it=>p.items[it.id]={status,evidence:"",owner:"",due:""})); }
+function fillItems(p, stages, status){ ENGINES.chai.sections.filter(s=>stages.includes(s.n)).forEach(s=>s.items.forEach(it=>p.items[it.id]={status,evidence:"",owner:"",due:""})); }
 
 function buildSample(spec, now){
   const d=n=>ymd(addDays(now,n)), iso=n=>addDays(now,n).toISOString();
@@ -170,7 +170,7 @@ function buildSample(spec, now){
   });
   Object.entries(spec.gates||{}).forEach(([k,[decision,day]])=>{
     p.gates[k]={decision,by:"AI governance committee",date:d(day),
-      rationale:isGo(decision)?"Met criteria for this stage.":"See the review record.",   // by class (#178)
+      rationale:ENGINES.chai.advances(decision)?"Met criteria for this stage.":"See the review record.",   // by class (#178)
       signedBy:ME.id||null,signedAt:iso(day)};
   });
   if(spec.card) p.card=Object.assign(spec.fullCard?clone(EX_CARD):{}, spec.card);

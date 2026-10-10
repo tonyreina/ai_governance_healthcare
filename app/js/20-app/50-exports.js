@@ -75,7 +75,7 @@ function exportPDF(){
 function exportMD(){
   // The Markdown report reads in the reader's language (D-60), like the HTML one.
   const fw=spine(), all=fw.items(), ov=fw.score(S), m=S.meta, L=[], answers=fw.answers(S);
-  const st=s=>t(Object.hasOwn(STATUS_KEY,s)?STATUS_KEY[s]:"report.unanswered");
+  const st=s=>fw.statusKnown(s) ? fw.statusLabel(s) : t("report.unanswered");
   // Every value a person typed goes through here. It ends the line (a value cannot
   // start a heading, a quotation or a table row) and backslash-escapes what Markdown
   // reads as structure: emphasis, links and images, code, tables and raw HTML. The
@@ -113,7 +113,7 @@ function projectJSON(p){
   const fw=spine(), all=fw.items(), answers=fw.answers(p);
   const state=clone(p); delete state.id;
   return {
-    schema:"chai-review/2", generated:new Date().toISOString(), storage:storageNote(),
+    schema:fw.schemaId, generated:new Date().toISOString(), storage:storageNote(),
     project_id:p.id||null, fingerprint:{...contentHashes(p), of:FINGERPRINT_OF},
     status:fw.status(p).label, phase:fw.phase(p).label, next_review:fw.nextReview(p), flags:fw.flags(p),
     meta:p.meta, gates:p.gates, metrics:p.metrics,

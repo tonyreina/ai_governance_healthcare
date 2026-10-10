@@ -31,14 +31,5 @@ const GateClass = Object.freeze({
 });
 const ADVANCES = Object.freeze(new Set([GateClass.GO, GateClass.CONDITIONAL]));
 
-const STATUS = {met:"Met",partial:"Partial",notmet:"Not met",na:"N/A"};   // English: exports
-const STATUS_KEY = Object.freeze({met:"status.met",partial:"status.partial",notmet:"status.notmet",na:"status.na"});
-const VAL = {met:1,partial:.5,notmet:0};
-
-// Generic: scores any list of {id} against any items map. Framework rules
-// decide WHICH list to pass; this does not know.
-function scoreOf(list, items){
-  items=items||S.items; let sum=0,n=0,answered=0;
-  list.forEach(it=>{ const st=(items[it.id]||{}).status; if(st) answered++; if(st==="na") return; n++; sum+=VAL[st]||0; });
-  return {pct:n?Math.round(sum/n*100):0,answered,total:list.length,applicable:n};
-}
+/* A status's meaning, its label and its weight belong to the framework that
+   defines it (app/frameworks/<id>/framework.json, the engine's StatusClass). */

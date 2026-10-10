@@ -18,6 +18,7 @@ markup of two builds to diff by hand.
 
     pixi run test-snapshot             compare
     pixi run test-snapshot --update    rewrite the fixture (an intended change)
+    pixi run test-snapshot --dump F    also write every piece's text to F
 """
 
 from __future__ import annotations
@@ -141,12 +142,12 @@ def capture() -> tuple[dict[str, str], list[str]]:
             # Switching OPTICA writes a log entry, asynchronously; wait for it so
             # the report and history views are captured after it, every time.
             n = page.evaluate("LOG.length")
-            page.evaluate("setOpticaEnabled(true)")
+            page.evaluate("setFrameworkEnabled('optica', true)")
             wait_until(page, f"LOG.length > {n}")
             settle(page)
             views_of(page, pid, f"{key}/optica-on", out)
             n = page.evaluate("LOG.length")
-            page.evaluate("setOpticaEnabled(false)")
+            page.evaluate("setFrameworkEnabled('optica', false)")
             wait_until(page, f"LOG.length > {n}")
             settle(page)
 
@@ -175,6 +176,12 @@ def digest(pieces: dict[str, str]) -> dict[str, str]:
 def main(argv: list[str]) -> int:
     update = "--update" in argv
     pieces, errors = capture()
+    if "--dump" in argv:
+        # Every piece's full text, to compare two builds by hand when the hashes
+        # differ (an intended change must be shown to be what it says).
+        out = Path(argv[argv.index("--dump") + 1])
+        out.write_text(json.dumps(pieces, indent=1, sort_keys=True), encoding="utf-8")
+        print(f"dumped {len(pieces)} pieces to {out}")
     print("The default build renders without errors")
     check("no page or console errors", not errors, "; ".join(errors[:3]))
     check(

@@ -177,7 +177,9 @@ def main() -> int:
         page.evaluate("loadSamples()")
         page.wait_for_function("PROJECTS && PROJECTS.size >= 10", timeout=15000)
         page.evaluate("setLocale('de'); relocalize();")
-        page.evaluate("openProject([...PROJECTS.keys()][0], STAGES[0].id)")
+        page.evaluate(
+            "openProject([...PROJECTS.keys()][0], ENGINES.chai.sections[0].id)"
+        )
         page.wait_for_timeout(200)
         main_text = page.inner_text("#main")
         check(
@@ -215,7 +217,8 @@ def main() -> int:
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.evaluate(
             "S.meta.chaiUseCase = 'sepsis-risk-prediction';"
-            " go(STAGES.find(s => s.metrics).id);"
+            " go(ENGINES.chai.sections"
+            ".find(s => (s.slots || []).includes('chai.metrics')).id);"
         )
         page.wait_for_timeout(200)
         english = "Risk Ratio"
@@ -252,7 +255,7 @@ def main() -> int:
         )
 
         print("OPTICA's questions")
-        page.evaluate("setOpticaEnabled(true); go('o1');")
+        page.evaluate("setFrameworkEnabled('optica', true); go('o1');")
         page.wait_for_timeout(200)
         text = page.inner_text("#main")
         check(
@@ -267,7 +270,7 @@ def main() -> int:
         )
 
         print("In English, nothing changes and no note is shown")
-        page.evaluate("setLocale('en'); relocalize(); go(STAGES[0].id);")
+        page.evaluate("setLocale('en'); relocalize(); go(ENGINES.chai.sections[0].id);")
         page.wait_for_timeout(200)
         check(
             "no translation note in English",
@@ -275,7 +278,8 @@ def main() -> int:
         )
         check(
             "the English criterion is the definition's",
-            page.evaluate("STAGES[0].items[0].text") in page.inner_text("#main"),
+            page.evaluate("ENGINES.chai.sections[0].items[0].text")
+            in page.inner_text("#main"),
         )
         browser.close()
 

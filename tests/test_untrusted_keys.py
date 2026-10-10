@@ -97,7 +97,8 @@ def main() -> int:
         check(
             "an ordinary edit still lands",
             page.evaluate(
-                "() => { const id = allItems()[0].id; edit(`items.${id}.owner`, 'Ok');"
+                "() => { const id = ENGINES.chai.items[0].id;"
+                " edit(`items.${id}.owner`, 'Ok');"
                 " return S.items[id].owner; }"
             )
             == "Ok",

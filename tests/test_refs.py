@@ -133,7 +133,7 @@ def main() -> int:
         item = None
         page.evaluate(f"openProject({pid!r}, 's1')")
         page.wait_for_timeout(300)
-        item = page.evaluate("allItems()[0].id")
+        item = page.evaluate("ENGINES.chai.items[0].id")
         page.evaluate(f"openItems.add({item!r}); renderMain(false)")
         box = f'[data-refs="items.{item}"]'
         before = len(requests)

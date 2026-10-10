@@ -2,7 +2,6 @@
   "javascript": {
     "app/js/00-core/10-model.js": {
       "developer": 1,
-      "na": 1,
       "name": 1
     },
     "app/js/00-core/15-access.js": {
@@ -34,34 +33,13 @@
       "end": 2
     },
     "app/js/10-frameworks/05-project/00-setup.js": {
-      "chai": 1,
       "changelog": 1,
       "green": 1,
-      "project": 1,
       "retired": 1
     },
     "app/js/10-frameworks/10-chai/20-views.js": {
       "developer": 1,
-      "met": 1,
-      "na": 1,
-      "name": 1,
-      "notmet": 1,
-      "partial": 2,
-      "red": 2
-    },
-    "app/js/10-frameworks/10-chai/30-register.js": {
-      "card": 1,
-      "gate": 1,
-      "stage": 1
-    },
-    "app/js/10-frameworks/20-optica/20-views.js": {
-      "declined": 1,
-      "developer": 1,
-      "met": 1,
-      "na": 1
-    },
-    "app/js/10-frameworks/20-optica/30-register.js": {
-      "chapter": 1
+      "name": 1
     },
     "app/js/20-app/10-shell.js": {
       "after": 1,
@@ -70,8 +48,6 @@
     "app/js/20-app/20-dashboard.js": {
       "all": 1,
       "archived": 2,
-      "deployed": 1,
-      "report": 1,
       "setup": 1
     },
     "app/js/20-app/30-data-arrival.js": {

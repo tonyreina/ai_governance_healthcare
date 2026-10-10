@@ -136,6 +136,60 @@ class FlagRule(StrEnum):
     IDLE = "idle"
 
 
+class UiSlot(StrEnum):
+    """A screen's whole-sentence catalog key a definition supplies (the engine's
+    UiSlot in app/js/10-frameworks/01-engine/10-facade.js)."""
+
+    RAIL_OVERVIEW = "railOverview"
+    RAIL_SHORT = "railShort"
+    SECTION_EYEBROW = "sectionEyebrow"
+    SECTION_ANSWERED = "sectionAnswered"
+    DECLINED_COUNT = "declinedCount"
+    CHIP_NOTE = "chipNote"
+    LEGEND = "legend"
+    EXTERNAL_COUNT = "externalCount"
+    COVERED_BY = "coveredBy"
+    NOT_COVERED = "notCovered"
+    OVERVIEW_TITLE = "overviewTitle"
+    OVERVIEW_LEDE = "overviewLede"
+    CARD_ANSWERED = "cardAnswered"
+    CARD_PROGRESS = "cardProgress"
+    CARD_DECLINED = "cardDeclined"
+    WHO_OWES = "whoOwes"
+    RELAY = "relay"
+    COL_WHO = "colWho"
+    COL_OUTSTANDING = "colOutstanding"
+    NEVER_TITLE = "neverTitle"
+    NEVER_DETAIL = "neverDetail"
+    OFF = "off"
+    TURN_ON = "turnOn"
+    TOGGLE_ON_DETAIL = "toggleOnDetail"
+    TOGGLE_OFF_DETAIL = "toggleOffDetail"
+
+
+# The slots a screen cannot do without, until the engine has neutral defaults
+# (#168 PR B2): every framework's section screen; a supplement's overview; an
+# opt-in supplement's switch; a stakeholder table; a crossRef chip's empty case.
+REQUIRED_SLOTS = (UiSlot.SECTION_EYEBROW, UiSlot.SECTION_ANSWERED)
+SUPPLEMENT_SLOTS = (
+    UiSlot.RAIL_OVERVIEW,
+    UiSlot.OVERVIEW_TITLE,
+    UiSlot.OVERVIEW_LEDE,
+    UiSlot.CARD_ANSWERED,
+    UiSlot.CARD_PROGRESS,
+    UiSlot.CARD_DECLINED,
+    UiSlot.NEVER_TITLE,
+    UiSlot.NEVER_DETAIL,
+)
+OPT_IN_SLOTS = (
+    UiSlot.OFF,
+    UiSlot.TURN_ON,
+    UiSlot.TOGGLE_ON_DETAIL,
+    UiSlot.TOGGLE_OFF_DETAIL,
+)
+WHO_SLOTS = (UiSlot.WHO_OWES, UiSlot.RELAY, UiSlot.COL_WHO, UiSlot.COL_OUTSTANDING)
+
+
 class CategoriesOn(StrEnum):
     ITEMS = "items"
     SECTIONS = "sections"
@@ -210,6 +264,7 @@ DEFAULT_SECTION_BODY = "blurb"
 # Where each closed set lives in the schema, so schema_drift() can compare.
 SCHEMA_ENUMS: dict[type[StrEnum], tuple[str, ...]] = {
     Role: ("properties", "role", "enum"),
+    UiSlot: ("properties", "ui", "propertyNames", "enum"),
     StatusClass: (
         "properties",
         "statuses",
@@ -271,6 +326,61 @@ class Report:
 
 def load_schema(path: Path = SCHEMA) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def shell_keys(path: Path = SHELL_CATALOG) -> frozenset[str]:
+    """Every key in the shell catalog, en.json."""
+    catalog = json.loads(path.read_text(encoding="utf-8"))
+    return frozenset(key for key in catalog if not key.startswith("@"))
+
+
+def catalog_problems(where: str, doc: dict, keys: frozenset[str]) -> Report:
+    """Every catalog key a definition names exists, and the screens it will show
+    have the sentences they need."""
+    r = Report()
+    ui = doc.get("ui", {})
+    for slot, key in ui.items():
+        if key not in keys:
+            r.add(
+                where, ("ui", slot), f"{key!r} is not a key in {label(SHELL_CATALOG)}"
+            )
+    for si, status in enumerate(doc["statuses"]):
+        for field in ("msg", "reasonMsg"):
+            if field in status and status[field] not in keys:
+                r.add(
+                    where,
+                    ("statuses", si, field),
+                    f"{status[field]!r} is not a catalog key",
+                )
+        if "reasonField" in status:
+            for field in ("reasonLabel", "reasonMsg"):
+                if field not in status:
+                    r.add(
+                        where,
+                        ("statuses", si),
+                        f"a status with a reasonField needs {field}",
+                    )
+    for wi, who in enumerate(doc.get("whos", [])):
+        if "msg" in who and who["msg"] not in keys:
+            r.add(where, ("whos", wi, "msg"), f"{who['msg']!r} is not a catalog key")
+    for pi, phase in enumerate(doc.get("phases", [])):
+        if "msg" in phase and phase["msg"] not in keys:
+            r.add(
+                where, ("phases", pi, "msg"), f"{phase['msg']!r} is not a catalog key"
+            )
+    needed = list(REQUIRED_SLOTS)
+    if Role(doc["role"]) is Role.SUPPLEMENT:
+        needed += SUPPLEMENT_SLOTS
+        if doc.get("optIn"):
+            needed += OPT_IN_SLOTS
+    if doc.get("whos") and Role(doc["role"]) is Role.SUPPLEMENT:
+        needed += WHO_SLOTS
+    if UiSlot.COVERED_BY in ui:
+        needed.append(UiSlot.NOT_COVERED)
+    for slot in needed:
+        if slot not in ui:
+            r.add(where, ("ui",), f"needs the {str(slot)!r} slot")
+    return r
 
 
 def shell_prefixes(path: Path = SHELL_CATALOG) -> frozenset[str]:
@@ -868,6 +978,7 @@ def problems(
     prefixes: frozenset[str] | None = None,
     folders: dict[str, str] | None = None,
     config: Any = None,
+    catalog: frozenset[str] | None = None,
 ) -> list[str]:
     """Every problem in a set of definitions, keyed by where each came from.
 
@@ -885,6 +996,9 @@ def problems(
             continue  # the rules below assume the shape
         folder = (folders or {}).get(where, Path(where).parent.name)
         out += definition_problems(where, doc, folder).lines
+        out += catalog_problems(
+            where, doc, shell_keys() if catalog is None else catalog
+        ).lines
         valid[where] = doc
     config = load_config() if config is None else config
     out += config_problems(config, valid)

@@ -1460,7 +1460,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 
 ### D-74 The shell asks one primary framework through a spine
 
-- Status: Accepted
+- Status: Accepted; its CHAI-specific spine (`10-chai/25-spine.js`) superseded
+  by D-77, where the engine provides the spine from the definition
 - Step 1 of #168 (R-63). The portfolio, the exports, the change history and
   the events used CHAI's definitions directly (about thirty places), so CHAI
   could be joined by another framework but not replaced.
@@ -1549,3 +1550,39 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Found and filed: the OPTICA page's prose says there are no "equivalent" rows,
   but the data has three (part of #174).
 - Source: #168; R-63; D-74.
+
+### D-77 Every framework screen is the engine's, drawn from the definition
+
+- Status: Accepted (implements the owner's decision in #168, R-63)
+- **One implementation of each screen**: a section's checklist, a checkpoint's
+  decision, a supplement's overview and its switched-off screen, and the
+  primary's report (`app/js/10-frameworks/01-engine/20-views.js`). The rail,
+  routing, record shape, spine and change-history words come from one
+  registration per definition (`10-frameworks/90-register.js`). CHAI's own code
+  is now only its plug-ins: the model card (form, panel, report section, flags),
+  the key metrics (stage 4's slot, a flag), the T&E picker and the samples.
+  OPTICA has no code at all; it is its definition.
+- **Where wording differs, a definition names a whole-sentence catalog key**
+  (`ui` slots: a section's eyebrow, the answered line, the overview's headings),
+  never a noun the engine pastes into a sentence. CHAI and OPTICA name today's
+  keys, so every translation is unchanged. A framework without a slot's key is
+  refused by `check-framework` until PR B2 gives the engine neutral defaults.
+- **Status tags keep their CSS names** by a status's class (done is styled as
+  "met", open as "notmet"), so the report looks the same for any framework.
+- **The transitional names are gone**: `STAGES`, `GATES`, `PRINCIPLES`,
+  `OPTICA`, `OPTICA_ITEMS`, `allItems`, `opticaScore`, `setOpticaEnabled`,
+  `scoreOf`, `STATUS` and the rest. Tests use the engine (`ENGINES`, `FACADES`,
+  `setFrameworkEnabled`) or the spine. The boundary test fails if one returns.
+- **Proof**: `tests/test_snapshot.py` before and after: 399 of 529 pieces are
+  byte-identical (every CHAI screen, the report, every export) and the other
+  130 (OPTICA's 13 chapter views on 10 samples) differ only in whitespace
+  between block elements; the fixture was regenerated for those. A stand-in
+  primary still drives the portfolio and every export
+  (`tests/test_framework_boundary.py`), which caught the Markdown export reaching
+  past the spine during this change.
+- **Rejected:** keeping a JS copy of each framework's screens beside the engine
+  (two implementations to keep equal); interpolating definition nouns into shell
+  sentences (it breaks grammar in de, ru, he, hi and zh-Hans, per the design
+  review); byte-identical output for OPTICA too (one template cannot reproduce
+  two whitespace styles, and inter-block whitespace does not render).
+- Source: #168; R-63; D-74; D-75.

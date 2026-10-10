@@ -10,13 +10,14 @@
    and only one framework can own that. See docs/crosswalk.md.
    ============================================================ */
 function frameworkToggles(){
-  const optional = FRAMEWORKS.filter(f => f.id !== "chai" && f.id !== "project");
+  // The frameworks a project may switch on: the build's opt-in supplements.
+  const optional = FRAMEWORKS.filter(f => !f.primary && f.optIn);
   if(!optional.length) return "";
   const rows = optional.map(f=>{
     const on = f.enabled(S);
     return `<li style="display:flex;align-items:center;gap:10px;padding:6px 0">
       <button class="btn${on?" primary":""}" data-framework="${esc(f.id)}" aria-pressed="${on}">${esc(t(on?"fw.on":"fw.off"))}</button>
-      <span><b>${esc(f.label)}</b> \u2014 ${esc(t(on?"fw.onDetail":"fw.offDetail"))}</span>
+      <span><b>${esc(f.label)}</b> \u2014 ${esc(t(f.facade.slot(on?UiSlot.TOGGLE_ON_DETAIL:UiSlot.TOGGLE_OFF_DETAIL)))}</span>
     </li>`;
   }).join("");
   return `<h2 class="ro-hide">${esc(t("fw.title"))}</h2>
@@ -37,11 +38,11 @@ const CADENCE_KEY = Object.freeze({
 });
 
 function renderSetup(){
-  const f=flags(S), st=statusOf(S), nr=nextReview(S);
-  const empty = !Object.keys(S.items).length && !Object.keys(S.card).length;
+  const fw=spine(), f=fw.flags(S), st=fw.status(S), nr=fw.nextReview(S);
+  const empty = !Object.keys(fw.answers(S)).length && !Object.keys(S.card || {}).length;
   return `<p class="eyebrow">${esc(t("setup.eyebrow"))}</p><h1>${esc(t("setup.title"))}</h1>
   <p class="lede">${esc(t("setup.lede"))}</p>
-  <div class="note ${st.key==="green"?"ok":""}" style="${st.key==="retired"?"border-color:var(--muted);background:var(--sunk)":""}"><b>${esc(statusLabel(st))}</b> · ${esc(phaseLabel(phase(S)))}${nr?` · ${esc(t("setup.nextReview",{date:fmtDay(nr)}))}`:""}
+  <div class="note ${st.key==="green"?"ok":""}" style="${st.key==="retired"?"border-color:var(--muted);background:var(--sunk)":""}"><b>${esc(statusLabel(st))}</b> · ${esc(phaseLabel(fw.phase(S)))}${nr?` · ${esc(t("setup.nextReview",{date:fmtDay(nr)}))}`:""}
     ${f.length?`<ul class="gaplist">${f.map(x=>`<li>${esc(flagText(x))}</li>`).join("")}</ul>`:""}</div>
   <div class="fields">
     ${field("meta.solution",t("setup.f.solution"),"",0)}

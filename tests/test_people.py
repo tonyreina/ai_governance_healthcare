@@ -149,7 +149,7 @@ def main() -> int:
         )
         check(
             "the printable report names them",
-            "Bob Writer" in page.evaluate("reportBody(true)"),
+            "Bob Writer" in page.evaluate("spine().reportBody(true)"),
         )
         page.evaluate("LOG = [{at: 'x', by: 'ghost@h', text: 'unknown author'}]")
         check(

@@ -40,10 +40,16 @@
       }
     },
     "viewPrefix": {"type": "string", "pattern": "^[A-Za-z0-9_-]{0,16}$"},
+    "nouns": {
+      "type": "object",
+      "description": "English nouns for the flags' export text, [one, many] (screens use catalog keys). Default: item, items.",
+      "additionalProperties": false,
+      "properties": {"item": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/text"}}}
+    },
     "ui": {
       "type": "object",
       "description": "Whole-sentence catalog keys a screen uses for this framework (UiSlot in scripts/check_framework.py and the engine).",
-      "propertyNames": {"enum": ["railOverview", "railShort", "sectionEyebrow", "sectionAnswered", "declinedCount", "chipNote", "legend", "externalCount", "coveredBy", "notCovered", "overviewTitle", "overviewLede", "cardAnswered", "cardProgress", "cardDeclined", "whoOwes", "relay", "colWho", "colOutstanding", "neverTitle", "neverDetail", "off", "turnOn", "toggleOnDetail", "toggleOffDetail"]},
+      "propertyNames": {"enum": ["railOverview", "railShort", "pipTitle", "sectionEyebrow", "sectionAnswered", "declinedCount", "chipNote", "legend", "externalCount", "coveredBy", "notCovered", "gateEyebrow", "gateGaps", "gateAnsweredPartial", "gateAllMet", "gateGapItem", "dashLede", "setupEyebrow", "fwLede", "delRemoves", "delDestroys", "reportEyebrow", "titleSuffix", "colSection", "colItem", "colCategory", "checkpoints", "colGate", "noGaps", "readinessDetail", "mdOverall", "disclaimer", "mdFooter", "fwNote", "flagLiveOpen", "flagNoRationale", "flagNoDeployDate", "overviewTitle", "overviewLede", "cardAnswered", "cardProgress", "cardDeclined", "whoOwes", "relay", "colWho", "colOutstanding", "neverTitle", "neverDetail", "off", "turnOn", "toggleOnDetail", "toggleOffDetail"]},
       "additionalProperties": {"$ref": "#/$defs/text"}
     },
     "statuses": {

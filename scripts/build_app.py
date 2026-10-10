@@ -119,32 +119,77 @@ def frameworks_js() -> str:
     )
 
 
-def catalogs_js() -> str:
+def namespace_owners(src: Path = SRC) -> dict[str, str]:
+    """Every catalog namespace a framework under app/frameworks/ owns, and its id."""
+    owners = {}
+    for path in sorted((src / "frameworks").glob("*/framework.json")):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        for ns in doc.get("namespaces", [doc["id"]]):
+            owners[ns] = doc["id"]
+    return owners
+
+
+def catalogs_js(defs: dict | None = None, src: Path = SRC) -> str:
     """The message catalogs, app/i18n/<locale>.json, as one frozen object (#80).
 
     Embedded rather than fetched: the dashboard is one file that must work opened from
-    disk (R-60), so nothing can be loaded at run time. English
-    first, then the rest by name, so the output is stable.
+    disk (R-60), so nothing can be loaded at run time. English first, then the rest by
+    name, so the output is stable.
+
+    Only the selected frameworks' text ships (#168): a key in a namespace another
+    framework owns is left out, from the shell's catalogs and the framework ones. A
+    developer's framework may bring its own translations, app/frameworks/<id>/i18n/
+    <locale>.json; FRAMEWORK_LOCALES says which languages each framework has, so a
+    screen can say when its words are shown in English (R-65).
     """
+    defs = framework_defs() if defs is None else defs
+    selected = {ns: fid for fid, d in defs.items() for ns in d.get("namespaces", [fid])}
+    left_out = set(namespace_owners(src)) - set(selected)
+
+    def keep(cat: dict) -> dict:
+        return {k: v for k, v in cat.items() if k.split(".", 1)[0] not in left_out}
+
     files = sorted(
-        (SRC / "i18n").glob("*.json"), key=lambda p: (p.stem != Locale.EN, p.stem)
+        (src / "i18n").glob("*.json"), key=lambda p: (p.stem != Locale.EN, p.stem)
     )
-    catalogs = {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in files}
+    catalogs = {p.stem: keep(json.loads(p.read_text(encoding="utf-8"))) for p in files}
     if Locale.EN not in catalogs:
         raise SystemExit("error: app/i18n/en.json, the source catalog, is missing")
     body = json.dumps(catalogs, ensure_ascii=False, separators=(",", ":"))
     # Framework content translations (D-60). English is the definitions themselves,
     # so only the other languages are embedded.
     framework = {
-        p.stem: json.loads(p.read_text(encoding="utf-8"))
-        for p in sorted((SRC / "i18n" / "framework").glob("*.json"))
+        p.stem: keep(json.loads(p.read_text(encoding="utf-8")))
+        for p in sorted((src / "i18n" / "framework").glob("*.json"))
         if p.stem != Locale.EN
     }
+    for fid in defs:
+        for path in sorted((src / "frameworks" / fid / "i18n").glob("*.json")):
+            if path.stem == Locale.EN:
+                continue
+            entries = json.loads(path.read_text(encoding="utf-8"))
+            have = framework.setdefault(path.stem, {})
+            clash = sorted(set(entries) & set(have))
+            if clash:
+                raise SystemExit(
+                    f"error: {path} repeats keys another catalog has: {clash[:3]}"
+                )
+            have.update(entries)
+    locales = {
+        fid: sorted(
+            loc
+            for loc, cat in framework.items()
+            if any(selected.get(k.split(".", 1)[0]) == fid for k in cat)
+        )
+        for fid in defs
+    }
     fw = json.dumps(framework, ensure_ascii=False, separators=(",", ":"))
+    loc = json.dumps(locales, ensure_ascii=False, separators=(",", ":"))
     return (
         "/* Generated from app/i18n/*.json by scripts/build_app.py. */\n"
         f"const I18N_CATALOGS = Object.freeze({body});\n"
-        f"const FRAMEWORK_I18N = Object.freeze({fw});"
+        f"const FRAMEWORK_I18N = Object.freeze({fw});\n"
+        f"const FRAMEWORK_LOCALES = Object.freeze({loc});"
     )
 
 

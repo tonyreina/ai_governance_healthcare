@@ -137,11 +137,13 @@ class FlagRule(StrEnum):
 
 
 class UiSlot(StrEnum):
-    """A screen's whole-sentence catalog key a definition supplies (the engine's
-    UiSlot in app/js/10-frameworks/01-engine/10-facade.js)."""
+    """A screen's whole-sentence catalog key a definition may supply (the engine's
+    UiSlot in app/js/10-frameworks/01-engine/10-facade.js). A slot a definition
+    leaves out gets the engine's neutral key, so none is required."""
 
     RAIL_OVERVIEW = "railOverview"
     RAIL_SHORT = "railShort"
+    PIP_TITLE = "pipTitle"
     SECTION_EYEBROW = "sectionEyebrow"
     SECTION_ANSWERED = "sectionAnswered"
     DECLINED_COUNT = "declinedCount"
@@ -150,6 +152,32 @@ class UiSlot(StrEnum):
     EXTERNAL_COUNT = "externalCount"
     COVERED_BY = "coveredBy"
     NOT_COVERED = "notCovered"
+    GATE_EYEBROW = "gateEyebrow"
+    GATE_GAPS = "gateGaps"
+    GATE_ANSWERED_PARTIAL = "gateAnsweredPartial"
+    GATE_ALL_MET = "gateAllMet"
+    GATE_GAP_ITEM = "gateGapItem"
+    DASH_LEDE = "dashLede"
+    SETUP_EYEBROW = "setupEyebrow"
+    FW_LEDE = "fwLede"
+    DEL_REMOVES = "delRemoves"
+    DEL_DESTROYS = "delDestroys"
+    REPORT_EYEBROW = "reportEyebrow"
+    TITLE_SUFFIX = "titleSuffix"
+    COL_SECTION = "colSection"
+    COL_ITEM = "colItem"
+    COL_CATEGORY = "colCategory"
+    CHECKPOINTS = "checkpoints"
+    COL_GATE = "colGate"
+    NO_GAPS = "noGaps"
+    READINESS_DETAIL = "readinessDetail"
+    MD_OVERALL = "mdOverall"
+    DISCLAIMER = "disclaimer"
+    MD_FOOTER = "mdFooter"
+    FW_NOTE = "fwNote"
+    FLAG_LIVE_OPEN = "flagLiveOpen"
+    FLAG_NO_RATIONALE = "flagNoRationale"
+    FLAG_NO_DEPLOY_DATE = "flagNoDeployDate"
     OVERVIEW_TITLE = "overviewTitle"
     OVERVIEW_LEDE = "overviewLede"
     CARD_ANSWERED = "cardAnswered"
@@ -165,29 +193,6 @@ class UiSlot(StrEnum):
     TURN_ON = "turnOn"
     TOGGLE_ON_DETAIL = "toggleOnDetail"
     TOGGLE_OFF_DETAIL = "toggleOffDetail"
-
-
-# The slots a screen cannot do without, until the engine has neutral defaults
-# (#168 PR B2): every framework's section screen; a supplement's overview; an
-# opt-in supplement's switch; a stakeholder table; a crossRef chip's empty case.
-REQUIRED_SLOTS = (UiSlot.SECTION_EYEBROW, UiSlot.SECTION_ANSWERED)
-SUPPLEMENT_SLOTS = (
-    UiSlot.RAIL_OVERVIEW,
-    UiSlot.OVERVIEW_TITLE,
-    UiSlot.OVERVIEW_LEDE,
-    UiSlot.CARD_ANSWERED,
-    UiSlot.CARD_PROGRESS,
-    UiSlot.CARD_DECLINED,
-    UiSlot.NEVER_TITLE,
-    UiSlot.NEVER_DETAIL,
-)
-OPT_IN_SLOTS = (
-    UiSlot.OFF,
-    UiSlot.TURN_ON,
-    UiSlot.TOGGLE_ON_DETAIL,
-    UiSlot.TOGGLE_OFF_DETAIL,
-)
-WHO_SLOTS = (UiSlot.WHO_OWES, UiSlot.RELAY, UiSlot.COL_WHO, UiSlot.COL_OUTSTANDING)
 
 
 class CategoriesOn(StrEnum):
@@ -328,6 +333,48 @@ def load_schema(path: Path = SCHEMA) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def framework_strings(doc: dict) -> dict[str, str]:
+    """Every content key a definition implies, with its English: the keys the
+    engine's tf() asks for (app/js/10-frameworks/01-engine/10-facade.js). A
+    translation of a developer's framework holds exactly these (R-65)."""
+    ns = doc["id"]
+    keys = {"section": "section", "sectionBody": "blurb", "category": "category"}
+    keys.update(doc.get("keys", {}))
+    out: dict[str, str] = {}
+    if CategoriesOn(doc.get("categoriesOn", CategoriesOn.ITEMS)) is CategoriesOn.ITEMS:
+        for c in doc.get("categories", []):
+            out[f"{ns}.{keys['category']}.{c['id']}"] = c["name"]
+    for s in doc["sections"]:
+        out[f"{ns}.{keys['section']}.{s['id']}.title"] = s["title"]
+        if s.get(keys["sectionBody"]):
+            out[f"{ns}.{keys['section']}.{s['id']}.{keys['sectionBody']}"] = s[
+                keys["sectionBody"]
+            ]
+    for s in doc["sections"]:
+        for it in s["items"]:
+            out[f"{ns}.item.{it['id']}"] = it["text"]
+    for g in doc.get("gates", []):
+        out[f"{ns}.gate.{g['id']}.title"] = g["title"]
+        if g.get("question"):
+            out[f"{ns}.gate.{g['id']}.q"] = g["question"]
+        if g.get("help"):
+            out[f"{ns}.gate.{g['id']}.help"] = g["help"]
+        for o in g["options"]:
+            out[f"{ns}.option.{o['value']}"] = o.get("label", o["value"])
+            if o.get("short"):
+                out[f"{ns}.short.{o['value']}"] = o["short"]
+    for st in doc["statuses"]:
+        if "msg" not in st:
+            out[f"{ns}.status.{st['value']}"] = st["label"]
+    for w in doc.get("whos", []):
+        if "msg" not in w:
+            out[f"{ns}.who.{w['value']}"] = w["label"]
+    for ph in doc.get("phases", []):
+        if "msg" not in ph:
+            out[f"{ns}.phase.{ph['key']}"] = ph["label"]
+    return out
+
+
 def shell_keys(path: Path = SHELL_CATALOG) -> frozenset[str]:
     """Every key in the shell catalog, en.json."""
     catalog = json.loads(path.read_text(encoding="utf-8"))
@@ -368,18 +415,6 @@ def catalog_problems(where: str, doc: dict, keys: frozenset[str]) -> Report:
             r.add(
                 where, ("phases", pi, "msg"), f"{phase['msg']!r} is not a catalog key"
             )
-    needed = list(REQUIRED_SLOTS)
-    if Role(doc["role"]) is Role.SUPPLEMENT:
-        needed += SUPPLEMENT_SLOTS
-        if doc.get("optIn"):
-            needed += OPT_IN_SLOTS
-    if doc.get("whos") and Role(doc["role"]) is Role.SUPPLEMENT:
-        needed += WHO_SLOTS
-    if UiSlot.COVERED_BY in ui:
-        needed.append(UiSlot.NOT_COVERED)
-    for slot in needed:
-        if slot not in ui:
-            r.add(where, ("ui",), f"needs the {str(slot)!r} slot")
     return r
 
 

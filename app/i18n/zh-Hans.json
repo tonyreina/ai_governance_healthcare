@@ -507,5 +507,60 @@
   "hold.confirmLift": "解除保全",
   "toast.holdPlaced": "已设置保全",
   "toast.holdLifted": "已解除保全",
-  "toast.holdFailed": "无法更改保全。显示的是其当前状态。"
+  "toast.holdFailed": "无法更改保全。显示的是其当前状态。",
+  "engine.supp.rail": "{name} 概览",
+  "engine.pipTitle": "第 {n} 部分：已回答 {answered}/{total}",
+  "engine.section.eyebrow": "第 {n} 部分（共 {total} 部分）",
+  "engine.section.answered": "已回答 {answered}/{total}。",
+  "engine.supp.notCovered": "主框架中没有条目涵盖此项",
+  "engine.gate.eyebrow": "{title}，在第 {n} 部分之后",
+  "engine.gate.gaps": {
+    "other": "第 1–{n} 部分中有 {count} 项未回答或未完成"
+  },
+  "engine.gate.answeredPartial": {
+    "other": "第 {n} 部分之前的所有条目均已回答；其中 {count} 项为部分完成。"
+  },
+  "engine.gate.allMet": "第 {n} 部分之前的每个适用条目均已完成。",
+  "engine.gate.gapItem": "第 {n} 部分：{text}",
+  "engine.dash.lede": "贵机构正在评估或使用的每个 AI 解决方案，均依据 {name} 进行检查。不合规或需要更新的项目排在最前面。",
+  "engine.setup.eyebrow": "第一部分之前",
+  "engine.fw.lede": "{name} 始终运行。开启另一个框架会同时加入其问题；再次关闭后答案会保留，且任何框架都不会改变另一个框架的状态。",
+  "engine.del.removes": "这会为所有人移除该审查：检查清单、每项决定及其签署，以及当前的审计日志，并将其移出项目组合。",
+  "engine.del.destroys": "这会为所有人销毁该审查：检查清单、每项决定及其签署，以及审计日志。此操作无法撤销。",
+  "engine.report.eyebrow": "{name} 审查",
+  "engine.export.titleSuffix": "{name} 审查",
+  "engine.col.section": "部分",
+  "engine.col.item": "条目",
+  "engine.col.category": "类别",
+  "engine.checkpoints": "决定",
+  "engine.col.gate": "决定节点",
+  "engine.report.noGaps": "没有未解决的差距。每个适用条目均已完成。",
+  "engine.report.readinessDetail": "的适用条目已完成（部分完成计为一半，未回答计为零）。已回答 {answered}/{total} 个条目",
+  "engine.md.overall": "总体：**{pct}%** 的适用条目已完成（已回答 {answered}/{total}）。",
+  "engine.report.disclaimer": "本报告记录一次依据 {name} 框架组织的本地审查。它是内部治理记录，不是框架作者或任何其他方的认证。",
+  "engine.md.footer": "依据 {name} 框架编排；内部治理记录，并非认证。",
+  "engine.fw.note": "本页框架文字为随框架提供的译文，未经本项目审核；以英文原文为准。",
+  "engine.fw.untranslated": "该框架没有此语言的译文，因此本页中的框架文字以英文显示。",
+  "engine.flag.liveOpen": {
+    "other": "已上线，但有 {count} 项未满足"
+  },
+  "engine.flag.noRationale": "{gate}：在有未完成条目且无理由的情况下获批",
+  "engine.flag.noLiveDate": "已上线，但 {gate} 未记录部署日期",
+  "engine.supp.title": "{name} 审查",
+  "engine.supp.lede": "与主框架一同回答的问题。这里的答案单独保存，绝不会改变主框架的状态。",
+  "engine.supp.answered": "已回答",
+  "engine.supp.progress": "进度",
+  "engine.supp.declined": "已拒绝",
+  "engine.supp.whoOwes": "谁需要提供下一批答案",
+  "engine.supp.relay": "按回答方列出的未完成条目。",
+  "engine.supp.colWho": "回答方",
+  "engine.supp.colOutstanding": "未完成",
+  "engine.supp.neverTitle": "这里的答案绝不会改变 {primary} 的状态。",
+  "engine.supp.neverDetail": "证据可以在两者中引用；在一个框架中的判断绝不等同于另一个框架中的判断。",
+  "engine.supp.off": "此项目已关闭 {name}。",
+  "engine.supp.turnOn": "请在{setup}中开启。",
+  "engine.fw.onDetail": "其视图显示在侧栏中主框架视图的下方",
+  "engine.fw.offDetail": {
+    "other": "{count} 个问题"
+  }
 }

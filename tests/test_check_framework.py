@@ -877,36 +877,10 @@ def main() -> int:
         has(found, "'no.such.key' is not a key"),
         str(found[:2]),
     )
-    found = run(lambda c, o: c["ui"].pop("sectionAnswered"))
-    check(
-        "a framework without a required slot",
-        has(found, "needs the 'sectionAnswered' slot"),
-        str(found[:2]),
-    )
-    found = run(lambda c, o: o["ui"].pop("overviewTitle"))
-    check(
-        "a supplement without its overview's title",
-        has(found, "needs the 'overviewTitle' slot"),
-        str(found[:2]),
-    )
-    found = run(lambda c, o: o["ui"].pop("turnOn"))
-    check(
-        "an opt-in supplement without its switch's words",
-        has(found, "needs the 'turnOn' slot"),
-        str(found[:2]),
-    )
-    found = run(lambda c, o: o["ui"].pop("relay"))
-    check(
-        "stakeholders without their table's words",
-        has(found, "needs the 'relay' slot"),
-        str(found[:2]),
-    )
-    found = run(lambda c, o: o["ui"].pop("notCovered"))
-    check(
-        "a crossRef chip without its empty case",
-        has(found, "needs the 'notCovered' slot"),
-        str(found[:2]),
-    )
+    # Every slot a screen needs has the engine's neutral words (PR B2), so a
+    # definition that names no catalog keys at all is valid.
+    found = run(lambda c, o: (c.pop("ui"), o.pop("ui")))
+    check("a definition with no ui slots is valid", not found, str(found[:3]))
     found = run(lambda c, o: o["statuses"][3].pop("reasonMsg"))
     check(
         "a reason field without its label key",

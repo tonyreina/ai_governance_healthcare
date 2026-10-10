@@ -164,6 +164,15 @@ mirror.
 
 Every string comes from a message catalog, `app/i18n/<language>.json`, embedded
 into the single dashboard file by the build. English (`en.json`) is the source.
+A framework's own text (its sections, items and checkpoints) is translated in
+`app/i18n/framework/<language>.json` for CHAI and OPTICA, which must have all
+eight languages. A framework you bring is translated in
+`app/frameworks/<id>/i18n/<language>.json`: English is its definition, and any
+other language is optional, but a language you supply must be complete
+(`check-i18n` names what is missing). Where a language is missing, the
+framework's words show in English with a note saying so. The words of a screen
+around a framework (headings, eyebrows, the report's footer) are the engine's
+neutral ones unless the definition names its own catalog keys (`ui`).
 `pixi run check-i18n` fails if a catalog lacks a key, has an extra one, drops or
 invents a `{placeholder}`, misses a plural form the language needs, holds markup,
 or if code puts an English literal on screen without going through `t()`.

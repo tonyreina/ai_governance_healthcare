@@ -11,7 +11,9 @@
       "label.foot",
       "provenance.local",
       "provenance.api",
-      "md.footer"
+      "md.footer",
+      "engine.report.disclaimer",
+      "engine.md.footer"
     ]
   },
   "lang.label": "Language",
@@ -514,5 +516,64 @@
   "hold.confirmLift": "Lift hold",
   "toast.holdPlaced": "Hold placed",
   "toast.holdLifted": "Hold lifted",
-  "toast.holdFailed": "Couldn't change the hold. It is shown as it now stands."
+  "toast.holdFailed": "Couldn't change the hold. It is shown as it now stands.",
+  "engine.supp.rail": "{name} overview",
+  "engine.pipTitle": "Section {n}: {answered}/{total} answered",
+  "engine.section.eyebrow": "Section {n} of {total}",
+  "engine.section.answered": "{answered} of {total} answered.",
+  "engine.supp.notCovered": "No item of the main framework covers this",
+  "engine.gate.eyebrow": "{title}, after section {n}",
+  "engine.gate.gaps": {
+    "one": "{count} item in sections 1–{n} is unanswered or open",
+    "other": "{count} items in sections 1–{n} are unanswered or open"
+  },
+  "engine.gate.answeredPartial": {
+    "one": "All items through section {n} are answered; {count} is partial.",
+    "other": "All items through section {n} are answered; {count} are partial."
+  },
+  "engine.gate.allMet": "Every applicable item through section {n} is done.",
+  "engine.gate.gapItem": "Section {n}: {text}",
+  "engine.dash.lede": "Every AI solution your organization is evaluating or running, checked against {name}. Projects out of compliance or needing an update rise to the top.",
+  "engine.setup.eyebrow": "Before the first section",
+  "engine.fw.lede": "{name} always runs. Switching another framework on adds its questions alongside; answers are kept if you switch it off again, and neither framework changes the other's status.",
+  "engine.del.removes": "This removes the review for everyone: the checklist, every decision and its sign-offs, and the live audit log, and it leaves the portfolio.",
+  "engine.del.destroys": "This destroys the review for everyone: the checklist, every decision and its sign-offs, and the audit log. It cannot be undone.",
+  "engine.report.eyebrow": "{name} review",
+  "engine.export.titleSuffix": "{name} review",
+  "engine.col.section": "Section",
+  "engine.col.item": "Item",
+  "engine.col.category": "Category",
+  "engine.checkpoints": "Decisions",
+  "engine.col.gate": "Decision point",
+  "engine.report.noGaps": "No open gaps. Every applicable item is done.",
+  "engine.report.readinessDetail": "of applicable items done (partial counts as half, unanswered as zero). {answered} of {total} items answered",
+  "engine.md.overall": "Overall: **{pct}%** of applicable items done ({answered}/{total} answered).",
+  "engine.report.disclaimer": "This report records a local review organized around the {name} framework. It is an internal governance record, not a certification by the framework's authors or anyone else.",
+  "engine.md.footer": "Structured around the {name} framework; an internal governance record, not a certification.",
+  "engine.fw.note": "The framework wording on this page is a translation supplied with the framework and not reviewed by this project; the English original governs.",
+  "engine.fw.untranslated": "This framework has no translation into this language, so its wording on this page is shown in English.",
+  "engine.flag.liveOpen": {
+    "one": "Live with {count} item not met",
+    "other": "Live with {count} items not met"
+  },
+  "engine.flag.noRationale": "{gate}: approved with open items and no rationale",
+  "engine.flag.noLiveDate": "Live with no deployment date recorded at {gate}",
+  "engine.supp.title": "{name} review",
+  "engine.supp.lede": "Questions answered alongside the main framework. Answers here are kept separately and never change its status.",
+  "engine.supp.answered": "Answered",
+  "engine.supp.progress": "Progress",
+  "engine.supp.declined": "Declined",
+  "engine.supp.whoOwes": "Who owes the next answers",
+  "engine.supp.relay": "Outstanding items, by who answers them.",
+  "engine.supp.colWho": "Answered by",
+  "engine.supp.colOutstanding": "Outstanding",
+  "engine.supp.neverTitle": "Answers here never change {primary}'s status.",
+  "engine.supp.neverDetail": "Evidence may be cited in both; a judgment in one is never a judgment in the other.",
+  "engine.supp.off": "{name} is switched off for this project.",
+  "engine.supp.turnOn": "Switch it on in {setup}.",
+  "engine.fw.onDetail": "its views appear in the rail below the main framework's",
+  "engine.fw.offDetail": {
+    "one": "{count} question",
+    "other": "{count} questions"
+  }
 }

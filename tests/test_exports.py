@@ -155,10 +155,12 @@ def main() -> int:
         # #178: a sample checkpoint's rationale follows the decision's class, not a
         # regular expression over its wording (which missed "Retrain or revise").
         made = page.evaluate(
-            """() => Object.fromEntries(["Proceed", "Continue with changes",
-                "Revise and resubmit", "Stop", "Retrain or revise", "Retire"].map(d =>
-                [d, buildSample({name: "x", gates: {D: [d, -1]}}, new Date())
-                      .gates.D.rationale]))"""
+            """() => Object.fromEntries([["A", "Proceed"],
+                ["D", "Continue with changes"],
+                ["A", "Revise and resubmit"], ["A", "Stop"], ["D", "Retrain or revise"],
+                ["D", "Retire"]].map(([g, d]) =>
+                [d, buildSample({name: "x", gates: {[g]: [d, -1]}}, new Date())
+                      .gates[g].rationale]))"""
         )
         approves = {"Proceed", "Continue with changes"}
         wrong = {

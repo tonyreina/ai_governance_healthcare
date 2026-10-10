@@ -11,26 +11,68 @@
 /* A definition's role in a build. */
 const Role = Object.freeze({ PRIMARY: "primary", SUPPLEMENT: "supplement" });
 
-/* What a screen asks a definition to word. Each value in a definition's `ui` is a
-   catalog key; scripts/check_framework.py checks the slot names and that each key
-   exists. */
+/* What a screen asks a definition to word. A definition's `ui` maps a slot to a
+   catalog key; a slot it leaves out gets the engine's neutral key (DEFAULT_SLOT),
+   so a framework that brings no catalog keys still reads well. CHAI and OPTICA
+   name today's keys, so their wording and its translations are unchanged.
+   scripts/check_framework.py checks the slot names and that each key exists. */
 const UiSlot = Object.freeze({
-  RAIL_OVERVIEW: "railOverview",       // a supplement's overview, in the rail
-  RAIL_SHORT: "railShort",             // a section's short name: {n}
-  SECTION_EYEBROW: "sectionEyebrow",   // above a section's title: {n} {total} {domain}
-  SECTION_ANSWERED: "sectionAnswered", // under a section's list: {answered} {total}
-  DECLINED_COUNT: "declinedCount",     // after it, when some are declined: {count}
-  CHIP_NOTE: "chipNote",               // after that: what the item chips mean
-  LEGEND: "legend",                    // above the list, instead of the category legend
-  EXTERNAL_COUNT: "externalCount",     // items an outside party answers: {count} {total}
-  COVERED_BY: "coveredBy",             // a crossRef chip's tooltip: {ids}
-  NOT_COVERED: "notCovered",           // an item with no crossRef
+  // A section's screen and the rail.
+  RAIL_OVERVIEW: "railOverview", RAIL_SHORT: "railShort", PIP_TITLE: "pipTitle",
+  SECTION_EYEBROW: "sectionEyebrow", SECTION_ANSWERED: "sectionAnswered",
+  DECLINED_COUNT: "declinedCount", CHIP_NOTE: "chipNote", LEGEND: "legend",
+  EXTERNAL_COUNT: "externalCount", COVERED_BY: "coveredBy", NOT_COVERED: "notCovered",
+  // A checkpoint.
+  GATE_EYEBROW: "gateEyebrow", GATE_GAPS: "gateGaps", GATE_ANSWERED_PARTIAL: "gateAnsweredPartial",
+  GATE_ALL_MET: "gateAllMet", GATE_GAP_ITEM: "gateGapItem",
+  // The portfolio, setup and the delete dialog.
+  DASH_LEDE: "dashLede", SETUP_EYEBROW: "setupEyebrow", FW_LEDE: "fwLede",
+  DEL_REMOVES: "delRemoves", DEL_DESTROYS: "delDestroys",
+  // The report and the exports.
+  REPORT_EYEBROW: "reportEyebrow", TITLE_SUFFIX: "titleSuffix", COL_SECTION: "colSection",
+  COL_ITEM: "colItem", COL_CATEGORY: "colCategory", CHECKPOINTS: "checkpoints", COL_GATE: "colGate",
+  NO_GAPS: "noGaps", READINESS_DETAIL: "readinessDetail", MD_OVERALL: "mdOverall",
+  DISCLAIMER: "disclaimer", MD_FOOTER: "mdFooter",
+  // The notes on translated framework text.
+  FW_NOTE: "fwNote",
+  // Flags whose words name the framework's things.
+  FLAG_LIVE_OPEN: "flagLiveOpen", FLAG_NO_RATIONALE: "flagNoRationale", FLAG_NO_DEPLOY_DATE: "flagNoDeployDate",
+  // A supplement's overview, its switched-off screen and its switch.
   OVERVIEW_TITLE: "overviewTitle", OVERVIEW_LEDE: "overviewLede",
   CARD_ANSWERED: "cardAnswered", CARD_PROGRESS: "cardProgress", CARD_DECLINED: "cardDeclined",
   WHO_OWES: "whoOwes", RELAY: "relay", COL_WHO: "colWho", COL_OUTSTANDING: "colOutstanding",
-  NEVER_TITLE: "neverTitle", NEVER_DETAIL: "neverDetail",
-  OFF: "off", TURN_ON: "turnOn",
+  NEVER_TITLE: "neverTitle", NEVER_DETAIL: "neverDetail", OFF: "off", TURN_ON: "turnOn",
   TOGGLE_ON_DETAIL: "toggleOnDetail", TOGGLE_OFF_DETAIL: "toggleOffDetail",
+});
+/* The engine's neutral words, for a slot a definition does not fill. Slots with
+   no default (a legend, a chip note, the crossRef chip, a section's short rail
+   name) are simply left out when a definition does not name them. */
+const DEFAULT_SLOT = Object.freeze({
+  [UiSlot.RAIL_OVERVIEW]: "engine.supp.rail", [UiSlot.PIP_TITLE]: "engine.pipTitle",
+  [UiSlot.SECTION_EYEBROW]: "engine.section.eyebrow", [UiSlot.SECTION_ANSWERED]: "engine.section.answered",
+  [UiSlot.NOT_COVERED]: "engine.supp.notCovered",
+  [UiSlot.GATE_EYEBROW]: "engine.gate.eyebrow", [UiSlot.GATE_GAPS]: "engine.gate.gaps",
+  [UiSlot.GATE_ANSWERED_PARTIAL]: "engine.gate.answeredPartial", [UiSlot.GATE_ALL_MET]: "engine.gate.allMet",
+  [UiSlot.GATE_GAP_ITEM]: "engine.gate.gapItem",
+  [UiSlot.DASH_LEDE]: "engine.dash.lede", [UiSlot.SETUP_EYEBROW]: "engine.setup.eyebrow",
+  [UiSlot.FW_LEDE]: "engine.fw.lede", [UiSlot.DEL_REMOVES]: "engine.del.removes", [UiSlot.DEL_DESTROYS]: "engine.del.destroys",
+  [UiSlot.REPORT_EYEBROW]: "engine.report.eyebrow", [UiSlot.TITLE_SUFFIX]: "engine.export.titleSuffix",
+  [UiSlot.COL_SECTION]: "engine.col.section", [UiSlot.COL_ITEM]: "engine.col.item",
+  [UiSlot.COL_CATEGORY]: "engine.col.category", [UiSlot.CHECKPOINTS]: "engine.checkpoints",
+  [UiSlot.COL_GATE]: "engine.col.gate", [UiSlot.NO_GAPS]: "engine.report.noGaps",
+  [UiSlot.READINESS_DETAIL]: "engine.report.readinessDetail", [UiSlot.MD_OVERALL]: "engine.md.overall",
+  [UiSlot.DISCLAIMER]: "engine.report.disclaimer", [UiSlot.MD_FOOTER]: "engine.md.footer",
+  [UiSlot.FW_NOTE]: "engine.fw.note",
+  [UiSlot.FLAG_LIVE_OPEN]: "engine.flag.liveOpen", [UiSlot.FLAG_NO_RATIONALE]: "engine.flag.noRationale",
+  [UiSlot.FLAG_NO_DEPLOY_DATE]: "engine.flag.noLiveDate",
+  [UiSlot.OVERVIEW_TITLE]: "engine.supp.title", [UiSlot.OVERVIEW_LEDE]: "engine.supp.lede",
+  [UiSlot.CARD_ANSWERED]: "engine.supp.answered", [UiSlot.CARD_PROGRESS]: "engine.supp.progress",
+  [UiSlot.CARD_DECLINED]: "engine.supp.declined", [UiSlot.WHO_OWES]: "engine.supp.whoOwes",
+  [UiSlot.RELAY]: "engine.supp.relay", [UiSlot.COL_WHO]: "engine.supp.colWho",
+  [UiSlot.COL_OUTSTANDING]: "engine.supp.colOutstanding", [UiSlot.NEVER_TITLE]: "engine.supp.neverTitle",
+  [UiSlot.NEVER_DETAIL]: "engine.supp.neverDetail", [UiSlot.OFF]: "engine.supp.off",
+  [UiSlot.TURN_ON]: "engine.supp.turnOn", [UiSlot.TOGGLE_ON_DETAIL]: "engine.fw.onDetail",
+  [UiSlot.TOGGLE_OFF_DETAIL]: "engine.fw.offDetail",
 });
 
 /* A stored status's CSS class, by its class: the report's and the screens' tags were
@@ -67,8 +109,11 @@ function frameworkFacade(id) {
 
   const F = {
     id, def, fw, primary, ns, keys, vp, ui, reason, answersPath,
-    hasSlot: slot => Object.hasOwn(ui, slot),
-    slot: slot => ui[slot],
+    // A slot is filled when the definition names a key or the engine has a default.
+    hasSlot: slot => Object.hasOwn(ui, slot) || Object.hasOwn(DEFAULT_SLOT, slot),
+    slot: slot => Object.hasOwn(ui, slot) ? ui[slot] : DEFAULT_SLOT[slot],
+    // English nouns for the export-only flag text (screens use catalog keys).
+    itemNoun: n => { const no = (def.nouns || {}).item || ["item", "items"]; return n === 1 ? no[0] : no[1]; },
     answers: p => (primary ? (p || S).items : (((p || S)[id] || {})[SupplementKey.ANSWERS])) || {},
     enabled: p => primary || !def.optIn || !!(((p || S)[id] || {})[SupplementKey.ENABLED]),
     sectionTitle: s => tf(`${ns}.${keys.section}.${s.id}.title`, s.title),

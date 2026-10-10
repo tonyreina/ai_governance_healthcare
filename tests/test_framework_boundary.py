@@ -251,6 +251,7 @@ STAND_IN = """
     isLive: ph => ph.role === "live", reportViewId: "report", reviewGateId: () => null,
     fileSuffix: "zz-review", schemaId: "zz-review/1",
     statusKnown: v => v === "met", statusLabel: v => v,
+    uiKey: s => DEFAULT_SLOT[s], name: "ZZ",
   };
   FRAMEWORKS.forEach(f => { f.primary = false; });
   registerFramework({id: "zz", label: "ZZ", primary: true, spine: sp,

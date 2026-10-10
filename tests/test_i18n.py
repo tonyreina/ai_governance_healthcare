@@ -157,11 +157,21 @@ def main() -> int:
         ctx_zh, zh = open_app(browser, "zh-CN")
         reviewers = zh.evaluate("I18N_CATALOGS['zh-Hans']['@meta'].reviewers")
         safety = zh.evaluate("I18N_CATALOGS.en['@meta'].safety")
+        # The engine's neutral report footers (#168, R-65) are new safety text no one
+        # has reviewed yet: they stay English in Chinese until a review is recorded.
+        neutral = {"engine.report.disclaimer", "engine.md.footer"}
         check(
-            "every safety-bearing string has a recorded Chinese reviewer",
-            sorted(reviewers) == sorted(safety)
-            and all("Cody Chen" in reviewers[k] for k in safety),
-            str(reviewers),
+            "every safety string but the new neutral footers has a Chinese reviewer",
+            sorted(reviewers) == sorted(set(safety) - neutral)
+            and all("Cody Chen" in reviewers[k] for k in reviewers),
+            str(sorted(set(safety) ^ set(reviewers))),
+        )
+        check(
+            "and those footers are safety-bearing, so they show in English in Chinese",
+            neutral <= set(safety)
+            and zh.evaluate("t('engine.md.footer', {name: 'X'})").startswith(
+                "Structured"
+            ),
         )
         warning = zh.inner_text("#storageWarning")
         check(

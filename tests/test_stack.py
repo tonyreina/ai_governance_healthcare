@@ -25,6 +25,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from pathlib import Path
 
 BASE = "http://localhost:8080"
 
@@ -187,6 +188,33 @@ def main() -> int:
     print("API")
     status, body = http("/api/health")
     check("health reports ok", json.loads(body).get("status") == "ok", body)
+    # The migrate service loaded the retirement rules from the manifest beside the
+    # page the proxy serves (compose's APP_DIR, D-76), and the API reports that rule
+    # set: the database retires by the build's own definition.
+    manifest = json.loads(
+        (Path(__file__).resolve().parent.parent / "docs" / "app" / "manifest.json")
+        .read_text(encoding="utf-8")
+    )  # fmt: skip
+    # What this proves is the default build: its rule set is 010's seed (same hash),
+    # so the hash alone would match even if no sync ran. `synced` shows the migrate
+    # job read the manifest and confirmed it. That a different rule set is loaded,
+    # refused or acknowledged is server/tests' evidence (C-88).
+    check(
+        "the database retires by the served build's rule set, synced from it",
+        json.loads(body).get("retirement_rules")
+        == {
+            "hash": manifest["ruleSetHash"],
+            "primary": manifest["primary"],
+            "synced": True,
+        },
+        body,
+    )
+    _, served = http("/manifest.json")
+    check(
+        "and it is the manifest the proxy serves beside the page",
+        json.loads(served or "{}").get("ruleSetHash") == manifest["ruleSetHash"],
+        served[:200],
+    )
 
     # Identity must come from the proxy, never from the client.
     _, me = http("/api/me")

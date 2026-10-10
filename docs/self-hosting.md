@@ -77,6 +77,108 @@ proxy, the API, a one-shot migration job and PostgreSQL.
 | `.env.example` | Every variable, commented. Copy to `.env`; it is git-ignored. |
 | `Makefile` | The commands above. |
 
+### Which build it serves, and the retirement rules
+
+The proxy serves the dashboard from `APP_DIR` (default `./docs/app`, the
+published build) with the policy in `CSP_FILE` (default `./proxy/csp.caddy`,
+generated with it). Leave both unset to run the published build. A build of
+another framework is a directory holding its own `index.html` and
+`manifest.json`, and its own policy file.
+
+`manifest.json` is written by `pixi run build-app` beside the page. It names each
+framework in the build and the checkpoint decisions that end a project. Which
+decisions those are is the framework's own definition, not a fixed rule: in the
+published build, "Stop" at checkpoint A, B or C, or "Retire" at D. The `migrate`
+service reads the manifest beside the page the proxy serves and loads those
+decisions into the database, which decides from them when a project is retired
+and so when it comes due for disposal ([Privacy and retention](privacy.md#disposal-at-the-end-of-the-period)).
+
+- Nothing about disposal changes silently. When the build adds a decision that
+  ends a project, no longer has one the database retires on today, or has a
+  different primary framework, `migrate` refuses: it lists the decisions added and
+  removed, the change of primary, and every project that would become due, or stop
+  being due, for disposal, prints the value to set, and exits non-zero. On a
+  first deploy the API waits for `migrate` and does not start. On a redeploy over
+  a running stack, `docker compose up -d` can still return 0: the API that is
+  already running keeps serving, by the rules the database already holds, while
+  a service it recreated for the new build, such as the proxy, is left created
+  and not started, so the dashboard is down. After every deploy, run
+  `docker compose ps -a` and read `docker compose logs migrate`: a `migrate` that
+  exited 3 printed the value. If the change is intended, set `RETIREMENT_RULES_ACK`
+  in `.env` to that value and run `docker compose up -d` again; then clear it. If
+  it is not, deploy the previous build again (`APP_DIR`, `CSP_FILE`) and run
+  `docker compose up -d`. The value
+  acknowledges exactly the change you were shown: every rule the database holds
+  before and after it, of every framework, and the primary before and after, from
+  the database's rules as they stood when it was printed. A different change, even
+  one between the same primary rule sets, needs its own value. Once used it is
+  spent, so one left set from an earlier deploy accepts nothing later, not even
+  the same change again, and an older build deployed over a newer one is refused
+  the same way. It also belongs to the database that printed it: it includes the
+  cluster's system identifier, the database's internal id (OID) and the internal
+  id of the rules' history table, none of which a dump carries, so another
+  database refuses it even when its history is the same (a value printed on a
+  staging database built separately, or restored from a dump, does nothing on
+  production), and so does a copy restored from a dump that creates the tables
+  again, into another database or cluster or over the same database in place
+  (`make backup` dumps with `--clean`, so `make restore` drops and creates every
+  table). A restore of the data alone does not: reloading the rows into the
+  tables that are already there (`pg_dump --data-only`, or `TRUNCATE` and reload)
+  keeps the history table's OID, so it is the same database to `migrate`, and a
+  value spent after the dump was taken is accepted again.
+- The value binds the rules and the primary, not the projects. The list is of the
+  projects as they stood when it was printed: a project decided or edited before
+  you run `migrate` again with the value is affected all the same, without having
+  been listed. Use the value promptly; to see the list as it stands, run `migrate`
+  without it.
+- A copy of the database's files is not a dump. A base backup, point-in-time
+  recovery, a volume or disk snapshot, or a promoted replica keeps the cluster's
+  identifier and both internal ids, so to `migrate` it is the database it was
+  copied from, and it accepts again a value printed against the state it holds.
+  Clear `RETIREMENT_RULES_ACK` before you restore one, and read what `migrate`
+  prints afterward. The same holds for a staging database made that way: it
+  shares production's identity, so a value printed on either, against the state
+  both hold, is accepted by the other. If you want staging's values never to work
+  on production, build staging from a dump (`pg_dump`, then `pg_restore` or
+  `psql`, creating the tables), not from a copy of production's files.
+- The database's identity comes from `pg_control_system()`, which PostgreSQL lets
+  every role call. On a platform that withholds it, `migrate` cannot bind a value
+  to the database, so it refuses every change of the rules and says why; a build
+  that changes nothing still starts.
+- A build that changes nothing (the same rules and the same primary as the
+  database) needs nothing: the published build on a new database starts without
+  an acknowledgment.
+- A build governs only the frameworks it lists. The rules of a framework it does
+  not list, such as the primary of an earlier build, are left in place, so that
+  framework's records keep retiring by them, and `migrate` says so.
+- A missing or unreadable manifest also stops `migrate`. There is no fallback.
+
+Every change is recorded in the append-only `retirement_rule_change` table (who,
+when, the rules before and after) and as a `retirement.rules_changed` security
+event. `GET /api/health` reports the rule set in use as `retirement_rules`: its
+`hash`, which equals `ruleSetHash` in the manifest of the build that set it, its
+`primary` framework, and `synced`, which is `true` when the latest change of the
+rules came from a build's manifest. It is `false` while the database holds only
+010's seed, and on an API that migrated itself (`RUN_MIGRATIONS=true`) with no
+`RETIREMENT_MANIFEST`, whatever an earlier sync recorded, since that API did not
+check the rules against its build.
+
+A record's framework is its `meta.framework.id`, and it decides when the record
+can be disposed of. The API accepts a new record that sets it only when it is
+exactly `{"id": "<primary>"}`, the primary of the build the rules were loaded
+from. A record without one is CHAI's, so while the primary is another framework
+the API refuses a new record without the stamp. No change to an existing record
+can change its framework: a change that would set, remove or blank the stamp, or
+replace `meta`, so that the record follows another framework's rules is refused,
+and a change that sets the stamp must name the record's own framework exactly. So
+a record written before a change of primary keeps the framework it had, and stays
+editable, and a record of a later primary keeps its framework after a rollback.
+A build of another framework ([Bring your own framework](frameworks/custom.md))
+stamps every record it creates with its primary; the published build stamps
+none, so its records are CHAI's. A change of primary waits for every new record
+in flight, and a new record that starts during it waits for it, so no record is
+checked against a primary that has just been replaced.
+
 ### Identity comes from the proxy
 
 The API does not authenticate anybody. The proxy deletes any
@@ -242,10 +344,12 @@ being compromised.
 restored is a hypothesis. `make verify-backup` restores the newest dump (or
 `FILE=...`) into a throwaway PostgreSQL of the same major version as production,
 with no network, and checks that the tables, the rows and the **append-only
-triggers** came back. A dump that restores without them has quietly lost the
-guarantee the history rests on. It exits non-zero otherwise, so run it after the
-backup, from the same scheduler. How long it takes is your real restore time,
-which is the number to write down.
+triggers** came back, enabled. A dump that restores without them, or with them
+switched off, has quietly lost the guarantee the history rests on. It also checks
+that the retirement rules it restored are exactly the ones their history last
+recorded, so a restore never retires by rules nobody recorded choosing. It exits
+non-zero otherwise, so run it after the backup, from the same scheduler. How
+long it takes is your real restore time, which is the number to write down.
 
 `make restore` overwrites the live database with a dump, so it asks you to type
 `YES` first (`CONFIRM=YES` skips the question for automation). Practice the

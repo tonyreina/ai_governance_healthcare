@@ -22,6 +22,7 @@ import asyncio
 import contextlib
 import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import asyncpg
@@ -128,6 +129,22 @@ async def owner_connection() -> AsyncIterator[asyncpg.Connection]:
         await conn.close()
 
 
+# The migration that creates and seeds the retirement rules (CHAI's four). It is
+# idempotent, so running it again over emptied tables puts back exactly the seeded
+# state, with no second copy of the seed here to drift from it.
+RETIREMENT_MIGRATION = (
+    Path(__file__).resolve().parent.parent / "migrations" / "010_retirement_rules.sql"
+)
+
+
+async def reset_retirement_rules(conn: asyncpg.Connection) -> None:
+    """Put the retirement rules and their history back to what 010 seeds."""
+    await conn.execute(
+        "TRUNCATE retirement_rule, retirement_rule_change RESTART IDENTITY"
+    )
+    await conn.execute(RETIREMENT_MIGRATION.read_text(encoding="utf-8"))
+
+
 async def reset_database() -> None:
     """Empty every table, as the OWNER, whichever role the API under test uses."""
     conn = await asyncpg.connect(DB_URL)
@@ -151,6 +168,7 @@ async def reset_database() -> None:
         await conn.execute(
             "UPDATE retention_policy SET record_years = 6, read_trail_years = 6"
         )
+        await reset_retirement_rules(conn)
     finally:
         await conn.close()
 

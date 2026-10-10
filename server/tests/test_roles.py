@@ -290,6 +290,11 @@ async def test_a_role_name_that_cannot_be_put_in_sql_is_refused(owner, name) -> 
         grant_statements(name)
 
 
+# The default build's manifest, which the migrate job needs to load the retirement
+# rules (D-76). server/tests/test_retirement_rules.py tests the job without one.
+MANIFEST = SERVER.parent / "docs" / "app" / "manifest.json"
+
+
 def run_migrate(*args: str, **env: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, "-m", "app.migrate", *args],
@@ -300,8 +305,11 @@ def run_migrate(*args: str, **env: str) -> subprocess.CompletedProcess:
             **{
                 k: v
                 for k, v in os.environ.items()
-                if not k.startswith(("POSTGRES_", "DATABASE_", "APP_POSTGRES"))
+                if not k.startswith(
+                    ("POSTGRES_", "DATABASE_", "APP_POSTGRES", "RETIREMENT_")
+                )
             },
+            "RETIREMENT_MANIFEST": str(MANIFEST),
             **env,
         },
     )

@@ -260,6 +260,24 @@ services:
       DATABASE_URL: ${DATABASE_URL:-}
       APP_POSTGRES_USER: ${APP_POSTGRES_USER:-chai_app}
       APP_POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:-}
+      # Which checkpoint decisions end a project, and so when disposal is due, come
+      # from the build the proxy serves: its manifest.json, mounted below (D-76). The
+      # job refuses to add or drop one, or change the primary, unless
+      # RETIREMENT_RULES_ACK acknowledges exactly that change, with the value it
+      # prints, and it fails if the file is missing.
+      RETIREMENT_MANIFEST: /etc/chai/manifest.json
+      RETIREMENT_RULES_ACK: ${RETIREMENT_RULES_ACK:-}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+    volumes:
+      # The same directory the proxy serves the page from, so the rules and the page
+      # are one build. Read-only: the job only reads it. A missing file stops `up`
+      # (create_host_path: false) instead of mounting an empty directory.
+      - type: bind
+        source: ${APP_DIR:-./docs/app}/manifest.json
+        target: /etc/chai/manifest.json
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       db:
         condition: service_healthy
@@ -278,7 +296,7 @@ services:
   # Caddy. The only service with a published port.
   #
   # Three jobs:
-  #   1. serve the built dashboard (docs/app/index.html) at /
+  #   1. serve the built dashboard (${APP_DIR}/index.html, docs/app by default) at /
   #   2. proxy /api/* to the API, streaming /api/events without buffering
   #   3. own identity: delete any client-supplied identity header, then set it
   #      from a source the operator configured (a fixed dev value locally, the
@@ -327,12 +345,15 @@ services:
     volumes:
       - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
       # The Content-Security-Policy, generated from the built dashboard (#154).
-      - ./proxy/csp.caddy:/etc/caddy/csp.caddy:ro
+      # CSP_FILE names another build's policy; it must be the one generated with
+      # the page in APP_DIR, or the browser refuses that page's script.
+      - ${CSP_FILE:-./proxy/csp.caddy}:/etc/caddy/csp.caddy:ro
       # The dashboard is a single pre-built static file. It is MOUNTED, not
       # rebuilt in Docker: it is generated on the host by `pixi run build-app`
       # from the sources under app/. Read-only so the web server cannot be
-      # tricked into writing to it.
-      - ./docs/app:/srv/app:ro
+      # tricked into writing to it. APP_DIR names another build's directory; the
+      # migrate service reads that build's manifest.json from the same place.
+      - ${APP_DIR:-./docs/app}:/srv/app:ro
       # Certificates and OCSP staples, so an automatic-HTTPS deployment does not
       # re-issue from Let's Encrypt on every restart and hit the rate limit.
       - caddy_data:/data

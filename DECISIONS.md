@@ -1674,13 +1674,21 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   (directly, in an IIFE, `new function(){...}` or static block, in a computed
   key of a class or object member, in the right-hand side of a
   `for (const a of ...)` reading `a`, in a destructuring default reading a name
-  the same pattern binds later, or in a function that top-level code calls by
-  name before the declaration; a generator's body is not run by its call, nor a
-  function held by an instance field by `new`), and on a name declared twice at
-  top level (a function in a top-level block that replaces another function or
-  var counts; as in Annex B, one whose name a top-level `let`, `const` or
-  `class` declares binds nothing there and does not, and two block functions
-  of one name do not).
+  the same pattern binds later, a class's own name in a computed key of its
+  members, or in a function that top-level code calls by name before the
+  declaration; a generator's body is not run by its call, nor a function held
+  by an instance field by `new`; `delete x` reads nothing), and on a name
+  declared twice at top level (a function in a top-level block, or as the body
+  of an `if` or `else`, that replaces another function or var counts; as in
+  Annex B, one whose name a top-level `let`, `const` or `class` declares binds
+  nothing there and does not, and two block functions of one name do not).
+- **What "exact" covers.** `tests/check_app_cases.py` holds some three hundred
+  scripts that `tests/test_check_app.py` runs both through the check and in
+  node; the check must report a problem on exactly the ones node throws a
+  ReferenceError on while loading. Exact is claimed for those cases (typeof
+  guards, undefined names in code that runs, the temporal dead zone in the
+  shapes listed above, Annex B block functions, calls through the call graph)
+  and for nothing wider.
   `node --check` still runs, and its absence is a failure under
   `REQUIRE_TESTS`, which both the lint and the test workflows set.
 - **The parser is tree-sitter's JavaScript grammar**, two PyPI wheels locked
@@ -1700,7 +1708,13 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   `tests/test_check_app.py` must find it in Chromium, Firefox and WebKit.
 - **Its limits, stated in the script and in `docs/developing.md`:** the call
   graph follows only calls of a plain name (`f()`, `new K()`), not method calls,
-  callbacks or events, and assumes every path through a called function runs;
+  callbacks or events, assumes every path through a called function runs, and
+  follows every block function of a name (so it can report a body another
+  block replaced first); through calls it checks only top-level `const`, `let`
+  and `class`, so a function called before a `const` of its own enclosing
+  function is missed; a parameter default reading a later parameter is not
+  modeled; a typeof guard is one exact form, so safe code in another shape is
+  reported;
   code after the first `await` (first in the text) of an async function is taken
   to run after load, so an `await` on a branch not taken hides a read that runs
   during load; a name the app means to declare that is also a browser global
@@ -1721,4 +1735,5 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Enforced by: `pixi run check-app` (pre-commit and CI's lint job);
   `tests/test_check_app.py` (`pixi run test-check-app`, in the browser and
   engines jobs), which shows each rule failing, including on copies of `app/`
-  broken and rebuilt.
+  broken and rebuilt, and requires the check and node to agree on every script
+  of `tests/check_app_cases.py`.

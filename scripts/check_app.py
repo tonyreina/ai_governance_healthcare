@@ -20,19 +20,15 @@ built shows up the same way. This checks, for every page it is given:
    consequent of an `if` or `?:`, or the right operand of `&&`, whose condition
    is (or has as an `&&` operand) `typeof x === "function"` or any other type,
    or `typeof x !== "undefined"`, either way round (`"function" === typeof x`),
-   with `==` and `!=` counting as `===` and `!==`. The other side must be a
-   string literal, read for its value (`"undefin\\x65d"` is "undefined"), that
-   `typeof` can return: "undefined", "object", "boolean", "number", "bigint",
-   "string", "symbol" or "function". Anything else (another string, a variable,
-   a template literal, another operator) is not a guard. Nothing wider: the else
-   branch, code after `if (typeof x !== "function") return;`, and a `||` form
-   are still reported.
-   The resolution is exact, scope analysis on a real parse, not a pattern. What
-   it cannot see: a name the app means to declare that is also a browser global
-   (`open`, `close`, `print`, `origin`, `history`, `Image`, `Option`, ...) passes
-   as that global if the declaration is missing, and a name a script adds at run
-   time as a property of `window` is reported if read bare (and not checked if
-   read as `window.x`).
+   with `==` and `!=` counting as `===` and `!==`, and parentheses and the
+   comments inside them ignored. The other side must be a string literal, read
+   for its value (`"undefin\\x65d"` is "undefined"), that `typeof` can return:
+   "undefined", "object", "boolean", "number", "bigint", "string", "symbol" or
+   "function". Anything else (another string, a variable, a template literal,
+   another operator) is not a guard. Nothing wider: the else branch, code after
+   `if (typeof x !== "function") return;`, and a `||` form are still reported.
+   `delete x` reads nothing (of a name nothing declares it is true), so it is
+   not reported.
 3. Use before declaration. A `const`, `let` or `class` binding read before its
    declaration has run throws a ReferenceError (the temporal dead zone), and
    `typeof` does not protect it. Reported:
@@ -43,44 +39,75 @@ built shows up the same way. This checks, for every page it is given:
      of `for (const a of ...)`, which runs with `a` already in its dead zone. In
      a destructuring pattern each name is ready once its own element has been
      destructured, so `const {y, x = y} = o` passes and `const {x = y, y} = o`
-     does not. `delete x` reads nothing and is not reported. A generator's body
-     does not run when it is called, so a generator called where it is written
-     is not an IIFE. Exact: that code throws whenever it runs, which for
-     top-level code is always, on load. One heuristic narrows it: code after the
-     first `await` of an async
-     function (an async IIFE, like the boot module's) runs after the script has
-     finished loading, so a read there of a name declared outside that function
-     is not reported. "First" is first in the text, so an `await` on a branch
-     that is not taken, or in a loop that runs no times, hides a read that does
-     run during load. (tree-sitter parses `await (p)()` in an async function as
-     a call of a function named `await`, and `await (p)` outside one as an
-     await; both are read here as JavaScript reads them.)
+     does not. A class's own name inside its body is bound after every computed
+     key of its members has been evaluated, wherever the key stands, so
+     `class C { [C]() {} }` and `class C { static x = 1; [C.x] = 2 }` are
+     reported, and `class C { static x = C }` is not. `delete x` reads nothing
+     and is not reported. A generator's body does not run when it is called, so
+     a generator called where it is written is not an IIFE. One heuristic
+     narrows this: code after the first `await` of an async function (an async
+     IIFE, like the boot module's) runs after the script has finished loading,
+     so a read there of a name declared outside that function is not reported.
+     "First" is first in the text, so an `await` on a branch that is not taken,
+     or in a loop that runs no times, hides a read that does run during load.
+     (tree-sitter parses `await (p)()` in an async function as a call of a
+     function named `await`, and `await (p)` outside one as an await; both are
+     read here as JavaScript reads them.)
    * a read inside a function that top-level code calls, directly or through other
-     functions, before the declaration. The call graph is followed only through
-     calls of a plain name bound to a function (`f()`, `new K()`), and every path
-     through a function is assumed to run, except what follows its first `await`
-     (as above). `new K()` runs K's constructor and its instance field
-     initializers, but not the body of a function a field holds. A generator's
-     body is not followed: it runs on `.next()`, a method call. So it misses a
-     call made another way (a method call, a callback, an event handler) and
-     could report a read on a branch that never runs during load. A read in a
-     function body that is not called during load is, correctly, never
-     reported: it runs after every module has loaded.
+     functions, before the declaration of a top-level `const`, `let` or `class`.
+     The call graph is followed only through calls of a plain name bound to a
+     function (`f()`, `new K()`), and every path through a function is assumed
+     to run, except what follows its first `await` (as above). `new K()` runs
+     K's constructor and its instance field initializers, but not the body of a
+     function a field holds. A generator's body is not followed: it runs on
+     `.next()`, a method call. A name with two block functions (Annex B) is
+     bound to whichever block ran last, which is not known here, so every one
+     of them is followed. A read in a function body that is not called during
+     load is, correctly, never reported: it runs after every module has loaded.
 4. Duplicate top-level declarations: two modules defining one name, including a
-   function declared in a top-level block (`{ function f(){} }`), which replaces
-   a top-level function or var of that name when the block runs (Annex B). As
-   in Annex B, a block function makes no top-level binding at all when a `let`,
-   `const` or `class` of its name is declared at top level (before or after it)
-   or in a block around it, so that is not a duplicate. Two block functions of
-   one name are not reported either: node accepts them, and the two blocks are
-   usually exclusive branches.
+   function declared in a top-level block (`{ function f(){} }`, or the whole
+   body of an `if` or `else`, `if (x) function f(){}`, which is the same thing:
+   Annex B, B.3.3), which replaces a top-level function or var of that name
+   when the block runs (B.3.2). As in Annex B, a block function makes no
+   top-level binding at all when a `let`, `const` or `class` of its name is
+   declared at top level (before or after it) or in a block around it, so that
+   is not a duplicate. Two block functions of one name are not reported either:
+   node accepts them, and the two blocks are usually exclusive branches.
 
 Parsing is tree-sitter's JavaScript grammar (tree-sitter and
 tree-sitter-javascript, locked in pixi.lock), so it runs offline, without node,
 and understands the syntax the app is written in. The scope analysis on top of it
-is this file. What it does not model: `with` and direct `eval` (the app uses
-neither, and check_injection forbids eval), a `switch` that jumps past a
-`let` in another case, and a parameter's default reading a later parameter.
+is this file.
+
+Where it is shown exact, and where it is not. tests/check_app_cases.py holds
+some three hundred scripts that tests/test_check_app.py runs both here and in
+node, and the test requires this check to report a problem on exactly the ones
+node throws a ReferenceError on while loading them. They cover the typeof guard
+forms that pass, undefined names in code that runs, reads in the temporal dead
+zone (destructuring order, computed keys, a class's own name, IIFEs, `new
+function`, static blocks and fields, generators, `delete`, for-of heads, code
+before and after an `await`), Annex B block functions, and calls through the
+call graph. On those cases it is exact; that is the claim, and nothing wider.
+The known limits, each a way it can be wrong:
+* Missed: a call made other than by a plain name (a method call, a callback, an
+  event handler); a read after an `await` that sits on a branch not taken; a
+  function a nested scope declares and calls before a `const` of that same
+  scope (`(() => { g(); const k = 1; function g(){ k; } })()`: the call graph
+  checks only top-level bindings); a parameter default reading a later
+  parameter; a `switch` that jumps past a `let` in another case; `with` and
+  direct `eval` (the app uses neither, and check_injection forbids eval); a
+  name the app means to declare that is also a browser global (`open`,
+  `close`, `print`, `origin`, `history`, `Image`, `Option`, ...), which passes
+  as that global if the declaration is missing.
+* Over-reported: a read on a branch of a called function that does not run
+  during load; the body of a block function another block of the same name
+  replaced before the call; a name a script adds at run time as a property of
+  `window`, if read bare (`window.x` is not checked); safe code whose guard is
+  not the exact typeof form above (an early return, an else branch, `||`, a
+  `switch`, a variable holding the string).
+* Policy, not runtime: the duplicate rule reports code that runs (a block
+  function replacing a top-level function), because two modules defining one
+  name is the bug it is there for.
 
     pixi run check-app                  the published page, and a build of every
                                         app/frameworks/*/build.json into a temp dir
@@ -163,6 +190,8 @@ class T(StrEnum):
     SUBSCRIPT_EXPRESSION = "subscript_expression"
     COMPUTED_PROPERTY_NAME = "computed_property_name"
     AWAIT_EXPRESSION = "await_expression"
+    ELSE_CLAUSE = "else_clause"
+    COMMENT = "comment"
     # Anonymous tokens: keywords that say which declaration or operator this is.
     TYPEOF = "typeof"
     DELETE = "delete"
@@ -253,6 +282,9 @@ class BindingKind(StrEnum):
 # Bindings with a temporal dead zone: reading one before its declaration throws.
 LEXICAL = frozenset({BindingKind.LET, BindingKind.CONST, BindingKind.CLASS})
 DECLARATION_KIND = {T.CONST: BindingKind.CONST, T.LET: BindingKind.LET}
+# What a block function's Annex B binding can share a name with (a lexical
+# declaration blocks it, and a parameter keeps its own value).
+ANNEX_B_TARGETS = frozenset({BindingKind.FUNCTION, BindingKind.VAR})
 
 
 def _words(text: str) -> frozenset[str]:
@@ -344,6 +376,14 @@ class Binding:
     # inside it (a default value, a computed key) runs while the pattern is
     # destructured, so the binding is ready once its own element has been.
     pattern: Node | None = None
+    # More functions it may be bound to: a later block function of the same name
+    # (Annex B), which replaces it when its block runs. The call graph follows
+    # all of them, since which block ran last is not known.
+    more: list[Node] = field(default_factory=list)
+    # For a class's own name inside its body: the computed keys of its members,
+    # evaluated before that binding is initialized (ClassDefinitionEvaluation),
+    # wherever they stand in the text. Everything else in the body runs after.
+    keys: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(eq=False)
@@ -420,6 +460,8 @@ class Analysis:
             # are left alone (only one block may run).
             if scope is self.program and (not quiet or not old.annex_b):
                 self.duplicates.append((old, binding))
+            if quiet and value is not None and old.kind in ANNEX_B_TARGETS:
+                old.more.append(value)  # the block may run last: it is f then
             if bkind is BindingKind.VAR or quiet:
                 return  # `var x` again, or Annex B: the first binding stands
         scope.names[name] = binding
@@ -465,7 +507,11 @@ class Analysis:
 
     def _declare(self, node: Node, scope: Scope) -> None:
         k = kind(node)
-        if k in FUNCTIONS:
+        if k in FUNCTION_DECLARATIONS and _if_body(node):
+            # `if (x) function f(){}` is `if (x) { function f(){} }` (Annex B,
+            # B.3.3): a block function, in a block of its own.
+            self._declare_function(node, Scope(ScopeKind.BLOCK, scope, node), k)
+        elif k in FUNCTIONS:
             self._declare_function(node, scope, k)
         elif k in CLASSES:
             self._declare_class(node, scope, k)
@@ -601,13 +647,22 @@ class Analysis:
             self._bind(name, BindingKind.CLASS, scope, node.end_byte, node)
         inner = self._scope(node, ScopeKind.CLASS, scope)
         if name is not None:
-            # The name inside the class body is its own binding, ready once defined.
-            # It is initialized before the static fields and blocks run, so
-            # it is ready from the start of the body.
+            # The name inside the class body is its own binding. It is initialized
+            # after every computed key of a member is evaluated and before the
+            # static fields and blocks run, so it is ready in the whole body but
+            # those keys (Binding.keys).
             text = name.text.decode("utf-8")
             body = node.child_by_field_name("body")
             inner.names[text] = Binding(
-                text, BindingKind.CLASS, inner, name, body.start_byte, node
+                text,
+                BindingKind.CLASS,
+                inner,
+                name,
+                body.start_byte,
+                node,
+                keys=tuple(
+                    (key.start_byte, key.end_byte) for key in _computed_keys(body)
+                ),
             )
             self.binding_nodes.add(name.id)
         for child in node.children:
@@ -657,6 +712,7 @@ class Analysis:
             if (
                 ref.binding is None
                 and not ref.in_typeof
+                and _reads(ref.node)
                 and ref.name not in GLOBALS
                 and not _guarded(ref.node, ref.name)
             ):
@@ -689,12 +745,13 @@ class Analysis:
                 )
             )
 
-        # Exact: a read earlier in the same execution context.
+        # Directly: a read earlier in the same execution context.
         for ref in self.references:
             b = ref.binding
             if (
                 b is not None
                 and b.kind in LEXICAL
+                and _reads(ref.node)
                 and _unready(ref.node, b)
                 and ref.scope.context is b.scope.context
                 and not self._after_await(ref, b.scope.function)
@@ -718,6 +775,8 @@ class Analysis:
                         b is not None
                         and b.scope is self.program
                         and b.kind in LEXICAL
+                        and _reads(inner.node)
+                        # The call site, not the read: the function runs there.
                         and _unready(ref.node, b)
                         and not self._after_await(inner)
                     ):
@@ -795,14 +854,23 @@ def lookup(scope: Scope | None, name: str) -> Binding | None:
     return None
 
 
+def _reads(node: Node) -> bool:
+    """Whether a reference reads its name: all but the operand of `delete`
+    (`delete x` of a name is false, or true if nothing declares it, and reads
+    nothing either way)."""
+    return not _operand_of(node, T.DELETE)
+
+
 def _unready(at: Node, b: Binding) -> bool:
     """Whether code at `at` runs before the let, const or class `b` is ready.
     Outside a destructuring pattern, that is before the end of its declaration
     (for `for (const x of ...)`, of the right-hand side). Inside one, the pattern
     is destructured in order, so `const {y, x = y} = o` reads `y` once it is
-    bound, while `const {x = y, y} = o` and `const {y = y} = o` do not."""
-    if _operand_of(at, T.DELETE):
-        return False  # `delete x` of a declared name is false, and reads nothing
+    bound, while `const {x = y, y} = o` and `const {y = y} = o` do not. A
+    class's own name inside its body is unready only in its members' computed
+    keys."""
+    if any(start <= at.start_byte < end for start, end in b.keys):
+        return True
     p = b.pattern
     if p is not None and p.start_byte <= at.start_byte < p.end_byte:
         return _pattern_order(at, p) < _pattern_order(b.node, p)
@@ -898,9 +966,13 @@ def _unparen(node: Node) -> Node:
 
 
 def _inner(node: Node | None) -> Node | None:
-    """In through parentheses: `((x))` to `x`."""
-    while kind(node) is T.PARENTHESIZED_EXPRESSION and node.named_child_count == 1:
-        node = node.named_children[0]
+    """In through parentheses: `((x))` and `(x /*c*/)` to `x`. A comment is a
+    named child of the parentheses, so it is skipped."""
+    while kind(node) is T.PARENTHESIZED_EXPRESSION:
+        inside = [c for c in node.named_children if kind(c) is not T.COMMENT]
+        if len(inside) != 1:
+            break
+        node = inside[0]
     return node
 
 
@@ -1030,6 +1102,30 @@ def _first_await(node: Node) -> int | None:
     return None
 
 
+def _if_body(node: Node) -> bool:
+    """Whether a statement is the whole body of an `if` or its `else`."""
+    parent = node.parent
+    k = kind(parent)
+    return k is T.ELSE_CLAUSE or (
+        k is T.IF_STATEMENT and parent.child_by_field_name("consequence") == node
+    )
+
+
+def _computed_keys(body: Node) -> Iterator[Node]:
+    """The computed keys, `[k]`, of a class body's members."""
+    for member in body.named_children:
+        mk = kind(member)
+        key = (
+            member.child_by_field_name("name")
+            if mk is T.METHOD_DEFINITION
+            else member.child_by_field_name("property")
+            if mk is T.FIELD_DEFINITION
+            else None
+        )
+        if kind(key) is T.COMPUTED_PROPERTY_NAME:
+            yield key
+
+
 def _iife(fn: Node) -> bool:
     """A function expression whose body runs where it is written:
     `(() => ...)()`, `new function(){ ... }`, `new (function(){ ... })()`. Not a
@@ -1062,16 +1158,22 @@ def _called(ref: Reference) -> Binding | None:
         if k is T.NEW_EXPRESSION
         else None
     )
-    if callee != node or ref.binding is None or ref.binding.value is None:
+    b = ref.binding
+    if callee != node or b is None or (b.value is None and not b.more):
         return None
-    return ref.binding
+    return b
 
 
 def _bodies(binding: Binding) -> Iterator[Node]:
     """The nodes whose code runs when a binding is called: the function itself,
     or for a class its constructor and its fields (an instance field's
-    initializer runs at construction)."""
-    value = binding.value
+    initializer runs at construction). Every function it may be bound to
+    (Binding.more)."""
+    for value in (binding.value, *binding.more):
+        yield from _value_bodies(value)
+
+
+def _value_bodies(value: Node | None) -> Iterator[Node]:
     if kind(value) in GENERATORS:
         return  # a generator's body runs on .next(), a method call
     if kind(value) in FUNCTIONS:

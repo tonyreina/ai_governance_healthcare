@@ -17,6 +17,9 @@ seen to fail is a claim, not a control, so each rule is shown failing here:
   guard's string read for its value, browser globals, shadowing, patterns),
   which must pass; each case pins a behavior a mutation of the check would
   break;
+* engine: every script of check_app_cases.py is run in node too, and the check
+  must report a problem on exactly the ones node throws a ReferenceError on
+  while loading them (where the check claims to be exact);
 * integration: the published page and a build of the example framework pass;
   the browser globals the check accepts all exist in a real browser engine;
 * mutation: a copy of app/ with a definition deleted, with the boot module sorted
@@ -31,6 +34,7 @@ Under REQUIRE_TESTS=1 (CI), a part that cannot run (no node, no browser) fails.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -44,6 +48,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import check_app  # noqa: E402
+from check_app_cases import ENGINE_CASES  # noqa: E402
 
 REQUIRE_TESTS = bool(os.environ.get("REQUIRE_TESTS"))
 CHECK = ROOT / "scripts" / "check_app.py"
@@ -122,6 +127,13 @@ def unit() -> None:
     check(
         "a top-level `arguments` (outside any function) is reported",
         flags("const f = () => arguments;", "undefined name 'arguments'"),
+    )
+    for js in ("delete zz;", "delete (zz);", "if (delete zz) 1;"):
+        passes(f"`delete` of an undeclared name reads nothing: {js!r}", js)
+    reported(
+        "... but `delete (0, x)` reads it",
+        "delete (0, zz);",
+        "undefined name 'zz'",
     )
     print("typeof guards: a name only some builds have")
     guarded = """
@@ -231,6 +243,21 @@ def unit() -> None:
         'if (typeof zz < "undefined") zz();',
         undefined_zz,
     )
+    for js in (
+        'if (typeof zz === "function" /*c*/) zz();',
+        'if (/*c*/ typeof zz === "function") zz();',
+        'if (typeof zz === "function" // c\n) zz();',
+        'typeof (zz /*c*/) === "function" && zz();',
+        '(typeof zz === "function" /*c*/) && zz();',
+        'typeof zz === ("function" /*c*/) && zz();',
+        '(/*c*/ typeof zz === "function") ? zz() : 0;',
+    ):
+        passes(f"a comment inside the parentheses does not hide a guard: {js!r}", js)
+    reported(
+        "... nor does it make one of a comma expression",
+        'typeof (0 /*c*/, zz) === "function" && zz();',
+        undefined_zz,
+    )
     print("typeof guards: the string is read for its value")
     for spelled in (
         "undefin\\x65d",
@@ -257,6 +284,13 @@ def unit() -> None:
         reported(
             f'"{bogus}" is not a string typeof returns: not a guard',
             f'if (typeof zz === "{bogus}") zz();',
+            undefined_zz,
+        )
+    for spelled in ("\\8", "\\9undefined", "undefined\\9"):
+        reported(
+            f'"{spelled}" is a string of 8 or 9, not an octal escape: not a guard, '
+            "and no crash",
+            f'if (typeof zz !== "{spelled}") zz();',
             undefined_zz,
         )
     reported(
@@ -415,6 +449,28 @@ def unit() -> None:
             js + '\nconst a = "x";',
             "'a' is used before",
         )
+    for js in (
+        "class C { [C]() {} }",
+        "class C { get [C]() { return 1; } }",
+        "class C { static async [C]() {} }",
+        "class C { [C] }",
+        "class C { [C.name] = 1 }",
+        "class C { static x = 1; [C.x] = 2 }",
+        "class C { [(() => C)()]() {} }",
+        "const D = class C { static [C] = 1 };",
+        "class C { [class D { [C]() {} }]() {} }",
+    ):
+        reported(
+            f"a class's own name read in its computed key, before it is bound: {js}",
+            js,
+            "'C' is used before",
+        )
+    passes(
+        "... but not in a static field, a static block, a method body, or the key "
+        "of a class nested in one of those",
+        "class C { static x = C; static { C; } m() { return C; } }\n"
+        "class E { m() { class D { [E]() {} } } static { class F { [E] = 1 } } }",
+    )
     passes(
         "a method body (not its key) reading a later const passes",
         "class K { [Symbol.iterator]() { return a; } }\nconst a = 1;",
@@ -467,6 +523,18 @@ def unit() -> None:
     passes(
         "`delete x` of a let before its declaration reads nothing, and passes",
         "delete a;\nlet a;",
+    )
+    for js in (
+        "function f(){ delete a; }\nf();\nconst a = 1;",
+        "function f(){ delete ((a)); }\nf();\nconst a = 1;",
+        "function f(){ g(); }\nfunction g(){ delete a; }\nf();\nconst a = 1;",
+    ):
+        passes(f"... nor in a function called during load: {js!r}", js)
+    reported(
+        "... while a read in that function is reported",
+        "function f(){ delete a.x; }\nf();\nconst a = {};",
+        "'a' is used before",
+        "via f()",
     )
     print("Async code: what runs after the first await runs after load")
     check(
@@ -677,11 +745,85 @@ def unit() -> None:
         "a catch parameter does not block it (B.3.4)",
         "try { throw 0; } catch (f) { { function f(){} } }\nf;",
     )
+    for js in (
+        "let f;\nif (1) function f(){}",
+        "if (1) function f(){}\nconst f = 1;",
+        "let f;\nif (0) ;\nelse function f(){}",
+        "class f {}\nif (1) function f(){}",
+    ):
+        passes(
+            "a function as the body of an `if` or `else` is a block function "
+            f"(B.3.3): a lexical declaration of its name blocks it: {js!r}",
+            js,
+        )
+    for js in (
+        "var f;\nif (1) function f(){}",
+        "if (0) ;\nelse function f(){}\nvar f;",
+    ):
+        reported(
+            f"... and it overrides a top-level var like any block function: {js!r}",
+            js,
+            "duplicate top-level declaration 'f'",
+        )
+    reported(
+        "... and is not visible outside the function it is in",
+        "function g(){ if (1) function f(){} }\nf;",
+        "undefined name 'f'",
+    )
+    reported(
+        "two block functions of one name: the call graph follows the one that runs "
+        "last",
+        "{ function f(){} }\n{ function f(){ return a; } }\nf();\nconst a = 1;",
+        "'a' is used before",
+        "via f()",
+    )
+    reported(
+        "... and a block function that replaces a var is followed through it",
+        "var f;\n{ function f(){ return a; } }\nf();\nconst a = 1;",
+        "'a' is used before",
+        "via f()",
+    )
+    reported(
+        "... and the first too (both are followed: which block ran last is not known)",
+        "{ function f(){ return a; } }\n{ function f(){} }\nf();\nconst a = 1;",
+        "'a' is used before",
+    )
     check(
         "the same name declared in two functions is not a duplicate",
         problems("function a(){ const x = 1; } function b(){ const x = 2; }") == [],
     )
     check("a syntax error is reported", flags("const a = ;", "syntax error"))
+
+    print("Known limits, pinned so the docstring stays true")
+    for js, why in (
+        (
+            "(() => { g(); const k = 1; function g(){ k; } })();",
+            "through calls, only top-level bindings are checked",
+        ),
+        ("function f(a = b, b){}\nf();", "a parameter default is not ordered"),
+        ("switch (1) { case 0: let x; case 1: x; }", "a switch jump is not seen"),
+        (
+            "const o = { m(){ return k; } };\no.m();\nconst k = 1;",
+            "a method call is not followed",
+        ),
+    ):
+        passes(f"missed (node throws on it): {why}: {js!r}", js)
+    if shutil.which("node"):
+        thrown = run_in_node(
+            [
+                "(() => { g(); const k = 1; function g(){ k; } })();",
+                "function f(a = b, b){}\nf();",
+                "switch (1) { case 0: let x; case 1: x; }",
+                "const o = { m(){ return k; } };\no.m();\nconst k = 1;",
+            ]
+        )
+        check(
+            "... and node does throw on each, so they are misses, not passes",
+            thrown == [REFERENCE_ERROR] * 4,
+            thrown,
+        )
+    else:
+        cannot_run("the known misses throw in node", "node is not on PATH")
 
     print("A part that cannot run says why")
     launch = (
@@ -765,6 +907,91 @@ def integration() -> None:
         f"all {len(check_app.GLOBALS)} accepted globals exist in this engine",
         missing == [],
         missing,
+    )
+
+
+# Each script of a JSON array on stdin, run as a classic script in a fresh context;
+# prints, per script, the name of the first error it raised while loading (thrown,
+# or an async rejection before a 5 ms timer fires), or null.
+ENGINE_JS = r"""
+const vm = require("vm");
+let input = "";
+process.stdin.on("data", (d) => (input += d));
+process.stdin.on("end", async () => {
+  const out = [];
+  let current = null;
+  process.on("unhandledRejection", (e) => {
+    if (current && current.error === null) current.error = (e && e.name) || String(e);
+  });
+  for (const src of JSON.parse(input)) {
+    current = { error: null };
+    try {
+      new vm.Script(src).runInContext(vm.createContext({}));
+    } catch (e) {
+      current.error = (e && e.name) || String(e);
+    }
+    await new Promise((r) => setTimeout(r, 5));
+    out.push(current.error);
+  }
+  console.log(JSON.stringify(out));
+});
+"""
+REFERENCE_ERROR = "ReferenceError"
+
+
+def run_in_node(scripts: list[str]) -> list[str | None]:
+    out = subprocess.run(
+        ["node", "-e", ENGINE_JS],
+        input=json.dumps(scripts),
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    if out.returncode != 0:
+        raise RuntimeError(out.stderr)
+    return json.loads(out.stdout)
+
+
+def engine() -> None:
+    """check-app against the engine: on every script of check_app_cases, node
+    throws a ReferenceError while loading it exactly when the case says so, and
+    check-app reports a problem exactly then too."""
+    print("check-app agrees with node, script by script")
+    if not shutil.which("node"):
+        cannot_run("check-app agrees with node", "node is not on PATH")
+        return
+    probe = run_in_node(["k;\nconst k = 1;", "(async () => { k; })();\nlet k;", "1;"])
+    check(
+        "the harness sees a thrown ReferenceError, a rejected one, and none",
+        probe == [REFERENCE_ERROR, REFERENCE_ERROR, None],
+        probe,
+    )
+    cases = ENGINE_CASES
+    errors = run_in_node([js for _, js, _ in cases])
+    node_disagrees = [
+        (name, error)
+        for (name, _, throws), error in zip(cases, errors, strict=True)
+        if error != (REFERENCE_ERROR if throws else None)
+    ]
+    check_disagrees = [
+        name for name, js, throws in cases if bool(problems(js)) is not throws
+    ]
+    throwing = sum(throws for _, _, throws in cases)
+    check(
+        f"node throws a ReferenceError on exactly the {throwing} of {len(cases)} "
+        "scripts that say it does",
+        node_disagrees == [],
+        node_disagrees,
+    )
+    check(
+        "check-app reports exactly the scripts node throws on",
+        check_disagrees == [],
+        check_disagrees,
+    )
+    check(
+        "the table has both kinds, in numbers that make it a test",
+        throwing >= 100 and len(cases) - throwing >= 100,
+        (throwing, len(cases)),
     )
 
 
@@ -903,6 +1130,7 @@ def mutation() -> None:
 
 def main() -> int:
     unit()
+    engine()
     integration()
     mutation()
     if failures:

@@ -74,12 +74,14 @@ every name through its scopes, and fails on:
   `if (typeof chaiCardMarkdown === "function") return chaiCardMarkdown(ctx);`
   (the consequent of an `if` or `?:`, or the right of `&&`, tested with
   `=== "function"` or another type, or `!== "undefined"`, either way round, with
-  `==` and `!=` counting the same). The other side must be a string literal
+  `==` and `!=` counting the same, and parentheses and comments inside them
+  ignored). The other side must be a string literal
   whose value is one `typeof` returns (`"undefined"`, `"object"`, `"boolean"`,
   `"number"`, `"bigint"`, `"string"`, `"symbol"`, `"function"`); escapes are
   decoded, so `"undefin\x65d"` is `"undefined"`. Nothing wider: not the else
   branch, not code after `if (typeof x !== "function") return;`, not a `||`
-  form, not a comparison with a variable or a template literal. A new browser
+  form, not a comparison with a variable or a template literal. `delete name`
+  reads nothing and is not reported. A new browser
   global goes in `BROWSER_GLOBALS` in
   `scripts/check_app.py`, and `pixi run test-check-app` must find it in each
   browser engine;
@@ -87,11 +89,15 @@ every name through its scopes, and fails on:
   the same code (top level, an IIFE or `new function(){...}`, a static block, a
   computed key `[k]` of a class or object member, the right-hand side of
   `for (const a of ...)`, a destructuring default reading a name bound later in
-  the same pattern), or in a function that top-level code calls before the
-  declaration (`new K()` runs K's constructor and instance field initializers,
-  not a function a field holds; calling a generator runs none of its body);
+  the same pattern, a class's own name in a computed key of its members, as in
+  `class C { [C]() {} }`, which is bound only after every key is evaluated), or
+  in a function that top-level code calls before the declaration (`new K()`
+  runs K's constructor and instance field initializers, not a function a field
+  holds; calling a generator runs none of its body; a name two block functions
+  declare has both bodies followed, since which block ran last is not known);
 - a name two modules declare at top level, including a function declared in a
-  top-level block that replaces another module's function or var. As in Annex
+  top-level block (or as the whole body of an `if` or `else`, which Annex B
+  treats as a block) that replaces another module's function or var. As in Annex
   B, a block function whose name a top-level `let`, `const` or `class` also
   declares (before or after it) binds nothing at top level, so is not reported,
   and neither are two block functions of one name;
@@ -99,11 +105,27 @@ every name through its scopes, and fails on:
   check says it skipped `node --check`, which `REQUIRE_TESTS=1` makes a failure
   (CI's lint and test workflows both set it).
 
-Its limits (D-80), which are heuristics, not exact:
+Where it is exact, and where it is not (D-80). `tests/check_app_cases.py` holds
+some three hundred scripts that `pixi run test-check-app` runs both through the
+check and in node, and the check must report a problem on exactly the ones node
+throws a ReferenceError on while loading them: typeof guards, undefined names in
+code that runs, reads in the temporal dead zone (destructuring, computed keys, a
+class's own name, IIFEs, static blocks and fields, generators, `delete`, `await`),
+Annex B block functions, and calls through the call graph. On those cases it is
+exact. Its known limits:
 
 - the call graph follows only calls of a plain name (`f()`, `new K()`), not
   method calls, callbacks or events, and assumes every path through a called
-  function runs, so it can miss a load-order bug reached another way;
+  function runs, so it can miss a load-order bug reached another way, and can
+  report a read on a branch that does not run during load, or in the body of a
+  block function another block of that name replaced first;
+- through calls, only top-level `const`, `let` and `class` are checked: a
+  function called before a `const` of its own enclosing function is declared
+  is missed;
+- a parameter default reading a later parameter, a `switch` jumping past a
+  `let` in another case, `with` and direct `eval` are not modeled;
+- a typeof guard is the exact form above, so safe code in another shape (an
+  early return, an else branch, `||`, a `switch`) is reported;
 - code after the first `await` of an async function (the boot module is an async
   IIFE) is taken to run after load. "First" is first in the text, so an `await`
   on a branch not taken hides a read that does run during load;

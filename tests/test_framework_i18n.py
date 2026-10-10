@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Framework content is translated, marked, and never drifts from its source (#80).
 
-The CHAI and OPTICA content lives in the framework definitions (app/js/10-frameworks/),
-which stay the English source of truth. app/i18n/framework/en.json is that English,
-keyed by stable ids, and each other language's file translates those keys.
+The CHAI and OPTICA content lives in the framework definitions
+(app/frameworks/<id>/framework.json), which stay the English source of truth,
+together with the few strings CHAI's plugin code adds (its model card, metric
+categories and TE metrics), which are read from the page.
+app/i18n/framework/en.json is that English, keyed by stable ids, and each other
+language's file translates those keys.
 
 * The English file must equal what the definitions hold right now, so editing a
   criterion without updating the catalogs fails here instead of silently showing a
@@ -17,7 +20,9 @@ keyed by stable ids, and each other language's file translates those keys.
 from __future__ import annotations
 
 import json
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -26,22 +31,13 @@ ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "docs" / "app" / "index.html"
 SOURCE = ROOT / "app" / "i18n" / "framework" / "en.json"
 
-# The English source strings, keyed by stable id, read from the live definitions.
-EXTRACT = """() => {
+FRAMEWORKS = ROOT / "app" / "frameworks"
+
+# The strings CHAI's plugin code adds (its model card, metric categories and TE
+# metrics). They are not in a definition, so they are read from the live page,
+# keyed by stable id.
+PLUGIN_EXTRACT = """() => {
   const out = {};
-  for (const [k, p] of Object.entries(PRINCIPLES)) out[`chai.principle.${k}`] = p.name;
-  for (const s of STAGES) {
-    out[`chai.stage.${s.id}.title`] = s.title;
-    out[`chai.stage.${s.id}.blurb`] = s.blurb;
-    for (const it of s.items) out[`chai.item.${it.id}`] = it.text;
-  }
-  for (const [k, g] of Object.entries(GATES)) {
-    out[`chai.gate.${k}.title`] = g.title;
-    out[`chai.gate.${k}.q`] = g.q;
-    out[`chai.gate.${k}.help`] = g.help;
-    for (const o of g.options) out[`chai.option.${o}`] = o;
-  }
-  for (const [d, s] of Object.entries(SHORT_DECISION)) out[`chai.short.${d}`] = s;
   CARD.forEach((sec, i) => {
     out[`chai.card.sec.${i}`] = sec.sec;
     for (const f of sec.fields) {
@@ -54,13 +50,80 @@ EXTRACT = """() => {
     out[`te.usecase.${k}`] = u.label;
     for (const m of u.metrics) out[`te.metric.${m.name}`] = m.name;
   }
-  for (const c of OPTICA.chapters) {
-    out[`optica.chapter.${c.n}.title`] = c.title;
-    if (c.purpose) out[`optica.chapter.${c.n}.purpose`] = c.purpose;
-    for (const it of c.items) out[`optica.item.${it.key}`] = it.text;
-  }
   return out;
 }"""
+
+
+def definition(framework: str, root: Path = FRAMEWORKS) -> dict:
+    """A framework's definition, app/frameworks/<id>/framework.json."""
+    path = root / framework / "framework.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def chai_strings(chai: dict) -> dict[str, str]:
+    """CHAI's English, keyed by stable id, from its definition."""
+    out: dict[str, str] = {}
+    for p in chai["categories"]:
+        out[f"chai.principle.{p['id']}"] = p["name"]
+    for s in chai["sections"]:
+        out[f"chai.stage.{s['id']}.title"] = s["title"]
+        out[f"chai.stage.{s['id']}.blurb"] = s["blurb"]
+        for it in s["items"]:
+            out[f"chai.item.{it['id']}"] = it["text"]
+    for g in chai["gates"]:
+        out[f"chai.gate.{g['id']}.title"] = g["title"]
+        out[f"chai.gate.{g['id']}.q"] = g["question"]
+        out[f"chai.gate.{g['id']}.help"] = g["help"]
+        for o in g["options"]:
+            out[f"chai.option.{o['value']}"] = o.get("label", o["value"])
+    for g in chai["gates"]:
+        for o in g["options"]:
+            if "short" in o:
+                out[f"chai.short.{o['value']}"] = o["short"]
+    return out
+
+
+def optica_strings(optica: dict) -> dict[str, str]:
+    """OPTICA's English, keyed by stable id, from its definition."""
+    out: dict[str, str] = {}
+    for c in optica["sections"]:
+        out[f"optica.chapter.{c['n']}.title"] = c["title"]
+        if c.get("purpose"):
+            out[f"optica.chapter.{c['n']}.purpose"] = c["purpose"]
+        for it in c["items"]:
+            out[f"optica.item.{it['id']}"] = it["text"]
+    return out
+
+
+def derived_english(plugin: dict[str, str], root: Path = FRAMEWORKS) -> dict[str, str]:
+    """Everything framework/en.json must hold, in its order: CHAI's definition,
+    then its plugin code's strings, then OPTICA's definition."""
+    return {
+        **chai_strings(definition("chai", root)),
+        **plugin,
+        **optica_strings(definition("optica", root)),
+    }
+
+
+def edited_definition_is_caught(source: dict[str, str], plugin: dict[str, str]) -> bool:
+    """Mutation: change one criterion's text in a temporary copy of CHAI's
+    definition. What is derived from the copy must differ from en.json in that
+    criterion's key, and in no other."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        shutil.copytree(FRAMEWORKS, root, dirs_exist_ok=True)
+        chai = definition("chai", root)
+        item = chai["sections"][0]["items"][0]
+        item["text"] += " (edited)"
+        (root / "chai" / "framework.json").write_text(
+            json.dumps(chai, ensure_ascii=False), encoding="utf-8"
+        )
+        derived = derived_english(plugin, root)
+    differ = {
+        k for k in source.keys() | derived.keys() if source.get(k) != derived.get(k)
+    }
+    return differ == {f"chai.item.{item['id']}"}
+
 
 failures: list[str] = []
 
@@ -78,7 +141,8 @@ def main() -> int:
         page = browser.new_page()
         page.goto(APP.as_uri())
         page.wait_for_function("typeof LOADED !== 'undefined' && LOADED", timeout=15000)
-        live = page.evaluate(EXTRACT)
+        plugin = page.evaluate(PLUGIN_EXTRACT)
+        live = derived_english(plugin)
         if write:
             SOURCE.write_text(json.dumps(live, ensure_ascii=False, indent=2) + "\n")
             print(f"  wrote {SOURCE.relative_to(ROOT)} ({len(live)} strings)")
@@ -97,6 +161,10 @@ def main() -> int:
         check(
             "an edited criterion is noticed (mutation)",
             edited != live and {k for k in edited if edited[k] != live[k]} == {first},
+        )
+        check(
+            "a criterion edited in a definition is noticed (mutation)",
+            edited_definition_is_caught(source, plugin),
         )
         stale = {k for k in source if k in live and source[k] != live[k]}
         check(

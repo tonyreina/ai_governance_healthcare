@@ -196,18 +196,66 @@ def main() -> int:
     ruled = [*good.migrations, vb.RULES_MIGRATION]
     with_rules = {**good.counts, vb.RULES_TABLE: 4, vb.RULES_HISTORY: 1}
     ruled_triggers = {**good.triggers, vb.RULES_HISTORY: 1}
+    seed = [("chai", "A", "Stop"), ("chai", "B", "Stop"), ("chai", "C", "Stop"),
+            ("chai", "D", "Retire")]  # fmt: skip
+
+    def rules_report(rules=seed, latest=seed, triggers=None, disabled=None):
+        return vb.Report(
+            with_rules,
+            ruled_triggers if triggers is None else triggers,
+            ruled,
+            rules=list(rules),
+            latest_rules=None if latest is None else list(latest),
+            disabled_triggers=disabled or {},
+        )
+
     check(
         "a restored database with its retirement rules has no problems",
-        vb.problems_for(vb.Report(with_rules, ruled_triggers, ruled)) == [],
-        str(vb.problems_for(vb.Report(with_rules, ruled_triggers, ruled))),
+        vb.problems_for(rules_report()) == [],
+        str(vb.problems_for(rules_report())),
+    )
+    drifted = vb.problems_for(rules_report(rules=[*seed, ("chai", "B", "Shelve")]))
+    check(
+        "rules that are not the ones their history last recorded are a problem",
+        any("last recorded" in p for p in drifted),
+        str(drifted),
+    )
+    fewer = vb.problems_for(rules_report(rules=seed[:3]))
+    check(
+        "and so is a rule missing from them",
+        any("last recorded" in p for p in fewer),
+        str(fewer),
+    )
+    unread = vb.problems_for(rules_report(latest=None))
+    check(
+        "a history whose latest change cannot be read is a problem",
+        any("last recorded" in p for p in unread),
+        str(unread),
+    )
+    off = vb.problems_for(
+        rules_report(triggers=good.triggers, disabled={vb.RULES_HISTORY: 1})
+    )
+    check(
+        "the rules' history restored with its trigger disabled is a problem",
+        any(vb.RULES_HISTORY in p and "DISABLED" in p for p in off),
+        str(off),
+    )
+    log_off = vb.problems_for(
+        vb.Report(good.counts, {"project_version": 1}, [],
+                  disabled_triggers={"project_log": 1})
+    )  # fmt: skip
+    check(
+        "and so is a history table's trigger, disabled",
+        any("project_log" in p and "DISABLED" in p for p in log_off),
+        str(log_off),
     )
     check(
         "the rules' history restored without its append-only trigger is a problem",
         any(
             vb.RULES_HISTORY in p and "trigger" in p
-            for p in vb.problems_for(vb.Report(with_rules, good.triggers, ruled))
+            for p in vb.problems_for(rules_report(triggers=good.triggers))
         ),
-        str(vb.problems_for(vb.Report(with_rules, good.triggers, ruled))),
+        str(vb.problems_for(rules_report(triggers=good.triggers))),
     )
     check(
         "the rules' history missing after its migration is a problem",
@@ -274,6 +322,11 @@ def main() -> int:
             done.stdout,
         )
         check(
+            "which are the rules their history last recorded",
+            "as last recorded   retirement_rule_change #1" in done.stdout,
+            done.stdout,
+        )
+        check(
             "and how many records belong to a framework with no rules (none here)",
             "no rules for              0 record(s)" in done.stdout,
             done.stdout,
@@ -318,6 +371,48 @@ def main() -> int:
             lost.stdout[-600:],
         )
         check("and leaves nothing running", leftovers() == [], str(leftovers()))
+
+        # A rule the owner wrote straight into the table, with no history row: the
+        # restored rules are not the ones their history says were set.
+        shelve = "('chai', 'B', 'Shelve')"
+        psql(source, f"INSERT INTO retirement_rule VALUES {shelve}")
+        drifted = verify(str(make_dump(source, work / "drift.sql.gz.gpg")))
+        psql(
+            source,
+            "DELETE FROM retirement_rule WHERE (framework_id, gate_id, decision)"
+            f" = {shelve}",
+        )
+        check(
+            "a dump whose rules differ from their history's last change fails",
+            drifted.returncode != 0
+            and "retirement_rule does not hold the rules" in drifted.stdout
+            and "chai: checkpoint B decided 'Shelve' (not in the history)"
+            in drifted.stdout,
+            drifted.stdout[-600:],
+        )
+        check("and leaves nothing running", leftovers() == [], str(leftovers()))
+
+        # The history's trigger present but disabled: as good as absent, and pg_dump
+        # carries the disabled state into the dump.
+        trigger = "retirement_rule_change_no_change"
+        psql(source, f"ALTER TABLE retirement_rule_change DISABLE TRIGGER {trigger}")
+        disabled = verify(str(make_dump(source, work / "disabled.sql.gz.gpg")))
+        psql(source, f"ALTER TABLE retirement_rule_change ENABLE TRIGGER {trigger}")
+        check(
+            "a dump whose rules' history trigger is disabled fails",
+            disabled.returncode != 0
+            and "retirement_rule_change was restored with its append-only trigger "
+            "DISABLED"
+            in disabled.stdout,
+            disabled.stdout[-600:],
+        )
+        check("and leaves nothing running", leftovers() == [], str(leftovers()))
+        recheck = verify(str(make_dump(source, work / "again.sql.gz.gpg")))
+        check(
+            "and the same source, set right again, verifies",
+            recheck.returncode == 0,
+            recheck.stdout[-600:],
+        )
 
         print("Failures are failures")
         wrong = verify(str(dump), passphrase="not-the-passphrase")

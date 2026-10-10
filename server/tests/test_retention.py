@@ -10,6 +10,7 @@ policy does not allow, even from the table's owner.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -731,7 +732,7 @@ async def acme_synced(tmp_path: Path) -> Path:
     """The stand-in primary's manifest, synced with the acknowledgment it needs."""
     path = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
     ack = manifests.transition(
-        manifests.SEED_HASH, manifests.manifest_of(path)["ruleSetHash"]
+        1, ("chai", chai_rules()), ("acme", chai_rules() | manifest_rules(path))
     )
     done = migrate(path, ack)
     assert done.returncode == 0, done.stdout + done.stderr
@@ -847,10 +848,20 @@ async def test_a_stand_in_primary_retires_by_its_own_words_once_acknowledged(
 
     path = manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
     wanted = manifests.manifest_of(path)
-    ack = manifests.transition(manifests.SEED_HASH, wanted["ruleSetHash"])
-    # Without the acknowledgment, and with the new rule set's own hash (what an
-    # earlier version took), it is refused: adding rules changes disposal too.
-    for given in ("", wanted["ruleSetHash"]):
+    ack = manifests.transition(
+        1, ("chai", chai_rules()), ("acme", chai_rules() | manifest_rules(path))
+    )
+    # Without the acknowledgment, with the new rule set's own hash, or with the
+    # value of the transition between the two primary rule-set hashes (what earlier
+    # versions took), it is refused: adding rules changes disposal too.
+    old_form = hashlib.sha256(
+        json.dumps(
+            {"from": manifests.SEED_HASH, "to": wanted["ruleSetHash"]},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    for given in ("", wanted["ruleSetHash"], old_form):
         refused = migrate(path, given)
         assert refused.returncode == 3, refused.stdout + refused.stderr
         assert (
@@ -896,8 +907,9 @@ async def test_a_new_ending_decision_is_refused_until_acknowledged(
     path = manifests.write(
         tmp_path / "m.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
     )
-    new_hash = manifests.manifest_of(path)["ruleSetHash"]
-    ack = manifests.transition(manifests.SEED_HASH, new_hash)
+    ack = manifests.transition(
+        1, ("chai", chai_rules()), ("chai", manifest_rules(path))
+    )
     await decided(client, "withdrawn", None, "C", "Withdraw")
     assert "withdrawn" not in await due()
 
@@ -933,7 +945,7 @@ async def test_a_leftover_acknowledgment_never_matches_another_transition(
         tmp_path / "w.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
     )
     first = manifests.transition(
-        manifests.SEED_HASH, manifests.manifest_of(withdraw)["ruleSetHash"]
+        1, ("chai", chai_rules()), ("chai", manifest_rules(withdraw))
     )
     assert migrate(withdraw, first).returncode == 0
 
@@ -955,7 +967,9 @@ async def test_a_stale_manifest_cannot_undo_a_newer_one(
         tmp_path / "new.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
     )
     newer_hash = manifests.manifest_of(newer)["ruleSetHash"]
-    added = manifests.transition(manifests.SEED_HASH, newer_hash)
+    added = manifests.transition(
+        1, ("chai", chai_rules()), ("chai", manifest_rules(newer))
+    )
     assert migrate(newer, added).returncode == 0
     await decided(client, "withdrawn", None, "C", "Withdraw")
     assert "withdrawn" in await due()
@@ -974,7 +988,9 @@ async def test_a_stale_manifest_cannot_undo_a_newer_one(
     assert "withdrawn" in await due()
 
     # Acknowledged, the removal goes through.
-    removed = manifests.transition(newer_hash, manifests.SEED_HASH)
+    removed = manifests.transition(
+        2, ("chai", manifest_rules(newer)), ("chai", chai_rules())
+    )
     done = migrate(manifests.DEFAULT_MANIFEST, removed)
     assert done.returncode == 0, done.stdout + done.stderr
     assert await rules_now() == chai_rules()
@@ -995,10 +1011,16 @@ async def test_a_manifest_leaves_the_rules_of_frameworks_it_does_not_list(
     await decided(client, "acme-old", "acme", "annual", "Decommission")
     assert "acme-old" in await due()
 
-    # Back to the default build, which lists chai and optica but not acme. Its own
-    # rules are unchanged (CHAI's four rows are still there), so no acknowledgment
-    # is needed, and acme's rows are left: acme's records keep retiring by them.
-    done = migrate(manifests.DEFAULT_MANIFEST)
+    # Back to the default build, which lists chai and optica but not acme. No row
+    # changes (CHAI's four rows are still there), but the primary does, so it is
+    # acknowledged like any change; acme's rows are left: acme's records keep
+    # retiring by them.
+    both = chai_rules() | manifest_rules(acme)
+    assert migrate(manifests.DEFAULT_MANIFEST).returncode == 3
+    done = migrate(
+        manifests.DEFAULT_MANIFEST,
+        manifests.transition(2, ("acme", both), ("chai", both)),
+    )
     assert done.returncode == 0, done.stdout + done.stderr
     assert "not listed by this manifest, left as they are: acme (3 rule(s))" in (
         done.stdout
@@ -1006,5 +1028,162 @@ async def test_a_manifest_leaves_the_rules_of_frameworks_it_does_not_list(
     assert await rules_now() == chai_rules() | manifest_rules(acme)
     assert "acme-old" in await due()
     change = await latest_change()
-    assert change["framework_id"] == "chai" and not change["acknowledged"]
+    assert change["framework_id"] == "chai" and change["acknowledged"]
     assert change["rule_set_hash"] == manifests.SEED_HASH
+
+
+# --- the acknowledgment binds the whole change it was printed for ---------------------
+# Each of these sequences was shown, against a real PostgreSQL, to let an
+# acknowledgment printed for one change accept another while it named only the
+# primary's rule-set hashes (#168 PR C review).
+
+
+def printed_ack(done: subprocess.CompletedProcess) -> str:
+    """The acknowledgment a refused job printed: what an operator copies."""
+    assert done.returncode == 3, done.stdout + done.stderr
+    found = re.search(r"RETIREMENT_RULES_ACK=([0-9a-f]{64})", done.stderr)
+    assert found, done.stderr
+    return found.group(1)
+
+
+def with_unlisted_as_supplement(path: Path, fid: str, out: Path) -> Path:
+    """The manifest at `path`, also listing `fid` as a supplement that ends nothing:
+    what a build that keeps an earlier primary as a supplement writes. It does not
+    change the primary's rule-set hash, and it removes every rule `fid` has."""
+    raw = manifests.manifest_of(path)
+    raw["frameworks"].append(
+        {"id": fid, "role": "supplement", "version": "1", "sha256": "0" * 64,
+         "retire": []}
+    )  # fmt: skip
+    out.write_text(json.dumps(raw), encoding="utf-8")
+    return out
+
+
+async def test_an_ack_for_a_harmless_addition_never_accepts_a_removal(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    # The operator is shown acme's three rules added and no project affected.
+    acme = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
+    shown = migrate(acme)
+    assert "0 live project(s) would change" in shown.stderr, shown.stderr
+    ack = printed_ack(shown)
+    await decided(client, "legacy", None, "D", "Retire")
+    assert "legacy" in await due()
+
+    # A different build is deployed with that value: the same primary and the same
+    # primary rule set, but it lists chai as a supplement, so CHAI's four rules would
+    # go and CHAI's records would stop coming due. That is not what was shown.
+    other = with_unlisted_as_supplement(acme, "chai", tmp_path / "other.json")
+    assert (
+        manifests.manifest_of(other)["ruleSetHash"]
+        == (manifests.manifest_of(acme)["ruleSetHash"])
+    )
+    refused = migrate(other, ack)
+    assert refused.returncode == 3, refused.stdout + refused.stderr
+    assert "chai: checkpoint D decided 'Retire' (removed)" in refused.stderr
+    assert "legacy: stops being due" in refused.stderr
+    assert await rules_now() == chai_rules()
+    assert (await latest_change())["n"] == 1
+    assert "legacy" in await due()
+
+
+async def test_a_rollback_is_acknowledged_and_does_not_revive_an_old_ack(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    await decided(client, "legacy", None, "D", "Retire")
+    acme = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
+    first = printed_ack(migrate(acme))
+    assert migrate(acme, first).returncode == 0
+
+    # Rolling back to the default build changes no row (chai's rules are still
+    # there) but changes the primary, and so the stamp the API accepts: it is a
+    # change, and is refused without its own acknowledgment.
+    rollback = migrate(manifests.DEFAULT_MANIFEST)
+    assert "the primary changes: acme -> chai" in rollback.stderr, rollback.stderr
+    back = printed_ack(rollback)
+    for given in ("", first):
+        refused = migrate(manifests.DEFAULT_MANIFEST, given)
+        assert refused.returncode == 3, (given, refused.stdout + refused.stderr)
+        assert (await latest_change())["framework_id"] == "acme"
+    done = migrate(manifests.DEFAULT_MANIFEST, back)
+    assert done.returncode == 0, done.stdout + done.stderr
+    change = await latest_change()
+    assert change["framework_id"] == "chai" and change["acknowledged"]
+    assert change["n"] == 3
+
+    # The first value, still set, now meets a state whose primary rule set and
+    # primary are the ones it was printed from. It must not accept a removal of
+    # CHAI's rules (acme, listing chai as a supplement), nor anything else.
+    other = with_unlisted_as_supplement(acme, "chai", tmp_path / "other.json")
+    for given in (first, back):
+        refused = migrate(other, given)
+        assert refused.returncode == 3, (given, refused.stdout + refused.stderr)
+        assert "legacy: stops being due" in refused.stderr
+    assert await rules_now() == chai_rules() | manifest_rules(acme)
+    assert "legacy" in await due()
+
+
+async def test_a_leftover_ack_never_accepts_a_later_change(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    # Every value used so far stays set by mistake, one after another, through a
+    # change, its reversal, the same change again, and other changes. None of them
+    # is ever accepted for a later change, even one identical to the change it was
+    # printed for: each acknowledges one change from one point in the history.
+    withdraw = manifests.write(
+        tmp_path / "w.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
+    )
+    acme = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
+    other = with_unlisted_as_supplement(acme, "chai", tmp_path / "other.json")
+    steps = [
+        withdraw,
+        manifests.DEFAULT_MANIFEST,
+        withdraw,  # the first change again, from the same rules as the first time
+        acme,
+        manifests.DEFAULT_MANIFEST,
+        other,
+    ]
+    used: list[str] = []
+    for step in steps:
+        before = (await rules_now(), (await latest_change())["n"])
+        for old in used:
+            stale = migrate(step, old)
+            assert stale.returncode == 3, (step, old, stale.stdout + stale.stderr)
+            assert (await rules_now(), (await latest_change())["n"]) == before
+        ack = printed_ack(migrate(step))
+        done = migrate(step, ack)
+        assert done.returncode == 0, done.stdout + done.stderr
+        # Spent: the same value, the same manifest, again, has nothing to do.
+        assert "retirement rules unchanged" in migrate(step, ack).stdout
+        used.append(ack)
+    assert len(set(used)) == len(used)
+
+
+async def test_a_primary_switch_over_the_same_rules_needs_an_ack(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    # The database already holds acme's rules beside CHAI's (written by the owner,
+    # as an earlier build could have left them). A build making acme the primary
+    # adds and removes no row, but it changes the stamp the API accepts and so whose
+    # rules new records follow: that is a change, shown and acknowledged.
+    acme = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
+    async with owner_connection() as conn:
+        await conn.executemany(
+            "INSERT INTO retirement_rule (framework_id, gate_id, decision)"
+            " VALUES ($1, $2, $3)",
+            sorted(manifest_rules(acme)),
+        )
+    both = chai_rules() | manifest_rules(acme)
+    refused = migrate(acme)
+    assert "the primary changes: chai -> acme" in refused.stderr, refused.stderr
+    ack = printed_ack(refused)
+    assert ack == manifests.transition(1, ("chai", both), ("acme", both))
+    assert (await latest_change())["framework_id"] == "chai"
+    done = migrate(acme, ack)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "primary chai -> acme, acknowledged" in done.stdout
+    change = await latest_change()
+    assert change["framework_id"] == "acme" and change["acknowledged"]
+    (event,) = manifests.events(done, "retirement.rules_changed")
+    assert event["active_primary"] == "chai" and event["framework"] == "acme"
+    assert await rules_now() == both

@@ -144,13 +144,45 @@ SEED_HASH = re.search(
 ).group(1)  # type: ignore[union-attr]
 
 
-def transition(old: str | None, new: str) -> str:
+Rules = set[tuple[str, str, str]]
+
+
+def transition(
+    follows: int,
+    before: tuple[str, Rules],
+    after: tuple[str, Rules],
+) -> str:
     """The acknowledgment a change of retirement rules needs (D-76): SHA-256 of the
-    canonical JSON {"from": <the active rule-set hash>, "to": <the manifest's>}.
-    Written here independently of app.retirement, so the format is pinned by the
-    test rather than echoed from the code under test."""
-    text = json.dumps({"from": old, "to": new}, sort_keys=True, separators=(",", ":"))
+    canonical JSON {"follows": <the latest history row's id>, "before": {"primary",
+    "rules"}, "after": {"primary", "rules"}}, each rule list every row of
+    retirement_rule, sorted. ``before`` and ``after`` are (primary, rules). Written
+    here independently of app.retirement, so the format is pinned by the test rather
+    than echoed from the code under test."""
+
+    def state(primary: str, rules: Rules) -> dict:
+        return {"primary": primary, "rules": sorted(list(r) for r in rules)}
+
+    text = json.dumps(
+        {"follows": follows, "before": state(*before), "after": state(*after)},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def rules_of(path: Path) -> Rules:
+    """Every (framework, gate, decision) a manifest lists."""
+    return {
+        (f["id"], p["gate"], p["decision"])
+        for f in manifest_of(path)["frameworks"]
+        for p in f["retire"]
+    }
+
+
+# 010's seed: CHAI's four rules, which are the default build's.
+CHAI_RULES: Rules = {("chai", "A", "Stop"), ("chai", "B", "Stop"),
+                     ("chai", "C", "Stop"), ("chai", "D", "Retire")}  # fmt: skip
 
 
 def events(done: subprocess.CompletedProcess, name: str) -> list[dict]:

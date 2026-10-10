@@ -94,16 +94,22 @@ decisions into the database, which decides from them when a project is retired
 and so when it comes due for disposal ([Privacy and retention](privacy.md#disposal-at-the-end-of-the-period)).
 
 - Nothing about disposal changes silently. When the build adds a decision that
-  ends a project, or no longer has one the database retires on today, `migrate`
-  refuses: it lists the decisions added and removed and every project that would
-  become due, or stop being due, for disposal, prints the value to set, and exits
-  non-zero, so the API does not start. If the change is intended, set
-  `RETIREMENT_RULES_ACK` in `.env` to that value and run `docker compose up -d`
-  again; then clear it. The value acknowledges that one change (from the rule set
-  in use to the build's), so one left set from an earlier deploy accepts nothing
-  else, and an older build deployed over a newer one is refused the same way.
-- A build with the same rules as the database needs nothing: the published build
-  on a new database starts without an acknowledgment.
+  ends a project, no longer has one the database retires on today, or has a
+  different primary framework, `migrate` refuses: it lists the decisions added and
+  removed, the change of primary, and every project that would become due, or stop
+  being due, for disposal, prints the value to set, and exits non-zero, so the API
+  does not start. If the change is intended, set `RETIREMENT_RULES_ACK` in `.env`
+  to that value and run `docker compose up -d` again; then clear it. The value
+  acknowledges exactly the change you were shown: every rule the database holds
+  before and after it, of every framework, and the primary before and after, from
+  the database's rules as they stood when it was printed. A different change, even
+  one between the same primary rule sets, needs its own value. Once used it is
+  spent, so one left set from an earlier deploy accepts nothing later, not even
+  the same change again, and an older build deployed over a newer one is refused
+  the same way.
+- A build that changes nothing (the same rules and the same primary as the
+  database) needs nothing: the published build on a new database starts without
+  an acknowledgment.
 - A build governs only the frameworks it lists. The rules of a framework it does
   not list, such as the primary of an earlier build, are left in place, so that
   framework's records keep retiring by them, and `migrate` says so.
@@ -119,7 +125,11 @@ set or confirmed the rules.
 A record's framework is its `meta.framework.id`. The API accepts a record that
 sets it only when it is exactly `{"id": "<primary>"}`, the primary of the build
 the rules were loaded from, because the stamp decides when a record can be
-disposed of. A record without one is CHAI's.
+disposed of. A record without one is CHAI's, so while the primary is another
+framework the API refuses a new record without the stamp, and a change that would
+remove it; a record written before that primary keeps the framework it had. The
+published dashboard does not stamp the records it creates yet, so a build with a
+primary other than CHAI needs a dashboard that does (#168).
 
 ### Identity comes from the proxy
 
@@ -286,10 +296,12 @@ being compromised.
 restored is a hypothesis. `make verify-backup` restores the newest dump (or
 `FILE=...`) into a throwaway PostgreSQL of the same major version as production,
 with no network, and checks that the tables, the rows and the **append-only
-triggers** came back. A dump that restores without them has quietly lost the
-guarantee the history rests on. It exits non-zero otherwise, so run it after the
-backup, from the same scheduler. How long it takes is your real restore time,
-which is the number to write down.
+triggers** came back, enabled. A dump that restores without them, or with them
+switched off, has quietly lost the guarantee the history rests on. It also checks
+that the retirement rules it restored are exactly the ones their history last
+recorded, so a restore never retires by rules nobody recorded choosing. It exits
+non-zero otherwise, so run it after the backup, from the same scheduler. How
+long it takes is your real restore time, which is the number to write down.
 
 `make restore` overwrites the live database with a dump, so it asks you to type
 `YES` first (`CONFIRM=YES` skips the question for automation). Practice the

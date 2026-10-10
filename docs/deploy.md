@@ -262,7 +262,8 @@ holds the owner.
    loads which checkpoint decisions retire a project. The API image does not
    carry it, so mount it into the job or copy it into a derived image. Without
    it, or when the manifest would stop the database retiring projects on a
-   decision it retires on today or start on one it does not, the job fails, unless
+   decision it retires on today, start on one it does not, or change the primary
+   framework, the job fails, unless
    `RETIREMENT_RULES_ACK` is set to the acknowledgment it prints ([Self-hosting](self-hosting.md#which-build-it-serves-and-the-retirement-rules)).
 2. **The service** gets `APP_DATABASE_URL` (the restricted role, with
    `?sslmode=verify-full`) and `RUN_MIGRATIONS=false`, and **never** the owner's
@@ -437,8 +438,8 @@ recording that a project was deleted.
 | `versions.purged` | warning | `actor`, `project`, `revisions`, `log_entries`, `incarnation`, `purged_at`, `through_rev`, `through_seq` | A version history and its audit log were destroyed. Review every one. Keep these: they re-apply the purge after a restore. |
 | `hold.placed` | warning | `actor`, `project` | A litigation hold now stops this project's disposal. The reason is not logged; it is with the hold. |
 | `hold.lifted` | warning | `actor`, `project` | A litigation hold was lifted, so the project can be disposed of when due. Confirm counsel agreed. |
-| `retirement.rules_changed` | warning | `framework`, `added`, `removed`, `unlisted`, `acknowledged`, `rule_set_hash`, `active_rule_set_hash` | The migrate job (or an API with `RUN_MIGRATIONS=true` and a manifest) changed or confirmed the retirement rules from the build's manifest. Review every one; `acknowledged` is true when a rule was added or removed, which only an operator's `RETIREMENT_RULES_ACK` allows. `unlisted` names frameworks whose rules the manifest left alone. |
-| `retirement.rules_refused` | warning | `framework`, `added`, `removed`, `projects`, `rule_set_hash`, `active_rule_set_hash` | The migrate job refused a manifest that adds or removes a retirement rule without the `RETIREMENT_RULES_ACK` for that change, and the stack did not start. Either an old build was deployed over a newer one, or the change needs an operator's acknowledgment. |
+| `retirement.rules_changed` | warning | `framework`, `active_primary`, `added`, `removed`, `unlisted`, `acknowledged`, `rule_set_hash`, `active_rule_set_hash` | The migrate job (or an API with `RUN_MIGRATIONS=true` and a manifest) changed or confirmed the retirement rules from the build's manifest. Review every one; `acknowledged` is true when a rule was added or removed or the primary changed (`active_primary` is the one before, `framework` the one after), which only an operator's `RETIREMENT_RULES_ACK` allows. `unlisted` names frameworks whose rules the manifest left alone. |
+| `retirement.rules_refused` | warning | `framework`, `active_primary`, `added`, `removed`, `projects`, `rule_set_hash`, `active_rule_set_hash` | The migrate job refused a manifest that adds or removes a retirement rule, or changes the primary, without the `RETIREMENT_RULES_ACK` for exactly that change, and the stack did not start. Either an old build was deployed over a newer one, or the change needs an operator's acknowledgment. |
 | `ratelimit.tripped` | warning | `key`, `limit`, `window_seconds` | A client hit the rate limit. Once per client per window. |
 | `stream.refused` | warning | `actor` | Too many open event streams for one user. |
 | `stream.attached` | info | `actor`, `action`, `source_ip` | An event stream was opened. The read trail records it too. |

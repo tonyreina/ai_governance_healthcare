@@ -793,14 +793,18 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-61 A backup can be verified by restoring it, and a restore asks first
 
 - **Claim:** `make verify-backup` restores a dump into a throwaway PostgreSQL and
-  fails unless the tables, rows and append-only triggers came back, and `make restore`
-  asks for `YES` before overwriting the live database.
+  fails unless the tables, rows and append-only triggers came back with the triggers
+  enabled, and, from migration 010, unless the retirement rules are exactly the
+  ones the latest `retirement_rule_change` row recorded; and `make restore` asks for
+  `YES` before overwriting the live database.
 - **Asserted in:** `docs/self-hosting.md` — "`make verify-backup` restores the newest
   dump"
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_verify_backup.py::a good encrypted dump verifies`
   `tests/test_verify_backup.py::a dump that restores without the append-only triggers fails`
+  `tests/test_verify_backup.py::a dump whose rules' history trigger is disabled fails`
+  `tests/test_verify_backup.py::a dump whose rules differ from their history's last change fails`
   `tests/test_verify_backup.py::the wrong passphrase fails`
   `tests/test_verify_backup.py::a truncated dump fails`
   `tests/test_verify_backup.py::with no answer it aborts and touches nothing`
@@ -1162,13 +1166,19 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   project's framework definition, as the deployed build's manifest states it,
   gives a stop or retire class at that checkpoint. A record without a framework
   stamp is CHAI's. The migrate job, and the API when it migrates itself with a
-  manifest, refuses any change to the rules of the frameworks the manifest lists
-  (an added ending decision or a dropped one) unless `RETIREMENT_RULES_ACK`
-  acknowledges that transition, leaves the rules of frameworks it does not list,
-  and fails without a usable manifest, so disposal never changes silently (R-66,
-  D-76). Each guard in the SQL (the join on the record's framework, a blank stamp
-  read as CHAI's, the clock at the latest ending decision) and the migration lock
-  has a test that breaks it and fails.
+  manifest, refuses any change (an ending decision added or dropped, or a new
+  primary) unless `RETIREMENT_RULES_ACK` is the acknowledgment of exactly that
+  change: the SHA-256 of every rule the table holds before and after it, the
+  primary before and after, and the history row it follows. So a value printed for
+  one change never accepts a different one (a build that also drops an unlisted
+  framework's rules, a rollback to another primary), and once used it accepts
+  nothing later. It leaves the rules of frameworks the manifest does not list, and
+  fails without a usable manifest, so disposal never changes silently (R-66, D-76).
+  Each guard in the SQL (the join on the record's framework, a blank stamp read as
+  CHAI's, the clock at the latest ending decision), the parts of the
+  acknowledgment, and the migration lock (taken before the rules are read, so a
+  sync waiting on another job works from what that job committed) has a test that
+  breaks it and fails.
 - **Gap:** the stack test proves only the default build: its rule set is
   010's seed (the same hash), so it shows the migrate job read and confirmed the
   manifest (`synced`), not that a different rule set reaches a running stack. That
@@ -1184,6 +1194,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_retention.py::test_a_leftover_acknowledgment_never_matches_another_transition`
   `server/tests/test_retention.py::test_a_stale_manifest_cannot_undo_a_newer_one`
   `server/tests/test_retention.py::test_a_manifest_leaves_the_rules_of_frameworks_it_does_not_list`
+  `server/tests/test_retention.py::test_an_ack_for_a_harmless_addition_never_accepts_a_removal`
+  `server/tests/test_retention.py::test_a_rollback_is_acknowledged_and_does_not_revive_an_old_ack`
+  `server/tests/test_retention.py::test_a_leftover_ack_never_accepts_a_later_change`
+  `server/tests/test_retention.py::test_a_primary_switch_over_the_same_rules_needs_an_ack`
   `server/tests/test_retention.py::test_a_record_follows_only_its_own_frameworks_rules`
   `server/tests/test_retention.py::test_the_mirror_a_chai_record_never_retires_by_anothers_words`
   `server/tests/test_retention.py::test_a_blank_stamp_is_chai`
@@ -1194,6 +1208,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_retirement_rules.py::test_the_api_migrating_itself_syncs_from_its_manifest`
   `server/tests/test_retirement_rules.py::test_the_api_migrating_itself_without_a_manifest_says_so`
   `server/tests/test_retirement_rules.py::test_two_syncs_serialize_on_the_migration_lock`
+  `server/tests/test_retirement_rules.py::test_the_lock_test_fails_when_the_lock_is_taken_after_the_reads`
   `tests/test_stack.py::the database retires by the served build's rule set, synced from it`
 
 ### C-89 The API's role cannot change which decisions retire a project
@@ -1215,7 +1230,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   record from ever coming due. The API refuses (422) a create or a patch that sets
   `meta.framework` to anything but exactly `{"id": <the primary the latest sync
   recorded>}`, and a patch that drops that stamp; a record without one is CHAI's.
-  Stamps written before this check, or by the database owner, are not re-checked,
+  While that primary is not CHAI, it also refuses a create that leaves the stamp
+  out, so omitting it cannot choose CHAI's rules; a record written before the
+  switch keeps its framework and stays editable. Stamps written before this check,
+  or by the database owner, are not re-checked,
   and `make dispose` and `make verify-backup` count the records whose framework
   has no rules (R-66, D-76).
 - **Asserted in:** `docs/privacy.md` — "Nor can a writer choose which framework's rules a record follows"
@@ -1224,6 +1242,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_retirement_rules.py::test_the_api_refuses_a_stamp_that_is_not_the_active_primary`
   `server/tests/test_retirement_rules.py::test_the_api_accepts_no_stamp_or_exactly_the_active_primarys`
   `server/tests/test_retirement_rules.py::test_a_stamp_follows_the_primary_the_latest_sync_recorded`
+  `server/tests/test_retirement_rules.py::test_under_another_primary_a_record_must_carry_its_stamp`
   `server/tests/test_retirement_rules.py::test_a_correctly_stamped_record_retires`
   `server/tests/test_retirement_rules.py::test_the_sql_reads_a_stamp_as_the_api_does`
   `tests/test_dispose.py`

@@ -1160,16 +1160,21 @@ honest answer and is a gap worth closing; see R-19.
 - **The build is the unit.** The rules reach the database only from the manifest
   built beside the page (`docs/app/manifest.json` by default), loaded by the
   migrate job as the database owner. The API cannot change them.
-- **Never silently.** Any change to the rules of the frameworks a build lists, a
-  rule added or a rule dropped, is made only when the operator acknowledges that
-  transition (from the rule set in use to the build's), after being shown every
-  project that would become due or stop being due. An unchanged rule set needs no
+- **Never silently.** Any change, a rule added or dropped or a new primary, is
+  made only when the operator acknowledges exactly that change (every rule held
+  before and after it, the primary before and after, from the point in the
+  history it was shown at), after being shown every project that would become due
+  or stop being due. An acknowledgment accepts that one change once, and nothing
+  else. A sync that changes nothing (the same rules, the same primary) needs no
   acknowledgment. A build leaves the rules of frameworks it does not list. A missing
   or malformed manifest, or a primary with no ending decision, stops the job, and
   stops an API that migrates itself with a manifest. Every change is recorded,
   append-only, with who and when.
 - **The stamp is the build's.** Through the API a record may name only the active
-  primary as its framework (`meta.framework` exactly `{"id": <primary>}`), or none.
+  primary as its framework (`meta.framework` exactly `{"id": <primary>}`). It may
+  name none only while that primary is CHAI, whose records an unstamped one is;
+  under another primary a new record without the stamp is refused, and a record
+  written before the switch keeps the framework it had.
 - Source: the owner's design v2 on #168; DECISIONS D-76. Numbered R-66 as that
   design names it ("R-66 amends R-56"), leaving R-64 and R-65 to the entries it
   assigns them.
@@ -1177,15 +1182,18 @@ honest answer and is a gap worth closing; see R-19.
   migrate job: every option of CHAI's definition and of a stand-in primary is due
   exactly when its class ends a project; a record follows only its own
   framework's rules, a blank stamp is CHAI's and the clock starts at the latest
-  ending decision, each with a mutation test; an addition or a removal refused
-  without the transition's acknowledgment and applied with it; a leftover
-  acknowledgment and a stale manifest refused; unlisted frameworks' rules kept),
+  ending decision, each with a mutation test; an addition, a removal or a new
+  primary refused without the change's acknowledgment and applied with it; an
+  acknowledgment never accepting a different change, a rollback, or a later
+  change; a stale manifest refused; unlisted frameworks' rules kept),
   `server/tests/test_retirement_rules.py` (a malformed or missing manifest fails
   the job; the API's own migration syncs or warns; the stamp is refused unless it
-  is the active primary's; the API role can only read the rules; their history is
-  append-only; the sync waits for the migration lock; `/api/health` reports the
-  rule set), `tests/test_dispose.py` and `tests/test_verify_backup.py` (records
-  with no rules are counted; the history keeps its trigger after a restore),
+  is the active primary's, and required under another primary; the API role can
+  only read the rules; their history is append-only; the sync takes the migration
+  lock before it reads; `/api/health` reports the rule set),
+  `tests/test_dispose.py` and `tests/test_verify_backup.py` (records with no rules
+  are counted; the history keeps its trigger, enabled, after a restore, and the
+  rules are the ones it last recorded),
   `tests/test_build_config.py` (the manifest is the definitions' own),
   `tests/test_compose_isolation.py` (the page and the manifest come from one build
   directory) and `tests/test_stack.py` (the running stack's rules are the served

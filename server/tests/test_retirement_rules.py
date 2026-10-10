@@ -24,6 +24,7 @@ from app.main import create_app
 from app.retirement import (
     ChangeSource,
     ManifestError,
+    RulesRefused,
     SyncOutcome,
     load_manifest,
     parse_manifest,
@@ -325,7 +326,11 @@ async def test_health_reports_the_rule_set_the_database_uses(
     done = manifests.run_migrate(
         DB_URL,
         RETIREMENT_MANIFEST=str(path),
-        RETIREMENT_RULES_ACK=manifests.transition(seed_hash(), wanted),
+        RETIREMENT_RULES_ACK=manifests.transition(
+            2,
+            ("chai", manifests.CHAI_RULES),
+            ("acme", manifests.CHAI_RULES | manifests.rules_of(path)),
+        ),
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert await health_rules(client) == {
@@ -404,11 +409,14 @@ async def test_a_stamp_follows_the_primary_the_latest_sync_recorded(
     )
     assert created.status_code == 201
     path = manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
-    wanted = manifests.manifest_of(path)["ruleSetHash"]
     done = manifests.run_migrate(
         DB_URL,
         RETIREMENT_MANIFEST=str(path),
-        RETIREMENT_RULES_ACK=manifests.transition(seed_hash(), wanted),
+        RETIREMENT_RULES_ACK=manifests.transition(
+            1,
+            ("chai", manifests.CHAI_RULES),
+            ("acme", manifests.CHAI_RULES | manifests.rules_of(path)),
+        ),
     )
     assert done.returncode == 0, done.stdout + done.stderr
 
@@ -430,6 +438,61 @@ async def test_a_stamp_follows_the_primary_the_latest_sync_recorded(
     dropped = await client.patch("/api/projects/a", json={"meta": None})
     assert dropped.status_code == 422, dropped.text
     assert (await stored_doc("a"))["meta"]["framework"] == {"id": "acme"}
+
+
+async def acme_is_primary(tmp_path: Path) -> None:
+    path = manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
+    done = manifests.run_migrate(
+        DB_URL,
+        RETIREMENT_MANIFEST=str(path),
+        RETIREMENT_RULES_ACK=manifests.transition(
+            1,
+            ("chai", manifests.CHAI_RULES),
+            ("acme", manifests.CHAI_RULES | manifests.rules_of(path)),
+        ),
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
+@requires_db
+async def test_under_another_primary_a_record_must_carry_its_stamp(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    # A record of the CHAI build, from before the switch: CHAI's, unstamped.
+    assert (
+        await client.post("/api/projects/legacy", json={"meta": {"solution": "x"}})
+    ).status_code == 201
+    await acme_is_primary(tmp_path)
+
+    # Leaving the stamp out would make the record CHAI's, and so let the writer
+    # choose CHAI's rules over the primary's. Refused, in every shape of "no stamp".
+    for body in ({"meta": {"solution": "x"}}, {}, {"meta": None},
+                 {"meta": {"framework": None}}):  # fmt: skip
+        created = await client.post("/api/projects/nostamp", json=body)
+        missing = "framework" not in (body.get("meta") or {})
+        assert ("must carry meta.framework" in created.text) is missing, created.text
+        assert created.status_code == 422, (body, created.text)
+        assert '{"id": "acme"}' in created.json()["detail"]
+    async with owner_connection() as conn:
+        assert await conn.fetchval(
+            "SELECT count(*) FROM projects WHERE id = 'nostamp'"
+        ) == 0  # fmt: skip
+
+    stamped = await client.post(
+        "/api/projects/new", json={"meta": {"framework": {"id": "acme"}}}
+    )
+    assert stamped.status_code == 201, stamped.text
+    # A patch that would leave a stamped record unstamped is refused...
+    for patch in ({"meta": None}, {"meta": {"framework": None}}):
+        dropped = await client.patch("/api/projects/new", json=patch)
+        assert dropped.status_code == 422, (patch, dropped.text)
+    assert (await stored_doc("new"))["meta"]["framework"] == {"id": "acme"}
+    # ...while the record written before the switch stays CHAI's and editable: a
+    # patch that leaves its framework as it was moves it to no other rules.
+    assert (
+        await client.patch("/api/projects/legacy", json={"meta": {"solution": "y"}})
+    ).status_code == 200
+    assert "framework" not in (await stored_doc("legacy"))["meta"]
 
 
 @requires_db
@@ -506,7 +569,9 @@ async def test_the_api_migrating_itself_syncs_from_its_manifest(
         tmp_path / "m.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
     )
     wanted = manifests.manifest_of(path)["ruleSetHash"]
-    ack = manifests.transition(seed_hash(), wanted)
+    ack = manifests.transition(
+        1, ("chai", manifests.CHAI_RULES), ("chai", manifests.rules_of(path))
+    )
 
     # The same refusal as the migrate job: the API does not start.
     app = create_app(fallback_settings(retirement_manifest=str(path)))
@@ -566,22 +631,54 @@ def test_the_manifest_settings_are_read_from_the_environment(monkeypatch) -> Non
 # --- the migration lock ----------------------------------------------------------------
 
 
-@requires_db
-async def test_two_syncs_serialize_on_the_migration_lock(
-    client: AsyncClient, tmp_path: Path
-) -> None:
-    path = manifests.write(
-        tmp_path / "m.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
-    )
+class LockTakenLate:
+    """A connection that runs ``pg_advisory_xact_lock`` only before the sync's first
+    write, not where the sync asks for it: the mutation of taking the lock after the
+    reads. Everything else goes straight to the real connection."""
+
+    LOCK = "pg_advisory_xact_lock"
+
+    def __init__(self, conn: asyncpg.Connection) -> None:
+        self._conn = conn
+        self._lock_args: tuple | None = None
+
+    def transaction(self):
+        return self._conn.transaction()
+
+    async def execute(self, query: str, *args):
+        if self.LOCK in query:
+            self._lock_args = (query, *args)
+            return None
+        if self._lock_args is not None:
+            pending, self._lock_args = self._lock_args, None
+            await self._conn.execute(*pending)
+        return await self._conn.execute(query, *args)
+
+    async def fetch(self, query: str, *args):
+        return await self._conn.fetch(query, *args)
+
+    async def fetchrow(self, query: str, *args):
+        return await self._conn.fetchrow(query, *args)
+
+
+SHELVE = ("chai", "B", "Shelve")
+
+
+async def race_a_rule_change(path: Path, wrap=None) -> object:
+    """Another migrate job holds the lock and commits a rule change (CHAI's B decided
+    "Shelve" ends a project) while a sync acknowledged for the state before it
+    waits. Returns the waiting sync's result, or the exception it raised."""
     manifest = load_manifest(str(path))
-    ack = manifests.transition(seed_hash(), manifest.rule_set_hash)
+    ack = manifests.transition(
+        1, ("chai", manifests.CHAI_RULES), ("chai", manifests.rules_of(path))
+    )
     holder = await asyncpg.connect(DB_URL)
     syncer = await asyncpg.connect(DB_URL)
     try:
-        # Another migrate job holds the lock (as db.migrate() and sync_rules do).
         await holder.execute("BEGIN")
         await holder.execute("SELECT pg_advisory_xact_lock($1)", MIGRATION_LOCK_ID)
-        task = asyncio.create_task(sync_rules(syncer, manifest, ack))
+        conn = wrap(syncer) if wrap else syncer
+        task = asyncio.create_task(sync_rules(conn, manifest, ack))
         pid = syncer.get_server_pid()
         waiting = False
         for _ in range(100):
@@ -597,10 +694,64 @@ async def test_two_syncs_serialize_on_the_migration_lock(
         # would have run straight through, and this fails.
         assert waiting and not task.done()
         assert await changes() == 1
+        # The holder changes the rules and records it, as a sync does, then commits.
+        after = sorted([*manifests.CHAI_RULES, SHELVE])
+        await holder.execute(
+            "INSERT INTO retirement_rule (framework_id, gate_id, decision)"
+            " VALUES ($1, $2, $3)",
+            *SHELVE,
+        )
+        await holder.execute(
+            "INSERT INTO retirement_rule_change (source, framework_id, old_rules,"
+            " new_rules, rule_set_hash, acknowledged)"
+            " VALUES ('manifest', 'chai', $1::text::jsonb, $2::text::jsonb, $3, true)",
+            json.dumps(sorted(manifests.CHAI_RULES)),
+            json.dumps(after),
+            rule_set_hash("chai", {(g, d) for f, g, d in after if f == "chai"}),
+        )
         await holder.execute("COMMIT")
-        result = await asyncio.wait_for(task, 10)
-        assert result.outcome is SyncOutcome.CHANGED
-        assert await changes() == 2
+        try:
+            return await asyncio.wait_for(task, 10)
+        except RulesRefused as exc:
+            return exc
     finally:
         await holder.close()
         await syncer.close()
+
+
+@requires_db
+async def test_two_syncs_serialize_on_the_migration_lock(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    path = manifests.write(
+        tmp_path / "m.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
+    )
+    # The waiting sync reads the rules only once it holds the lock, so it sees the
+    # holder's change: its acknowledgment was for the state before, and it refuses,
+    # naming the rule it would now remove. The holder's change stands.
+    result = await race_a_rule_change(path)
+    assert isinstance(result, RulesRefused), result
+    assert "chai: checkpoint B decided 'Shelve' (removed)" in str(result)
+    assert await rules_now() == {*manifests.CHAI_RULES, SHELVE}
+    assert await changes() == 2
+
+
+@requires_db
+async def test_the_lock_test_fails_when_the_lock_is_taken_after_the_reads(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    # Mutation: the same race with the lock taken only before the first write. The
+    # sync has read the state before the holder's change, so the acknowledgment for
+    # that state matches; it then writes on top of the holder's change and records
+    # a history row that does not describe the table. The assertions above fail.
+    path = manifests.write(
+        tmp_path / "m.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
+    )
+    result = await race_a_rule_change(path, LockTakenLate)
+    assert not isinstance(result, RulesRefused), result
+    assert result.outcome is SyncOutcome.CHANGED  # type: ignore[attr-defined]
+    async with owner_connection() as conn:
+        recorded = await conn.fetchval(
+            "SELECT new_rules::text FROM retirement_rule_change ORDER BY id DESC LIMIT 1"
+        )
+    assert {tuple(r) for r in json.loads(recorded)} != await rules_now()

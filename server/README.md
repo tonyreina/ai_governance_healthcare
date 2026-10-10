@@ -124,7 +124,7 @@ controls, and the CIDR check would be checking the attacker's own claim.
 | `APP_POSTGRES_USER` | `chai_app` | The restricted role's name. |
 | `APP_POSTGRES_PASSWORD` | — | Its password. With this set the API serves as that role, and `DATABASE_URL`/`POSTGRES_PASSWORD` (the owner's) belong to `python -m app.migrate` only. See `app/roles.py` for exactly what the role may do. |
 | `RETIREMENT_MANIFEST` | — | **Required by `python -m app.migrate`.** The build's `manifest.json`, from which it loads which checkpoint decisions retire a project (`app/retirement.py`, D-76). Missing or malformed fails the job. With `RUN_MIGRATIONS=true` the API syncs from it too, with the same refusal; unset there, the API migrates without syncing, logs a warning, and `/api/health` reports `retirement_rules.synced: false`. |
-| `RETIREMENT_RULES_ACK` | — | The acknowledgment of a change of the retirement rules: SHA-256 of `{"from": <active rule-set hash>, "to": <the manifest's>}`, which the job prints when a manifest would add or drop a rule; without it, the job refuses (exit 3). |
+| `RETIREMENT_RULES_ACK` | — | The acknowledgment of one change of the retirement rules: SHA-256 of `{"follows": <latest retirement_rule_change id>, "before": {"primary", "rules"}, "after": {"primary", "rules"}}` (every row of `retirement_rule`, sorted), which the job prints when a manifest would add or drop a rule or change the primary; without it, the job refuses (exit 3). Spent once used. |
 | `EVENTS_CHANNEL` | `chai_events` | `LISTEN`/`NOTIFY` channel. |
 | `LOG_LEVEL` | `info` | The application log's level. Security events are held at INFO whatever this says. |
 | `LOG_FORMAT` | `json` | `json`: one object per line, security events named and tagged `"stream": "security"`. `text`: the human-readable line. |
@@ -244,11 +244,13 @@ R-66): `retirement_rule` lists every (framework, checkpoint, decision) that
 ends a project, and `retention_due()` matches a record against the rows of its own
 framework (`meta.framework.id`; a record without one is CHAI's). `python -m
 app.migrate` loads the rows of the frameworks the build's manifest lists, refusing
-any change (an added or a removed rule) unless `RETIREMENT_RULES_ACK` acknowledges
-that transition, leaves the rows of frameworks it does not list, and records every
-change in the append-only `retirement_rule_change`. The API's role may only read
-both, and the API accepts a `meta.framework` only when it is exactly
-`{"id": <the active primary>}`.
+any change (an added or a removed rule, or a new primary) unless
+`RETIREMENT_RULES_ACK` acknowledges exactly that change, leaves the rows of
+frameworks it does not list, and records every change in the append-only
+`retirement_rule_change`. The API's role may only read both, and the API
+accepts a `meta.framework` only when it is exactly
+`{"id": <the active primary>}`, and requires it on a new record while that
+primary is not CHAI.
 
 A hold is the one retention action the API performs: `POST /api/projects/{id}/hold`
 adds a row to the append-only `retention_hold` table, and a project whose latest

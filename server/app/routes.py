@@ -83,7 +83,13 @@ from .models import (
 from .principals import MAX_ID_LENGTH, MAX_LOOKUP
 from .principals import resolve as resolve_principals
 from .retention import HoldAction
-from .retirement import active_primary, record_framework, sets_stamp, stamp_problem
+from .retirement import (
+    UNSTAMPED_FRAMEWORK,
+    active_primary,
+    record_framework,
+    sets_stamp,
+    stamp_problem,
+)
 from .securitylog import SecurityEvent, emit
 from .signoff import attribute_signoffs
 
@@ -318,6 +324,26 @@ async def _check_stamp(conn: Any, document: dict[str, Any]) -> None:
         raise HTTPException(422, problem)
 
 
+async def _check_new_record(conn: Any, document: dict[str, Any]) -> None:
+    """A new record's stamp. One it sets must be exactly the active primary's. One it
+    leaves out makes it CHAI's (the reading every record written before stamps had),
+    which is right only while CHAI is the primary: under another primary, leaving
+    the stamp out would let a writer choose CHAI's rules over the primary's, so the
+    create is refused (R-66)."""
+    if sets_stamp(document):
+        await _check_stamp(conn, document)
+        return
+    primary = await active_primary(conn)
+    if primary != UNSTAMPED_FRAMEWORK:
+        raise HTTPException(
+            422,
+            f'a new record must carry meta.framework {{"id": "{primary}"}}: the '
+            "primary framework of the build this server retires by (R-66). A record "
+            f"without one is read as {UNSTAMPED_FRAMEWORK}'s, and would retire by "
+            "its rules instead.",
+        )
+
+
 async def _check_unstamped(conn: Any, document: dict[str, Any]) -> None:
     primary = await active_primary(conn)
     if record_framework(document) != primary:
@@ -376,8 +402,7 @@ async def create_project(
             "readers": _listed_ids(access.get("readers")),
         }
     async with db.acquire() as conn, conn.transaction():
-        if sets_stamp(doc):
-            await _check_stamp(conn, doc)
+        await _check_new_record(conn, doc)
         row = await conn.fetchrow(
             """
                 INSERT INTO projects (id, doc, created_by, updated_by)

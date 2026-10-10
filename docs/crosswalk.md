@@ -499,7 +499,7 @@ An earlier pass of this analysis ran on a corrupted input, in which CHAI stages
 4 and 5 had been merged by a parsing bug. Its figures (8 equivalences, 27
 uncovered CHAI criteria) were wrong in both directions and are not used here.
 
-The underlying data is committed at
-[`data/optica_items.json`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/data/optica_items.json),
+The underlying data is committed as OPTICA's framework definition,
+[`app/frameworks/optica/framework.json`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/app/frameworks/optica/framework.json),
 and the per-item view is generated from it onto the
 [OPTICA checklist](frameworks/optica-checklist.md) page.

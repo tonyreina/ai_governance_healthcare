@@ -1662,31 +1662,69 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   read); a definition chosen at run time (R-63: a build is a reviewed change).
 - Source: #168; design v2; R-63; R-67.
 
-### D-80 The spelling guard lists roots and reads words the way code writes them
+### D-81 The spelling guard lists roots and segments, and reads code's words
 
 - Status: Proposed (built for #169; the owner has not yet confirmed it)
 - **Roots, not words.** `scripts/check_spelling.py` holds British roots in
   families (-our, -re, -ce, -ise, -yse, a doubled l), and generates each root's
   inflections and prefixed forms (plural, -ed, -ing, -er, -able, -isation,
-  un-, re-, mis- and the like). Words in no family are listed with their
-  inflections spelled out. A list of exact forms missed a plural while it
-  listed the singular (#169), and every other unlisted inflection would have
-  passed the same way. A generated form that is not a real word is harmless:
-  each keeps the British part of its root, so it can only match a British
-  spelling. Forms that are American too ("analyses", "cancellation",
-  "enrolled", "programmed") are never generated.
+  -llist, un-, re-, mis- and the like). Words in no family are listed in
+  `EXPLICIT` with their inflections spelled out, and none of them may also be
+  generated. A list of exact forms missed a plural while it listed the singular
+  (#169), and every other unlisted inflection would have passed the same way.
+  A generated form that is not a real word is harmless: each keeps the British
+  part of its root, so it can only match a British spelling. Forms that are
+  American too ("analyses", "cancellation", "enrolled", "programmed") are never
+  generated.
+- **Segments, for the medical digraphs.** British segments that no American
+  word we know of contains (`SEGMENTS` in the checker, such as the
+  "haem" of the blood words) are matched anywhere in a word <!-- spelling-ok -->
+  and respelled, so every inflection of a medical word is caught without being
+  listed. A word British in both its segment and its ending is respelled in
+  both. Each segment was checked against American look-alikes, which the tests
+  pin, and narrowed where one exists: not bare "oea" or "coel" ("coelacanth"
+  and "coelom" are American), and not "caesar" (the name "Caesar" is left
+  alone; only the obstetric word is caught). Latin genus names keep their
+  spelling (`GENERA`: "Haemophilus").
+- **Left out on purpose**, because they are standard or common American
+  spellings: "dialogue", "analogue" and the other -ogue words (except the
+  catalog word, which CLAUDE.md names); "burnt", "dreamt", "spelt";
+  "glamour"; "fulfilled", "enrolled" (the American past tense doubles the l);
+  "analyses" (the plural of "analysis").
 - **Words as code writes them.** The scan splits identifiers at underscores,
   hyphens, digits and case changes, so each word of a camelCase or
-  SHOUTING_CASE name is checked (R-17 covers code), in any case.
-- **An allowed phrase exempts only itself.** A `.spelling-allow` phrase is
-  blanked before the scan, like a URL, so a British word elsewhere on the same
-  line is still caught. `spelling-ok` still exempts its whole line.
-- **Shown to fail:** `tests/test_check_spelling.py` checks every generated word
-  in eight contexts, a hand-written table of inflections, a list of American
-  look-alikes, both exemptions, the skips and `--fix`, and breaks a copy of the
-  checker twelve ways to show each is noticed.
+  SHOUTING_CASE name is checked (R-17 covers code), in any case. The ligatures
+  "œ" and "æ" are read as "oe" and "ae".
+- **Exemptions are narrow.** A `.spelling-allow` entry is `glob: phrase`: the
+  phrase is exempt, exactly and case-sensitively, only in the files the glob
+  matches, and only the phrase is blanked, so a British word elsewhere on the
+  same line is still caught. An entry with no glob is refused; `*` is the
+  explicit way to exempt a phrase everywhere, and needs a comment saying why.
+  The GitHub Actions status function and result value are exempt only in
+  `.github/workflows/*.yml`, and Python's asyncio exception only in `*.py`.
+  The `spelling-ok` marker still exempts its whole line. A slash makes a path
+  only when the run starts with `./`, `../` or `/`, or has a segment with a
+  file extension, so two British words joined by a slash in prose are
+  checked. A URL needs a scheme. The allowlist file itself is skipped, like
+  the checker: each of its entries is a British phrase.
+- **Nothing is skipped in silence.** A file that is not valid UTF-8 is reported
+  as a problem, not passed.
+- **Shown to fail:** `tests/test_check_spelling.py` checks every generated word,
+  and every word of a hand-written table, in each of the nine contexts it lists
+  (prose, a comment, a string, snake_case, kebab-case, camelCase, Title case,
+  UPPER CASE, UPPER_SNAKE). The table names every `EXPLICIT` word and a form of
+  every stem, ending, prefix and segment, and the test demands it does. It also
+  checks American look-alikes, slashes in prose, both exemptions and their
+  scope, a file that is not UTF-8, which files a whole-repository run reads,
+  the skips and `--fix`, and breaks copies of the checker (a word, stem,
+  ending, prefix or segment dropped; a stem added that generates an American
+  word; an exemption widened; a kind of file no longer read) to show each is
+  noticed.
 - **Rejected:** listing more exact forms (the failure #169 describes, repeated
   for the next unlisted one); matching any word that contains a British stem
   (flags "enrolled" and "fulfilled", and a checker that cries wolf gets
-  switched off); a dictionary dependency (a new install, and still a list).
-- Source: #169; R-17.
+  switched off); a dictionary dependency (a new install, and still a list);
+  allowlist phrases that apply in every file (a protocol's spelling in a
+  workflow exempted the same word in our prose).
+- Source: #169; R-17; the verifier's findings on the first version of this
+  change.

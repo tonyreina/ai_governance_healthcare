@@ -9,20 +9,35 @@ because words like "behavior" and "defense" look unremarkable.
 Deliberately conservative. Only words whose American form is unambiguous are
 listed, and anything that is a word in both -- "specialist", "analysis",
 "practice" as a noun -- is left out, because a checker that cries wolf gets
-switched off.
+switched off. Left out on purpose, because they are standard or common American
+spellings too: "dialogue", "analogue", "monologue", "prologue" and the other
+-ogue words except "catalogue" (CLAUDE.md names "catalog"); "burnt", "dreamt",
+"spelt"; "glamour"; "fulfilled", "enrolled" (the American past tense doubles
+the l); "analyses" (the plural of "analysis"); "aesthetic", "archaeology",
+"amoeba"; and the name "Caesar" (only "caesarean" is caught).
 
 The list is of roots, not of words: each root's inflections (plurals, -ed,
 -ing, -er, the -isation family, un-, re- and the like) are generated from it,
 because a list of exact forms missed "judgements" while it listed "judgement"
-(#169). Words are read the way code writes them, so the parts of an identifier
-(``colourPicker``, ``MAX_COLOURS``, ``data-colour-id``) are checked too, in any
-case. tests/test_check_spelling.py pins all of this.
+(#169). The British medical digraphs ("haem", "oesoph", "paed", "-aemia" and the
+like) are matched as segments anywhere in a word, so every inflection of
+"haemorrhage" or "oedema" is caught without being listed. Words are read the
+way code writes them, so the parts of an identifier (``colourPicker``,
+``MAX_COLOURS``, ``data-colour-id``) are checked too, in any case, and the
+ligatures "œ" and "æ" are read as "oe" and "ae". tests/test_check_spelling.py
+pins all of this.
 
 Quoting a source that spells a word the British way is legitimate. Two escapes:
 
 * Put ``spelling-ok`` in a comment on the same line; that line is skipped.
-* Add the exact phrase to ``.spelling-allow`` in the repo root, one per line;
-  that phrase is skipped wherever it appears, and the rest of its line is not.
+* Add ``glob: phrase`` to ``.spelling-allow`` in the repo root, one per line.
+  The phrase, matched exactly and case-sensitively, is skipped in the files the
+  glob matches (``*.py``, ``.github/workflows/*.yml``; matched from the right,
+  like ``PurePath.match``), and the rest of its line is still checked. ``*``
+  matches every file, and needs a comment saying why.
+
+A file that is not valid UTF-8 is reported, not skipped: a check that cannot
+read a file has not checked it.
 
 Run via: pixi run check-spelling
 """
@@ -31,7 +46,7 @@ from __future__ import annotations
 
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -129,13 +144,16 @@ FAMILIES: dict[str, Family] = {
         ),
         ("", "mis", "dis", "un", "water", "multi"),
         (
+            "ard",
             "arm",
             "behavi",
             "cand",
             "clam",
             "col",
+            "demean",
             "endeav",
             "fav",
+            "ferv",
             "flav",
             "harb",
             "hon",
@@ -144,11 +162,13 @@ FAMILIES: dict[str, Family] = {
             "neighb",
             "od",
             "parl",
+            "ranc",
             "rig",
             "rum",
             "savi",
             "sav",
             "splend",
+            "succ",
             "tum",
             "val",
             "vap",
@@ -164,7 +184,21 @@ FAMILIES: dict[str, Family] = {
             ("ring", "ering"),
         ),
         ("", "kilo", "centi", "milli", "micro", "nano", "de", "re", "epi"),
-        ("calib", "cent", "fib", "lit", "meag", "met", "somb", "spect", "theat"),
+        (
+            "calib",
+            "cent",
+            "fib",
+            "goit",
+            "lit",
+            "meag",
+            "met",
+            "och",
+            "sab",
+            "scept",
+            "somb",
+            "spect",
+            "theat",
+        ),
     ),
     # defence -> defense.
     "-ce": (
@@ -175,7 +209,9 @@ FAMILIES: dict[str, Family] = {
             ("cing", "sing"),
             ("celess", "seless"),
         ),
-        ("", "sub", "self"),
+        # No "self": the scan splits "self-defence" at the hyphen, so "defence"
+        # is caught, and "selfdefence" is not a word.
+        ("", "sub"),
         ("defen", "licen", "offen", "preten"),
     ),
     # organise -> organize, and every form built on it. Only stems whose -ise
@@ -196,11 +232,15 @@ FAMILIES: dict[str, Family] = {
         ),
         ("", "re", "un", "de", "dis", "mis", "pre", "non", "over", "under"),
         (
+            # "anesthet": the American segment, so "anaesthetise" is caught by
+            # its segment and its ending together (see american()).
+            "anesthet",
             "anonym",
             "apolog",
             "author",
             "capital",
             "categor",
+            "catheter",
             "central",
             "character",
             "civil",
@@ -224,6 +264,7 @@ FAMILIES: dict[str, Family] = {
             "hospital",
             "hypothes",
             "ideal",
+            "immun",
             "incentiv",
             "initial",
             "internal",
@@ -236,6 +277,7 @@ FAMILIES: dict[str, Family] = {
             "material",
             "maxim",
             "memor",
+            "metabol",
             "minim",
             "mobil",
             "modern",
@@ -281,6 +323,7 @@ FAMILIES: dict[str, Family] = {
             "trivial",
             "util",
             "vapor",
+            "vascular",
             "victim",
             "virtual",
             "visual",
@@ -313,6 +356,8 @@ FAMILIES: dict[str, Family] = {
             ("lous", "ous"),
             ("lously", "ously"),
             ("lery", "ry"),
+            ("list", "ist"),
+            ("lists", "ists"),
         ),
         ("", "re", "un", "mis"),
         (
@@ -353,7 +398,9 @@ FAMILIES: dict[str, Family] = {
     ),
 }
 
-# Words that belong to no family, each with its own inflections spelled out.
+# Words that belong to no family, each with its own inflections spelled out. No
+# entry here may also be generated by a family or matched by a segment: the
+# tests check that, so every entry is load-bearing.
 EXPLICIT: dict[str, str] = {
     "catalogue": "catalog",
     "catalogues": "catalogs",
@@ -378,6 +425,8 @@ EXPLICIT: dict[str, str] = {
     "enrols": "enrolls",
     "enrolment": "enrollment",
     "enrolments": "enrollments",
+    "instal": "install",
+    "instals": "installs",
     "instalment": "installment",
     "instalments": "installments",
     "instil": "instill",
@@ -387,6 +436,8 @@ EXPLICIT: dict[str, str] = {
     "unskilful": "unskillful",
     "wilful": "willful",
     "wilfully": "willfully",
+    "woollen": "woolen",
+    "woollens": "woolens",
     "acknowledgement": "acknowledgment",
     "acknowledgements": "acknowledgments",
     "judgement": "judgment",
@@ -395,9 +446,14 @@ EXPLICIT: dict[str, str] = {
     "misjudgement": "misjudgment",
     "misjudgements": "misjudgments",
     "abridgement": "abridgment",
+    "ageing": "aging",
+    "learnt": "learned",
+    "unlearnt": "unlearned",
     "towards": "toward",
     "amongst": "among",
     "whilst": "while",
+    "enquiry": "inquiry",
+    "enquiries": "inquiries",
     "programme": "program",
     "programmes": "programs",
     "storey": "story",
@@ -416,6 +472,9 @@ EXPLICIT: dict[str, str] = {
     "draughty": "drafty",
     "kerb": "curb",
     "kerbs": "curbs",
+    # Not in the -re family: "lustring" is a fabric, spelled so in American too.
+    "lustre": "luster",
+    "lustres": "lusters",
     "manoeuvre": "maneuver",
     "manoeuvres": "maneuvers",
     "manoeuvred": "maneuvered",
@@ -428,6 +487,14 @@ EXPLICIT: dict[str, str] = {
     "moulding": "molding",
     "mouldings": "moldings",
     "mouldy": "moldy",
+    "moult": "molt",
+    "moults": "molts",
+    "moulted": "molted",
+    "moulting": "molting",
+    "smoulder": "smolder",
+    "smoulders": "smolders",
+    "smouldered": "smoldered",
+    "smouldering": "smoldering",
     "moustache": "mustache",
     "moustaches": "mustaches",
     "practise": "practice",
@@ -443,46 +510,46 @@ EXPLICIT: dict[str, str] = {
     "specialities": "specialties",
     "cheque": "check",
     "cheques": "checks",
-    "jewellery": "jewelry",
     "pyjamas": "pajamas",
-    "sulphur": "sulfur",
     "aeroplane": "airplane",
     "aeroplanes": "airplanes",
-    # Medicine, since this is aimed at US health systems.
-    "anaemia": "anemia",
-    "anaemic": "anemic",
-    "anaesthesia": "anesthesia",
-    "anaesthetic": "anesthetic",
-    "anaesthetics": "anesthetics",
-    "anaesthetist": "anesthetist",
-    "anaesthetists": "anesthetists",
-    "caesarean": "cesarean",
-    "diarrhoea": "diarrhea",
-    "encyclopaedia": "encyclopedia",
-    "foetal": "fetal",
-    "foetus": "fetus",
-    "gynaecological": "gynecological",
-    "gynaecologist": "gynecologist",
-    "gynaecology": "gynecology",
-    "haematologist": "hematologist",
-    "haematology": "hematology",
-    "haemoglobin": "hemoglobin",
-    "haemorrhage": "hemorrhage",
-    "ischaemia": "ischemia",
-    "ischaemic": "ischemic",
-    "leukaemia": "leukemia",
-    "oedema": "edema",
-    "oesophageal": "esophageal",
-    "oesophagus": "esophagus",
-    "oestrogen": "estrogen",
-    "orthopaedic": "orthopedic",
-    "orthopaedics": "orthopedics",
-    "paediatric": "pediatric",
-    "paediatrician": "pediatrician",
-    "paediatricians": "pediatricians",
-    "paediatrics": "pediatrics",
-    "septicaemia": "septicemia",
+    # "tumour" is in the -our family; these are built on it with no ending of
+    # that family's.
+    "tumourigenic": "tumorigenic",
+    "tumourigenicity": "tumorigenicity",
+    "tumourigenesis": "tumorigenesis",
 }
+
+# British spellings that are a segment of many words, mostly medical since this
+# is aimed at US health systems. Each is matched anywhere in a word and replaced
+# by its American segment, so "haemorrhages", "haemorrhagic", "haematoma" and
+# "haemodialysis" are all caught by "haem" without a list of their forms. A
+# segment is here only if no American word contains it; each was checked, and
+# the American look-alikes in the tests ("aerial", "academia", "coelacanth",
+# "Caesar", "paean", "onomatopoeia") pin that. "oea" alone is not a segment
+# (only "rrhoea" and "pnoea" are), nor is "coel" (the American "coelacanth"
+# and "coelom" contain it), nor "caesar" (the name).
+SEGMENTS: tuple[tuple[str, str], ...] = (
+    ("haem", "hem"),  # haemorrhage, haematoma, haemodynamic, haemophilia
+    ("aemi", "emi"),  # anaemia, leukaemia, septicaemic, glycaemic, ischaemia
+    ("anaes", "anes"),  # anaesthesia, anaesthetise
+    ("paed", "ped"),  # paediatric, orthopaedist, encyclopaedia
+    ("oesoph", "esoph"),  # oesophagus, oesophagitis
+    ("oestr", "estr"),  # oestrogen, oestradiol
+    ("oedem", "edem"),  # oedema, oedematous
+    ("foet", "fet"),  # foetus, foetal
+    ("faec", "fec"),  # faeces, faecal
+    ("gynaec", "gynec"),  # gynaecology, gynaecologic
+    ("coeliac", "celiac"),
+    ("caesare", "cesare"),  # caesarean
+    ("aetiolog", "etiolog"),  # aetiology
+    ("rrhoea", "rrhea"),  # diarrhoea, gonorrhoea
+    ("pnoea", "pnea"),  # apnoea, dyspnoea
+    ("sulph", "sulf"),  # sulphur, sulphate, sulphide
+)
+# Latin genus names keep their spelling in American text ("Haemophilus
+# influenzae"), so a word that starts with one is not respelled.
+GENERA: tuple[str, ...] = ("haemophilus", "haemaphysalis", "haemonchus")
 
 
 def generate(families: dict[str, Family], explicit: dict[str, str]) -> dict[str, str]:
@@ -499,20 +566,61 @@ def generate(families: dict[str, Family], explicit: dict[str, str]) -> dict[str,
 
 BRITISH: dict[str, str] = generate(FAMILIES, EXPLICIT)
 
+# The ligatures, as their two letters. Each is one character, so a word keeps
+# its length and its column when it is read this way.
+LIGATURES = str.maketrans({"œ": "oe", "æ": "ae"})
+
+
+def american(word: str) -> str | None:
+    """The American spelling of `word`, lowercase, or None if it is not British."""
+    key = word.lower().translate(LIGATURES)
+    hit = BRITISH.get(key)
+    if hit is not None:
+        return hit
+    if key.startswith(GENERA):
+        return None
+    respelled = key
+    for british, american_segment in SEGMENTS:
+        respelled = respelled.replace(british, american_segment)
+    if respelled == key:
+        return None
+    # A segment and an ending can both be British: "anaesthetise" is respelled
+    # "anesthetise" by its segment, and then "anesthetize" by the -ise family.
+    return BRITISH.get(respelled, respelled)
+
+
 MARKER = "spelling-ok"
 # A word, as the checker sees one: a run of letters, split where an identifier
 # changes case, so `colourPicker`, `MAX_COLOURS` and `data-colour-id` are each
 # read as their words. Underscores, digits and hyphens separate words.
-WORD = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+")
+WORD = re.compile(r"[A-ZŒÆ]+(?![a-zœæ])|[A-ZŒÆ]?[a-zœæ]+")
 # The whole run of letters, without splitting identifiers (kept for the tests'
 # mutation that shows the split matters).
-WHOLE = re.compile(r"[A-Za-z]+")
-# A URL or a path can legitimately contain any spelling; it is not prose.
-URLISH = re.compile(r"(https?://\S+|\b[\w.-]+/[\w./-]+)")
+WHOLE = re.compile(r"[A-Za-zŒÆœæ]+")
+# A URL or a path can legitimately contain any spelling; it is not prose. A URL
+# has a scheme. A run with a slash is a path only if it starts with "./", "../"
+# or "/", or a segment has a file extension: "colour/flavour" is prose.
+URL = re.compile(r"\b[A-Za-z][\w+.-]*://\S+")
+SLASHED = re.compile(r"(?<![\w./-])[\w.~-]*/[\w./~-]*")
+EXTENSION = re.compile(r"\w\.[A-Za-z0-9]+$")
 
 
 def blank(match: re.Match[str]) -> str:
     return " " * len(match.group(0))
+
+
+def blank_path(match: re.Match[str]) -> str:
+    run = match.group(0)
+    path = run.rstrip(".")
+    if path.startswith(("./", "../", "/")) or any(
+        EXTENSION.search(segment) for segment in path.split("/")
+    ):
+        return " " * len(run)
+    return run
+
+
+def blank_urls(line: str) -> str:
+    return SLASHED.sub(blank_path, URL.sub(blank, line))
 
 
 def american_for(word: str, american: str) -> str:
@@ -527,23 +635,33 @@ def american_for(word: str, american: str) -> str:
 def find(line: str, allow: list[str]) -> list[tuple[int, str, str]]:
     """(column, British word, American word) for each hit in one line.
 
-    A line with the marker is exempt. An allowed phrase exempts only itself: it
-    is blanked out before the scan, like a URL, so a British word elsewhere on
-    the same line is still caught.
+    `allow` is the phrases allowed in this file. A line with the marker is
+    exempt. An allowed phrase exempts only itself, matched exactly: it is blanked
+    out before the scan, like a URL, so a British word elsewhere on the same line
+    is still caught.
     """
     if MARKER in line:
         return []
     scannable = line
     for phrase in allow:
         scannable = scannable.replace(phrase, " " * len(phrase))
-    scannable = URLISH.sub(blank, scannable)
+    scannable = blank_urls(scannable)
     hits = []
     for match in WORD.finditer(scannable):
         word = match.group(0)
-        american = BRITISH.get(word.lower())
-        if american is not None:
-            hits.append((match.start(), word, american_for(word, american)))
+        respelled = american(word)
+        if respelled is not None:
+            hits.append((match.start(), word, american_for(word, respelled)))
     return hits
+
+
+def relative(path: Path) -> str:
+    """The path from the repository root, or the whole path if it is outside."""
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(ROOT).as_posix()
+    except ValueError:
+        return resolved.as_posix()
 
 
 def is_translation(rel: str) -> bool:
@@ -563,9 +681,13 @@ def is_translation(rel: str) -> bool:
 
 
 def skip(path: Path) -> bool:
-    """This file (it IS the word list), anything quoted verbatim, and translations."""
+    """This file (it IS the word list), the allowlist (it is the list of British
+    phrases allowed, so each of its entries is one), anything quoted verbatim,
+    and translations. pre-commit names files itself, so this applies to them."""
     resolved = path.resolve()
     if resolved == SELF:
+        return True
+    if resolved == ALLOWLIST.resolve():
         return True
     try:
         rel = str(resolved.relative_to(ROOT))
@@ -574,28 +696,60 @@ def skip(path: Path) -> bool:
     return rel in QUOTED_VERBATIM or is_translation(rel)
 
 
-def load_allowlist() -> list[str]:
+# An allowlist entry: (glob, phrase). The phrase is allowed only in the files
+# the glob matches.
+Allow = tuple[str, str]
+
+
+def parse_allowlist(text: str) -> list[Allow]:
+    """`glob: phrase` per line. A line with no glob is an error, not a phrase
+    allowed everywhere: an exemption names where it applies."""
+    entries = []
+    for number, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        glob, sep, phrase = line.partition(": ")
+        if not sep or not glob or not phrase.strip():
+            raise ValueError(
+                f"{ALLOWLIST.name}:{number}: expected 'glob: phrase', got {line!r}"
+            )
+        entries.append((glob, phrase.strip()))
+    return entries
+
+
+def load_allowlist() -> list[Allow]:
     if not ALLOWLIST.exists():
         return []
-    return [
-        line.strip()
-        for line in ALLOWLIST.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    ]
+    return parse_allowlist(ALLOWLIST.read_text(encoding="utf-8"))
 
 
-def check(path: Path, allow: list[str]) -> list[str]:
+def allowed_in(path: Path, allow: list[Allow]) -> list[str]:
+    """The phrases allowed in `path`."""
+    where = PurePosixPath(relative(path))
+    return [phrase for glob, phrase in allow if where.match(glob)]
+
+
+def read(path: Path) -> str:
+    """The file's text. Raises UnicodeDecodeError or OSError if it cannot be read."""
+    return path.read_text(encoding="utf-8")
+
+
+def check(path: Path, allow: list[Allow]) -> list[str]:
     try:
-        text = path.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, OSError):
-        return []
+        text = read(path)
+    except UnicodeDecodeError as error:
+        return [f"{path}: not valid UTF-8 (byte {error.start}), so not checked"]
+    except OSError as error:
+        return [f"{path}: could not be read ({error.strerror}), so not checked"]
 
+    phrases = allowed_in(path, allow)
     problems = []
     for number, line in enumerate(text.splitlines(), 1):
-        for column, word, american in find(line, allow):
+        for column, word, respelled in find(line, phrases):
             problems.append(
                 f"{path}:{number}:{column + 1}: "
-                f"British spelling {word!r} -- use {american!r}\n"
+                f"British spelling {word!r} -- use {respelled!r}\n"
                 f"    {line.strip()[:100]}"
             )
     return problems
@@ -613,23 +767,22 @@ def targets(argv: list[str]) -> list[Path]:
     ]
 
 
-def fix(path: Path, allow: list[str]) -> int:
+def fix(path: Path, allow: list[Allow]) -> int:
     """Rewrite British spellings in place. Returns how many were changed.
 
     Uses the same scan as check(), so it changes exactly what check() reports:
-    never an exempt line, an allowed phrase or a URL.
+    never an exempt line, an allowed phrase or a URL. A file that cannot be
+    read raises, so the caller reports it.
     """
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, OSError):
-        return 0
+    text = read(path)
+    phrases = allowed_in(path, allow)
 
     changed = 0
     out = []
     for line in text.splitlines(keepends=True):
         # Right to left, so an earlier column is not moved by a later change.
-        for column, word, american in reversed(find(line, allow)):
-            line = line[:column] + american + line[column + len(word) :]
+        for column, word, respelled in reversed(find(line, phrases)):
+            line = line[:column] + respelled + line[column + len(word) :]
             changed += 1
         out.append(line)
 
@@ -641,13 +794,23 @@ def fix(path: Path, allow: list[str]) -> int:
 def main(argv: list[str]) -> int:
     do_fix = "--fix" in argv
     argv = [a for a in argv if a != "--fix"]
-    allow = load_allowlist()
+    try:
+        allow = load_allowlist()
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
 
     if do_fix:
         total = 0
+        unread = 0
         for path in targets(argv):
             if path.is_file() and not skip(path):
-                n = fix(path, allow)
+                try:
+                    n = fix(path, allow)
+                except (UnicodeDecodeError, OSError) as error:
+                    print(f"  could not read {path}: {error}", file=sys.stderr)
+                    unread += 1
+                    continue
                 if n:
                     try:
                         shown = path.resolve().relative_to(ROOT)
@@ -656,7 +819,7 @@ def main(argv: list[str]) -> int:
                     print(f"  {n:3d}  {shown}")
                     total += n
         print(f"\n{total} spelling(s) corrected")
-        return 0
+        return 1 if unread else 0
 
     problems = [
         msg
@@ -670,9 +833,9 @@ def main(argv: list[str]) -> int:
 
     if problems:
         print(
-            f"\n{len(problems)} British spelling(s) found. This project uses "
-            "American English.\nIf a word is quoted from a source, add "
-            "`spelling-ok` to the line or the phrase to .spelling-allow.",
+            f"\n{len(problems)} problem(s) found. This project uses American "
+            "English.\nIf a word is quoted from a source, add `spelling-ok` to "
+            "the line, or 'glob: phrase' to .spelling-allow.",
             file=sys.stderr,
         )
         return 1

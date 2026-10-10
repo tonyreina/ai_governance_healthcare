@@ -314,9 +314,10 @@ In short:
 - **American English** everywhere, checked by `pixi run check-spelling`. It
   lists British roots and generates their inflections, and reads identifiers
   word by word (camelCase and SHOUTING_CASE). A quotation keeps its spelling
-  with `spelling-ok` on the line, or with the exact phrase in `.spelling-allow`,
-  which exempts that phrase and not the rest of its line. `pixi run
-  test-check-spelling` shows the checker failing.
+  with `spelling-ok` on the line, or with a `glob: phrase` entry in
+  `.spelling-allow`, which exempts that exact phrase only in the files the glob
+  matches, and not the rest of its line. `pixi run test-check-spelling` shows
+  the checker failing.
 
 ## The documentation site
 

@@ -163,6 +163,21 @@ rules came from a build's manifest. It is `false` while the database holds only
 `RETIREMENT_MANIFEST`, whatever an earlier sync recorded, since that API did not
 check the rules against its build.
 
+The dashboard checks the same thing. The build writes the manifest's
+`ruleSetHash` into the page, and a page served by the API compares it, and its
+primary framework, with `retirement_rules`. When they agree it shows nothing.
+When they do not, a banner below the header (an alert to screen readers) says
+the server retires records by different rules than this page shows, or by
+another framework's, and asks for the migrate job to be run with this build's
+manifest. Until they agree, the page records no checkpoint decision and creates
+no new record; other edits still save. When the rules agree but `synced` is
+`false`, the banner says no build's manifest set or confirmed them, and stops
+nothing, since the rules the server holds are the page's. The banner cannot be
+dismissed: it goes away when the rules are fixed and
+the page is reloaded. A server that does not send `retirement_rules`, or sends it
+as `null`, gets no banner. These are the page's own refusals; the server's are
+the checks below.
+
 A record's framework is its `meta.framework.id`, and it decides when the record
 can be disposed of. The API accepts a new record that sets it only when it is
 exactly `{"id": "<primary>"}`, the primary of the build the rules were loaded

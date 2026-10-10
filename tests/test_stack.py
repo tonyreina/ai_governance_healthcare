@@ -595,6 +595,17 @@ def main() -> int:
         )
         check("identity taken from the proxy", page.evaluate("ME.id") == baseline["id"])
         check("mode badge says shared", "Shared" in page.inner_text("#mode"))
+        # The served page and the stack's rules are one build, so the page says
+        # nothing about them (D-83). tests/test_rules_banner.py shows it would.
+        check(
+            "the page shows no retirement-rules banner: its rules are the server's",
+            page.evaluate(
+                "BUILD.ruleSetHash === "
+                + json.dumps(manifest["ruleSetHash"])
+                + " && RULES_PROBLEMS.length === 0"
+                " && !document.getElementById('rulesBanner')"
+            ),
+        )
 
         # A change made OUTSIDE the browser must arrive over SSE. This is the
         # one that silently regressed once: the server sends named events, and

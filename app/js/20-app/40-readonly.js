@@ -5,6 +5,8 @@ function setMode(text,cls){ const el=document.getElementById("mode"); el.textCon
 function setModeFor(mode){ const l=MODE_LABEL[mode]; if(l) setMode(t(MODE_LABEL_KEY[mode]),l.cls); }
 function setReadOnly(v){ RO=v; document.body.classList.toggle("ro",v); if(v) setMode(t("mode.viewOnly"),"ro"); if(CUR) renderMain(false); else if(document.getElementById("plistHost")) renderDashboardShell(); }
 function applyRO(root){
+  // While the server's retirement rules are not this page's, no decision (D-83).
+  if(rulesBlockWrites()) root.querySelectorAll("[data-gate]").forEach(e=>e.disabled=true);
   if(!RO) return;
   root.querySelectorAll("input:not([type=search]),textarea,select").forEach(e=>{ if(!e.closest(".fallback")) e.disabled=true; });
   root.querySelectorAll("[data-set],[data-gate],[data-delmetric]").forEach(e=>e.disabled=true);
@@ -91,6 +93,7 @@ function relocalize(){
   });
   if(MODE === Mode.LOCAL) showStorageWarning();
   else if(MODE === Mode.API) showScopeNotice();
+  showRulesBanner();
   if(document.body.classList.contains("home")) renderDashboardShell();
   else if(S) renderProject(false);
 }

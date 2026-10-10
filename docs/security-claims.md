@@ -1363,3 +1363,24 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_build_config.py::the published page and policy are untouched`
   `tests/test_build_config.py::an --out into docs/, proxy/ or app/ is refused`
   `tests/test_build_config.py::--config without --out is refused`
+
+### C-95 The page says when its server retires records by other rules, and records no decision
+
+- **Claim:** A page served by the API compares the rule-set hash and primary its
+  build embedded with the server's `retirement_rules`. When they differ it shows
+  an alert saying so, and records no checkpoint decision and creates no record
+  until they agree; when the server's rules were not synced from a manifest it
+  says so. Nothing is shown when they agree. These refusals are the page's; the
+  server's stamp and acknowledgment checks (C-88 to C-90) are what bind.
+- **Asserted in:** `docs/self-hosting.md` — "Until they agree, the page records no checkpoint decision and creates no new record"
+- **Asserted in:** `docs/frameworks/custom.md` — "it shows a banner saying so and records no decision and creates no new record"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_rules_banner.py::a different hash shows the banner`
+  `tests/test_rules_banner.py::as an alert`
+  `tests/test_rules_banner.py::and a decision is refused even if pressed`
+  `tests/test_rules_banner.py::a new record is refused`
+  `tests/test_rules_banner.py::a different primary shows the banner`
+  `tests/test_rules_banner.py::unsynced rules show the banner`
+  `tests/test_rules_banner.py::rules that agree show no banner`
+  `tests/test_rules_banner.py::the page embeds its manifest's rule-set hash`

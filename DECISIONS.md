@@ -1585,9 +1585,12 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   of the frameworks it lists. Any change, a pair added, a pair removed or a new
   primary (which decides the stamp the API accepts, and so whose rules new records
   follow), is made only when `RETIREMENT_RULES_ACK` equals the SHA-256 of the
-  canonical JSON `{"follows": <id of the latest retirement_rule_change row>,
+  canonical JSON `{"database": <the database's nonce>, "follows": <id of the
+  latest retirement_rule_change row>, "at": <its time, UTC, to the microsecond>,
   "before": {"primary", "rules"}, "after": {"primary", "rules"}}`, where each
-  `rules` is every row of `retirement_rule`, of every framework, sorted.
+  `rules` is every row of `retirement_rule`, of every framework, sorted. The
+  nonce is a random UUID each database gets once (`retirement_ack_nonce`,
+  migration 012; the API has no access to it).
   Otherwise the job exits 3, listing the rules added and removed, the change of
   primary, and every live project that would become due or stop being due,
   prints the exact value to set, and changes nothing. A sync that changes nothing
@@ -1598,8 +1601,21 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   also drops an unlisted framework's rules, or a rollback to an earlier primary
   over the same rows. Because it names the history row it follows, which the
   change itself moves on, it is spent once used: a value left set accepts no later
-  change, not even the same change made again. Additions need it too: a stale or
+  change, not even the same change made again. Because it binds the database's
+  nonce, a value printed by one database is refused by another with the same
+  history (staging and production, or two fresh databases migrated alike), which
+  the history row's id alone did not do. Additions need it too: a stale or
   mistaken build that adds a rule can make records due at once.
+- **A write checks the stamp under the lock, shared.** The API's create and patch
+  take `pg_advisory_xact_lock_shared(MIGRATION_LOCK_ID)` before they read the
+  active primary (a patch at the start of its transaction, before its row lock),
+  and the sync takes the same lock exclusively before it reads. So a sync that
+  changes the primary waits for every write in flight, and a write that starts
+  during it waits and reads the new primary: no record is checked against a
+  primary that has just been replaced. Writes do not block one another. Taken
+  before any row lock, so a migration holding the lock never waits on a write that
+  waits for it. The restricted role may call it (advisory lock functions are
+  granted to PUBLIC), which the suite shows by running as that role.
 - **A manifest governs only what it lists.** Rows of a framework the manifest
   does not list (the primary of an earlier build) are left as they are, so that
   framework's records keep retiring by their own rules; the job reports them,
@@ -1661,10 +1677,22 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   that affected no project accepted a different build with the same primary rule
   set that removed all of CHAI's rules, and a rollback to another primary over the
   same rows went through with no acknowledgment, after which an old value matched
-  again); additive
+  again); an acknowledgment naming only the history row's id (shown against
+  PostgreSQL 17 in review: a value printed for one database was accepted by
+  another fresh one, and by staging's twin in production); reading the primary
+  for a write without a lock (shown against PostgreSQL 17 in review: a create
+  that read CHAI as primary committed, unstamped, after an acknowledged switch to
+  another, a record no acknowledgment listed); a row lock or `SERIALIZABLE` for
+  that instead (the sync would have to lock every project, and a serialization
+  failure is a retry every write path would need); additive
   sync without an acknowledgment (a stale or mistaken build could make records due
   at once, silently); a manifest removing the rules of frameworks it does not list
   (switching primary would stop the earlier primary's records ever coming due).
+- **Limit, stated:** a restore is not another database. A dump carries the nonce
+  and the history, so a database restored from it accepts a value printed against
+  the state in that dump, again; `docs/self-hosting.md` says to clear
+  `RETIREMENT_RULES_ACK` before restoring. Nothing prevents it: telling a restore
+  from the original would need state outside the database.
 - **Limit, stated:** the acknowledgment binds the rules and the primary, not the
   records. The projects listed as becoming due, or stopping being due, are those
   at the moment the refusal was printed; a project decided or edited between that
@@ -1687,14 +1715,20 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   acknowledgment, the value printed (its format pinned by an independent
   computation) and the projects listed both ways; the two review sequences above
   refused; every value used through a run of changes refused for each later one;
-  a stale manifest refused; unlisted frameworks' rows kept; mutation tests that
+  a stale manifest refused; unlisted frameworks' rows kept; a value printed by
+  one database refused by another with an identical history, and accepted by
+  the other once the nonce is dropped; mutation tests that
   drop the framework join, the blank-stamp `nullif` and the latest-decision clock
   and see the result change),
   `server/tests/test_retirement_rules.py` (the stamp checks, a create without the
   stamp under another primary, the API's own sync and its warning, `/api/health`,
   the migration lock: the holder commits a rule change while the sync waits, and
   the sync refuses from the new state; the same race with the lock taken after
-  the reads is shown to slip through), `tests/test_dispose.py` and
+  the reads is shown to slip through; a create and a patch held after reading
+  the primary make a switching sync wait, and without the shared lock the switch
+  commits under them; a migration holding the lock gets the projects table at
+  once while a patch waits, and would wait on it if the patch locked its row
+  first), `tests/test_dispose.py` and
   `tests/test_verify_backup.py` (the count of records with no rules; the
   history's trigger present and enabled after a restore, and the rules equal to
   the last recorded change, each with a dump that breaks it). Claims C-61 and

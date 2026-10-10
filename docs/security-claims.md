@@ -1169,21 +1169,27 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   manifest, refuses any change (an ending decision added or dropped, or a new
   primary) unless `RETIREMENT_RULES_ACK` is the acknowledgment of exactly that
   change: the SHA-256 of every rule the table holds before and after it, the
-  primary before and after, and the history row it follows. So a value printed for
-  one change never accepts a different one (a build that also drops an unlisted
-  framework's rules, a rollback to another primary), and once used it accepts
-  nothing later. It leaves the rules of frameworks the manifest does not list, and
+  primary before and after, the history row it follows (its id and time), and the
+  database's own random nonce (012). So a value printed for one change never
+  accepts a different one (a build that also drops an unlisted framework's rules,
+  a rollback to another primary), once used it accepts nothing later, and another
+  database refuses it even with the same history. It leaves the rules of frameworks the manifest does not list, and
   fails without a usable manifest, so disposal never changes silently (R-66, D-76).
   Each guard in the SQL (the join on the record's framework, a blank stamp read as
   CHAI's, the clock at the latest ending decision), the parts of the
-  acknowledgment, and the migration lock (taken before the rules are read, so a
+  acknowledgment (the nonce dropped, a value from one database is accepted by
+  another), and the migration lock (taken before the rules are read, so a
   sync waiting on another job works from what that job committed) has a test that
   breaks it and fails.
 - **Gap:** the stack test proves only the default build: its rule set is
   010's seed (the same hash), so it shows the migrate job read and confirmed the
   manifest (`synced`), not that a different rule set reaches a running stack. That
   a different set is loaded, refused or acknowledged is the server tests' evidence,
-  against a real PostgreSQL and the real migrate job.
+  against a real PostgreSQL and the real migrate job. And a restore is not another
+  database: a dump carries the nonce and the history, so restoring one re-arms a
+  value printed against the state in that dump. `docs/self-hosting.md` says so;
+  nothing prevents it.
+- **Asserted in:** `docs/self-hosting.md` — "another database refuses it even when its history is the same"
 - **Asserted in:** `docs/self-hosting.md` — "loads those decisions into the database, which decides from them when a project is retired"
 - **Asserted in:** `docs/privacy.md` — "A build of another framework retires on its own decisions"
 - **Asserted in:** `docs/frameworks/custom.md` — "from the checkpoint options your definition classes `stop` or `retire`"
@@ -1199,6 +1205,9 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_retention.py::test_a_rollback_is_acknowledged_and_does_not_revive_an_old_ack`
   `server/tests/test_retention.py::test_a_leftover_ack_never_accepts_a_later_change`
   `server/tests/test_retention.py::test_a_primary_switch_over_the_same_rules_needs_an_ack`
+  `server/tests/test_retention.py::test_a_value_printed_for_one_database_is_refused_by_another`
+  `server/tests/test_retention.py::test_the_database_test_fails_without_the_nonce`
+  `server/tests/test_retention.py::test_every_part_of_the_acknowledgment_changes_it`
   `server/tests/test_retention.py::test_a_record_follows_only_its_own_frameworks_rules`
   `server/tests/test_retention.py::test_the_mirror_a_chai_record_never_retires_by_anothers_words`
   `server/tests/test_retention.py::test_a_blank_stamp_is_chai`
@@ -1233,12 +1242,17 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   recorded>}`, and a patch that drops that stamp; a record without one is CHAI's.
   While that primary is not CHAI, it also refuses a create that leaves the stamp
   out, so omitting it cannot choose CHAI's rules; a record written before the
-  switch keeps its framework and stays editable. Stamps written before this check,
+  switch keeps its framework and stays editable. The check reads the primary under
+  the migration lock, shared, taken before any row lock: a sync that changes the
+  primary waits for every create or patch in flight, and one that starts during the
+  sync waits and reads the new primary, so none is checked against a primary that
+  has just been replaced. Stamps written before this check,
   or by the database owner, are not re-checked,
   and `make dispose` and `make verify-backup` count the records whose framework
   has no rules (R-66, D-76).
 - **Asserted in:** `docs/privacy.md` — "Nor can a writer choose which framework's rules a record follows"
 - **Asserted in:** `docs/frameworks/custom.md` — "the API accepts a record only with your primary's stamp"
+- **Asserted in:** `docs/self-hosting.md` — "so no record is checked against a primary that has just been replaced"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_retirement_rules.py::test_the_api_refuses_a_stamp_that_is_not_the_active_primary`
@@ -1247,6 +1261,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_retirement_rules.py::test_under_another_primary_a_record_must_carry_its_stamp`
   `server/tests/test_retirement_rules.py::test_a_correctly_stamped_record_retires`
   `server/tests/test_retirement_rules.py::test_the_sql_reads_a_stamp_as_the_api_does`
+  `server/tests/test_retirement_rules.py::test_a_write_that_read_the_primary_holds_off_a_switch`
+  `server/tests/test_retirement_rules.py::test_the_race_test_fails_without_the_shared_lock`
+  `server/tests/test_retirement_rules.py::test_a_migration_holding_the_lock_never_waits_on_a_patch`
+  `server/tests/test_retirement_rules.py::test_the_lock_order_test_fails_when_the_patch_locks_its_row_first`
   `tests/test_dispose.py`
   `tests/test_verify_backup.py`
 

@@ -327,7 +327,7 @@ async def test_health_reports_the_rule_set_the_database_uses(
         DB_URL,
         RETIREMENT_MANIFEST=str(path),
         RETIREMENT_RULES_ACK=manifests.transition(
-            2,
+            await manifests.follows(DB_URL, 2),
             ("chai", manifests.CHAI_RULES),
             ("acme", manifests.CHAI_RULES | manifests.rules_of(path)),
         ),
@@ -413,7 +413,7 @@ async def test_a_stamp_follows_the_primary_the_latest_sync_recorded(
         DB_URL,
         RETIREMENT_MANIFEST=str(path),
         RETIREMENT_RULES_ACK=manifests.transition(
-            1,
+            await manifests.follows(DB_URL, 1),
             ("chai", manifests.CHAI_RULES),
             ("acme", manifests.CHAI_RULES | manifests.rules_of(path)),
         ),
@@ -446,7 +446,7 @@ async def acme_is_primary(tmp_path: Path) -> None:
         DB_URL,
         RETIREMENT_MANIFEST=str(path),
         RETIREMENT_RULES_ACK=manifests.transition(
-            1,
+            await manifests.follows(DB_URL, 1),
             ("chai", manifests.CHAI_RULES),
             ("acme", manifests.CHAI_RULES | manifests.rules_of(path)),
         ),
@@ -570,7 +570,9 @@ async def test_the_api_migrating_itself_syncs_from_its_manifest(
     )
     wanted = manifests.manifest_of(path)["ruleSetHash"]
     ack = manifests.transition(
-        1, ("chai", manifests.CHAI_RULES), ("chai", manifests.rules_of(path))
+        await manifests.follows(DB_URL, 1),
+        ("chai", manifests.CHAI_RULES),
+        ("chai", manifests.rules_of(path)),
     )
 
     # The same refusal as the migrate job: the API does not start.
@@ -660,6 +662,9 @@ class LockTakenLate:
     async def fetchrow(self, query: str, *args):
         return await self._conn.fetchrow(query, *args)
 
+    async def fetchval(self, query: str, *args):
+        return await self._conn.fetchval(query, *args)
+
 
 SHELVE = ("chai", "B", "Shelve")
 
@@ -670,7 +675,9 @@ async def race_a_rule_change(path: Path, wrap=None) -> object:
     waits. Returns the waiting sync's result, or the exception it raised."""
     manifest = load_manifest(str(path))
     ack = manifests.transition(
-        1, ("chai", manifests.CHAI_RULES), ("chai", manifests.rules_of(path))
+        await manifests.follows(DB_URL, 1),
+        ("chai", manifests.CHAI_RULES),
+        ("chai", manifests.rules_of(path)),
     )
     holder = await asyncpg.connect(DB_URL)
     syncer = await asyncpg.connect(DB_URL)
@@ -755,3 +762,242 @@ async def test_the_lock_test_fails_when_the_lock_is_taken_after_the_reads(
             "SELECT new_rules::text FROM retirement_rule_change ORDER BY id DESC LIMIT 1"
         )
     assert {tuple(r) for r in json.loads(recorded)} != await rules_now()
+
+
+# --- a write that reads the primary, racing a sync that changes it ----------------
+# The API checks a record's stamp against the active primary (R-66). Under READ
+# COMMITTED, a create or patch that read the old primary and committed after a sync
+# switched it would write a record the new primary forbids (an unstamped create, a
+# stamp of the old primary) that no acknowledgment covered. Shown against
+# PostgreSQL 17 in review. So the API takes the migration lock SHARED before it reads
+# the primary, and the sync, which takes it exclusively, waits for every write in
+# flight; a write that starts after the sync waits for it, and reads the new primary.
+
+
+def printed_value(refused: RulesRefused) -> str:
+    found = re.search(r"RETIREMENT_RULES_ACK=([0-9a-f]{64})", str(refused))
+    assert found, str(refused)
+    return found.group(1)
+
+
+async def acme_ack(manifest) -> str:
+    """The value the switch to the stand-in primary needs, as the job prints it."""
+    async with owner_connection() as conn:
+        try:
+            await sync_rules(conn, manifest, "")
+        except RulesRefused as exc:
+            return printed_value(exc)
+    raise AssertionError("the switch to acme was not refused without a value")
+
+
+async def wait_for(conn: asyncpg.Connection, sql: str, *args, tries: int = 200) -> bool:
+    for _ in range(tries):
+        if await conn.fetchval(sql, *args):
+            return True
+        await asyncio.sleep(0.025)
+    return False
+
+
+async def race_a_write_with_a_switch(
+    tmp_path: Path, write, blocker: str, blocked_on: str, *args
+) -> tuple[bool, object, object]:
+    """Hold `write` (an API call) after it has read the primary, by an uncommitted
+    row its INSERT must wait for (`blocker`), and switch the primary to acme with the
+    acknowledged sync meanwhile. Returns whether the sync had to wait for the lock
+    while the write was in flight, the write's response and the sync's result."""
+    path = manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
+    manifest = load_manifest(str(path))
+    ack = await acme_ack(manifest)
+    holder = await asyncpg.connect(DB_URL)
+    syncer = await asyncpg.connect(DB_URL)
+    # Watched from outside any transaction: pg_stat_activity is a snapshot taken
+    # once per transaction, so the holder would never see the write start waiting.
+    watcher = await asyncpg.connect(DB_URL)
+    try:
+        await holder.execute("BEGIN")
+        await holder.execute(blocker, *args)
+        request = asyncio.create_task(write())
+        # The write is past its stamp check, waiting on the holder's row.
+        assert await wait_for(
+            watcher,
+            "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid <> $1"
+            " AND wait_event_type = 'Lock' AND query ILIKE $2)",
+            holder.get_server_pid(),
+            f"%{blocked_on}%",
+        ), "the write never reached its INSERT"
+        sync = asyncio.create_task(sync_rules(syncer, manifest, ack))
+        waited = await wait_for(
+            watcher,
+            "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid = $1"
+            " AND locktype = 'advisory' AND NOT granted)",
+            syncer.get_server_pid(),
+            tries=120,
+        )
+        # Without the shared lock the sync is not waiting: give it the time it
+        # needs to commit, so the mutation test sees the harm it does.
+        if not waited:
+            await asyncio.wait_for(asyncio.shield(sync), 10)
+        waited = waited and not sync.done()
+        await holder.execute("ROLLBACK")
+        response = await asyncio.wait_for(request, 10)
+        result = await asyncio.wait_for(sync, 10)
+        return waited, response, result
+    finally:
+        await holder.close()
+        await syncer.close()
+        await watcher.close()
+
+
+async def primary_now() -> str:
+    async with owner_connection() as conn:
+        return await conn.fetchval(
+            "SELECT framework_id FROM retirement_rule_change ORDER BY id DESC LIMIT 1"
+        )
+
+
+CREATE_BLOCKER = (
+    "INSERT INTO projects (id, doc, created_by, updated_by)"
+    " VALUES ($1, '{}'::jsonb, 'h@x', 'h@x')"
+)
+PATCH_BLOCKER = (
+    "INSERT INTO project_version (project_id, incarnation, rev, doc, content_md5,"
+    " changed_by, access)"
+    " SELECT id, incarnation, rev + 1, '{}'::jsonb, 'x', 'h@x', '{}'::jsonb"
+    " FROM projects WHERE id = $1"
+)
+
+
+async def race_a_create(client: AsyncClient, tmp_path: Path):
+    # A record without a stamp: CHAI's, accepted while CHAI is the primary.
+    return await race_a_write_with_a_switch(
+        tmp_path,
+        lambda: client.post("/api/projects/racer", json={"meta": {"solution": "x"}}),
+        CREATE_BLOCKER,
+        "INSERT INTO projects",
+        "racer",
+    )
+
+
+async def race_a_patch(client: AsyncClient, tmp_path: Path):
+    # CHAI's stamp, accepted while CHAI is the primary and refused under acme.
+    assert (
+        await client.post("/api/projects/racer", json={"meta": {"solution": "x"}})
+    ).status_code == 201
+    return await race_a_write_with_a_switch(
+        tmp_path,
+        lambda: client.patch(
+            "/api/projects/racer", json={"meta": {"framework": {"id": "chai"}}}
+        ),
+        PATCH_BLOCKER,
+        "INSERT INTO project_version",
+        "racer",
+    )
+
+
+@requires_db
+@pytest.mark.parametrize("race", [race_a_create, race_a_patch])
+async def test_a_write_that_read_the_primary_holds_off_a_switch(
+    client: AsyncClient, tmp_path: Path, race
+) -> None:
+    waited, response, result = await race(client, tmp_path)
+    # The sync waited for the write in flight, so the write, checked against CHAI,
+    # committed before the switch: a record written before it, which keeps its
+    # framework (R-66). Then the switch went through with its acknowledgment.
+    assert waited, "the sync switched the primary under a write that read the old one"
+    assert response.status_code in (200, 201), response.text
+    assert not isinstance(result, RulesRefused), result
+    assert result.outcome is SyncOutcome.CHANGED
+    assert await primary_now() == "acme"
+    # And a write that starts now reads the new primary.
+    late = await client.post("/api/projects/late", json={"meta": {"solution": "x"}})
+    assert late.status_code == 422, late.text
+
+
+@requires_db
+@pytest.mark.parametrize("race", [race_a_create, race_a_patch])
+async def test_the_race_test_fails_without_the_shared_lock(
+    client: AsyncClient, tmp_path: Path, race, monkeypatch
+) -> None:
+    # Mutation: the API reads the primary without the lock (neither where it reads
+    # it nor at the start of a patch). The sync no longer
+    # waits; it switches to acme while the write is in flight, and the write,
+    # checked against CHAI, commits after the switch a record acme forbids (no
+    # stamp, or CHAI's), which no acknowledgment listed.
+    from app import retirement, routes
+
+    async def no_lock(conn) -> None:
+        return None
+
+    monkeypatch.setattr(routes, "write_primary", retirement.active_primary)
+    monkeypatch.setattr(routes, "hold_off_rule_changes", no_lock)
+    waited, response, result = await race(client, tmp_path)
+    assert not waited
+    assert response.status_code in (200, 201), response.text
+    assert result.outcome is SyncOutcome.CHANGED
+    assert await primary_now() == "acme"
+    assert record_framework(await stored_doc("racer")) == "chai"
+
+
+async def a_migration_meets_a_stamp_patch(client: AsyncClient) -> object:
+    """A migration holds the lock (as the migrate job does) when a patch that sets
+    the stamp arrives, then needs the projects table (as DDL does). Returns None when
+    it got the table at once, or the error it got waiting for it."""
+    assert (
+        await client.post("/api/projects/p", json={"meta": {"solution": "x"}})
+    ).status_code == 201
+    migration = await asyncpg.connect(DB_URL)
+    watcher = await asyncpg.connect(DB_URL)
+    try:
+        await migration.execute("BEGIN")
+        await migration.execute("SELECT pg_advisory_xact_lock($1)", MIGRATION_LOCK_ID)
+        request = asyncio.create_task(
+            client.patch(
+                "/api/projects/p", json={"meta": {"framework": {"id": "chai"}}}
+            )
+        )
+        assert await wait_for(
+            watcher,
+            "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid <> $1"
+            " AND locktype = 'advisory' AND NOT granted)",
+            migration.get_server_pid(),
+        ), "the patch never waited for the lock"
+        # Shorter than deadlock_timeout (1s), so a wait shows as this error rather
+        # than as PostgreSQL aborting one side of the cycle.
+        await migration.execute("SET LOCAL lock_timeout = '300ms'")
+        try:
+            await migration.execute("LOCK TABLE projects IN ACCESS EXCLUSIVE MODE")
+            outcome = None
+        except asyncpg.PostgresError as exc:
+            outcome = exc
+        await migration.execute("ROLLBACK")
+        response = await asyncio.wait_for(request, 10)
+        assert response.status_code == 200, response.text
+        return outcome
+    finally:
+        await migration.close()
+        await watcher.close()
+
+
+@requires_db
+async def test_a_migration_holding_the_lock_never_waits_on_a_patch(
+    client: AsyncClient,
+) -> None:
+    # The patch asks for the lock before it locks its row, so while it waits it
+    # holds nothing a migration needs: no deadlock with a migration's DDL.
+    assert await a_migration_meets_a_stamp_patch(client) is None
+
+
+@requires_db
+async def test_the_lock_order_test_fails_when_the_patch_locks_its_row_first(
+    client: AsyncClient, monkeypatch
+) -> None:
+    # Mutation: the patch takes the lock only when it reads the primary, after its
+    # row lock. The migration then waits on the patch, which waits on it.
+    from app import routes
+
+    async def not_first(conn) -> None:
+        return None
+
+    monkeypatch.setattr(routes, "hold_off_rule_changes", not_first)
+    outcome = await a_migration_meets_a_stamp_patch(client)
+    assert isinstance(outcome, asyncpg.exceptions.LockNotAvailableError), outcome

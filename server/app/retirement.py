@@ -14,13 +14,15 @@ The sync never changes disposal silently:
   their own rules, and the job reports them;
 * any change, a pair added or a pair removed or a new primary, is made only when
   ``RETIREMENT_RULES_ACK`` equals :func:`transition_ack` of that whole change: every
-  rule the table holds before and after it, the primary before and after, and the
-  history row it follows. Otherwise the job refuses, names every project whose
-  disposal would start or stop being due, prints the value to set, and exits
-  non-zero. Because the value binds the change it was printed for and the row it
-  follows, it accepts that change once and nothing else: not a different change
-  between the same primary rule sets, not a stale manifest undoing a newer one, and
-  not the same change again later;
+  rule the table holds before and after it, the primary before and after, the
+  history row it follows (its id and time) and the database's own nonce (012).
+  Otherwise the job refuses, names every project whose disposal would start or stop
+  being due, prints the value to set, and exits non-zero. Because the value binds
+  the change it was printed for, the row it follows and the database, it accepts
+  that change once and nothing else: not a different change between the same
+  primary rule sets, not a stale manifest undoing a newer one, not the same change
+  again later, and not another database with the same history (a database restored
+  from a dump is, to it, the one the dump came from);
 * a sync that changes nothing (the same rows, the same primary) needs no
   acknowledgment, so the default build on a fresh database (whose seed is that
   build's rule set) starts without one;
@@ -314,11 +316,24 @@ class RuleState(NamedTuple):
     rules: frozenset[Rule]
 
 
-def transition_ack(follows: int | None, before: RuleState, after: RuleState) -> str:
+class Follows(NamedTuple):
+    """Where in which database's history a change starts: the database's nonce
+    (``retirement_ack_nonce``, 012), and the id and time of the latest
+    ``retirement_rule_change`` row."""
+
+    database: str
+    # None only before 010's seed, which never happens once migrated.
+    change_id: int | None
+    at: str | None
+
+
+def transition_ack(follows: Follows, before: RuleState, after: RuleState) -> str:
     """The value ``RETIREMENT_RULES_ACK`` must hold to make one change: SHA-256 of
     the canonical JSON ::
 
-        {"follows": <id of the latest retirement_rule_change row>,
+        {"database": <the database's nonce>,
+         "follows": <id of the latest retirement_rule_change row>,
+         "at": <that row's time, UTC, "YYYY-MM-DDTHH:MM:SS.ffffffZ">,
          "before": {"primary": ..., "rules": [[framework, gate, decision], ...]},
          "after":  {"primary": ..., "rules": [...]}}
 
@@ -329,17 +344,31 @@ def transition_ack(follows: int | None, before: RuleState, after: RuleState) -> 
     framework's rules) or a new primary over the same rows needs its own value. And
     because it names the history row it follows, which the change itself moves on,
     it is spent once used: a value left set never accepts a later change, even one
-    identical to it.
+    identical to it. The nonce makes it one database's: another database with the
+    same history (staging and production) refuses it. A database restored from a
+    dump has the dump's nonce and history, so it accepts a value printed against the
+    state in that dump.
     """
     return hashlib.sha256(
         canonical_json(
             {
-                "follows": follows,
+                "database": follows.database,
+                "follows": follows.change_id,
+                "at": follows.at,
                 "before": {"primary": before.primary, "rules": _as_json(before.rules)},
                 "after": {"primary": after.primary, "rules": _as_json(after.rules)},
             }
         )
     ).hexdigest()
+
+
+async def database_nonce(conn: asyncpg.Connection) -> str:
+    """This database's nonce (012), made now if the row is missing: a fresh nonce
+    only ever makes a value printed earlier stop matching. Owner only."""
+    await conn.execute(
+        "INSERT INTO retirement_ack_nonce DEFAULT VALUES ON CONFLICT DO NOTHING"
+    )
+    return str(await conn.fetchval("SELECT nonce FROM retirement_ack_nonce"))
 
 
 def _refusal(
@@ -391,17 +420,20 @@ class ActiveRules(NamedTuple):
     primary: str
     source: ChangeSource
     change_id: int
+    # Its time, UTC, as the acknowledgment states it (transition_ack).
+    at: str
 
 
 async def active_rules(conn: asyncpg.Connection) -> ActiveRules | None:
     """The latest change, or ``None`` before 010's seed (never, once migrated)."""
     row = await conn.fetchrow(
-        "SELECT rule_set_hash, framework_id, source, id FROM retirement_rule_change"
-        " ORDER BY id DESC LIMIT 1"
+        "SELECT rule_set_hash, framework_id, source, id,"
+        " to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')"
+        " FROM retirement_rule_change ORDER BY id DESC LIMIT 1"
     )
     if row is None:
         return None
-    return ActiveRules(row[0], row[1], ChangeSource(row[2]), row[3])
+    return ActiveRules(row[0], row[1], ChangeSource(row[2]), row[3], row[4])
 
 
 async def active_rule_set_hash(conn: asyncpg.Connection) -> str | None:
@@ -415,6 +447,26 @@ async def active_primary(conn: asyncpg.Connection) -> str:
     framework a record may be stamped with through the API (R-66)."""
     active = await active_rules(conn)
     return active.primary if active else UNSTAMPED_FRAMEWORK
+
+
+async def hold_off_rule_changes(conn: asyncpg.Connection) -> None:
+    """Take the migration lock SHARED for the rest of the caller's transaction.
+
+    :func:`sync_rules` takes it exclusively before it reads, so it waits for every
+    write holding it to commit or roll back, and a write that asks for it while a
+    sync (or a migration) holds it waits and then reads what that left. Writes do
+    not block one another. A write takes it before any row or table lock, so a
+    migration holding the lock never waits on a write that is waiting for it."""
+    await conn.execute("SELECT pg_advisory_xact_lock_shared($1)", MIGRATION_LOCK_ID)
+
+
+async def write_primary(conn: asyncpg.Connection) -> str:
+    """The active primary, for a write whose stamp check depends on it (R-66), read
+    under :func:`hold_off_rule_changes`. Without it, under READ COMMITTED, a write
+    that read the old primary could commit, after an acknowledged switch, a record
+    the new primary forbids, which the acknowledgment never listed."""
+    await hold_off_rule_changes(conn)
+    return await active_primary(conn)
 
 
 # --- the record's stamp (meta.framework) -----------------------------------------
@@ -516,8 +568,11 @@ async def sync_rules(
         active = await active_rules(conn)
         old_hash = active.rule_set_hash if active else None
         old_primary = active.primary if active else None
+        nonce = await database_nonce(conn)
         needed = transition_ack(
-            active.change_id if active else None,
+            Follows(nonce, active.change_id, active.at)
+            if active
+            else Follows(nonce, None, None),
             RuleState(old_primary, current),
             RuleState(manifest.primary, after),
         )

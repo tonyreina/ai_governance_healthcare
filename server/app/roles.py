@@ -71,8 +71,9 @@ GRANTS: Mapping[str, tuple[str, ...]] = {
     "retirement_rule_change": ("SELECT",),
 }
 
-# Tables the API must never touch at all: the owner's migration bookkeeping.
-NO_ACCESS = ("schema_migrations",)
+# Tables the API must never touch at all: the owner's migration bookkeeping, and the
+# database's nonce, which only the migrate job's acknowledgment reads (D-76, 012).
+NO_ACCESS = ("schema_migrations", "retirement_ack_nonce")
 
 # project_log.seq is a bigserial; inserting needs the sequence.
 SEQUENCE_GRANTS: Mapping[str, tuple[str, ...]] = {

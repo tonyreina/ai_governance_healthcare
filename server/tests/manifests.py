@@ -17,7 +17,11 @@ import os
 import re
 import subprocess
 import sys
+from datetime import UTC
 from pathlib import Path
+from typing import NamedTuple
+
+import asyncpg
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVER = ROOT / "server"
@@ -147,14 +151,41 @@ SEED_HASH = re.search(
 Rules = set[tuple[str, str, str]]
 
 
+class Follows(NamedTuple):
+    """Where a change starts: the database's nonce (012) and the id and time of the
+    latest history row."""
+
+    database: str
+    change_id: int
+    at: str
+
+
+async def follows(db_url: str, change_id: int) -> Follows:
+    """The point in this database's history a change made now follows, read
+    straight from the tables. `change_id` is the history row the test expects to
+    be the latest, checked, so a test still says which point it means."""
+    conn = await asyncpg.connect(db_url)
+    try:
+        nonce = await conn.fetchval("SELECT nonce FROM retirement_ack_nonce")
+        row = await conn.fetchrow(
+            "SELECT id, at FROM retirement_rule_change ORDER BY id DESC LIMIT 1"
+        )
+    finally:
+        await conn.close()
+    assert row["id"] == change_id, (row["id"], change_id)
+    at = row["at"].astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return Follows(str(nonce), change_id, at)
+
+
 def transition(
-    follows: int,
+    follows: Follows,
     before: tuple[str, Rules],
     after: tuple[str, Rules],
 ) -> str:
     """The acknowledgment a change of retirement rules needs (D-76): SHA-256 of the
-    canonical JSON {"follows": <the latest history row's id>, "before": {"primary",
-    "rules"}, "after": {"primary", "rules"}}, each rule list every row of
+    canonical JSON {"database": <the database's nonce>, "follows": <the latest
+    history row's id>, "at": <its time, UTC, microseconds, "Z">, "before":
+    {"primary", "rules"}, "after": {"primary", "rules"}}, each rule list every row of
     retirement_rule, sorted. ``before`` and ``after`` are (primary, rules). Written
     here independently of app.retirement, so the format is pinned by the test rather
     than echoed from the code under test."""
@@ -163,7 +194,13 @@ def transition(
         return {"primary": primary, "rules": sorted(list(r) for r in rules)}
 
     text = json.dumps(
-        {"follows": follows, "before": state(*before), "after": state(*after)},
+        {
+            "database": follows.database,
+            "follows": follows.change_id,
+            "at": follows.at,
+            "before": state(*before),
+            "after": state(*after),
+        },
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,

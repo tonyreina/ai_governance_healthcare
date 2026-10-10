@@ -106,7 +106,15 @@ and so when it comes due for disposal ([Privacy and retention](privacy.md#dispos
   one between the same primary rule sets, needs its own value. Once used it is
   spent, so one left set from an earlier deploy accepts nothing later, not even
   the same change again, and an older build deployed over a newer one is refused
-  the same way.
+  the same way. It also belongs to the database that printed it: each database
+  holds a random value made when it was migrated, which the acknowledgment
+  includes, so another database refuses it even when its history is the same (a
+  value printed on staging does nothing on production).
+- Restoring a dump re-arms a value printed against that dump's state. A dump
+  carries the database's random value and the history with it, so the restored
+  database is, to `migrate`, the database the dump was taken from at that moment,
+  and a value printed then is accepted again. Clear `RETIREMENT_RULES_ACK` before
+  you restore, and read what `migrate` prints afterward.
 - A build that changes nothing (the same rules and the same primary as the
   database) needs nothing: the published build on a new database starts without
   an acknowledgment.
@@ -127,9 +135,12 @@ sets it only when it is exactly `{"id": "<primary>"}`, the primary of the build
 the rules were loaded from, because the stamp decides when a record can be
 disposed of. A record without one is CHAI's, so while the primary is another
 framework the API refuses a new record without the stamp, and a change that would
-remove it; a record written before that primary keeps the framework it had. The
-published dashboard does not stamp the records it creates yet, so a build with a
-primary other than CHAI needs a dashboard that does (#168).
+remove it; a record written before that primary keeps the framework it had. A
+build of another framework ([Bring your own framework](frameworks/custom.md))
+stamps every record it creates with its primary; the published build stamps
+none, so its records are CHAI's. A change of primary waits for every write in
+flight, and a write that starts during it waits for it, so no record is checked
+against a primary that has just been replaced.
 
 ### Identity comes from the proxy
 

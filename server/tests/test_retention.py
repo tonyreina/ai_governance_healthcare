@@ -10,13 +10,15 @@ policy does not allow, even from the table's owner.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import re
 import subprocess
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from enum import StrEnum
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import asyncpg
 import pytest
@@ -732,7 +734,9 @@ async def acme_synced(tmp_path: Path) -> Path:
     """The stand-in primary's manifest, synced with the acknowledgment it needs."""
     path = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
     ack = manifests.transition(
-        1, ("chai", chai_rules()), ("acme", chai_rules() | manifest_rules(path))
+        await manifests.follows(DB_URL, 1),
+        ("chai", chai_rules()),
+        ("acme", chai_rules() | manifest_rules(path)),
     )
     done = migrate(path, ack)
     assert done.returncode == 0, done.stdout + done.stderr
@@ -849,7 +853,9 @@ async def test_a_stand_in_primary_retires_by_its_own_words_once_acknowledged(
     path = manifests.write(tmp_path / "m.json", {"acme": manifests.STAND_IN}, "acme")
     wanted = manifests.manifest_of(path)
     ack = manifests.transition(
-        1, ("chai", chai_rules()), ("acme", chai_rules() | manifest_rules(path))
+        await manifests.follows(DB_URL, 1),
+        ("chai", chai_rules()),
+        ("acme", chai_rules() | manifest_rules(path)),
     )
     # Without the acknowledgment, with the new rule set's own hash, or with the
     # value of the transition between the two primary rule-set hashes (what earlier
@@ -908,7 +914,9 @@ async def test_a_new_ending_decision_is_refused_until_acknowledged(
         tmp_path / "m.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
     )
     ack = manifests.transition(
-        1, ("chai", chai_rules()), ("chai", manifest_rules(path))
+        await manifests.follows(DB_URL, 1),
+        ("chai", chai_rules()),
+        ("chai", manifest_rules(path)),
     )
     await decided(client, "withdrawn", None, "C", "Withdraw")
     assert "withdrawn" not in await due()
@@ -945,7 +953,9 @@ async def test_a_leftover_acknowledgment_never_matches_another_transition(
         tmp_path / "w.json", manifests.chai_with("C", "Withdraw", "stop"), "chai"
     )
     first = manifests.transition(
-        1, ("chai", chai_rules()), ("chai", manifest_rules(withdraw))
+        await manifests.follows(DB_URL, 1),
+        ("chai", chai_rules()),
+        ("chai", manifest_rules(withdraw)),
     )
     assert migrate(withdraw, first).returncode == 0
 
@@ -968,7 +978,9 @@ async def test_a_stale_manifest_cannot_undo_a_newer_one(
     )
     newer_hash = manifests.manifest_of(newer)["ruleSetHash"]
     added = manifests.transition(
-        1, ("chai", chai_rules()), ("chai", manifest_rules(newer))
+        await manifests.follows(DB_URL, 1),
+        ("chai", chai_rules()),
+        ("chai", manifest_rules(newer)),
     )
     assert migrate(newer, added).returncode == 0
     await decided(client, "withdrawn", None, "C", "Withdraw")
@@ -989,7 +1001,9 @@ async def test_a_stale_manifest_cannot_undo_a_newer_one(
 
     # Acknowledged, the removal goes through.
     removed = manifests.transition(
-        2, ("chai", manifest_rules(newer)), ("chai", chai_rules())
+        await manifests.follows(DB_URL, 2),
+        ("chai", manifest_rules(newer)),
+        ("chai", chai_rules()),
     )
     done = migrate(manifests.DEFAULT_MANIFEST, removed)
     assert done.returncode == 0, done.stdout + done.stderr
@@ -1019,7 +1033,9 @@ async def test_a_manifest_leaves_the_rules_of_frameworks_it_does_not_list(
     assert migrate(manifests.DEFAULT_MANIFEST).returncode == 3
     done = migrate(
         manifests.DEFAULT_MANIFEST,
-        manifests.transition(2, ("acme", both), ("chai", both)),
+        manifests.transition(
+            await manifests.follows(DB_URL, 2), ("acme", both), ("chai", both)
+        ),
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert "not listed by this manifest, left as they are: acme (3 rule(s))" in (
@@ -1177,7 +1193,9 @@ async def test_a_primary_switch_over_the_same_rules_needs_an_ack(
     refused = migrate(acme)
     assert "the primary changes: chai -> acme" in refused.stderr, refused.stderr
     ack = printed_ack(refused)
-    assert ack == manifests.transition(1, ("chai", both), ("acme", both))
+    assert ack == manifests.transition(
+        await manifests.follows(DB_URL, 1), ("chai", both), ("acme", both)
+    )
     assert (await latest_change())["framework_id"] == "chai"
     done = migrate(acme, ack)
     assert done.returncode == 0, done.stdout + done.stderr
@@ -1187,3 +1205,160 @@ async def test_a_primary_switch_over_the_same_rules_needs_an_ack(
     (event,) = manifests.events(done, "retirement.rules_changed")
     assert event["active_primary"] == "chai" and event["framework"] == "acme"
     assert await rules_now() == both
+
+
+# --- the acknowledgment belongs to one database ------------------------------------
+# It named only the history row it follows, a bigserial id, so a value printed for
+# one database was accepted by any other at the same point in the same history: a
+# staging value on production, or a fresh database built the same way (shown against
+# PostgreSQL 17 in review). It now also binds a random nonce each database is created
+# with (012) and the time of the change it follows.
+
+OTHER_DB = "chai_test_other_database"
+
+
+def url_of(database: str) -> str:
+    parts = urlsplit(DB_URL)
+    return urlunsplit(parts._replace(path=f"/{database}"))
+
+
+@contextlib.asynccontextmanager
+async def another_database() -> AsyncIterator[str]:
+    """A second database, migrated by the real job with the default build: the same
+    schema and the same rules as the one under test, made separately."""
+    async with owner_connection() as conn:
+        await conn.execute(f"DROP DATABASE IF EXISTS {OTHER_DB} WITH (FORCE)")
+        await conn.execute(f"CREATE DATABASE {OTHER_DB}")
+    try:
+        done = manifests.run_migrate(
+            url_of(OTHER_DB), RETIREMENT_MANIFEST=str(manifests.DEFAULT_MANIFEST)
+        )
+        assert done.returncode == 0, done.stdout + done.stderr
+        yield url_of(OTHER_DB)
+    finally:
+        async with owner_connection() as conn:
+            await conn.execute(f"DROP DATABASE IF EXISTS {OTHER_DB} WITH (FORCE)")
+
+
+SAME_MOMENT = "2026-01-01 00:00:00+00"
+
+
+async def give_the_same_history(url: str) -> None:
+    """Make a database's rules and their history exactly 010's seed, recorded at one
+    fixed moment, so two databases differ in nothing the history holds."""
+    conn = await asyncpg.connect(url)
+    try:
+        await conn.execute(
+            "TRUNCATE retirement_rule, retirement_rule_change RESTART IDENTITY"
+        )
+        await conn.executemany(
+            "INSERT INTO retirement_rule (framework_id, gate_id, decision)"
+            " VALUES ($1, $2, $3)",
+            sorted(manifests.CHAI_RULES),
+        )
+        await conn.execute(
+            "INSERT INTO retirement_rule_change (at, changed_by, source, framework_id,"
+            " old_rules, new_rules, rule_set_hash)"
+            " VALUES ($1::text::timestamptz, 'owner', 'seed', 'chai', '[]'::jsonb,"
+            " $2::text::jsonb, $3)",
+            SAME_MOMENT,
+            json.dumps(sorted(list(r) for r in manifests.CHAI_RULES)),
+            manifests.SEED_HASH,
+        )
+    finally:
+        await conn.close()
+
+
+async def history_of(url: str) -> list[tuple]:
+    conn = await asyncpg.connect(url)
+    try:
+        rows = await conn.fetch(
+            "SELECT id, at, changed_by, source, framework_id, old_rules::text,"
+            " new_rules::text, rule_set_hash FROM retirement_rule_change ORDER BY id"
+        )
+        rules = await conn.fetch(
+            "SELECT * FROM retirement_rule ORDER BY framework_id, gate_id, decision"
+        )
+    finally:
+        await conn.close()
+    return [tuple(r) for r in rows] + [tuple(r) for r in rules]
+
+
+async def test_a_value_printed_for_one_database_is_refused_by_another(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    acme = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
+    async with another_database() as other:
+        for url in (DB_URL, other):
+            await give_the_same_history(url)
+        assert await history_of(DB_URL) == await history_of(other)
+
+        value = printed_ack(migrate(acme))
+        unchanged = await history_of(other)
+        elsewhere = manifests.run_migrate(
+            other, RETIREMENT_MANIFEST=str(acme), RETIREMENT_RULES_ACK=value
+        )
+        # Refused there, printing that database's own value, and nothing changed.
+        assert elsewhere.returncode == 3, elsewhere.stdout + elsewhere.stderr
+        assert printed_ack(elsewhere) != value
+        assert await history_of(other) == unchanged
+        # The database it was printed for accepts it.
+        done = migrate(acme, value)
+        assert done.returncode == 0, done.stdout + done.stderr
+
+
+async def test_the_database_test_fails_without_the_nonce(
+    client: AsyncClient, tmp_path: Path, monkeypatch
+) -> None:
+    # Mutation: the acknowledgment without the database's nonce. The two databases'
+    # histories are identical, so a value printed for one is accepted by the other.
+    from app import retirement
+
+    async def no_nonce(conn) -> str:
+        return ""
+
+    monkeypatch.setattr(retirement, "database_nonce", no_nonce)
+    acme = manifests.write(tmp_path / "acme.json", {"acme": manifests.STAND_IN}, "acme")
+    manifest = retirement.load_manifest(str(acme))
+    async with another_database() as other:
+        for url in (DB_URL, other):
+            await give_the_same_history(url)
+        here = await asyncpg.connect(DB_URL)
+        there = await asyncpg.connect(other)
+        try:
+            with pytest.raises(retirement.RulesRefused) as refused:
+                await retirement.sync_rules(here, manifest, "")
+            value = re.search(
+                r"RETIREMENT_RULES_ACK=([0-9a-f]{64})", str(refused.value)
+            ).group(1)  # type: ignore[union-attr]
+            synced = await retirement.sync_rules(there, manifest, value)
+        finally:
+            await here.close()
+            await there.close()
+        assert synced.outcome is retirement.SyncOutcome.CHANGED
+
+
+@pytest.mark.parametrize("part", ["database", "follows", "at", "before", "after"])
+def test_every_part_of_the_acknowledgment_changes_it(part: str) -> None:
+    from app.retirement import Follows, RuleState, transition_ack
+
+    rules = frozenset(manifests.CHAI_RULES)
+    base = {
+        "follows": Follows("d1", 1, "2026-01-01T00:00:00.000000Z"),
+        "before": RuleState("chai", rules),
+        "after": RuleState("acme", rules),
+    }
+    changed = dict(base)
+    follows = base["follows"]
+    match part:
+        case "database":
+            changed["follows"] = follows._replace(database="d2")
+        case "follows":
+            changed["follows"] = follows._replace(change_id=2)
+        case "at":
+            changed["follows"] = follows._replace(at="2026-01-01T00:00:00.000001Z")
+        case "before":
+            changed["before"] = RuleState("other", rules)
+        case "after":
+            changed["after"] = RuleState("chai", rules)
+    assert transition_ack(**base) != transition_ack(**changed)

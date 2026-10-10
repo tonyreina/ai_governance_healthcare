@@ -85,10 +85,11 @@ from .principals import resolve as resolve_principals
 from .retention import HoldAction
 from .retirement import (
     UNSTAMPED_FRAMEWORK,
-    active_primary,
+    hold_off_rule_changes,
     record_framework,
     sets_stamp,
     stamp_problem,
+    write_primary,
 )
 from .securitylog import SecurityEvent, emit
 from .signoff import attribute_signoffs
@@ -319,7 +320,7 @@ async def _check_stamp(conn: Any, document: dict[str, Any]) -> None:
     """422 unless the document's ``meta.framework`` is exactly the active primary's
     stamp. A writer who could stamp any id could keep a record from ever coming due
     for disposal (R-66, D-76)."""
-    problem = stamp_problem(document, await active_primary(conn))
+    problem = stamp_problem(document, await write_primary(conn))
     if problem:
         raise HTTPException(422, problem)
 
@@ -333,7 +334,7 @@ async def _check_new_record(conn: Any, document: dict[str, Any]) -> None:
     if sets_stamp(document):
         await _check_stamp(conn, document)
         return
-    primary = await active_primary(conn)
+    primary = await write_primary(conn)
     if primary != UNSTAMPED_FRAMEWORK:
         raise HTTPException(
             422,
@@ -345,7 +346,7 @@ async def _check_new_record(conn: Any, document: dict[str, Any]) -> None:
 
 
 async def _check_unstamped(conn: Any, document: dict[str, Any]) -> None:
-    primary = await active_primary(conn)
+    primary = await write_primary(conn)
     if record_framework(document) != primary:
         raise HTTPException(
             422,
@@ -465,6 +466,10 @@ async def patch_project(
     """
     patch = body.root
     async with db.acquire() as conn, conn.transaction():
+        # Before the row lock: the stamp check below reads the active primary, and a
+        # sync must not change it under this write (R-66). Taken first, so a
+        # migration holding the lock never waits on a patch waiting for it.
+        await hold_off_rule_changes(conn)
         row = await conn.fetchrow(
             "SELECT doc, incarnation FROM projects WHERE id = $1 FOR UPDATE",
             project_id,

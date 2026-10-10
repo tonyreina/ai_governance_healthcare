@@ -1995,7 +1995,10 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   `BUILD.primary` is one problem; otherwise a `hash` other than
   `BUILD.ruleSetHash` is another (a different primary always has a different
   hash, so its sentence replaces the vaguer one); `synced` not `true` is a
-  third. Anything but exactly the page's value counts as a difference. Each has
+  third. Anything but exactly the page's value counts as a difference: a
+  missing field, a `synced` that is not the boolean `true`, and a
+  `retirement_rules` that is not an object at all (a string, a number, a
+  boolean, a list), which is reported as other rules and blocks. Each has
   its own sentence (`rules.primary`, `rules.hash`, `rules.unsynced`), and each
   asks for the migrate job to be run with this build's `manifest.json`. A
   closed set, so `RulesProblem` is a frozen object.
@@ -2008,14 +2011,22 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   other rules than the server's could make a record due when the page says it is
   not; a new record would be retired by rules the person was not shown. A
   litigation hold and the purge path protect records and must work exactly when
-  something is wrong.
+  something is wrong. A disabled decision button names the banner with
+  `aria-describedby`. The banner says other changes still save only to a person
+  with a project open that they may edit; to a reader it says only what stops.
 - **Unsynced alone stops nothing.** When the hash and primary agree and
   `synced` is false, the server holds the page's rules (the hash is of the rules
   themselves) but no manifest confirmed them; the banner is `role="status"`
   and says so.
 - **Not dismissable.** The fix is the operator's, and a banner one person closes
   hides the problem from the next decision. It goes when the rules are fixed and
-  the page reloaded; it is drawn again on a change of language. Its sentences
+  the page reloaded. It is one element for the life of the page, inserted empty
+  with its role and filled a moment later (a live region inserted already full is
+  not reliably announced, `role="status"` above all); a change of language or of
+  the open project changes only the words that differ, in place, rather than
+  inserting a new alert. It takes `dir="auto"` with each part isolated, so it
+  reads in the direction of the words it shows (English in Hebrew until
+  reviewed) rather than each sentence aligned its own way. Its sentences
   are safety-bearing (`@meta.safety`), so they stay English until a reviewer is
   recorded (D-59).
 - **No server, no banner.** In local mode or from a file there is nothing to
@@ -2038,19 +2049,36 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   page or calls the API directly can still record a decision; the server's own
   checks (D-76: the stamp, the acknowledgment) are what bind. The comparison is
   made once, at boot: a migrate job that runs while the page is open is seen on
-  the next reload.
+  the next reload. `null` is also what a server that has the rules table sends
+  when it fails to read it (`Database.retirement_rules_cached` in
+  `server/app/db.py` returns `None` on a database error, and caches that for 30
+  seconds), so a page that boots during a transient failure shows no banner and
+  refuses nothing, though the server's rules may not be its own; it is told on
+  the next reload after the failure clears.
 - Source: #168 (design v2, the client side); D-76's "Not done here"; the
   workflow task for it.
 - Enforced by: `tests/test_rules_banner.py` (`pixi run test-rules-banner`, in
   CI's browser job): the embedded hash is the manifest's, for the published
   build and the example built into a temporary `--out`; no banner when the
   rules agree, when `retirement_rules` is absent or null, or from a file; each
-  disagreement's own sentence and role; a decision and a new record refused and
-  other edits saved under a disagreement; nothing refused when only `synced` is
-  false; the server's words shown as text; the banner drawn again on a change
-  of language; and ten mutations of the built pages (the hash compared with the
-  wrong field, the primary check skipped or compared with the legacy framework,
-  `synced` ignored, each refusal dropped, the buttons left enabled, the alert
-  role dropped, the page's primary taken from the published build, the banner
-  not redrawn) each caught. `tests/test_stack.py` checks the real stack's page
-  shows no banner. Claim C-95.
+  disagreement's own sentence, title, role and blocking style, the banner
+  visible; a hash differing in its last character, a missing hash or primary, a
+  primary the page's is a prefix of, and a `retirement_rules` that is a string,
+  a boolean, a number or a list each blocking; a missing `synced`, `"false"` and
+  `1` each unsynced; a decision and a new record refused and other edits saved
+  under a disagreement, the disabled buttons described by the banner, and "other
+  changes still save" not said to a reader; nothing refused when only `synced`
+  is false; the server's words shown as text; the banner inserted empty and
+  filled after, changed in place (the same element, one banner) on a change of
+  language, for the published build and the example, and left to right in
+  Hebrew; and twenty-eight mutations of the built pages (among them the hash
+  compared with the wrong field or by its first character, the primary check
+  skipped, compared by prefix or with the legacy framework, a missing hash or
+  primary or a malformed answer taken as agreement, `synced` ignored, compared
+  as not false or by truthiness, each refusal dropped, the buttons left enabled
+  or undescribed, the alert role, the blocking style or the title dropped, the
+  titles or the two frameworks swapped, the banner hidden, inserted full,
+  reinserted on a redraw or its words never changed, its direction unset, and
+  "other changes still save" said to a reader) each caught.
+  `tests/test_stack.py` checks the real stack's page shows no banner. Claim
+  C-95.

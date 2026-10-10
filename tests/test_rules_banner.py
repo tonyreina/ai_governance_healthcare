@@ -17,11 +17,20 @@ Drives the real built page in Chromium against a stand-in API, and checks:
     with its own sentence; a disagreement is an alert (role=alert) and stops a
     decision and a new record, while `synced: false` alone is a status and stops
     nothing;
+  - anything but exactly the page's values is a difference: a hash differing in
+    one character, a missing hash or primary, a primary the page's is a prefix
+    of, a `synced` that is not `true`, and a `retirement_rules` that is not an
+    object at all (blocking);
+  - each banner's title, visibility and blocking style; the disabled decision
+    buttons described by the banner; "other changes still save" said only to a
+    person who may edit the open project;
   - the server's words are text, never markup;
-  - the banner survives a change of language;
-  - and mutations of the built page (the hash compared with the wrong field, the
-    primary check skipped, `synced` ignored, each refusal dropped, the alert role
-    dropped) each fail some check, so the checks are shown to bite.
+  - the banner is inserted empty and filled after, so it is announced; a change
+    of language changes its words in place, in one element, for the published
+    build and the example; in Hebrew it reads left to right while its sentences
+    are English;
+  - and mutations of the built pages (MUTATIONS, EXAMPLE_MUTATIONS) each fail
+    some check, so the checks are shown to bite.
 
     pixi run test-rules-banner
 """
@@ -95,9 +104,12 @@ def build_stamp(build: dict) -> dict | None:
     return None if build["primary"] == "chai" else {"id": build["primary"]}
 
 
-def boot(browser, url: str, rules: object, stamp: dict | None = None):
+def boot(
+    browser, url: str, rules: object, stamp: dict | None = None, reader: bool = False
+):
     """Boot the page at `url` against a stand-in API whose health reports `rules`.
-    Returns the page and the list of writes (method, path) it sent."""
+    With `reader`, the signed-in person may only read the project. Returns the page
+    and the list of writes (method, path) it sent."""
     health = {
         "status": "ok",
         "version": "t",
@@ -110,7 +122,9 @@ def boot(browser, url: str, rules: object, stamp: dict | None = None):
     meta: dict = {"solution": "Rules banner project"}
     if stamp:
         meta["framework"] = stamp
-    listed = [{"id": "p1", "meta": meta}]
+    listed: list[dict] = [{"id": "p1", "meta": meta}]
+    if reader:
+        listed[0]["access"] = {"owners": ["o@b"], "writers": [], "readers": ["a@b"]}
     writes: list[tuple[str, str]] = []
     page = browser.new_page(viewport={"width": 1300, "height": 900})
     page.set_default_timeout(6000)
@@ -151,6 +165,22 @@ def boot(browser, url: str, rules: object, stamp: dict | None = None):
         lambda r: r.fulfill(status=200, body="{}", content_type="application/json"),
     )
     page.route("**/api/events", lambda r: r.abort())
+    # Whether the banner got its words after it entered the page: a live region
+    # inserted already full is not reliably announced (role=status above all).
+    page.add_init_script(
+        """(() => {
+          window.__rulesFilledLive = null;
+          new MutationObserver(records => {
+            const b = document.getElementById('rulesBanner');
+            if (!b) return;
+            for (const r of records) {
+              // Seen after the task that inserted it: empty then, filled later.
+              if ([...r.addedNodes].includes(b) && window.__rulesFilledLive === null)
+                window.__rulesFilledLive = b.textContent === '';
+            }
+          }).observe(document, {childList: true, subtree: true, characterData: true});
+        })()"""
+    )
     page.goto(url)
     page.wait_for_function(
         "() => typeof LOADED !== 'undefined' && LOADED", timeout=15000
@@ -165,11 +195,19 @@ def banner(page) -> dict | None:
         """() => {
           const b = document.getElementById('rulesBanner');
           if (!b) return null;
+          const head = b.querySelector('b');
+          const st = getComputedStyle(b);
           return {
             role: b.getAttribute('role'),
             text: b.textContent,
+            title: head ? head.textContent : null,
             lines: [...b.querySelectorAll('[data-rules]')].map(e => e.dataset.rules),
             elements: b.querySelectorAll('img,script,a').length,
+            blocking: b.classList.contains('blocking'),
+            visible: st.display !== 'none' && st.visibility !== 'hidden'
+              && b.getBoundingClientRect().height > 0,
+            count: document.querySelectorAll('#rulesBanner').length,
+            filledLive: window.__rulesFilledLive,
           };
         }"""
     )
@@ -194,6 +232,23 @@ def try_decision(page) -> tuple[bool, bool]:
     )
 
 
+def decision_described(page) -> list:
+    """The aria-describedby of each decision button of the open project, and
+    whether each names an element that exists."""
+    return page.evaluate(
+        """() => [...document.querySelectorAll('[data-gate]')].map(b => {
+          const id = b.getAttribute('aria-describedby');
+          const ids = id ? id.split(/\\s+/) : [];
+          return [id, ids.length > 0 && ids.every(i => document.getElementById(i))];
+        })"""
+    )
+
+
+TITLE = "This page and its server disagree about when records are retired."
+TITLE_UNSYNCED = "The server's retirement rules were not confirmed against this page."
+OTHERS_SAVE = "Other changes still save."
+
+
 def try_create(page, writes) -> bool:
     """Create a record; whether a POST for it reached the server."""
     before = sum(1 for m, _ in writes if m == "POST")  # enum-ok: HTTP method
@@ -208,8 +263,11 @@ def scenarios(browser, url: str, build: dict, run: Run) -> None:
     page_hash, primary = build["ruleSetHash"], build["primary"]
     other = "zz-other" if primary != "zz-other" else "zz-another"
 
-    def go(rules):
-        return boot(browser, url, rules, stamp=build_stamp(build))
+    def go(rules, reader=False):
+        return boot(browser, url, rules, stamp=build_stamp(build), reader=reader)
+
+    def last_char_differs(h: str) -> str:
+        return h[:-1] + ("0" if h[-1] != "0" else "1")
 
     page, writes = go({"hash": page_hash, "primary": primary, "synced": True})
     check(
@@ -228,6 +286,18 @@ def scenarios(browser, url: str, build: dict, run: Run) -> None:
     check("a different hash shows the banner", bool(b), str(b))
     check("as an alert", b.get("role") == "alert", str(b.get("role")))
     check(
+        "headed by the disagreement's own title",
+        b.get("title") == TITLE,
+        str(b.get("title")),
+    )
+    check("which can be seen", b.get("visible") is True, str(b))
+    check("styled as blocking", b.get("blocking") is True, str(b))
+    check(
+        "filled after it entered the page, so a screen reader announces it",
+        b.get("filledLive") is True,
+        str(b),
+    )
+    check(
         "saying the server retires by different rules",
         b.get("lines") == ["hash"]
         and "different rules than this page shows" in b.get("text", "")
@@ -241,6 +311,18 @@ def scenarios(browser, url: str, build: dict, run: Run) -> None:
     )
     disabled, recorded = try_decision(page)
     check("its decision buttons are disabled", disabled is True, str(disabled))
+    described = decision_described(page)
+    check(
+        "and each names the banner as what describes it",
+        bool(described) and all(d == ["rulesBanner", True] for d in described),
+        str(described),
+    )
+    b = banner(page) or {}
+    check(
+        "a person who can edit the project is told other changes still save",
+        OTHERS_SAVE in b.get("text", "") and b.get("count") == 1,
+        str(b),
+    )
     check("and a decision is refused even if pressed", recorded is False)
     check(
         "no decision reaches the server",
@@ -268,6 +350,13 @@ def scenarios(browser, url: str, build: dict, run: Run) -> None:
         and f'"{primary}"' in b.get("text", ""),
         str(b),
     )
+    check(
+        "the server's framework as the server's, the page's as the page's",
+        f'the framework "{other}", but this page was built for "{primary}"'
+        in b.get("text", ""),
+        b.get("text", ""),
+    )
+    check("under the disagreement's title", b.get("title") == TITLE, str(b))
     disabled, recorded = try_decision(page)
     check(
         "a decision is refused under another primary",
@@ -283,6 +372,21 @@ def scenarios(browser, url: str, build: dict, run: Run) -> None:
         "as a status, not an alert",
         b.get("role") == "status",
         str(b.get("role")),
+    )
+    check(
+        "headed by its own title, not the disagreement's",
+        b.get("title") == TITLE_UNSYNCED,
+        str(b.get("title")),
+    )
+    check(
+        "seen, and not styled as blocking",
+        b.get("visible") is True and b.get("blocking") is False,
+        str(b),
+    )
+    check(
+        "and filled after it entered the page, so it is announced",
+        b.get("filledLive") is True,
+        str(b),
     )
     check(
         "saying no build's manifest set them",
@@ -303,6 +407,84 @@ def scenarios(browser, url: str, build: dict, run: Run) -> None:
     check(
         "both problems at once: both sentences, and an alert",
         b.get("lines") == ["primary", "unsynced"] and b.get("role") == "alert",
+        str(b),
+    )
+    page.close()
+
+    # Every way the server's answer can differ from the page's, however slightly.
+    # A missing field, or one of the wrong type, is not taken as agreement.
+    for label, rules, lines in (
+        (
+            "a hash differing in its last character",
+            {"hash": last_char_differs(page_hash), "primary": primary, "synced": True},
+            ["hash"],
+        ),
+        (
+            "no hash",
+            {"primary": primary, "synced": True},
+            ["hash"],
+        ),
+        (
+            "no primary",
+            {"hash": page_hash, "synced": True},
+            ["primary"],
+        ),
+        (
+            "a primary the page's is a prefix of",
+            {"hash": page_hash, "primary": primary + "-v2", "synced": True},
+            ["primary"],
+        ),
+        (
+            "rules that are a string",
+            "not rules",
+            ["hash"],
+        ),
+        ("rules that are true", True, ["hash"]),
+        ("rules that are false", False, ["hash"]),
+        ("rules that are a number", 0, ["hash"]),
+        ("rules that are a list", [page_hash, primary], ["hash"]),
+    ):
+        page, writes = go(rules)
+        b = banner(page) or {}
+        check(
+            f"{label}: a disagreement, blocking",
+            b.get("lines") == lines
+            and b.get("role") == "alert"
+            and b.get("title") == TITLE
+            and b.get("blocking") is True
+            and page.evaluate("rulesBlockWrites()"),
+            str(b),
+        )
+        page.close()
+
+    for label, rules in (
+        ("no synced field", {"hash": page_hash, "primary": primary}),
+        (
+            'synced as the string "false"',
+            {"hash": page_hash, "primary": primary, "synced": "false"},
+        ),
+        ("synced as 1", {"hash": page_hash, "primary": primary, "synced": 1}),
+    ):
+        page, _ = go(rules)
+        b = banner(page) or {}
+        check(
+            f"{label}: unsynced, a status",
+            b.get("lines") == ["unsynced"] and b.get("role") == "status",
+            str(b),
+        )
+        page.close()
+
+    # A person who may only read the project is not told their changes save.
+    page, writes = go({"hash": "0" * 64, "primary": primary, "synced": True}, True)
+    page.evaluate("openProject('p1', 'setup')")
+    page.wait_for_timeout(200)
+    b = banner(page) or {}
+    check(
+        "a read-only person is not told other changes still save",
+        bool(b)
+        and page.evaluate("RO") is True
+        and OTHERS_SAVE not in b.get("text", "")
+        and "records no decision and creates no new record" in b.get("text", ""),
         str(b),
     )
     page.close()
@@ -353,15 +535,16 @@ def load_sweep(browser, run: Run) -> None:
 
 
 def language_sweep(browser, url: str, build: dict, run: Run) -> None:
-    """A change of language draws the banner again, in the new language. The
-    pseudo-locale is used because the banner's sentences are safety-bearing, so a
-    real language shows them in English until a reviewer is recorded (D-59)."""
+    """A change of language puts the banner's words in the new language, in place.
+    The pseudo-locale is used because the banner's sentences are safety-bearing, so
+    a real language shows them in English until a reviewer is recorded (D-59)."""
     page, _ = boot(
         browser,
         url,
         {"hash": "0" * 64, "primary": build["primary"], "synced": True},
         stamp=build_stamp(build),
     )
+    page.evaluate("window.__rulesBanner = document.getElementById('rulesBanner')")
     page.evaluate("setLocale(Locale.PSEUDO); relocalize()")
     page.wait_for_timeout(200)
     b = banner(page) or {}
@@ -370,8 +553,50 @@ def language_sweep(browser, url: str, build: dict, run: Run) -> None:
         b.get("lines") == ["hash"]
         and b.get("role") == "alert"
         and "different rules than this page shows" not in b.get("text", "")
-        and page.evaluate("document.querySelectorAll('#rulesBanner').length") == 1,
+        and b.get("count") == 1,
         str(b),
+    )
+    run.check(
+        "in the same element, not removed and inserted again (an alert announced anew)",
+        page.evaluate(
+            "window.__rulesBanner === document.getElementById('rulesBanner')"
+        ),
+    )
+    # However often it is asked for, there is one banner.
+    disagreeing = {"hash": "0" * 64, "primary": build["primary"], "synced": True}
+    page.evaluate(
+        "relocalize(); relocalize(); showRulesBanner();"
+        " checkRetirementRules({retirement_rules:"
+        f" {json.dumps(disagreeing)}}})"
+    )
+    page.wait_for_timeout(200)
+    b = banner(page) or {}
+    run.check(
+        "drawn again and checked again, there is still one banner",
+        b.get("count") == 1 and b.get("lines") == ["hash"],
+        str(b),
+    )
+    # Hebrew: the banner's sentences stay English until reviewed, and the banner
+    # reads in one direction, not each sentence aligned its own way.
+    page.evaluate("setLocale(Locale.HE); relocalize()")
+    page.wait_for_timeout(200)
+    shape = page.evaluate(
+        """() => {
+          const b = document.getElementById('rulesBanner');
+          const parts = [...b.children];
+          return {
+            page: document.documentElement.dir,
+            ltr: b.matches(':dir(ltr)'),
+            same: parts.every(e => e.matches(':dir(ltr)') === b.matches(':dir(ltr)')),
+            plaintext: parts.filter(
+              e => getComputedStyle(e).unicodeBidi === 'plaintext').length,
+          };
+        }"""
+    )
+    run.check(
+        "in Hebrew, the English banner reads left to right, every part alike",
+        shape == {"page": "rtl", "ltr": True, "same": True, "plaintext": 0},
+        str(shape),
     )
     page.close()
 
@@ -415,10 +640,104 @@ MUTATIONS: list[tuple[str, str, str]] = [
         'el.setAttribute("role", blocking ? "alert" : "status");',
         'el.setAttribute("role", "status");',
     ),
+    # Each of these lets through a server that is not the page's.
     (
-        "the banner never redrawn after a change of language",
-        "  showRulesBanner();\n  if(document.body",
-        "  if(document.body",
+        "synced compared as not false, rather than as true",
+        "rules.synced !== true",
+        "rules.synced === false",
+    ),
+    (
+        "synced taken by truthiness",
+        "rules.synced !== true",
+        "!rules.synced",
+    ),
+    (
+        "a missing hash taken as agreement",
+        "rules.hash !== build.ruleSetHash",
+        "rules.hash && rules.hash !== build.ruleSetHash",
+    ),
+    (
+        "a missing primary taken as agreement",
+        "rules.primary !== build.primary",
+        "rules.primary && rules.primary !== build.primary",
+    ),
+    (
+        "the hash compared by its first character",
+        "rules.hash !== build.ruleSetHash",
+        "String(rules.hash)[0] !== String(build.ruleSetHash)[0]",
+    ),
+    (
+        "the primary compared by prefix",
+        "rules.primary !== build.primary",
+        "!String(rules.primary).startsWith(build.primary)",
+    ),
+    (
+        "a malformed answer taken as agreement",
+        'if(typeof rules !== "object" || Array.isArray(rules))'
+        " return [RulesProblem.HASH];",
+        'if(typeof rules !== "object" || Array.isArray(rules)) return [];',
+    ),
+    # Each of these says it wrongly, or hides it.
+    (
+        "the page's and the server's frameworks swapped in the sentence",
+        "{page: BUILD.primary, server: RULES_SERVER_PRIMARY}",
+        "{page: RULES_SERVER_PRIMARY, server: BUILD.primary}",
+    ),
+    (
+        "the two titles swapped",
+        't(blocking ? "rules.title" : "rules.titleUnsynced")',
+        't(blocking ? "rules.titleUnsynced" : "rules.title")',
+    ),
+    (
+        "the title dropped",
+        't(blocking ? "rules.title" : "rules.titleUnsynced")',
+        '""',
+    ),
+    (
+        "the banner hidden",
+        'el.dir = "auto";',
+        'el.dir = "auto"; el.style.display = "none";',
+    ),
+    (
+        "the blocking style dropped",
+        '(blocking ? " blocking" : "")',
+        '""',
+    ),
+    (
+        "other changes said to save to a person who may only read",
+        "if(S && !RO) parts",
+        "if(true) parts",
+    ),
+    (
+        "what is said to save never brought up to date as a project opens",
+        "  fillRulesBanner();   // whether",
+        "  // whether",
+    ),
+    (
+        "the disabled decision buttons not described by the banner",
+        'e.setAttribute("aria-describedby", "rulesBanner"); ',
+        "",
+    ),
+    (
+        "the banner inserted already full",
+        "  setTimeout(fillRulesBanner, 50);",
+        "  fillRulesBanner();",
+    ),
+    (
+        "the banner removed and inserted again on every redraw",
+        'let el = document.getElementById("rulesBanner");',
+        'let el = document.getElementById("rulesBanner");'
+        " if(el){ el.remove(); el = null; }",
+    ),
+    (
+        "the banner's direction not set from its words",
+        'el.dir = "auto";',
+        "",
+    ),
+    (
+        "the banner's words never changed once written (a change of language)",
+        "if(part.textContent !== text) part.textContent = text;",
+        "if(!part.textContent) part.textContent = text;",
     ),
 ]
 
@@ -472,6 +791,7 @@ def main() -> int:
         )
         with serve(out) as base:
             scenarios(browser, base + "/index.html", example, run)
+            language_sweep(browser, base + "/index.html", example, run)
             # The published build's server, under the example's page.
             page, _ = boot(
                 browser,

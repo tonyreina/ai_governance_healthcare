@@ -19,7 +19,8 @@
       "rules.primary",
       "rules.hash",
       "rules.unsynced",
-      "rules.blocked"
+      "rules.blocked",
+      "rules.othersSave"
     ]
   },
   "lang.label": "Language",
@@ -398,7 +399,8 @@
   "rules.primary": "The server retires records by the rules of the framework \"{server}\", but this page was built for \"{page}\". Ask whoever runs this server to run its migrate job with this build's manifest.json.",
   "rules.hash": "The server retires records by different rules than this page shows, so a decision recorded here could make a record due for disposal when this page says it is not, or the reverse. Ask whoever runs this server to run its migrate job with this build's manifest.json.",
   "rules.unsynced": "No build's manifest.json set or confirmed the rules the server retires records by. Ask whoever runs this server to run its migrate job with this build's manifest.json.",
-  "rules.blocked": "Until they agree, this page records no decision and creates no new record. Other changes still save.",
+  "rules.blocked": "Until they agree, this page records no decision and creates no new record.",
+  "rules.othersSave": "Other changes still save.",
   "rules.refused": "Not saved: the server retires records by different rules than this page shows. See the notice at the top of the page.",
   "report.unanswered": "Unanswered",
   "report.eyebrow": "CHAI lifecycle assurance review",

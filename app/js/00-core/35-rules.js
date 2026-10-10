@@ -11,8 +11,9 @@
 
    Nothing here runs without a server: in local mode, or from a file, there is no
    other side to disagree with. A server that sends no `retirement_rules` (one
-   from before #168, or one that cannot read them) is not second-guessed: the
-   page has nothing to compare, and says nothing (D-83).
+   from before #168), or sends null (it cannot read them), is not second-guessed:
+   the page has nothing to compare, and says nothing (D-83). Any other value that
+   is not an object of fields is a malformed answer, and a disagreement.
    ============================================================ */
 /* What can be wrong, each with its own sentence. A closed set, so a frozen object. */
 const RulesProblem = Object.freeze({
@@ -39,7 +40,10 @@ let RULES_PROBLEMS = [], RULES_SERVER_PRIMARY = "";
    the hash, which would only repeat it in vaguer words. Anything but exactly the
    page's value is a disagreement: a malformed answer is not taken as agreement. */
 function rulesProblems(rules, build){
-  if(!rules || typeof rules !== "object") return [];
+  if(rules === null || rules === undefined) return [];
+  // A string, a number, a boolean or a list says nothing the page can check: the
+  // server is not shown to hold the page's rules, so the decision stops.
+  if(typeof rules !== "object" || Array.isArray(rules)) return [RulesProblem.HASH];
   const out = [];
   if(rules.primary !== build.primary) out.push(RulesProblem.PRIMARY);
   else if(rules.hash !== build.ruleSetHash) out.push(RulesProblem.HASH);

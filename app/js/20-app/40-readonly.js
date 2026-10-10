@@ -5,8 +5,10 @@ function setMode(text,cls){ const el=document.getElementById("mode"); el.textCon
 function setModeFor(mode){ const l=MODE_LABEL[mode]; if(l) setMode(t(MODE_LABEL_KEY[mode]),l.cls); }
 function setReadOnly(v){ RO=v; document.body.classList.toggle("ro",v); if(v) setMode(t("mode.viewOnly"),"ro"); if(CUR) renderMain(false); else if(document.getElementById("plistHost")) renderDashboardShell(); }
 function applyRO(root){
-  // While the server's retirement rules are not this page's, no decision (D-83).
-  if(rulesBlockWrites()) root.querySelectorAll("[data-gate]").forEach(e=>e.disabled=true);
+  // While the server's retirement rules are not this page's, no decision (D-83),
+  // and each disabled button says why: the banner describes it.
+  if(rulesBlockWrites()) root.querySelectorAll("[data-gate]").forEach(e=>{ e.disabled=true; e.setAttribute("aria-describedby", "rulesBanner"); });
+  fillRulesBanner();   // whether "other changes still save" is true here
   if(!RO) return;
   root.querySelectorAll("input:not([type=search]),textarea,select").forEach(e=>{ if(!e.closest(".fallback")) e.disabled=true; });
   root.querySelectorAll("[data-set],[data-gate],[data-delmetric]").forEach(e=>e.disabled=true);

@@ -168,6 +168,7 @@ def main() -> int:
             "rules.hash",
             "rules.unsynced",
             "rules.blocked",
+            "rules.othersSave",
         }
         check(
             "every safety string but the new neutral footers and the rules banner"

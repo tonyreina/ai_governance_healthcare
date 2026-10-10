@@ -57,9 +57,32 @@ sorts before its first use, normally in `00-core/`.
 
 ```bash
 pixi run build-app     # app/ -> docs/app/index.html
-pixi run check-app     # syntax + duplicate-declaration checks
+pixi run check-app     # syntax, undefined names, use before declaration, duplicates
 pixi run test-app      # end-to-end browser tests
 ```
+
+`check-app` checks the published page and a build of every
+`app/frameworks/*/build.json`, because a build of other frameworks leaves
+framework code out and a reference into it would otherwise show only as a blank
+page. It parses the script with tree-sitter's JavaScript grammar and resolves
+every name through its scopes, and fails on:
+
+- a name nothing declares that is not a JavaScript or browser global. Shared
+  code may reach a name only some builds have only as `typeof name`, which asks
+  whether it was built. A new browser global goes in `BROWSER_GLOBALS` in
+  `scripts/check_app.py`, and `pixi run test-check-app` must find it in each
+  browser engine;
+- a `const`, `let` or `class` read before its declaration has run: earlier in
+  the same code (top level, an IIFE, a static block), or in a function that
+  top-level code calls before the declaration;
+- a name two modules declare at top level;
+- a syntax error, from the parse and from `node --check`. Without node the
+  check says it skipped `node --check`, which `REQUIRE_TESTS=1` makes a failure.
+
+Its limits (D-80): the call graph follows only calls of a plain name (`f()`,
+`new K()`), not methods, callbacks or events, and assumes every path through a
+called function runs, so it can miss a load-order bug reached another way. A
+function body that runs only after load is, correctly, never reported.
 
 A prek hook rebuilds on any change under `app/`, so the generated file can never
 go stale.

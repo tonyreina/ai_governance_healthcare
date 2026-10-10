@@ -17,6 +17,8 @@ playwright = ">=1.63.0, <2"
 ruff = ">=0.16.10, <0.17"
 scikit-learn = ">=1.9.1, <2"
 jsonschema = ">=4.23, <5"
+tree-sitter = ">=0.25, <0.26"
+tree-sitter-javascript = ">=0.25, <0.26"
 
 [tasks]
 docs-serve = "zensical serve"
@@ -40,7 +42,11 @@ gen-te-page = "python scripts/gen_te_page.py"
 build-app = "python scripts/build_app.py"
 # A build of other frameworks: the made-up example, into build/example/ (#168).
 build-example = "python scripts/build_app.py --config app/frameworks/example/build.json --out build/example"
+# The published page and a build of every app/frameworks/*/build.json: syntax,
+# undefined names, use before declaration, duplicate declarations (#176).
 check-app = "python scripts/check_app.py"
+# check-app shown failing: synthetic scripts, and a copy of app/ broken and rebuilt.
+test-check-app = "python tests/test_check_app.py"
 test-app = "python tests/test_optica.py"
 test-boot = "python tests/test_boot_storage.py"
 test-exports = "python tests/test_exports.py"

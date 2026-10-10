@@ -1661,3 +1661,45 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   build (a custom build would list, and could open, CHAI records it cannot
   read); a definition chosen at run time (R-63: a build is a reviewed change).
 - Source: #168; design v2; R-63; R-67.
+
+### D-80 check-app resolves every name on a real parse of the built script
+
+- Status: Proposed (implements #176; the parser and the rules below are this
+  change's choice, for the owner to accept)
+- **What it checks.** `scripts/check_app.py` parses the inline script of the
+  published page, and of a build of every `app/frameworks/*/build.json` made
+  into a temporary directory, and resolves every identifier through its scopes.
+  It fails on a name nothing declares that is not an ECMAScript or browser
+  global, on a `const`, `let` or `class` read before its declaration has run
+  (directly, in an IIFE or static block, or in a function that top-level code
+  calls by name before the declaration), and on a name declared twice at top
+  level. `node --check` still runs, and its absence is a failure under
+  `REQUIRE_TESTS`.
+- **The parser is tree-sitter's JavaScript grammar**, two PyPI wheels locked
+  with hashes in `pixi.lock`, and the scope analysis is the script's own. It
+  runs offline, without node, and parses the syntax the app uses (`?.`, `??`,
+  private fields, static blocks).
+- **What this asks of future code.** Shared code may reach a name only some
+  builds have (a framework's own code, which a build of other frameworks leaves
+  out) only behind `typeof name`, which the check accepts as the question "was
+  this built?". A new browser global the app uses goes in `BROWSER_GLOBALS`, and
+  `tests/test_check_app.py` must find it in Chromium, Firefox and WebKit.
+- **Its limits, stated in the script and in `docs/developing.md`:** the call
+  graph follows only calls of a plain name (`f()`, `new K()`), not methods,
+  callbacks or events, and assumes every path through a called function runs;
+  `with`, direct `eval` and globals a script adds to `window` at run time are not
+  modeled; a `switch` jumping past a `let` in another case is not seen.
+- **Rejected:** softening the docstring to what the old code did (#176 names it
+  as a false claim, and a custom build makes the failure likely); ESLint's
+  `no-undef` and `no-use-before-define` (npm packages pixi cannot lock here, and
+  `no-use-before-define` flags a function body that only runs later); the Python
+  `esprima` port (ES2017, cannot parse `?.` or `??`); node's bundled acorn
+  (reachable only with `--expose-internals`, not a stable interface, and still
+  no scope analysis); loading the page in a browser and watching for a
+  ReferenceError (finds only what that load happens to run); patterns over the
+  text (the old check's approach, which saw only declarations at column 0).
+- Source: #176; the workflow task for it.
+- Enforced by: `pixi run check-app` (pre-commit and CI's lint job);
+  `tests/test_check_app.py` (`pixi run test-check-app`, in the browser and
+  engines jobs), which shows each rule failing, including on copies of `app/`
+  broken and rebuilt.

@@ -57,9 +57,85 @@ sorts before its first use, normally in `00-core/`.
 
 ```bash
 pixi run build-app     # app/ -> docs/app/index.html
-pixi run check-app     # syntax + duplicate-declaration checks
+pixi run check-app     # syntax, undefined names, use before declaration, duplicates
 pixi run test-app      # end-to-end browser tests
 ```
+
+`check-app` checks the published page and a build of every
+`app/frameworks/*/build.json`, because a build of other frameworks leaves
+framework code out and a reference into it would otherwise show only as a blank
+page. It parses the script with tree-sitter's JavaScript grammar and resolves
+every name through its scopes, and fails on:
+
+- a name nothing declares that is not a JavaScript or browser global. Shared
+  code may reach a name only some builds have only behind `typeof`, which asks
+  whether it was built: `typeof name` itself, or a use inside the branch a typeof
+  test of that name guards, as in
+  `if (typeof chaiCardMarkdown === "function") return chaiCardMarkdown(ctx);`
+  (the consequent of an `if` or `?:`, or the right of `&&`, tested with
+  `=== "function"` or another type, or `!== "undefined"`, either way round, with
+  `==` and `!=` counting the same, and parentheses and comments inside them
+  ignored). The other side must be a string literal
+  whose value is one `typeof` returns (`"undefined"`, `"object"`, `"boolean"`,
+  `"number"`, `"bigint"`, `"string"`, `"symbol"`, `"function"`); escapes are
+  decoded, so `"undefin\x65d"` is `"undefined"`. Nothing wider: not the else
+  branch, not code after `if (typeof x !== "function") return;`, not a `||`
+  form, not a comparison with a variable or a template literal. `delete name`
+  reads nothing and is not reported. A new browser
+  global goes in `BROWSER_GLOBALS` in
+  `scripts/check_app.py`, and `pixi run test-check-app` must find it in each
+  browser engine;
+- a `const`, `let` or `class` read before its declaration has run: earlier in
+  the same code (top level, an IIFE or `new function(){...}`, a static block, a
+  computed key `[k]` of a class or object member, the right-hand side of
+  `for (const a of ...)`, a destructuring default reading a name bound later in
+  the same pattern, a class's own name in a computed key of its members, as in
+  `class C { [C]() {} }`, which is bound only after every key is evaluated), or
+  in a function that top-level code calls before the declaration (`new K()`
+  runs K's constructor and instance field initializers, not a function a field
+  holds; calling a generator runs none of its body; a name two block functions
+  declare has both bodies followed, since which block ran last is not known);
+- a name two modules declare at top level, including a function declared in a
+  top-level block (or as the whole body of an `if` or `else`, which Annex B
+  treats as a block) that replaces another module's function or var. As in Annex
+  B, a block function whose name a top-level `let`, `const` or `class` also
+  declares (before or after it) binds nothing at top level, so is not reported,
+  and neither are two block functions of one name;
+- a syntax error, from the parse and from `node --check`. Without node the
+  check says it skipped `node --check`, which `REQUIRE_TESTS=1` makes a failure
+  (CI's lint and test workflows both set it).
+
+Where it is exact, and where it is not (D-80). `tests/check_app_cases.py` holds
+some three hundred scripts that `pixi run test-check-app` runs both through the
+check and in node, and the check must report a problem on exactly the ones node
+throws a ReferenceError on while loading them: typeof guards, undefined names in
+code that runs, reads in the temporal dead zone (destructuring, computed keys, a
+class's own name, IIFEs, static blocks and fields, generators, `delete`, `await`),
+Annex B block functions, and calls through the call graph. On those cases it is
+exact. Its known limits:
+
+- the call graph follows only calls of a plain name (`f()`, `new K()`), not
+  method calls, callbacks or events, and assumes every path through a called
+  function runs, so it can miss a load-order bug reached another way, and can
+  report a read on a branch that does not run during load, or in the body of a
+  block function another block of that name replaced first;
+- through calls, only top-level `const`, `let` and `class` are checked: a
+  function called before a `const` of its own enclosing function is declared
+  is missed;
+- a parameter default reading a later parameter, a `switch` jumping past a
+  `let` in another case, `with` and direct `eval` are not modeled;
+- a typeof guard is the exact form above, so safe code in another shape (an
+  early return, an else branch, `||`, a `switch`) is reported;
+- code after the first `await` of an async function (the boot module is an async
+  IIFE) is taken to run after load. "First" is first in the text, so an `await`
+  on a branch not taken hides a read that does run during load;
+- a name the app means to declare that is also a browser global (`open`,
+  `close`, `print`, `origin`, `history`, `Image`, ...) passes as the global if
+  its declaration goes missing;
+- a name a script adds to `window` at run time is reported if read bare, and
+  `window.x` is not checked at all.
+
+A function body that runs only after load is, correctly, never reported.
 
 A prek hook rebuilds on any change under `app/`, so the generated file can never
 go stale.

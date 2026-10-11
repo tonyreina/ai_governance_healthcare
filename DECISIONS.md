@@ -2071,16 +2071,33 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   dictionary does not list ("pharmacopoeial") are reported. <!-- spelling-ok -->
 - **The binomial skip.** No word, listed or by shape, is reported when it is a
   binomial's epithet: it is lowercase and a true Latin epithet (`epithet()`):
-  it ends in a Latin form (-a, -ae, -i, -is, -um, -us but not -ous), does not
+  it ends in a Latin form (-a, -i, -is, -um, -us but not -ous), does not
   end in an English medical form (`ENGLISH_FORM`: -ia, so every -aemia; -oea,
-  so every -rrhoea and -pnoea; -oma; -itis; -sis), and is not a listed word,
+  so every -rrhoea and -pnoea; -oma; -itis; -sis), is not one of `NOT_EPITHETS`
+  (English -um and -a nouns that look Latin:
+  caecum, haemoperitoneum, <!-- spelling-ok -->
+  haemopericardium, haematometra, <!-- spelling-ok -->
+  praecordium), and is not a listed word, <!-- spelling-ok -->
   except foetus (`LISTED_EPITHETS`, a species epithet too); <!-- spelling-ok -->
   and the word before it, past
   emphasis, quotes, brackets, HTML tags and `&nbsp;`, and on the line before if
   nothing but markup precedes it on its own (a blank line ends that), is one of
   `GENERA` (genera with British-looking epithets: Tritrichomonas,
-  Campylobacter, Enterococcus, Schistosoma, Mycoplasma and others) or a capital
-  and a period ("T.").
+  Campylobacter, Enterococcus, Schistosoma, Mycoplasma and others) or an
+  abbreviated genus: exactly one capital and a period ("T."), the capital at
+  the start of the text or directly after whitespace, "*", "_", a quote or an
+  opening bracket (so "UK." and "Fig. 2A." are none), and the word before it
+  none of `NOT_GENUS_WORDS` (Dr, Mr, Mrs, Ms, Prof, Hep, Group, Twin, Fig,
+  Figure, Bed, Lead, Vitamin, Appendix, Table, Type, Grade, Stage, Class,
+  Factor, Hepatitis, Genotype, in any case), so
+  "Twin A. foetus" is reported. <!-- spelling-ok -->
+  Word-level exceptions are listed whole in `LATIN_EPITHETS` and pass wherever
+  they stand: those with a Latin-looking ending the rules above call English
+  ("haemophilum") and the -ans, -ens and -os ones
+  ("haemolysans", <!-- spelling-ok -->
+  "oedematiens", "haemobos", "caecicola"). <!-- spelling-ok -->
+  "sulphur" is reported even as the butterfly's name, <!-- spelling-ok -->
+  since it is the British spelling of "sulfur". <!-- spelling-ok -->
   So "Tritrichomonas foetus" and <!-- spelling-ok -->
   "Enterococcus faecalis" pass, <!-- spelling-ok -->
   and "Severe foetus", "Staphylococcus bacteraemia", <!-- spelling-ok -->
@@ -2138,7 +2155,9 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   still be wrong (a lowercase listed word inside a quotation, a name written in
   lowercase), which is why it is a suggestion. An epithet after a genus not in
   `GENERA`, and a name made only of listed words, are reported and need
-  `spelling-ok`. A base64 run that is mostly long words, a URL with a scheme
+  `spelling-ok`. A word spelled with the letters a-f alone is hex and is not
+  read, so "caeca" passes. <!-- spelling-ok -->
+  A base64 run that is mostly long words, a URL with a scheme
   not listed and no "://", a domain with an unlisted top-level domain and a
   file name with an unlisted extension are read as prose; a word joined to a
   listed top-level domain by a dot ("oedema.co") is read as a domain and not
@@ -2177,9 +2196,12 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   TAB, LF, VT, FF, CR and ESC (so no NUL, other control byte or DEL). So
   `pixi run check-spelling` reads shell scripts, `.caddy` files, `.env.example`,
   the ignore files and the lock file, as the hook does. Symbolic links are not
-  read (pre-commit does not pass them; the target is read on its own), and a
-  symbolic link named on the command line is skipped and said to be, so a
-  patch never names one file twice and always applies. The one
+  read (pre-commit does not pass them; the target is read on its own). On the
+  command line a file named twice (with and without `./`, through a symbolic
+  link to a directory, or by a link and its target) is read once, and a symbolic
+  link to a file stands for its target, so a patch never names one file twice
+  and always applies; a link to no file is said to be skipped and makes the
+  exit 1. The one
   difference left: the hook reads only files git tracks, while the no-argument
   run also reads untracked files that are not in `SKIP_DIRS`.
 - **Shown to fail:** `tests/test_check_spelling.py` checks every generated word,
@@ -2217,10 +2239,13 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   removed, and each boundary character added or dropped; `--fix` writing a
   file, ignoring `skip()`, losing its header, its exit code, its list of the
   rest, the no-newline marker, git's line splitting or the file's line
-  endings, reading a named symbolic link or naming a path `git apply`
-  refuses; each alternative of each narrowed pattern, each exception, Latin
-  epithet and dictionary word, and each English form of the binomial skip
-  dropped; and the file rules), and the test demands the break is noticed.
+  endings, reading a file named twice twice, reading a named link rather
+  than its target or naming a path `git apply` refuses; each alternative of
+  each narrowed pattern, each exception, Latin epithet and dictionary word,
+  and each English form of the binomial skip dropped; each URL scheme and
+  top-level domain the checker lists, which the test also demands equal a
+  list written in it; and the file rules), and the test demands the break is
+  noticed.
   A mutant stops at the first property that notices it, the fast ones first,
   and the en_US dictionary is expanded once and handed to every mutant's
   process, so the whole run takes about half a minute (it took ten, because

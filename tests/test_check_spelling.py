@@ -27,10 +27,15 @@ What is pinned, both ways:
   capitalized word, hex, a Latin ending or epithet, an exception and a word the
   dictionary accepts are not;
 * the epithet of a binomial is not reported after a genus in GENERA or an
-  abbreviated one, past markup and across a line, and is reported after any
-  other word, with an English ending (-ous, -al, and the medical -ia, -oea,
-  -oma, -itis, -sis), or when it is a listed word other than one of
-  LISTED_EPITHETS (BINOMIALS has the verifier's eleven cases);
+  abbreviated one (exactly one capital and a period, at the start or after
+  whitespace, "*", "_", a quote or an opening bracket, and not after a word of
+  NOT_GENUS_WORDS, each of which is pinned), past markup and across a line, and
+  is reported after any other word, with an English ending (-ous, -al, and the
+  medical -ia, -oea, -oma, -itis, -sis), when it is one of NOT_EPITHETS (each
+  pinned), or when it is a listed word other than one of LISTED_EPITHETS;
+  LATIN_EPITHETS are not reported wherever they stand; "sulphur" is  # spelling-ok
+  reported
+  (BINOMIALS has the cases, the verifier's eleven among them);
 * no rule matches a lowercase word of the en_US Hunspell dictionary (pinned in
   pixi.toml), read as the checker reads words, except the two in
   CAUGHT_ON_PURPOSE, which CLAUDE.md rules out;
@@ -59,14 +64,18 @@ What is pinned, both ways:
   after it; FIX_CASES pins every boundary character both ways, every kind of
   file, every kind of code, and each of the verifier's cases; the report says,
   of each hit the patch leaves, why;
-* the patch never names a file skip() skips; a symbolic link named on the
-  command line is skipped and said to be, so the patch names its target once
-  and applies; a file outside the repository named by an absolute path or with
-  ".." is refused from the patch, said to be, and exits 1;
+* the patch never names a file skip() skips; a file named twice (with and
+  without "./", through a symbolic link to a directory, or by a link and its
+  target) gets one diff that `git apply --check` accepts; a symbolic link to a
+  file stands for its target, and a link to no file is said to be skipped and
+  exits 1; a file outside the repository named by an absolute path or with ".."
+  is refused from the patch, said to be, and exits 1;
 * American scientific words the dictionary lacks
   (spelling_corpus/american.txt: "leucocratic", "nonaesthetic", "oestrid",
   "asafoetida" and more) are not reported;
-* URLs of every listed scheme, also after "_" and not inside a longer word,
+* URLs of every scheme in SCHEMES and domains of every top-level domain in TLDS
+  (each list equals one written here, and each entry has a case of its own and
+  a mutation), also after "_" and not inside a longer word,
   email and git addresses, domains, file names, paths (with ./, ../, ~/ or /,
   or an extension), digests and encoded data from 16 characters are neither
   reported nor suggested, while an identifier with a digit is still read, and
@@ -1031,6 +1040,61 @@ NOT_PROSE = [
     "md5:colour",  # spelling-ok
     "~/colour/notes",  # spelling-ok
     "see /users/~colour/notes now",  # spelling-ok
+    "pmid:colour",  # spelling-ok
+    "see colour.edu now",  # spelling-ok
+    "proxy/colour.caddy",  # spelling-ok
+    "colour.caddy",  # spelling-ok
+]
+# Every scheme written without slashes and every top-level domain the checker
+# lists, written out by hand: the checker's lists must equal these, so dropping
+# one is noticed, and each gets a case of its own (not_prose()).
+SCHEMES = [
+    "mailto",
+    "urn",
+    "doi",
+    "data",
+    "tel",
+    "sms",
+    "news",
+    "blob",
+    "javascript",
+    "about",
+    "geo",
+    "magnet",
+    "cid",
+    "mid",
+    "pmid",
+    "arxiv",
+    "isbn",
+]
+TLDS = [
+    "com",
+    "org",
+    "net",
+    "edu",
+    "gov",
+    "mil",
+    "int",
+    "io",
+    "ai",
+    "app",
+    "dev",
+    "co",
+    "uk",
+    "us",
+    "ca",
+    "au",
+    "nz",
+    "ie",
+    "de",
+    "fr",
+    "eu",
+    "nl",
+    "info",
+    "biz",
+    "me",
+    "ly",
+    "gl",
 ]
 
 # Ordinary American lines that must stay clean: URLs and paths among them.
@@ -1257,10 +1321,18 @@ def not_prose(mod: ModuleType) -> list[str]:
     """URLs of every scheme, email addresses, domains, file names, digests and
     encoded data are neither reported nor rewritten."""
     bad = []
-    found = scan(mod, NOT_PROSE)
+    if list(mod.SCHEMES) != SCHEMES or list(mod.TLDS) != TLDS:
+        bad.append("SCHEMES or TLDS is not the list the test pins")
+    lines = [
+        *NOT_PROSE,
+        *(f"{scheme}:colour" for scheme in SCHEMES),  # spelling-ok
+        *(f"see colour.{tld} now" for tld in TLDS),  # spelling-ok
+        *(f"see colour.{tld}/path?behaviour=1" for tld in TLDS),  # spelling-ok
+    ]
+    found = scan(mod, lines)
     if found:
         bad.append(f"text that is not prose is left alone ({found})")
-    text = "\n".join(NOT_PROSE) + "\n"
+    text = "\n".join(lines) + "\n"
     if suggested(mod, text) != text:
         bad.append("the patch leaves text that is not prose")
     return bad
@@ -1820,6 +1892,7 @@ FIX_CASES: list[tuple[str, str, str | None]] = [
     ("cmap='Greys_r'", "", "CAPITALIZED"),  # spelling-ok
     ("01H8XGJWBWBAQ4Z1HXKT2GREY7", "", "CAPITALIZED"),  # spelling-ok
     ("import colour", "", "CODE"),  # spelling-ok
+    ("library (colour)", "", "CODE"),  # spelling-ok
     ("See import colour, page 3.", "", "CODE"),  # spelling-ok
     ("aes(colour=)", "", "JOINED"),  # spelling-ok
     ("ggplot(df, aes(colour = arm))", "", "JOINED"),  # spelling-ok
@@ -1926,6 +1999,85 @@ BINOMIALS = [
     ("Streptococcus haemangioendothelioma", ["haemangioendothelioma"]),  # spelling-ok
     ("Clostridium caecitis", ["caecitis"]),  # spelling-ok
     ("Clostridium haemosiderosis", ["haemosiderosis"]),  # spelling-ok
+    # An abbreviated genus is one capital and a period, after whitespace or the
+    # start, and not after a word that is no genus (NOT_GENUS_WORDS).
+    ("E. faecalis", []),  # spelling-ok
+    ("T. foetus", []),  # spelling-ok
+    ("S. haematobium eggs", []),  # spelling-ok
+    ("M. haemolytica", []),  # spelling-ok
+    ("*E.* foetus", []),  # spelling-ok
+    ("(S.) haematobium", []),  # spelling-ok
+    ("In cattle T. foetus", []),  # spelling-ok
+    ("Twin A. foetus", ["foetus"]),  # spelling-ok
+    ("Dr K. foetus", ["foetus"]),  # spelling-ok
+    ("Dr. K. foetus", ["foetus"]),  # spelling-ok
+    ("Prof. K. haemobium", ["haemobium"]),  # spelling-ok
+    ("Hep B. foetus", ["foetus"]),  # spelling-ok
+    ("Hep B. haemoperitoneum", ["haemoperitoneum"]),  # spelling-ok
+    ("Group A. foetus", ["foetus"]),  # spelling-ok
+    ("vitamin D. foetus", ["foetus"]),  # spelling-ok
+    ("Fig. 2A. foetus", ["foetus"]),  # spelling-ok
+    ("UK. foetus", ["foetus"]),  # spelling-ok
+    ("Appendix B. oedema", ["oedema"]),  # spelling-ok
+    ("xClostridium foetus", ["foetus"]),  # spelling-ok
+    ("Dr K. caecum", ["caecum"]),  # spelling-ok
+    ("Fig. B. haemobium", ["haemobium"]),  # spelling-ok
+    ("Hepatitis B. haemobium", ["haemobium"]),  # spelling-ok
+    # Written with a ligature, a listed word is still a listed word.
+    ("E. œdema", ["œdema"]),  # spelling-ok
+    # English -um and -a nouns after a genus are reported (NOT_EPITHETS); true
+    # epithets that end so are skipped.
+    ("Clostridium caecum perforation", ["caecum"]),  # spelling-ok
+    ("Streptococcus haemoperitoneum", ["haemoperitoneum"]),  # spelling-ok
+    ("Streptococcus haemopericardium", ["haemopericardium"]),  # spelling-ok
+    ("Clostridium haematometra", ["haematometra"]),  # spelling-ok
+    ("Clostridium praecordium", ["praecordium"]),  # spelling-ok
+    ("Enterococcus faecium", []),  # spelling-ok
+    ("Schistosoma haematobium", []),  # spelling-ok
+    ("Mycobacterium haemophilum", []),  # spelling-ok
+    # True epithets with an -ans, -ens or -os ending, listed in LATIN_EPITHETS,
+    # are skipped after any genus and alone.
+    ("Gemella haemolysans", []),  # spelling-ok
+    ("Neisseria haemolysans", []),  # spelling-ok
+    ("Clostridium oedematiens", []),  # spelling-ok
+    ("Eimeria caecicola", []),  # spelling-ok
+    ("Bos haemobos", []),  # spelling-ok
+    # The butterfly is a "sulphur", reported as the British spelling of  # spelling-ok
+    # sulfur in a name or not (documented in the checker's docstring).
+    ("the clouded sulphur butterfly", ["sulphur"]),  # spelling-ok
+]
+# The words that make an initial no genus, and the English nouns that are never
+# epithets, written out here so that dropping one from the checker is noticed.
+NOT_GENUS = [
+    "dr",
+    "mr",
+    "mrs",
+    "ms",
+    "prof",
+    "hep",
+    "group",
+    "twin",
+    "fig",
+    "figure",
+    "bed",
+    "lead",
+    "vitamin",
+    "appendix",
+    "table",
+    "type",
+    "grade",
+    "stage",
+    "class",
+    "factor",
+    "hepatitis",
+    "genotype",
+]
+NEVER_EPITHETS = [
+    "caecum",  # spelling-ok
+    "haemoperitoneum",  # spelling-ok
+    "haemopericardium",  # spelling-ok
+    "haematometra",  # spelling-ok
+    "praecordium",  # spelling-ok
 ]
 
 
@@ -1933,7 +2085,17 @@ def binomials(mod: ModuleType) -> list[str]:
     found = scan(mod, [line for line, _ in BINOMIALS])
     got = {n: [w for w, _ in hits] for n, hits in found.items()}
     want = {n: words for n, (_, words) in enumerate(BINOMIALS, 1) if words}
-    return [] if got == want else [f"a binomial's epithet is skipped ({got})"]
+    bad = [] if got == want else [f"a binomial's epithet is skipped ({got})"]
+    if set(mod.NOT_GENUS_WORDS) != set(NOT_GENUS) or set(mod.NOT_EPITHETS) != set(
+        NEVER_EPITHETS
+    ):
+        bad.append("NOT_GENUS_WORDS or NOT_EPITHETS is not the list the test pins")
+    lines = [f"{w.title()} A. foetus" for w in NOT_GENUS]  # spelling-ok
+    lines += [f"Clostridium {w}" for w in NEVER_EPITHETS]  # spelling-ok
+    reported = scan(mod, lines)
+    if len(reported) != len(lines):
+        bad.append(f"a listed non-genus word or non-epithet is skipped ({reported})")
+    return bad
 
 
 def fix_lines(mod: ModuleType) -> list[str]:
@@ -1952,6 +2114,9 @@ def fix_lines(mod: ModuleType) -> list[str]:
         ("a.md", f"```\n{g}\n```\n{g}\n", f"```\n{g}\n```\n{a}\n"),
         ("a.md", f"~~~\n{g}\n~~~\n{g}\n", f"~~~\n{g}\n~~~\n{a}\n"),
         ("a.md", f"````\n```\n{g}\n````\n{g}\n", f"````\n```\n{g}\n````\n{a}\n"),
+        # A fence may be indented up to three spaces.
+        ("a.md", f"  ```\n{g}\n  ```\n{g}\n", f"  ```\n{g}\n  ```\n{a}\n"),
+        ("a.md", f"   ~~~\n{g}\n   ~~~\n{g}\n", f"   ~~~\n{g}\n   ~~~\n{a}\n"),
         ("a.rst", f"Example::\n\n    {g}\n\n{g}\n", f"Example::\n\n    {g}\n\n{a}\n"),
         (
             "a.rst",
@@ -2198,35 +2363,72 @@ def patch_applies(mod: ModuleType) -> list[str]:
 
 
 def named_files(mod: ModuleType) -> list[str]:
-    """A symbolic link named on the command line is skipped, and said to be, so
-    the patch names its target once and applies; a file outside the repository
-    named by an absolute path or one that climbs ("..") is refused, said to be,
-    and makes the exit 1, because `git apply` refuses such a path."""
+    """A file named twice (./a.md and a.md, or by a path through a symbolic link
+    to a directory) is one file, and a named symbolic link to a file stands for
+    its target, which gets one diff that `git apply --check` accepts, whether or
+    not the target is named too; a link to no file is said to be skipped and
+    makes the exit 1; a file outside the repository named by an absolute path or
+    one that climbs ("..") is refused, said to be, and makes the exit 1, because
+    `git apply` refuses such a path."""
     bad = []
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "repo"
         root.mkdir()
+        (root / "sub").mkdir()
         target = root / "a.md"
         target.write_text(f"the {W} here\n", encoding="utf-8")
         link = root / "link.md"
         link.symlink_to(target)
-        code, patch, err = run_fix(mod, root, [str(target), str(link)])
-        if patch.count("diff --git") != 1 or mod.SYMLINK not in err:
-            bad.append(f"--fix skips a named symbolic link ({patch!r}, {err!r})")
+        dirlink = root / "dirlink"
+        dirlink.symlink_to(root / "sub")
+        (root / "sub" / "b.md").write_text(f"the {W} there\n", encoding="utf-8")
         copy = Path(tmp) / "copy"
         shutil.copytree(root, copy, symlinks=True)
-        applied = git_apply(patch, copy)
-        if applied.returncode != 0 or code != 1:
-            bad.append(f"the patch applies with a link named ({applied.stderr!r})")
+        cases = [
+            ("the target and a link to it", [str(target), str(link)], 1),
+            ("a link alone, its target not named", [str(link)], 1),
+            ("the link first, then its target", [str(link), str(target)], 1),
+            ("a path twice, with and without './'", [str(target), f"{root}/./a.md"], 1),
+            (
+                "a file by two paths, one through a linked directory",
+                [str(root / "sub" / "b.md"), str(dirlink / "b.md")],
+                1,
+            ),
+        ]
+        for what, argv, want in cases:
+            code, patch, err = run_fix(mod, root, argv)
+            applied = git_apply(patch, copy, "--check")
+            diffs = patch.count("diff --git")
+            if diffs != want or applied.returncode != 0 or code != 1:
+                bad.append(
+                    f"--fix, {what}: {diffs} diff(s), "
+                    f"git apply --check {applied.stderr!r}, exit {code}, {err!r}"
+                )
+            if mod.SYMLINK in err:
+                bad.append(f"--fix, {what}, calls a link to a file skipped ({err!r})")
         saved = mod.ROOT
         mod.ROOT = root
         try:
             with contextlib.redirect_stderr(io.StringIO()) as err:
-                code = mod.main([str(link)])
+                code = mod.main([str(link), str(target)])
         finally:
             mod.ROOT = saved
-        if code != 0 or mod.SYMLINK not in err.getvalue():
-            bad.append(f"the check skips a named symbolic link ({err.getvalue()!r})")
+        if code != 1 or err.getvalue().count("a.md:1:") != 1:
+            bad.append(f"the check reports a file twice ({err.getvalue()!r})")
+
+        gone = root / "gone.md"
+        gone.symlink_to(root / "nowhere.md")
+        code, patch, err = run_fix(mod, root, [str(gone)])
+        if code != 1 or patch or mod.SYMLINK not in err:
+            bad.append(f"--fix says a link to no file is skipped ({patch!r}, {err!r})")
+        mod.ROOT = root
+        try:
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                code = mod.main([str(gone)])
+        finally:
+            mod.ROOT = saved
+        if code != 1 or mod.SYMLINK not in err.getvalue():
+            bad.append(f"the check skips a link to no file ({err.getvalue()!r})")
 
         outside = Path(tmp) / "outside.md"
         outside.write_text(f"the {W} here\n", encoding="utf-8")
@@ -2299,6 +2501,7 @@ SHAPED = [
     ("leucopoiesis", "leukopoiesis"),  # spelling-ok
     ("leucoencephalopathy", "leukoencephalopathy"),  # spelling-ok
     ("leucaemogenic", "leukemogenic"),  # spelling-ok
+    ("leukaemoid", "leukemoid"),  # spelling-ok
     ("leucoplakia", "leukoplakia"),  # spelling-ok
     ("leucoderma", "leukoderma"),  # spelling-ok
     # aesthe after each prefix.
@@ -2810,8 +3013,10 @@ def command_line() -> None:
         link.symlink_to(bad)
         linked = run(str(link))
         check(
-            "a named symbolic link is skipped, and said to be",
-            linked.returncode == 0 and cs.SYMLINK in linked.stderr,
+            "a named symbolic link to a file is checked as its target",
+            linked.returncode == 1
+            and "bad.md:1:" in linked.stderr
+            and cs.SYMLINK not in linked.stderr,
             linked.stderr,
         )
         fix = run("--fix", "bad.md", "link.md")
@@ -2897,10 +3102,6 @@ OE_SOURCE = 'r"(?:^|(?<=[aioy]))(?:oedem|oesophag|oestr)"'
 AESTHE_SOURCE = 'r"(?:an|kin|syn|par|dys|hyper|hypo|hyp|cen)aesthe"'
 LEUCO_SOURCE = 'r"leuc(?:o(?:cyt|pen|dystroph|tom|trien|poie|encephal|plak|derm)|aem)"'
 ENGLISH_FORM_SOURCE = 'r"(?:ia|oea|oma|itis|sis)$"'
-LATIN_EPITHETS_SOURCE = (
-    'LATIN_EPITHETS = ("faecium", "haematobium", "haemominutum", "haemofelis", '
-    '"haemocanis")'
-)
 DICTIONARY_WORDS_SOURCE = (
     'DICTIONARY_WORDS = ("leucotomy", "leucotomies", "pharmacopoeia", "pharmacopoeias")'
 )
@@ -3090,10 +3291,6 @@ MUTATIONS: list[tuple[str, str, str]] = [
     # URLs and paths.
     ("a URL runs to the end of the line", r'[\w+.-]*://\S+"', r'[\w+.-]*://.*"'),
     ("a colon makes a URL", r'[\w+.-]*://\S+"', r'[\w+.-]*:\S+"'),
-    ("mailto: is not a scheme", "mailto|", ""),
-    ("urn: is not a scheme", "|urn|", "|"),
-    ("doi: is not a scheme", "|doi|", "|"),
-    ("data: is not a scheme", "|data|", "|"),
     (
         "email addresses are read",
         "(URL, EMAIL, DIGEST, DOMAIN)",
@@ -3268,16 +3465,66 @@ MUTATIONS += [
     ),
     (
         "a scheme without slashes needs no boundary",
-        'r"|(?<![A-Za-z0-9])(?:mailto',
-        'r"|(?:mailto',
+        'rf"|(?<![A-Za-z0-9])(?:{',
+        'rf"|(?:{',
     ),
     (
         "a scheme without slashes has a word boundary",
-        'r"|(?<![A-Za-z0-9])(?:mailto',
-        r'r"|\b(?:mailto',
+        'rf"|(?<![A-Za-z0-9])(?:{',
+        r'rf"|\b(?:{',
     ),
-    ("javascript: is not a scheme", "|javascript|", "|"),
-    ("gov is not a top-level domain", "|edu|gov|", "|edu|"),
+    *[
+        (
+            f"{w}: is not a scheme",
+            "{'|'.join(SCHEMES)}",
+            "{'|'.join(s for s in SCHEMES if s != '" + w + "')}",
+        )
+        for w in cs.SCHEMES
+    ],
+    *[
+        (
+            f"{w} is not a top-level domain",
+            "{'|'.join(TLDS)}",
+            "{'|'.join(t for t in TLDS if t != '" + w + "')}",
+        )
+        for w in cs.TLDS
+    ],
+    (".caddy is not a file extension", "|otf|env|caddy)", "|otf|env)"),
+    (
+        "library is not a code word",
+        'frozenset({"import", "require", "library"})',
+        'frozenset({"import", "require"})',
+    ),
+    (
+        "a fence may not be indented",
+        'FENCE = re.compile(r" {0,3}(`{3,}|~{3,})")',
+        'FENCE = re.compile(r"(`{3,}|~{3,})")',
+    ),
+    (
+        "a binomial reads a ligature as another letter",
+        "    key = word.translate(LIGATURES)\n    if not word.islower()",
+        "    key = word\n    if not word.islower()",
+    ),
+    (
+        "a genus name may follow a letter",
+        'r"(?:(?<![A-Za-z])([A-Z][a-z]+)|',
+        'r"(?:([A-Z][a-z]+)|',
+    ),
+    (
+        "an initial may follow a letter",
+        "(?<![^\\s*_\\\"'(\\[])([A-Z])",
+        "([A-Z])",
+    ),
+    (
+        "the words that are no genus are ignored",
+        "titled.group(1).lower() not in NOT_GENUS_WORDS",
+        "True",
+    ),
+    (
+        "a never-epithet is an epithet",
+        " or key in NOT_EPITHETS",
+        "",
+    ),
     (".lock is not a file extension", "|conf|lock|", "|conf|"),
     ("md5 is not a digest", "|sha512|md5)", "|sha512)"),
     ("encoded data needs 24 characters", "{16,}", "{24,}"),
@@ -3433,8 +3680,8 @@ MUTATIONS += [
     *[
         (
             f"{w} is no longer a Latin epithet",
-            LATIN_EPITHETS_SOURCE,
-            LATIN_EPITHETS_SOURCE.replace(f'"{w}", ', "").replace(f', "{w}"', ""),
+            f'    "{w}",\n',
+            "",
         )
         for w in cs.LATIN_EPITHETS
     ],
@@ -3450,15 +3697,19 @@ MUTATIONS += [
     # The binomial skip.
     (
         "the binomial skip is off",
-        "    return bool(genus) and (genus.group(2)",
-        "    return False and bool(genus) and (genus.group(2)",
+        "    if genus is None:\n        return False\n",
+        "    return False\n",
     ),
     (
         "any capitalized word is a genus",
-        "genus.group(1) in GENERA)",
-        "genus.group(1) is not None)",
+        "return genus.group(1) in GENERA",
+        "return genus.group(1) is not None",
     ),
-    ("an abbreviation is no genus", "genus.group(2) is not None or ", ""),
+    (
+        "an abbreviation is no genus",
+        "    if genus.group(2) is None:\n",
+        "    if True:\n",
+    ),
     (
         "an English ending is an epithet",
         'EPITHET_ENDINGS = ("a", ',
@@ -3472,7 +3723,7 @@ MUTATIONS += [
     # Only a true Latin epithet is skipped (the verifier's seventh pass).
     (
         "an English medical form is an epithet",
-        "    if ENGLISH_FORM.search(key):\n        return False\n",
+        "ENGLISH_FORM.search(key) or ",
         "",
     ),
     *[
@@ -3496,14 +3747,29 @@ MUTATIONS += [
     # A symbolic link named on the command line, and a file outside the
     # repository the patch cannot name.
     (
-        "a named symbolic link is read by --fix",
+        "a link to no file is read by --fix",
         '            if path.is_symlink():\n                print(f"  skipped',
         '            if False:\n                print(f"  skipped',
     ),
     (
-        "a named symbolic link is read by the check",
+        "a link to no file is read by the check",
         '        if path.is_symlink():\n            print(f"skipped',
         '        if False:\n            print(f"skipped',
+    ),
+    (
+        "a link to no file is passed in silence by the check",
+        '{SYMLINK}", file=sys.stderr)\n            unread += 1\n',
+        '{SYMLINK}", file=sys.stderr)\n',
+    ),
+    (
+        "a file named twice is read twice",
+        "        if real not in seen:\n",
+        "        if True:\n",
+    ),
+    (
+        "a named link stands for itself, not its target",
+        "        if path.is_symlink() and real.is_file():\n",
+        "        if False:\n",
     ),
     (
         "an absolute path outside is named in the patch",
@@ -3527,7 +3793,7 @@ MUTATIONS += [
         "        previous = line\n",
         "        previous = line if line.strip() else previous\n",
     ),
-    ("a comma is markup", r"""\[\]]*$")""", r"""\[\],]*$")"""),
+    ("a comma is markup", '\\[\\]]*$"\n)\n# The word', '\\[\\],]*$"\n)\n# The word'),
     # Nothing is written, and the patch is one git applies.
     (
         "--fix writes the file",

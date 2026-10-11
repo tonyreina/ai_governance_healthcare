@@ -947,8 +947,13 @@ honest answer and is a gap worth closing; see R-19.
   anywhere in it, whatever word stands before it, except a true Latin epithet
   after its genus (D-81): a word with a Latin ending that is neither an English
   medical form (-ia, so every -aemia, -oea, so every -rrhoea and -pnoea, -oma,
-  -itis, -sis) nor a listed word, but for the one listed epithet, so an English
-  word after a genus is still reported. Nothing rewrites a file: `pixi run
+  -itis, -sis), a listed word (but for the one listed epithet) nor one of a
+  closed list of English nouns that look Latin
+  ("caecum", "haemoperitoneum" <!-- spelling-ok -->
+  and four more), so an English word after a genus is still reported; the genus
+  is a listed name, or one capital and a period that starts the text or follows
+  whitespace and not a word such as Dr, Hep, Group or Twin; and a listed true
+  epithet passes wherever it stands. Nothing rewrites a file: `pixi run
   fix-spelling` prints a patch of suggested respellings for a person to review
   and `git apply`, and lists every other hit to fix by hand. So quoted material
   is never respelled by a tool; the check still reports a quoted British word,

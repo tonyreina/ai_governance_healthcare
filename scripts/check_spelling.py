@@ -60,18 +60,35 @@ A word found by its shape is not reported when:
 
 And no word, listed or found by its shape, is reported when it is the epithet
 of a binomial (see binomial()): it is a Latin epithet (epithet()): it ends in
-a Latin form (-a, -ae, -i, -is, -um, -us but not -ous), does not end in an
+a Latin form (-a, -i, -is, -um, -us but not -ous), does not end in an
 English medical form (-ia, so every -aemia; -oea, so every -rrhoea and -pnoea;
 -oma; -itis; -sis), and is not a listed word, except "foetus"
-(LISTED_EPITHETS); and the word before it, past markup such as "*", "_" and
-HTML tags, and on the line before if it is first on its line, is one of GENERA
-or an abbreviated genus such as "E.". So "Tritrichomonas foetus", "T. foetus"
-and "Enterococcus faecalis" pass, and "Severe foetus", "Staphylococcus
-bacteraemia", "Neisseria gonorrhoea", "Mycoplasma oesophagitis" and "B. oedema"
-are reported.
+(LISTED_EPITHETS), and is not one of NOT_EPITHETS (English -um and -a nouns
+that look Latin: "caecum", "haemoperitoneum", "haemopericardium",
+"haematometra", "praecordium"); and the word before it, past markup such as "*",
+"_" and HTML tags, and on the line before if it is first on its line, is one of
+GENERA or an abbreviated genus. An abbreviated genus is exactly one capital
+letter and a period, the capital standing at the start of the text or directly
+after whitespace, "*", "_", a quote or an opening bracket (so "UK." and
+"Fig. 2A." are none), and the word before the capital is none of
+NOT_GENUS_WORDS (Dr, Mr, Mrs, Ms, Prof, Hep, Group, Twin, Fig, Figure, Bed,
+Lead, Vitamin, Appendix, Table, Type, Grade, Stage, Class, Factor, Hepatitis,
+Genotype, in any case; "Twin A. foetus" is reported). So "Tritrichomonas
+foetus", "T. foetus", "S. haematobium" and "Enterococcus faecalis" pass, and
+"Severe foetus", "Staphylococcus bacteraemia", "Neisseria gonorrhoea",
+"Mycoplasma oesophagitis", "Clostridium caecum", "Hep B. foetus", "Dr K. foetus"
+and "B. oedema" are reported. A British word after a genus is reported, then,
+except a true epithet: LATIN_EPITHETS (listed whole, wherever they stand,
+including "haemolysans", "oedematiens", "haemobos", "haemophilum" and
+"caecicola"), a word with a Latin ending, or "foetus" after a genus. The genus
+list is closed: an epithet after a name not in GENERA is reported, and needs a
+marker.
 
-A British word that neither the list nor a shape covers passes
-(tests/fixtures/spelling_corpus/unlisted.txt keeps a few), and so does a
+Known limits: a British word that neither the list nor a shape covers passes
+(tests/fixtures/spelling_corpus/unlisted.txt keeps a few); a word spelled with
+the letters a-f alone is hex and is not read, so "caeca" passes; "sulphur" is
+reported wherever it stands, the butterfly's name included, because it is the
+British spelling of "sulfur" and a marker is the way to keep it; and a
 commit message, which the check does not read. A word with an accented letter
 is not English and is not read ("décentre").
 
@@ -139,8 +156,10 @@ is_text()), so a whole-repository run and the hook read the same kinds of file:
 a shell script, a .caddy file, .env.example and .gitignore as well as code and
 documentation. Symbolic links are not read (pre-commit does not pass them; the
 target is read on its own), nor anything under SKIP_DIRS. A symbolic link named
-on the command line is not read either, and is said to be skipped on stderr, so
-a patch never names one file twice.
+on the command line stands for its target: a file named twice (./a.md and
+a.md, or through a symbolic link to a directory, or a link and its target) is
+read once, so a patch never names one file twice, and a link to no file is said
+to be skipped on stderr and makes the exit 1.
 
 tests/test_check_spelling.py pins all of this, against a corpus a verifier
 built (tests/fixtures/spelling_corpus/).
@@ -151,6 +170,7 @@ Run via: pixi run check-spelling  (suggestions: pixi run fix-spelling)
 from __future__ import annotations
 
 import difflib
+import os
 import re
 import sys
 from enum import StrEnum
@@ -1085,6 +1105,8 @@ SHAPES = (
     # Only the British medical stems: "leucocratic", "leucoplast", "leucon"
     # and the rest of American geology and botany keep "leuco".
     r"leuc(?:o(?:cyt|pen|dystroph|tom|trien|poie|encephal|plak|derm)|aem)",
+    # The British leukaemia words ("leukaemoid", "leukaemogenic").
+    r"leukaem",
     r"aetio",
     r"palaeo",
     r"praecord",
@@ -1114,6 +1136,14 @@ SHAPE_EXCEPTIONS = (
     "haemogregarin",
     "haemonch",
     "asafoetid",
+    # Families of insects and parasites, and two parasite diseases.
+    "caeciliid",
+    "caecid",
+    "haemulid",
+    "haemadipsid",
+    "haemoproteid",
+    "oestrosis",
+    "oestriasis",
 )
 # Whole words the en_US dictionary accepts as American spellings: not reported,
 # though their derivatives the dictionary does not list ("pharmacopoeial") are.
@@ -1125,7 +1155,19 @@ NOT_LATIN = ("ous",)
 # Latin epithets whose ending looks English, so LATIN_ENDINGS does not cover
 # them. Each is not reported wherever it stands; after its genus, binomial()
 # would skip it anyway.
-LATIN_EPITHETS = ("faecium", "haematobium", "haemominutum", "haemofelis", "haemocanis")
+LATIN_EPITHETS = (
+    "faecium",
+    "haematobium",
+    "haemominutum",
+    "haemofelis",
+    "haemocanis",
+    "haemophilum",
+    # Endings -ans, -ens and -os that no Latin-ending rule covers.
+    "haemolysans",
+    "oedematiens",
+    "haemobos",
+    "caecicola",
+)
 # A word of the letters a-f alone is hex ("#faecab"), not a word.
 HEX = re.compile("[a-f]+")
 # The suggestion: each British segment, respelled wherever it is in the word,
@@ -1142,6 +1184,7 @@ SHAPE_RESPELL = (
     ("aesthe", "esthe"),
     ("gynae", "gyne"),
     ("leucaem", "leukem"),
+    ("leukaem", "leukem"),
     ("leuco", "leuko"),
     ("aetio", "etio"),
     ("palaeo", "paleo"),
@@ -1191,11 +1234,9 @@ def by_shape(word: str) -> str | None:
 GENERA = frozenset(
     {
         "Arcanobacterium",
-        "Bibersteinia",
         "Campylobacter",
         "Clostridium",
         "Enterococcus",
-        "Gemella",
         "Haemophilus",
         "Mannheimia",
         "Mycoplasma",
@@ -1207,14 +1248,25 @@ GENERA = frozenset(
         "Tritrichomonas",
     }
 )
-# "-is" covers "-ensis", and "-i" covers "-ii".
-EPITHET_ENDINGS = ("a", "ae", "i", "is", "um", "us")
+# "-is" covers "-ensis", and "-i" covers "-ii" and "-ae": no listed word ends in
+# "-ae", and a shape ending so is Latin already (LATIN_ENDINGS).
+EPITHET_ENDINGS = ("a", "i", "is", "um", "us")
 # English medical endings among those Latin ones: -ia (every -aemia word, and
 # -paedia), -oea (every -rrhoea and -pnoea word), -oma, -itis, and -sis (-osis,
 # -ysis, -esis). A word ending so is English, not an epithet. An -ensis epithet
 # is never a hit at all: no listed word ends so, and LATIN_ENDINGS keeps it from
 # being a shape.
 ENGLISH_FORM = re.compile(r"(?:ia|oea|oma|itis|sis)$")
+# English nouns that end in a Latin-looking -um or -a, never epithets, so they
+# are reported after any genus ("Clostridium caecum perforation"). A true
+# epithet that ends so ("faecium", "haematobium", "haemophilum") is skipped.
+NOT_EPITHETS = (
+    "caecum",
+    "haemoperitoneum",
+    "haemopericardium",
+    "haematometra",
+    "praecordium",
+)
 # A listed word is English, so never an epithet, except these, which are also
 # species epithets ("Tritrichomonas foetus", "Campylobacter fetus" written the
 # British way).
@@ -1222,8 +1274,45 @@ LISTED_EPITHETS = ("foetus",)
 # Markup between a genus and its epithet: an HTML tag or a non-breaking space.
 MARKUP = re.compile(r"<[^>]*>|&nbsp;")
 # The genus at the end of the text before an epithet, past emphasis, quotes and
-# brackets: a name (group 1) or an abbreviation (group 2).
-GENUS = re.compile(r"(?<![A-Za-z])(?:([A-Z][a-z]+)|([A-Z])\.)[\s*_\"'()\[\]]*$")
+# brackets: a name (group 1) or an abbreviation (group 2). An abbreviation is
+# one capital letter and a period, and the letter stands at the start of the
+# text or directly after whitespace, "*", "_", a quote or an opening bracket:
+# "UK." and "Fig. 2A." are none.
+GENUS = re.compile(
+    r"(?:(?<![A-Za-z])([A-Z][a-z]+)|(?<![^\s*_\"'(\[])([A-Z])\.)[\s*_\"'()\[\]]*$"
+)
+# The word before an abbreviated genus, past its period and markup.
+BEFORE_INITIAL = re.compile(r"([A-Za-z]+)\.?[\s*_\"'()\[\]]*$")
+# Words that stand before a capital letter and a period that is no genus: a
+# title, or a thing with a letter for a name ("Twin A. foetus", "Hep B.",
+# "Appendix B.", "Group A."). Compared in lowercase. The closed list is the
+# rule: any other word before the initial leaves it a genus.
+NOT_GENUS_WORDS = frozenset(
+    {
+        "dr",
+        "mr",
+        "mrs",
+        "ms",
+        "prof",
+        "hep",
+        "group",
+        "twin",
+        "fig",
+        "figure",
+        "bed",
+        "lead",
+        "vitamin",
+        "appendix",
+        "table",
+        "type",
+        "grade",
+        "stage",
+        "class",
+        "factor",
+        "hepatitis",
+        "genotype",
+    }
+)
 
 
 def epithet(key: str) -> bool:
@@ -1232,7 +1321,7 @@ def epithet(key: str) -> bool:
     (ENGLISH_FORM), and it is not a listed word, but for LISTED_EPITHETS."""
     if not key.endswith(EPITHET_ENDINGS) or key.endswith(NOT_LATIN):
         return False
-    if ENGLISH_FORM.search(key):
+    if ENGLISH_FORM.search(key) or key in NOT_EPITHETS:
         return False
     return key not in BRITISH or key in LISTED_EPITHETS
 
@@ -1249,7 +1338,12 @@ def binomial(word: str, before: str, previous: str) -> bool:
     if not re.search(r"[A-Za-z0-9]", text):
         text = MARKUP.sub(" ", previous) + " " + text
     genus = GENUS.search(text)
-    return bool(genus) and (genus.group(2) is not None or genus.group(1) in GENERA)
+    if genus is None:
+        return False
+    if genus.group(2) is None:
+        return genus.group(1) in GENERA
+    titled = BEFORE_INITIAL.search(text[: genus.start()])
+    return titled is None or titled.group(1).lower() not in NOT_GENUS_WORDS
 
 
 MARKER = "spelling-ok"
@@ -1274,19 +1368,64 @@ WHOLE = re.compile(r"[A-Za-zŒÆœæ]+")
 # scheme starts after a character that is not a letter or digit, so a URL in
 # Markdown italics ("_ws://host/x_") is one, and "metadata:" is not "data:". A
 # colon alone is not one ("note:colour" is prose).
+SCHEMES = (
+    "mailto",
+    "urn",
+    "doi",
+    "data",
+    "tel",
+    "sms",
+    "news",
+    "blob",
+    "javascript",
+    "about",
+    "geo",
+    "magnet",
+    "cid",
+    "mid",
+    "pmid",
+    "arxiv",
+    "isbn",
+)
 URL = re.compile(
     r"(?<![A-Za-z0-9])[A-Za-z][\w+.-]*://\S+"
-    r"|(?<![A-Za-z0-9])(?:mailto|urn|doi|data|tel|sms|news|blob|javascript|about"
-    r"|geo|magnet|cid|mid|pmid|arxiv|isbn):\S+",
+    rf"|(?<![A-Za-z0-9])(?:{'|'.join(SCHEMES)}):\S+",
     re.IGNORECASE,
 )
 # An email address, and the user@host:path form of git.
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+(?::\S*)?")
 # A domain, by its top-level domain, with any path after it.
+TLDS = (
+    "com",
+    "org",
+    "net",
+    "edu",
+    "gov",
+    "mil",
+    "int",
+    "io",
+    "ai",
+    "app",
+    "dev",
+    "co",
+    "uk",
+    "us",
+    "ca",
+    "au",
+    "nz",
+    "ie",
+    "de",
+    "fr",
+    "eu",
+    "nl",
+    "info",
+    "biz",
+    "me",
+    "ly",
+    "gl",
+)
 DOMAIN = re.compile(
-    r"\b(?:[A-Za-z0-9-]+\.)+"
-    r"(?:com|org|net|edu|gov|mil|int|io|ai|app|dev|co|uk|us|ca|au|nz|ie|de|fr"
-    r"|eu|nl|info|biz|me|ly|gl)\b(?:[/:?#][^\s)\]>\"'`]*)?",
+    rf"\b(?:[A-Za-z0-9-]+\.)+(?:{'|'.join(TLDS)})\b(?:[/:?#][^\s)\]>\"'`]*)?",
 )
 # A file name with a known extension ("colour.md", "behaviour.json").
 FILE_NAME = re.compile(
@@ -1718,9 +1857,29 @@ def is_text(path: Path) -> bool:
     return not head.translate(None, TEXT_BYTES)
 
 
+def named(argv: list[str]) -> list[Path]:
+    """The files named on the command line, each once: two names for one file
+    (./a.md and a.md, or a path through a symbolic link to a directory) are one
+    file, and a named symbolic link to a file stands for its target (written
+    relative to where the command ran if the link was). The first name given
+    is kept, so a message names the file as it was written. A link
+    to no file is kept as it is, for the caller to say so."""
+    seen = set()
+    out = []
+    for arg in argv:
+        path = Path(arg)
+        real = Path(os.path.realpath(path))
+        if path.is_symlink() and real.is_file():
+            path = real if path.is_absolute() else Path(os.path.relpath(real))
+        if real not in seen:
+            seen.add(real)
+            out.append(path)
+    return out
+
+
 def targets(argv: list[str]) -> list[Path]:
     if argv:
-        return [Path(a) for a in argv]
+        return named(argv)
     return [
         p
         for p in ROOT.rglob("*")
@@ -1793,8 +1952,9 @@ def patch_name(path: Path) -> str | None:
         return path.as_posix()
 
 
-# Said of a file named on the command line that is not read.
-SYMLINK = "a symbolic link, so not read (its target is read on its own)"
+# Said of a symbolic link named on the command line that points to no file; one
+# that points to a file is read as its target (see named()).
+SYMLINK = "a symbolic link to no file, so not read"
 # Said by --fix of a file it cannot name in a patch.
 OUTSIDE = (
     "outside the repository and named by an absolute path or one with '..', "
@@ -1828,6 +1988,7 @@ def main(argv: list[str]) -> int:
         for path in targets(argv):
             if path.is_symlink():
                 print(f"  skipped {path}: {SYMLINK}", file=sys.stderr)
+                unread += 1
             elif path.is_file() and not skip(path):
                 name = patch_name(path)
                 try:
@@ -1857,15 +2018,19 @@ def main(argv: list[str]) -> int:
         return 1 if unread or patches or hand else 0
 
     problems = []
+    unread = 0
     for path in targets(argv):
         if path.is_symlink():
             print(f"skipped {path}: {SYMLINK}", file=sys.stderr)
+            unread += 1
         elif path.is_file() and not skip(path):
             problems.extend(check(path, allow))
 
     for msg in problems:
         print(msg, file=sys.stderr)
 
+    if unread and not problems:
+        return 1
     if problems:
         print(
             f"\n{len(problems)} problem(s) found. This project uses American "

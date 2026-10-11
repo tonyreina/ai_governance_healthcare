@@ -395,10 +395,21 @@ In short:
   haem, oedem or -aemia. <!-- spelling-ok -->
   It reports every hit whatever word stands before it, except a true Latin
   epithet after its genus: a word with a Latin ending that is not an English
-  medical form (-ia, -oea, -oma, -itis, -sis) and not a listed word, but for
-  the one listed epithet, so a British medical word after a genus is still
-  reported. Words with an accented letter, URLs, email addresses, domains,
-  file names, paths and encoded data are skipped.
+  medical form (-ia, -oea, -oma, -itis, -sis), not a listed word but for the
+  one listed epithet, and not one of a closed list of English nouns that look
+  Latin ("caecum", "haemoperitoneum" <!-- spelling-ok -->
+  and four more), so a British medical word after a genus is still reported.
+  The genus is a name on a closed list, or one capital and a period that
+  starts the text or follows whitespace, and that does
+  not follow Dr, Hep, Group, Twin, Fig, Appendix or one of the other words the
+  checker lists, so "T. foetus" passes <!-- spelling-ok -->
+  and "Twin A. foetus" does not. <!-- spelling-ok -->
+  A listed true epithet ("haemophilum",
+  "haemolysans") passes wherever it stands, and
+  "sulphur" is always reported, <!-- spelling-ok -->
+  the butterfly's name too.
+  Words with an accented letter, URLs, email addresses, domains, file names,
+  paths and encoded data are skipped.
   **Nothing rewrites your files.** `pixi run fix-spelling` prints a patch of
   suggested respellings on stdout, under a header saying it is a suggestion,
   and lists on stderr every other hit for you to fix by hand, with the reason
@@ -412,7 +423,9 @@ In short:
   the line, or with a `glob: phrase` entry in `.spelling-allow`, which exempts
   that exact phrase only in the files the glob matches, and not the rest of its
   line. Run with no arguments, it reads every text file, as the pre-commit hook
-  does. A symbolic link named on the command line is skipped, and said to be.
+  does. A file named twice on the command line is read once, a symbolic link
+  to a file stands for its target, and a link to no file is said to be skipped
+  and makes the exit 1.
   `fix-spelling` cannot name a file outside the repository given by an
   absolute path or with "..", because `git apply` refuses such a path: it says
   so and leaves that file's suggestions out of the patch.

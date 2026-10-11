@@ -12,9 +12,11 @@ months (#174), because nothing connected them. This script connects them:
   page's prose states about the current mapping (the headline relations, the
   CHAI criteria cited and never cited, the per-stage and per-chapter tables and
   sentences, the corrections applied and rejected, the producer split, the relay
-  of completion stages) and recomputes each from the definition. A sentence
-  that no longer says what the checker reads is a failure too, so rewording a
-  claim means updating its check.
+  of completion stages) and recomputes each from the definition. A numeric
+  claim reworded so its pattern no longer matches is a failure too, but a few
+  sentences are found by a looser search and can be reworded unnoticed; the check
+  is a tripwire for the page's counts and lists, not proof that every sentence is
+  true.
 
 Items the page marks as reviewed but "not yet recorded" in the definition (its
 section 7 says which, citing an open question in REQUIREMENTS.md, R-69) are read

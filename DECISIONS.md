@@ -2264,10 +2264,18 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   applied and rejected, the producer split and who the adopting organization's
   items are assigned to, the relay of completion stages and the stages it puts
   s3-7, s6-3 and 12.1 at, the most-cited criterion, the items that keep or lose
-  a mapping, and the whole-checklist totals named in passing. A reworded
-  sentence the checker can no longer read is a failure, so a claim cannot
-  silently fall out of the check. It also checks the OPTICA checklist's "There
-  are no *equivalent* rows" (`app/frameworks/optica/docs.toml`).
+  a mapping, and the whole-checklist totals named in passing. Most of these are
+  read by pattern, and a numeric claim reworded so its pattern no longer
+  matches is a failure. Some sentences are found by a looser search, and
+  rewording one of those (naming a different item, or changing a number the
+  pattern does not capture) is not noticed: the check is a tripwire for the
+  counts and lists on the page, not proof that every sentence is true. It
+  also checks the OPTICA checklist's "There are no *equivalent* rows"
+  (`app/frameworks/optica/docs.toml`), which stops being checked if that
+  sentence is reworded. The page's item-by-item attributions in prose (which
+  item supplies which criterion in the section 3 and section 6 lists) are not
+  checked; some of them disagree with the definition and are tracked in the
+  follow-up issue.
 - **What the check cannot derive, and so does not claim.** The reviewer's
   grading of each CHAI criterion as reached, touched or absent is not in the
   definition. The check holds it to itself and to what is cited: the stage
@@ -2317,7 +2325,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   it: not the dashboard, the generated checklist or the crosswalk page. It is
   empty for 1.1, 9.3 and 12.1 and was written for the earlier relation of 3.2,
   6.3, 7.5 and 8.1. It was left as it is rather than rewritten, because the
-  page does not supply the text and none is invented here. Anything that starts
+  page does not supply the text and none is invented here (the only edit is
+  the spelling "rigour" to "rigor" in 12.2's, under R-17). Anything that starts
   to show it must first bring it up to date.
 - **Rejected:** generating the whole page from the definition (its argument is
   prose, written by a reviewer, not data); hand-maintaining a second per-item

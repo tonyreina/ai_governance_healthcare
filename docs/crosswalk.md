@@ -496,14 +496,16 @@ OPTICA's framework definition records them. This is the data the dashboard's
 are drawn from. Where an item cites more than one criterion, the first listed
 is the one its chip shows. The table is written from the definition by
 `scripts/gen_crosswalk.py`, and `pixi run check-crosswalk` fails if the table
-disagrees with the definition, or if a count, list or correction this page
-states about the current mapping does (#174). That covers the relations, the
-criteria cited and who answers each item, and how they add up by CHAI stage, by
-chapter and by completion stage. It does not cover what cannot be derived from
-the definition: the previous pass's figures (checked by `tests/test_crosswalk.py`
-against a record of that pass), the coverage grades, the history of the audit,
-and the reviewer's grading of each criterion as reached, touched or absent,
-which is checked only for agreeing with itself and with what is cited.
+disagrees with the definition, or if most counts, lists and corrections this
+page states about the current mapping do (#174). A few sentences are found by a
+looser search and may be reworded without the check noticing. That covers
+the relations, the criteria cited and who answers each item, and how they add
+up by CHAI stage, by chapter and by completion stage. It does not cover what
+cannot be derived from the definition: the previous pass's figures (checked by
+`tests/test_crosswalk.py` against a record of that pass), the coverage grades,
+the history of the audit, and the reviewer's grading of each criterion as
+reached, touched or absent, which is checked only for agreeing with itself
+and with what is cited.
 
 Two items are not yet recorded there: 5.3 and 7.4 are partial on this page, but
 this page does not name the CHAI criteria they reach, so the definition still

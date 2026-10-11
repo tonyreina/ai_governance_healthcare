@@ -1044,8 +1044,10 @@ honest answer and is a gap worth closing; see R-19.
 - Status: Open
 - docs/crosswalk.md moves OPTICA 5.3 and 7.4 from OPTICA-only to partial, but
   names no CHAI criterion for either. The page narrows them: 5.3 cites exactly
-  one of s2-1, s2-2, s3-2, s3-4, s4-6 or s6-3; 7.4 cites from s3-1, s3-2 and
-  s4-3. The owner has decided (2026-10-10) to leave both unresolved for now.
+  one of s2-1, s2-2, s3-2, s3-4, s4-6 or s6-3 (s6-3 would also add CHAI stage
+  s6 to chapter 5's stage set, which the page lists as s2; s1 s3 s4); 7.4 cites
+  from s3-1, s3-2 and s4-3. The owner has decided (2026-10-10) to leave both
+  unresolved for now.
 - Until answered: OPTICA's definition keeps 5.3 and 7.4 OPTICA-only with no
   criteria, so the dashboard shows them as not covered by CHAI, and the page
   says so in its section 7, citing this entry. Do not record a criterion for

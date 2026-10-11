@@ -160,9 +160,20 @@ def main() -> int:
         # The engine's neutral report footers (#168, R-65) are new safety text no one
         # has reviewed yet: they stay English in Chinese until a review is recorded.
         neutral = {"engine.report.disclaimer", "engine.md.footer"}
+        # So is the retirement-rules banner (D-83): English until a review.
+        rules = {
+            "rules.title",
+            "rules.titleUnsynced",
+            "rules.primary",
+            "rules.hash",
+            "rules.unsynced",
+            "rules.blocked",
+            "rules.othersSave",
+        }
         check(
-            "every safety string but the new neutral footers has a Chinese reviewer",
-            sorted(reviewers) == sorted(set(safety) - neutral)
+            "every safety string but the new neutral footers and the rules banner"
+            " has a Chinese reviewer",
+            sorted(reviewers) == sorted(set(safety) - neutral - rules)
             and all("Cody Chen" in reviewers[k] for k in reviewers),
             str(sorted(set(safety) ^ set(reviewers))),
         )
@@ -172,6 +183,11 @@ def main() -> int:
             and zh.evaluate("t('engine.md.footer', {name: 'X'})").startswith(
                 "Structured"
             ),
+        )
+        check(
+            "and the rules banner is safety-bearing, so it shows in English in Chinese",
+            rules <= set(safety)
+            and zh.evaluate("t('rules.hash')").startswith("The server retires"),
         )
         warning = zh.inner_text("#storageWarning")
         check(

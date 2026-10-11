@@ -130,6 +130,12 @@ sentences) are translated in every language already.
     definition, and no change moves a record to another framework's rules. A
     record with no stamp is CHAI's and retires by CHAI's rules.
 
+    Your page carries its manifest's `ruleSetHash`. Served by an API whose
+    rules are another build's (the published build's, or an older version of
+    yours), it shows a banner saying so and records no decision and creates no
+    new record until the migrate job has loaded your manifest
+    ([Self-hosting](../self-hosting.md#which-build-it-serves-and-the-retirement-rules)).
+
 `pixi run test-custom-build` builds the example and checks all of this in a
 real browser: every screen, the report and every export, with no word of CHAI or
 OPTICA in any of them.

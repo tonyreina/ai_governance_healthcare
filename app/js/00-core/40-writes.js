@@ -239,6 +239,8 @@ const pendingLogCount = () => logQueue.length;
 
 async function createProject(data,logText){
   if(RO) return null;
+  // A new record would follow rules this page does not show (D-83).
+  if(rulesBlockWrites()){ toast(t("rules.refused")); return null; }
   const id=newId();
   try{
     await STORE.create(id,data);

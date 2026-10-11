@@ -15,6 +15,7 @@ renderDashboardShell();
     setModeFor(MODE);
     showScopeNotice();
     startSession(api.health);   // sign-out link and idle lock, as the server configured
+    checkRetirementRules(api.health);   // does it retire records by this page's rules? (D-83)
     // Identity is established by the proxy, so the browser cannot choose it.
     try{
       const me = await fetch("/api/me",{credentials:"same-origin"}).then(r=>r.json());

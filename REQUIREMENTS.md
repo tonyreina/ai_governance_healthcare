@@ -1247,8 +1247,12 @@ honest answer and is a gap worth closing; see R-19.
   the primary even when the config does not list it first),
   `tests/test_compose_isolation.py` (the page and the manifest come from one build
   directory) and `tests/test_stack.py` (the running stack's rules are the served
-  default build's, confirmed by a sync; it cannot show a different rule set,
-  which the server tests do). Security claims C-88 to C-90.
+  default build's, confirmed by a sync, and its page shows no banner; it cannot
+  show a different rule set, which the server tests do), and
+  `tests/test_rules_banner.py` (the page carries its manifest's rule-set hash,
+  and against a server whose rules, primary or sync differ it says so and
+  records no decision and creates no record, D-83; the dashboard side D-76 left
+  undone, now done). Security claims C-88 to C-90 and C-95.
 
 ### R-67 A build opens only its own framework's records
 
@@ -1279,3 +1283,7 @@ honest answer and is a gap worth closing; see R-19.
   `test_under_another_primary_a_record_must_carry_its_stamp`; C-90), and
   `tests/test_build_config.py` shows a `--config` build writes its own
   `manifest.json` beside its page, the file the server loads its primary from.
+  Served by an API whose primary is another framework, a build's page says so
+  and makes no record (`tests/test_rules_banner.py`, "the example's page on the
+  published build's server says so", "a new record is refused under another
+  primary"; D-83).

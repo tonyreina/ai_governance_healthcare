@@ -32,7 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from build_manifest import manifest_json
+from build_manifest import manifest, manifest_json
 from check_i18n import Locale
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -158,6 +158,10 @@ def frameworks_js(defs: dict | None = None, published: bool = True) -> str:
             "published": published,
             # The framework of a record made before records were stamped.
             "legacy": DEFAULT_FRAMEWORKS["primary"],
+            # The hash of the primary's retirement rules, as manifest.json beside the
+            # page names it. In API mode the page compares it with what /api/health
+            # says the server retires by, and says so when they differ (D-83).
+            "ruleSetHash": manifest(defs, primary)["ruleSetHash"],
         },
     )
     return (

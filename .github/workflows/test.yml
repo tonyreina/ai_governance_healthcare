@@ -235,6 +235,9 @@ jobs:
       - name: session controls (idle lock, sign-out, lost stream)
         if: ${{ !cancelled() }}
         run: pixi run test-session-ui
+      - name: the page says when its server retires records by other rules
+        if: ${{ !cancelled() }}
+        run: pixi run test-rules-banner
       - name: user ids become people
         if: ${{ !cancelled() }}
         run: pixi run test-people

@@ -3,7 +3,7 @@
   "id": "optica",
   "name": "OPTICA",
   "title": "OPTICA adoption review",
-  "version": "1",
+  "version": "2",
   "role": "supplement",
   "optIn": true,
   "requires": [

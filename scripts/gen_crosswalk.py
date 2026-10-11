@@ -9,20 +9,30 @@ months (#174), because nothing connected them. This script connects them:
 * It writes the page's item-by-item table (between the two markers below) from
   the definition, so the per-item view on the page *is* the definition.
 * With ``--check`` it also reads every count, list and named correction the
-  page's prose states (the headline relations, the CHAI criteria cited and never
-  cited, the per-stage and per-chapter tables, the corrections applied and
-  rejected, the producer split, the relay of completion stages) and recomputes
-  each from the definition. A sentence that no longer says what the checker
-  reads is a failure too, so rewording a claim means updating its check.
+  page's prose states about the current mapping (the headline relations, the
+  CHAI criteria cited and never cited, the per-stage and per-chapter tables and
+  sentences, the corrections applied and rejected, the producer split, the relay
+  of completion stages) and recomputes each from the definition. A sentence
+  that no longer says what the checker reads is a failure too, so rewording a
+  claim means updating its check.
 
 Items the page marks as reviewed but "not yet recorded" in the definition (its
-section 7 says which) are read as the page states their relation; the definition
-must still hold them as OPTICA-only with no criteria, so recording them means
-removing them from that sentence. Counts that depend on their unknown criteria
-are checked as a lower bound only.
+section 7 says which, citing an open question in REQUIREMENTS.md, R-69) are read
+as the page states their relation; the definition must still hold them as
+OPTICA-only with no criteria, so recording them means removing them from that
+sentence. The sentence is accepted only while the question it cites is Open:
+once the owner answers it, the check demands the items be recorded. Counts that
+depend on their unknown criteria are checked as a lower bound only.
+
+What it does not check, because the definition cannot say: the previous pass's
+figures (tests/test_crosswalk.py checks those against a record of that pass),
+the coverage grades, the audit's history, and the reviewer's grading of each
+CHAI criterion as reached, touched or absent, which is checked only for agreeing
+with itself (the stage table, the section 3 tables and the section 6 lists) and
+with what is cited.
 
     pixi run gen-crosswalk      # rewrite the table
-    pixi run check-crosswalk    # the table is current and every claim holds
+    pixi run check-crosswalk    # the table is current and every checked claim holds
 """
 
 from __future__ import annotations
@@ -45,6 +55,7 @@ PAGE = ROOT / "docs" / "crosswalk.md"
 OPTICA = ROOT / "app" / "frameworks" / "optica" / "framework.json"
 CHAI = ROOT / "app" / "frameworks" / "chai" / "framework.json"
 OPTICA_DOCS = ROOT / "app" / "frameworks" / "optica" / "docs.toml"
+REQUIREMENTS = ROOT / "REQUIREMENTS.md"
 
 BEGIN = (
     "<!-- Generated from app/frameworks/optica/framework.json by"
@@ -62,6 +73,15 @@ class Who(StrEnum):
     EITHER = "either"
 
 
+class Grade(StrEnum):
+    """The page's grading of a CHAI criterion by what a complete OPTICA dossier
+    yields against it (section 1): a reviewer's judgment, not the definition's."""
+
+    REACHED = "reached"
+    TOUCHED = "touched"
+    ABSENT = "absent"
+
+
 RELATION_LABEL = {
     CrossRefRelation.EQUIVALENT: "equivalent",
     CrossRefRelation.PARTIAL: "partial",
@@ -70,6 +90,15 @@ RELATION_LABEL = {
 
 # A table's totals row: "Total items" or "Total".
 TOTAL_ROW = re.compile(r"total(?: items)?", re.IGNORECASE)
+
+# How the page names CHAI's tracks (the categories of CHAI's definition).
+TRACK_WORDS = {
+    "usefulness": "U",
+    "fairness": "F",
+    "safety": "S",
+    "trust and accountability": "T",
+    "privacy and security": "P",
+}
 
 # How the producer table on the page names each party.
 PRODUCER_ROW = (
@@ -100,6 +129,7 @@ class Item:
     stage: str
     relation: CrossRefRelation
     ids: tuple[str, ...]
+    framework: str | None = None
 
 
 def load_items(optica: dict) -> dict[str, Item]:
@@ -115,6 +145,7 @@ def load_items(optica: dict) -> dict[str, Item]:
                 stage=raw["attrs"]["stage"],
                 relation=CrossRefRelation(refs.get("relation", "optica-only")),
                 ids=tuple(refs.get("ids", ())),
+                framework=refs.get("framework"),
             )
     return items
 
@@ -210,6 +241,60 @@ def flat(text: str) -> str:
     return " ".join(text.split())
 
 
+def requirement(requirements: str, rid: str) -> tuple[str, str, str] | None:
+    """An entry of REQUIREMENTS.md: (its title, its status, the section it is in)."""
+    m = re.search(
+        rf"^### {re.escape(rid)} (.+?)$(.*?)(?=^### |^## |\Z)",
+        requirements,
+        re.M | re.S,
+    )
+    if m is None:
+        return None
+    status = re.search(r"^- Status: (.+)$", m.group(2), re.M)
+    sections = re.findall(r"^## (.+)$", requirements[: m.start()], re.M)
+    return (
+        m.group(1).strip(),
+        status.group(1).strip() if status else "",
+        sections[-1].strip() if sections else "",
+    )
+
+
+def reach_grades(page: str, r: Report) -> tuple[dict[Grade, set[str]], list[int]]:
+    """Section 6's grading of CHAI's criteria: reached ("genuinely shareable"),
+    touched (a fragment) and absent, with the counts it states checked; and the
+    number of CHAI criteria it states them out of."""
+    text = flat(section_text(page, "6"))
+    grades: dict[Grade, set[str]] = {}
+    out_of: list[int] = []
+    if m := r.find(
+        r"Genuinely shareable: (\d+) of CHAI's (\d+) criteria\.\*\* A complete OPTICA"
+        r" dossier produces evidence a reviewer could accept against (.+?)\. In most",
+        text,
+        "the criteria genuinely shareable",
+    ):
+        listed = criterion_ids(m.group(3))
+        r.expect("criteria genuinely shareable", int(m.group(1)), len(listed))
+        grades[Grade.REACHED] = set(listed)
+        out_of.append(int(m.group(2)))
+    if m := r.find(
+        r"Not shareable: (\d+) of (\d+)\.\*\* (\w+) absent \((.+?)\) and (\w+) where"
+        r" OPTICA yields only a fragment \((.+?)\)\.",
+        text,
+        "the criteria not shareable",
+    ):
+        absent, touched = criterion_ids(m.group(4)), criterion_ids(m.group(6))
+        r.expect("criteria absent", number(m.group(3)), len(absent))
+        r.expect("criteria touched", number(m.group(5)), len(touched))
+        r.expect("criteria not shareable", int(m.group(1)), len(absent) + len(touched))
+        grades[Grade.ABSENT], grades[Grade.TOUCHED] = set(absent), set(touched)
+        out_of.append(int(m.group(2)))
+    return grades, out_of
+
+
+def is_open(status: str) -> bool:
+    return re.match(r"\**Open\b", status) is not None
+
+
 class Report:
     def __init__(self) -> None:
         self.problems: list[str] = []
@@ -230,13 +315,34 @@ class Report:
         return m
 
 
-def check(page: str, optica: dict, chai: dict, optica_docs: str = "") -> list[str]:
-    """Every problem with the page against the definitions; empty means agreed."""
+def check(
+    page: str,
+    optica: dict,
+    chai: dict,
+    optica_docs: str = "",
+    requirements: str = "",
+) -> list[str]:
+    """Every problem with the page against the definitions; empty means agreed.
+
+    `requirements` is REQUIREMENTS.md, where the open question that lets an item
+    stay "not yet recorded" lives (R-69)."""
     r = Report()
     recorded = load_items(optica)
     stages = chai_stages(chai)
     criteria = [c for ids in stages.values() for c in ids]
+    track = {i["id"]: i.get("category") for s in chai["sections"] for i in s["items"]}
     text = flat(page)
+
+    # Every crossRef points at CHAI, the framework OPTICA requires: the page and
+    # the checks below read every id as a CHAI criterion.
+    if chai["id"] not in optica.get("requires", []):
+        r.problems.append(f"OPTICA's definition does not require {chai['id']!r}")
+    for it in recorded.values():
+        if it.framework is not None and it.framework != chai["id"]:
+            r.problems.append(
+                f"{it.num}'s crossRefs name framework {it.framework!r}, not"
+                f" {chai['id']!r}: the crosswalk is to CHAI"
+            )
 
     # The generated table is the definition, byte for byte.
     try:
@@ -247,15 +353,43 @@ def check(page: str, optica: dict, chai: dict, optica_docs: str = "") -> list[st
     except PageError as exc:
         r.problems.append(str(exc))
 
-    # Items reviewed on the page but not yet recorded in the definition.
+    # Items reviewed on the page but not yet recorded in the definition, while
+    # the open question the page cites for them (R-69) stays open.
     pending: set[str] = set()
-    m = r.find(
-        r"not yet recorded there: (.+?) are partial on this page",
+    m = re.search(
+        r"not yet recorded there: (.+?) are partial on this page.*?\((R-\d+)\b",
         text,
-        "which reviewed items are not yet recorded in the definition",
     )
     if m:
         pending = set(item_nums(m.group(1)))
+        rid = m.group(2)
+        entry = requirement(requirements, rid)
+        if entry is None:
+            r.problems.append(
+                f"the items not yet recorded cite {rid}, which REQUIREMENTS.md lacks"
+            )
+        else:
+            title, status, section = entry
+            if section != "Open questions":
+                r.problems.append(
+                    f"{rid} is not under REQUIREMENTS.md's Open questions"
+                )
+            if not is_open(status):
+                r.problems.append(
+                    f"{rid} is answered ({status or 'no status'}): record"
+                    f" {' and '.join(sorted(pending))} in OPTICA's definition and take"
+                    " them out of the 'not yet recorded' sentence"
+                )
+            r.expect(
+                f"items {rid} asks about", sorted(pending), sorted(item_nums(title))
+            )
+    elif "not yet recorded" in text:
+        r.problems.append(
+            "the page no longer states which reviewed items are not yet recorded, and"
+            " the open question about them, in the form the checker reads (update"
+            " scripts/gen_crosswalk.py with the new wording)"
+        )
+    if m:
         for num in sorted(pending):
             it = recorded.get(num)
             if it is None:
@@ -326,6 +460,25 @@ def check(page: str, optica: dict, chai: dict, optica_docs: str = "") -> list[st
         r.expect("criteria in all", int(m.group(2)), len(criteria))
         r.expect("share cited", m.group(3), f"{100 * len(cited) / len(criteria):.1f}")
     if m := r.find(
+        r"\(\d+\.\d%\), up from (\d+) \((\d+\.\d)%\)\. The gain is (s\d-\d), which"
+        r" OPTICA (.+?) demand",
+        text,
+        "the gain over the previous pass",
+    ):
+        before, gain = int(m.group(1)), m.group(3)
+        # The previous pass's own figure is checked against a record of that
+        # pass by tests/test_crosswalk.py; here, that one criterion is the gain.
+        r.expect("criteria cited before the gain", before, len(cited - {gain}))
+        r.expect(f"{gain} cited", True, gain in cited)
+        r.expect(
+            "share cited before the gain",
+            m.group(2),
+            f"{100 * before / len(criteria):.1f}",
+        )
+        r.expect(
+            f"items citing {gain}", sorted(item_nums(m.group(4))), sorted(citing(gain))
+        )
+    if m := r.find(
         r"(\w+) criteria are never cited: \*\*(.+?)\*\*",
         text,
         "the criteria never cited",
@@ -344,6 +497,109 @@ def check(page: str, optica: dict, chai: dict, optica_docs: str = "") -> list[st
         elif len(row) == 6 and TOTAL_ROW.fullmatch(row[0]):
             r.expect("criteria in the stage table", int(row[1]), len(criteria))
             r.expect("criteria cited in the stage table", int(row[2]), len(cited))
+
+    # The reviewer's grading of each criterion as reached, touched or absent is
+    # not in the definition. What is checked is that it agrees with itself (the
+    # stage table, the section 3 tables, the section 6 lists), covers every
+    # criterion once, and agrees with what is cited.
+    grades, out_of = reach_grades(page, r)
+    for stated in out_of:
+        r.expect("CHAI criteria (section 6)", stated, len(criteria))
+    reached, touched, absent = (grades.get(g, set()) for g in Grade)
+    graded = set(Grade) <= grades.keys()
+    if graded:
+        r.expect(
+            "criteria graded more than once",
+            [],
+            sorted((reached & touched) | (reached & absent) | (touched & absent)),
+        )
+        r.expect(
+            "criteria not graded",
+            [],
+            sorted(set(criteria) - reached - touched - absent),
+        )
+        r.expect(
+            "graded criteria that are no CHAI criterion",
+            [],
+            sorted((reached | touched | absent) - set(criteria)),
+        )
+        r.expect("criteria graded reached but not cited", [], sorted(reached - cited))
+    # Per CHAI stage: (n, reached, touched, absent), as the stage table states.
+    stage_grades: dict[str, tuple[int, int, int, int]] = {}
+    for row in table_rows(section_text(page, "1")):
+        if len(row) != 6:
+            continue
+        is_total = TOTAL_ROW.fullmatch(row[0]) is not None
+        if not (is_total or re.match(r"s\d ", row[0])):
+            continue
+        n, reach, touch, gone = (int(c) for c in (row[1], row[3], row[4], row[5]))
+        where = "all stages" if is_total else row[0].split()[0]
+        r.expect(
+            f"reached, touched and absent in {where} add to n",
+            n,
+            reach + touch + gone,
+        )
+        ids = set(criteria) if is_total else set(stages.get(where, []))
+        if not is_total:
+            stage_grades[where] = (n, reach, touch, gone)
+        if graded:
+            r.expect(f"criteria reached in {where}", reach, len(reached & ids))
+            r.expect(f"criteria touched in {where}", touch, len(touched & ids))
+            r.expect(f"criteria absent in {where}", gone, len(absent & ids))
+    if m := r.find(
+        r"\*\*(\d+) of (\d+), not (\d+) of (\d+), is the number to plan with\.\*\*",
+        text,
+        "the number to plan with",
+    ):
+        r.expect(
+            "criteria reached (the number to plan with)", int(m.group(1)), len(reached)
+        )
+        r.expect(
+            "criteria in all (the number to plan with)", int(m.group(2)), len(criteria)
+        )
+        r.expect(
+            "criteria cited (not the number to plan with)", int(m.group(3)), len(cited)
+        )
+        r.expect("criteria in all (not the number)", int(m.group(4)), len(criteria))
+    if m := r.find(
+        r"(\w+) criteria are cited yet absent.*?: (.+?) appear in the crosswalk only",
+        text,
+        "the criteria cited yet absent",
+    ):
+        listed = criterion_ids(m.group(2))
+        r.expect("criteria cited yet absent", number(m.group(1)), len(listed))
+        r.expect(
+            "which criteria are cited yet absent",
+            sorted(listed),
+            sorted(absent & cited),
+        )
+    if m := r.find(
+        r"Conversely (s\d-\d) is never cited but is partly touched",
+        text,
+        "the criterion touched though never cited",
+    ):
+        c = m.group(1)
+        r.expect(f"{c} cited", False, c in cited)
+        r.expect(f"{c} touched", True, c in touched)
+        r.expect("criteria touched though never cited", [c], sorted(touched - cited))
+    if m := r.find(
+        r"Stage (\d) is (\d+)/(\d+) and Stage (\d) is (\d+)/(\d+)\. OPTICA's strongest"
+        r" alignment with CHAI is at the engineering stage, .*? its weakest is at pilot"
+        r" \((\d+)/(\d+)\)",
+        text,
+        "the effective coverage of stages 3, 4 and 5",
+    ):
+        for stage, reach, n in (
+            m.group(1, 2, 3),
+            m.group(4, 5, 6),
+            ("5", *m.group(7, 8)),
+        ):
+            got = stage_grades.get(f"s{stage}", (0, 0, 0, 0))
+            r.expect(f"Stage {stage} reached/n", f"{reach}/{n}", f"{got[1]}/{got[0]}")
+        share = {k: v[1] / v[0] for k, v in stage_grades.items() if v[0]}
+        if share:
+            r.expect("the stage OPTICA reaches best", "s3", max(share, key=share.get))
+            r.expect("the stage OPTICA reaches worst", "s5", min(share, key=share.get))
 
     # Corrections applied.
     if m := r.find(
@@ -455,6 +711,26 @@ def check(page: str, optica: dict, chai: dict, optica_docs: str = "") -> list[st
             r.expect(f"who answers for the {stakeholder}", 1, len(found))
 
     # 2. Chapter by chapter.
+    def chapter(ch: int) -> list[Item]:
+        return [it for it in items.values() if it.chapter == ch]
+
+    def at_least(what: str, claimed: int, recorded_: int, floor: bool) -> None:
+        """A count the definition gives exactly, or, where an item it holds is not
+        yet recorded (R-69), at least: their criteria could only add to it."""
+        if not floor:
+            r.expect(what, claimed, recorded_)
+        elif claimed < recorded_:
+            r.expect(f"{what} (at least)", claimed, recorded_)
+
+    def chapter_criteria(what: str, ch: int, claimed: int) -> None:
+        mine = chapter(ch)
+        at_least(
+            what,
+            claimed,
+            len({c for it in mine for c in it.ids}),
+            any(it.num in pending for it in mine),
+        )
+
     rows = [row for row in table_rows(section_text(page, "2")) if row[0].isdigit()]
     r.expect("chapters in the chapter table", [int(row[0]) for row in rows], chapters)
     for row in rows:
@@ -465,17 +741,21 @@ def check(page: str, optica: dict, chai: dict, optica_docs: str = "") -> list[st
         mine = [it for it in items.values() if it.chapter == ch]
         ids = {c for it in mine for c in it.ids}
         r.expect(f"items in chapter {ch}", int(row[2]), len(mine))
-        r.expect(
-            f"CHAI stages of chapter {ch}",
-            sorted(row[3].replace(";", " ").split()),
-            sorted({c.split("-")[0] for c in ids}),
-        )
+        claimed_stages = set(row[3].replace(";", " ").split())
+        recorded_stages = {c.split("-")[0] for c in ids}
         if any(it.num in pending for it in mine):
-            # Their criteria are not recorded, so the definition's count is a floor.
-            if int(row[4]) < len(ids):
-                r.expect(f"criteria in chapter {ch} (at least)", int(row[4]), len(ids))
+            r.expect(
+                f"CHAI stages of chapter {ch} (at least)",
+                [],
+                sorted(recorded_stages - claimed_stages),
+            )
         else:
-            r.expect(f"criteria in chapter {ch}", int(row[4]), len(ids))
+            r.expect(
+                f"CHAI stages of chapter {ch}",
+                sorted(claimed_stages),
+                sorted(recorded_stages),
+            )
+        chapter_criteria(f"criteria in chapter {ch}", ch, int(row[4]))
         none = sum(it.relation is CrossRefRelation.OPTICA_ONLY for it in mine)
         r.expect(f"unanchored items in chapter {ch}", int(row[5]), none)
     if m := r.find(
@@ -503,6 +783,49 @@ def check(page: str, optica: dict, chai: dict, optica_docs: str = "") -> list[st
             sorted(alone | rest),
             sorted({items[n].chapter for n in only}),
         )
+
+    if m := r.find(
+        r"\*\*Chapter (\d+) \([^)]*\) is the most structurally awkward\.\*\* (\w+)"
+        r" items, (\w+) answerable only by the vendor and (\w+) only by the adopter,"
+        r" spanning (\w+) completion stages and (\w+) CHAI criteria across (\w+) CHAI"
+        r" stages\.",
+        text,
+        "chapter 7's shape",
+    ):
+        ch = int(m.group(1))
+        mine = chapter(ch)
+        floor = any(it.num in pending for it in mine)
+        r.expect(f"items in chapter {ch}", number(m.group(2)), len(mine))
+        r.expect(
+            f"vendor items in chapter {ch}",
+            number(m.group(3)),
+            sum(it.who is Who.DEVELOPER for it in mine),
+        )
+        r.expect(
+            f"adopter items in chapter {ch}",
+            number(m.group(4)),
+            sum(it.who is Who.ADOPTER for it in mine),
+        )
+        r.expect(
+            f"completion stages of chapter {ch}",
+            number(m.group(5)),
+            len({it.stage for it in mine}),
+        )
+        chapter_criteria(f"criteria in chapter {ch}", ch, number(m.group(6)))
+        at_least(
+            f"CHAI stages of chapter {ch}",
+            number(m.group(7)),
+            len({c.split("-")[0] for it in mine for c in it.ids}),
+            floor,
+        )
+    if m := r.find(
+        r"\*\*Chapters (\d+), (\d+) and (\d+) touch CHAI widely but shallowly\.\*\*"
+        r" They cite (\w+), (\w+) and (\w+) distinct criteria respectively",
+        text,
+        "the criteria chapters 3, 4 and 5 cite",
+    ):
+        for ch, count in zip(m.group(1, 2, 3), m.group(4, 5, 6), strict=True):
+            chapter_criteria(f"criteria chapter {ch} cites", int(ch), number(count))
 
     # 3. What OPTICA asks that CHAI never does.
     alone_text = flat(section_text(page, "3").split("**What CHAI asks")[0])
@@ -603,6 +926,75 @@ def check(page: str, optica: dict, chai: dict, optica_docs: str = "") -> list[st
             len(cited) - len(vendor_only) - len(adopter_only),
         )
 
+    if m := r.find(
+        r"the remaining (\d+) are assigned to the (.+?), the (.+?) or the (.+?)\.",
+        text,
+        "who the adopting organization's items are assigned to",
+    ):
+        adopting = [it for it in items.values() if it.who is Who.ADOPTER]
+        r.expect(
+            "items the adopting organization answers", int(m.group(1)), len(adopting)
+        )
+        r.expect(
+            "stakeholders of the adopting organization's items",
+            sorted(w.lower() for w in m.group(2, 3, 4)),
+            sorted({it.stakeholder.lower() for it in adopting}),
+        )
+    if m := r.find(
+        r"(\w+) of the (\w+) development-process questions",
+        text,
+        "the development-process questions with no anchor",
+    ):
+        mine = chapter(6)
+        r.expect("development-process questions", number(m.group(2)), len(mine))
+        r.expect(
+            "development-process questions with no anchor",
+            number(m.group(1)),
+            sum(it.num in only for it in mine),
+        )
+    if m := r.find(
+        r"\*\*Of the (\w+) chapters the vendor answers in, only chapter (\d+) can be"
+        r" completed by one party\.\*\* (.+?)\. The natural unit",
+        text,
+        "which chapters one party can complete",
+    ):
+        vendor_chapters = sorted(
+            {it.chapter for it in items.values() if it.who is Who.DEVELOPER}
+        )
+        r.expect(
+            "chapters the vendor answers in", number(m.group(1)), len(vendor_chapters)
+        )
+        r.expect(
+            "chapters the vendor answers in, one party can complete",
+            [int(m.group(2))],
+            [ch for ch in vendor_chapters if len({it.who for it in chapter(ch)}) == 1],
+        )
+        order = {
+            2: (Who.DEVELOPER, Who.ADOPTER),
+            3: (Who.DEVELOPER, Who.EITHER, Who.ADOPTER),
+        }
+        split_chapters = []
+        for ch_word, split in re.findall(
+            r"[Cc]hapter (\d+) (?:splits )?(\w+(?:-\w+)+)", m.group(3)
+        ):
+            ch, parts = int(ch_word), split.split("-")
+            split_chapters.append(ch)
+            whos = order.get(len(parts))
+            if whos is None:
+                r.problems.append(f"a chapter split the checker cannot read: {split}")
+                continue
+            r.expect(
+                f"the split of chapter {ch}",
+                [number(p) for p in parts] + [0] * (3 - len(parts)),
+                [sum(it.who is w for it in chapter(ch)) for w in whos]
+                + [sum(it.who not in whos for it in chapter(ch))] * (3 - len(parts)),
+            )
+        r.expect(
+            "chapters the vendor shares with another party",
+            sorted(split_chapters),
+            [ch for ch in vendor_chapters if len({it.who for it in chapter(ch)}) > 1],
+        )
+
     # 5. The relay of completion stages, and the most-cited criterion.
     order = sorted({it.stage for it in items.values()})
     if m := r.find(
@@ -657,6 +1049,144 @@ def check(page: str, optica: dict, chai: dict, optica_docs: str = "") -> list[st
         )
         r.expect("OPTICA items with no CHAI source", int(m.group(3)), len(only))
 
+    # 3 and 6 again: what CHAI asks that OPTICA never does, by track.
+    ask_text = section_text(page, "3").split(
+        "**What CHAI asks that OPTICA never does.**"
+    )
+    if len(ask_text) != 2:
+        r.problems.append(
+            "the page no longer has the section 3 part 'What CHAI asks that OPTICA"
+            " never does' in the form the checker reads"
+        )
+    else:
+        part = ask_text[1]
+        tables = re.split(r"^\| CHAI id ", part, flags=re.M)[1:]
+        found: list[list[str]] = []
+        for table in tables:
+            ids = []
+            for row in table_rows("| CHAI id " + table)[1:]:
+                if len(row) == 3 and re.fullmatch(r"s\d-\d", row[0]):
+                    ids.append(row[0])
+                    r.expect(f"the track of {row[0]}", track.get(row[0]), row[1])
+            found.append(ids)
+        if len(found) == 2:
+            r.expect(
+                "criteria in section 3's absent table", sorted(absent), sorted(found[0])
+            )
+            r.expect(
+                "criteria in section 3's fragment table",
+                sorted(touched),
+                sorted(found[1]),
+            )
+        else:
+            r.problems.append(f"section 3 has {len(found)} CHAI tables, not two")
+        flat_part = flat(part)
+        if m := r.find(
+            r"(\w+) criteria are absent outright and (\w+) more are touched only in"
+            r" fragments",
+            flat_part,
+            "how many criteria OPTICA misses",
+        ):
+            r.expect("criteria absent outright", number(m.group(1)), len(absent))
+            r.expect("criteria touched in fragments", number(m.group(2)), len(touched))
+        if m := r.find(
+            r"Of the (\w+) absent criteria, (\w+) are CHAI's (.+?) track, (\w+) its"
+            r" (.+?) track, (\w+) its (.+?) track\. \*\*None is from the (.+?)"
+            r" track and none from the (.+?) track\*\*",
+            flat_part,
+            "the tracks of the absent criteria",
+        ):
+            r.expect("absent criteria", number(m.group(1)), len(absent))
+            by_track = Counter(track.get(c) for c in absent)
+            for count, words in (m.group(2, 3), m.group(4, 5), m.group(6, 7)):
+                letter = TRACK_WORDS.get(words)
+                r.expect(
+                    f"absent criteria in the {words} track",
+                    number(count),
+                    by_track[letter],
+                )
+            for words in m.group(8, 9):
+                letter = TRACK_WORDS.get(words)
+                r.expect(f"absent criteria in the {words} track", 0, by_track[letter])
+    if m := r.find(
+        r"Watch the (\w+) that are cited in the crosswalk but produce nothing"
+        r" - (.+?) -",
+        text,
+        "the criteria cited but producing nothing",
+    ):
+        listed = criterion_ids(m.group(2))
+        r.expect(
+            "criteria cited but producing nothing", number(m.group(1)), len(listed)
+        )
+        r.expect(
+            "which criteria are cited but produce nothing",
+            sorted(listed),
+            sorted(absent & cited),
+        )
+
+    # 5. Where the relay puts what CHAI puts at a stage.
+    if m := r.find(
+        r"CHAI places monitoring ownership at Stage (\d) \((s\d-\d)\); OPTICA produces"
+        r" it at stages (\w) and (\w)\.",
+        text,
+        "where OPTICA produces monitoring ownership",
+    ):
+        c = m.group(2)
+        r.expect(f"the CHAI stage of {c}", f"s{m.group(1)}", c.split("-")[0])
+        r.expect(
+            f"completion stages citing {c}",
+            sorted(m.group(3, 4)),
+            sorted({items[n].stage for n in citing(c)}),
+        )
+    if m := r.find(
+        r"CHAI places retraining cadence and change control at Stage (\d) \((s\d-\d)\);"
+        r" OPTICA asks the developer for it at stage (\w)\.",
+        text,
+        "where OPTICA asks the developer for change control",
+    ):
+        c = m.group(2)
+        r.expect(f"the CHAI stage of {c}", f"s{m.group(1)}", c.split("-")[0])
+        r.expect(
+            f"completion stages of the developer's items citing {c}",
+            [m.group(3)],
+            sorted({items[n].stage for n in citing(c) & dev}),
+        )
+    if m := r.find(
+        r"deployment success criteria \((\d+\.\d+)\) are written at stage (\w)",
+        text,
+        "the stage of the deployment success criteria",
+    ):
+        r.expect(
+            f"the completion stage of {m.group(1)}", m.group(2), items[m.group(1)].stage
+        )
+    if m := r.find(
+        r"s4-1 binds, so (\d+\.\d+) is left with no anchor at all\.",
+        text,
+        "the item s4-1 leaves without an anchor",
+    ):
+        r.expect(
+            f"relation of {m.group(1)}",
+            RELATION_LABEL[CrossRefRelation.OPTICA_ONLY],
+            RELATION_LABEL[items[m.group(1)].relation],
+        )
+    if m := r.find(
+        r"which is why (.+?) keep their mappings", text, "the items that keep a mapping"
+    ):
+        for num in item_nums(m.group(1)):
+            r.expect(f"{num} keeps a mapping", True, bool(items[num].ids))
+
+    # Whole-checklist and whole-framework totals named in passing.
+    for m in re.finditer(
+        r"\ball (\d+) (?:OPTICA )?items\b(?! at)|each of the (\d+) OPTICA items", text
+    ):
+        r.expect(f"OPTICA items ({m.group(0)!r})", int(m.group(1) or m.group(2)), total)
+    for m in re.finditer(r"CHAI's (\d+) criteria|conditionals in the (\d+)\b", text):
+        r.expect(
+            f"CHAI criteria ({m.group(0)!r})",
+            int(m.group(1) or m.group(2)),
+            len(criteria),
+        )
+
     # The generated OPTICA checklist's own words (its docs.toml).
     if "There are no *equivalent* rows" in optica_docs:
         r.expect(
@@ -685,7 +1215,11 @@ def main(argv: list[str] | None = None) -> int:
     optica = read_json(OPTICA)
     if args.check:
         problems = check(
-            page, optica, read_json(CHAI), OPTICA_DOCS.read_text(encoding="utf-8")
+            page,
+            optica,
+            read_json(CHAI),
+            OPTICA_DOCS.read_text(encoding="utf-8"),
+            REQUIREMENTS.read_text(encoding="utf-8"),
         )
         for problem in problems:
             print(f"docs/crosswalk.md: {problem}", file=sys.stderr)

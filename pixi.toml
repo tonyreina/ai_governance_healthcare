@@ -36,7 +36,8 @@ gen-docs = { depends-on = ["gen-framework-docs", "gen-crosswalk", "gen-te-page",
 # docs/frameworks/<id>-checklist.md, one per definition (#168, D-75).
 gen-framework-docs = "python scripts/gen_framework_docs.py"
 # docs/crosswalk.md's item table, from OPTICA's definition; check-crosswalk also
-# checks every count and correction the page states against it (#174, D-84).
+# checks every count and correction the page states about the current mapping
+# against it (#174, D-84; its section 7 says what is not checked).
 gen-crosswalk = "python scripts/gen_crosswalk.py"
 check-crosswalk = "python scripts/gen_crosswalk.py --check"
 # check-crosswalk shown failing: the definition and the page, each broken one way at a time.

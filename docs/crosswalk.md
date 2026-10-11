@@ -178,13 +178,14 @@ other seven are scattered through chapters 3, 4 and 7.
 
 **Chapter 7 (performance) is the most structurally awkward.** Twelve items,
 six answerable only by the vendor and six only by the adopter, spanning four
-completion stages and six CHAI criteria across three CHAI stages. It is also
+completion stages and ten CHAI criteria across four CHAI stages. It is also
 where the clock conflict in section 5 does the most damage.
 
-**Chapters 3, 4 and 5 touch CHAI widely but shallowly.** They cite nine, nine
-and seven distinct criteria respectively, yet almost every mapping carries
-substantial residue, because CHAI documents data at dataset level while OPTICA
-works per cohort rule, per variable and per label.
+**Chapters 3, 4 and 5 touch CHAI widely but shallowly.** They cite five, nine
+and seven distinct criteria respectively (chapter 5's seven counts the one
+criterion 5.3 reaches, which section 7 explains is not yet recorded), yet almost
+every mapping carries substantial residue, because CHAI documents data at
+dataset level while OPTICA works per cohort rule, per variable and per label.
 
 ## 3. Where each framework is alone
 
@@ -335,9 +336,10 @@ including the role-dual MLOps ones, and ten through both. So the dependency
 runs in both directions, but asymmetrically: a vendor cannot hand you a CHAI
 file, and you cannot assemble one without the vendor.
 
-**No chapter can be completed by one party.** Chapter 4 splits five-five
-between vendor and adopter, chapter 5 three-three, chapter 7 six-six, chapter
-3 five-one and chapter 11 two-two-two across vendor, dual and adopter. The
+**Of the seven chapters the vendor answers in, only chapter 6 can be completed
+by one party.** Chapter 4 splits five-five between vendor and adopter, chapter
+5 three-three, chapter 7 six-six, chapter 3 five-one, chapter 8 two-one and
+chapter 11 two-two-two across vendor, dual and adopter. The
 natural unit of exchange is therefore not a chapter and not a domain but the
 individual item, which is precisely the granularity at which cross-framework
 reuse is most expensive to administer.
@@ -491,14 +493,23 @@ top of CHAI.
 Each OPTICA item's relation to CHAI and the CHAI criteria it cites, exactly as
 OPTICA's framework definition records them. This is the data the dashboard's
 "covered by CHAI" chips and the [OPTICA checklist](frameworks/optica-checklist.md)
-are drawn from. The table is written from the definition by
-`scripts/gen_crosswalk.py`, and `pixi run check-crosswalk` fails if the table,
-or any count, list or correction stated on this page, disagrees with the
-definition (#174).
+are drawn from. Where an item cites more than one criterion, the first listed
+is the one its chip shows. The table is written from the definition by
+`scripts/gen_crosswalk.py`, and `pixi run check-crosswalk` fails if the table
+disagrees with the definition, or if a count, list or correction this page
+states about the current mapping does (#174). That covers the relations, the
+criteria cited and who answers each item, and how they add up by CHAI stage, by
+chapter and by completion stage. It does not cover what cannot be derived from
+the definition: the previous pass's figures (checked by `tests/test_crosswalk.py`
+against a record of that pass), the coverage grades, the history of the audit,
+and the reviewer's grading of each criterion as reached, touched or absent,
+which is checked only for agreeing with itself and with what is cited.
 
 Two items are not yet recorded there: 5.3 and 7.4 are partial on this page, but
 this page does not name the CHAI criteria they reach, so the definition still
-marks them OPTICA-only until those are settled (#174).
+marks them OPTICA-only and the dashboard shows them as not covered by CHAI.
+Which criteria they cite is an open question for the owner (R-69 in
+REQUIREMENTS.md, #174).
 
 <!-- Generated from app/frameworks/optica/framework.json by scripts/gen_crosswalk.py (pixi run gen-crosswalk). Do not edit by hand. -->
 

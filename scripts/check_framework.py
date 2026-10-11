@@ -961,12 +961,26 @@ def build_problems(defs: dict[str, dict], prefixes: frozenset[str]) -> Report:
                 continue
             target = ref["framework"]
             relation = CrossRefRelation(ref["relation"])
-            if relation is CrossRefRelation.EQUIVALENT and not ref["ids"]:
-                r.add(
-                    where,
-                    (*path, "crossRefs", "ids"),
-                    "an equivalent crossRef names no item",
-                )
+            # The relation and the ids must agree: the dashboard's chip reads the
+            # ids, so a partial with none would show "not covered" (#174).
+            match relation:
+                case CrossRefRelation.EQUIVALENT | CrossRefRelation.PARTIAL:
+                    if not ref["ids"]:
+                        r.add(
+                            where,
+                            (*path, "crossRefs", "ids"),
+                            f"crossRef relation {str(relation)!r} names no item",
+                        )
+                case CrossRefRelation.OPTICA_ONLY:
+                    if ref["ids"]:
+                        r.add(
+                            where,
+                            (*path, "crossRefs", "ids"),
+                            f"crossRef relation {str(relation)!r} names items"
+                            f" {ref['ids']}, and must name none",
+                        )
+                case _:
+                    assert_never(relation)
             if target not in by_id:
                 if target not in named:
                     named.add(target)

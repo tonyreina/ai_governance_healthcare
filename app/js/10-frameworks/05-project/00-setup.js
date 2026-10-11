@@ -210,7 +210,7 @@ const roleNote = () => {
    meeting" is how a committee reads it.
    ============================================================ */
 function changelogHTML(){
-  const now = contentHash(S);
+  const now = contentHash(storedRecord(S));
 
   if(!LOG.length){
     return `<p class="eyebrow">${esc(t("log.eyebrow"))}</p><h1>${esc(t("log.title"))}</h1>

@@ -213,8 +213,8 @@ function engineFramework(def) {
           if (!nr) F.push({ sev: Severity.RED, text: `Live with no deployment date recorded at ${gateById[entry.gate].title}`, msg: [slotKey(UiSlot.FLAG_NO_DEPLOY_DATE), { gateKey: entry.gate }] });
           else {
             const left = daysBetween(today, parseDay(nr));
-            if (left < 0) F.push({ sev: Severity.RED, text: `Periodic review overdue since ${fmtDay(nr)}`, msg: ["flag.reviewOverdue", { date: nr }] });
-            else if (left <= review.dueSoonDays) F.push({ sev: Severity.AMBER, text: `Periodic review due ${fmtDay(nr)}`, msg: ["flag.reviewDue", { date: nr }] });
+            if (left < 0) F.push({ sev: Severity.RED, text: `Periodic review overdue since ${fmtDay(nr, Locale.EN)}`, msg: ["flag.reviewOverdue", { date: nr }] });
+            else if (left <= review.dueSoonDays) F.push({ sev: Severity.AMBER, text: `Periodic review due ${fmtDay(nr, Locale.EN)}`, msg: ["flag.reviewDue", { date: nr }] });
           }
           break;
         }

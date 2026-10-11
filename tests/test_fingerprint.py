@@ -222,9 +222,13 @@ def main() -> int:
         sha.get("pattern") in ("^[0-9a-f]{64}$", "[0-9a-f]{64}"),
         str(sha),
     )
+    # It was optional, so that exports from before #150 validated; that also let
+    # the current export drop it unnoticed. Every export since carries one, and the
+    # schema requires what the export always writes (#177, D-82). load_export.py
+    # still reads an older export and says it has none.
     check(
-        "the schema does not require it, so older exports still validate",
-        "fingerprint" not in schema.get("required", []),
+        "the schema requires it, so an export that drops it is refused",
+        "fingerprint" in schema.get("required", []),
     )
     notice = json.loads(EN.read_text(encoding="utf-8"))["fp.warnDetail"]
     check(

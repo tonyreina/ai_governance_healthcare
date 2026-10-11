@@ -2,13 +2,13 @@
    Data arrival
    ============================================================ */
 function onProjects(list){
-  PROJECTS=new Map(list.map(p=>[p.id,normalize(p)]));
+  PROJECTS=new Map(list.map(p=>[p.id,normalizeStored(p)]));
   const first=!LOADED; LOADED=true;
   if(first && UI.project && PROJECTS.has(UI.project) && !CUR){ openProject(UI.project,UI.view); return; }
   if(CUR){
     const r=PROJECTS.get(CUR);
     if(!r){ toast(t("toast.deletedElsewhere")); goHome(); return; }
-    S=normalize(deepMerge(clone(r), clone(pending[CUR]||{})));
+    S=normalizeStored(deepMerge(clone(storedRecord(r)), clone(pending[CUR]||{})));
     softRefresh();
   } else updateDashboard();
 }

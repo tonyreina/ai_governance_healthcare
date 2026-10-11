@@ -50,9 +50,26 @@ python examples/load_export.py my-project-chai-review.json
 
 It recomputes both digests from the file alone, over the record (the `_state` and
 the project id) as compact canonical JSON in UTF-8: keys sorted at every level,
-with the volatile fields `updatedAt`, `updatedBy`, `cardUpdatedAt`, `_state`,
-`contentHash` and `generated` left out. An export from before fingerprints were
-added reports that it has none.
+by UTF-16 code unit as JavaScript sorts them (so `"10"` comes before `"9"`, and
+an emoji before a character from U+E000 to U+FFFF), with the volatile fields
+`updatedAt`, `updatedBy`, `cardUpdatedAt`, `_state`, `contentHash` and
+`generated` left out. Strings are written as JavaScript's `JSON.stringify` writes
+them, so a lone surrogate (half of a pair, alone, which a JavaScript string can
+hold and UTF-8 cannot encode) is written as its lowercase `\u` escape, such as
+`\ud800`. An export from before fingerprints were added reports that it has none.
+It reads the export of a build of any framework, not only CHAI's.
+
+The record is the one as stored. A record an older version of the dashboard
+saved can lack fields the dashboard now fills in to show it (such as
+`meta.chaiUseCase`); the fingerprint, and the export's `_state`, are of the
+record without them, as the server holds it.
+
+On the shared server, each revision in the version history carries the MD5 of
+the record as it was, computed by the same rule, so a revision's fingerprint is
+the one the setup page and an export showed for that record. Revisions saved
+before this rule was fixed (#177) were hashed without the project's id, and their
+fingerprints do not match. The server refuses a record holding a lone surrogate,
+which PostgreSQL cannot store.
 
 On the shared server, the dashboard reports each export it produces, so it
 appears in the read trail beside the reads that fetched the data
@@ -105,13 +122,42 @@ unavailable, since it goes through the print dialog rather than a download API.
 
 ## Project data (JSON)
 
-Each project exports as JSON, validated by
-[`schema/project.schema.json`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/schema/project.schema.json)
-(`chai-review/2`). The file holds the status, phase, next review date and flags
+Each project exports as JSON, described by
+[`schema/project.schema.json`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/schema/project.schema.json).
+The file holds the status, phase, next review date and flags
 as computed at export time; the project's `meta`, checkpoint decisions and metrics;
 the model card; the whole checklist with each criterion's status, evidence, owner,
 due date and `references`; the scores; and `_state`, the project as the tool
-stores it.
+stores it. A flag's `text` is English, its dates included ("Periodic review due
+Sep 5, 2026"), whatever the language of the dashboard that exported it; the
+portfolio CSV's flags are the same text.
+
+The `schema` field names the framework: `chai-review/2` for the published build,
+and the definition's own id, of the form `<id>-review/<n>`, for a [build of
+another framework](frameworks/custom.md). One schema describes every framework's
+export, because the structure is the same. Where a value comes from the
+framework's definition (item ids, statuses, categories, phases, checkpoints,
+model card fields and supplements), the schema lists it for CHAI; for the
+example framework's build (`example-review/1`) it lists the record's keys and an
+answer's fields, and says it has no model card; another framework's values are
+the ones in its definition. An answer holds a status, evidence, an owner, a due
+date and references, and the reason a status asks for under the field the
+definition names: for CHAI and the example framework any other field is refused,
+while another framework's answer may hold any text field, since the schema
+cannot know its reason field's name. Every field the export always writes is
+required.
+
+CI validates against the schema the exports of every sample of the published
+build and of the example framework's build, in English and in every other
+language the dashboard offers (each the same file as the English one), and, in
+English, an empty project, one with hostile text in every typed field, and
+records with evidence references, OPTICA's answers, access lists and a review
+due soon. It also fails on a field one of those exports writes and the schema
+does not describe, on any field the export always writes that the schema does
+not require, and on any field the schema describes that none of those exports
+writes, unless the test lists it with the reason. An export from before the
+provenance and the fingerprint were added (#93, #150) lacks them, and the schema
+no longer describes it.
 
 Only `_state` is read back. Everything else is derived for the reader's
 convenience. **Import project JSON** on the home page reads `_state` and creates
@@ -137,7 +183,8 @@ Four scripts in `examples/` work on exports. Run them from the repository root.
 python examples/load_export.py my-project-chai-review.json
 ```
 
-prints a summary of the project and, if pandas is installed, its open gaps.
+prints a summary of the project, checks its fingerprint and, for a CHAI export
+with pandas installed, lists its open gaps.
 
 ### Feeding evaluation metrics back in
 

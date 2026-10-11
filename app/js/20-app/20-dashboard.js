@@ -132,7 +132,7 @@ function openProject(id,view){
   const p=PROJECTS.get(id); if(!p) return;
   if(!isOwnRecord(p)){ toast(t("toast.foreignRecord",{name:String(recordFramework(p)).slice(0,64)})); return; }
   if(unsubLog){ unsubLog(); unsubLog=null; }
-  CUR=id; S=normalize(clone(p)); LOG=[]; LOG_TOTAL=null; openItems.clear();
+  CUR=id; S=normalizeStored(clone(storedRecord(p))); LOG=[]; LOG_TOTAL=null; openItems.clear();
   // Read-only is a property of this project and this user, not of the
   // workspace: the same person may own one review and only read another.
   RO = !canWrite(S);

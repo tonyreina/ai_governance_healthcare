@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tonyreina.github.io/ai_governance_healthcare/schema/project.schema.json",
   "title": "Governance review: project export",
-  "description": "One project as written by 'Download project data (JSON)', from the published build (CHAI, 'chai-review/2') or a build of any other framework ('<id>-review/<n>', D-79). The structure is the same for every framework; where a value comes from the framework's definition (its item ids, statuses, categories, phases, checkpoints, card fields and supplements), this schema states it for the published framework only, under the 'chai-review/2' condition at the end (D-82). Every field the export always writes is required. Fields other than _state are derived for convenience; import reads _state, the record as stored. tests/test_export_schema.py validates real exports against this file, and also with every object closed, so a field the export writes and this file does not describe fails.",
+  "description": "One project as written by 'Download project data (JSON)', from the published build (CHAI, 'chai-review/2') or a build of any other framework ('<id>-review/<n>', D-79). The structure is the same for every framework; where a value comes from the framework's definition (its item ids, statuses, categories, phases, checkpoints, card fields and supplements), this schema states it for the published framework under the 'chai-review/2' condition at the end, and the record's keys and an answer's fields for the example framework's build under 'example-review/1' (D-82). For another framework, an answer may also hold text under the reason field its definition names. Every field the export always writes is required. Fields other than _state are derived for convenience; import reads _state, the record as stored. tests/test_export_schema.py validates real exports against this file, and also with every object closed, so a field the export writes and this file does not describe fails.",
   "type": "object",
   "required": ["schema", "generated", "storage", "project_id", "fingerprint", "status", "phase", "next_review", "flags", "meta", "gates", "metrics", "checklist", "scores", "_state"],
   "properties": {
@@ -175,6 +175,13 @@
         "properties": {"schema": {"const": "chai-review/2"}}
       },
       "then": {"$ref": "#/$defs/chai"}
+    },
+    {
+      "if": {
+        "required": ["schema"],
+        "properties": {"schema": {"const": "example-review/1"}}
+      },
+      "then": {"$ref": "#/$defs/example"}
     }
   ],
   "$defs": {
@@ -327,6 +334,24 @@
         }
       }
     },
+    "example": {
+      "description": "What the example framework's build fixes (app/frameworks/example/, a build of another framework, D-79): the record's keys (it has no supplement), an answer's fields, and an empty model card (it has none). Its definition names no reason field, so an answer holds only the fields every framework writes. tests/test_export_schema.py checks both lists against the definition and the build.",
+      "properties": {
+        "_state": {
+          "propertyNames": {
+            "enum": ["meta", "items", "gates", "metrics", "card", "access", "archived", "createdAt", "createdBy", "updatedAt", "updatedBy", "cardUpdatedAt"]
+          },
+          "properties": {
+            "items": {
+              "additionalProperties": {
+                "propertyNames": {"enum": ["status", "evidence", "owner", "due", "refs"]}
+              }
+            },
+            "card": {"maxProperties": 0, "description": "The example framework has no model card."}
+          }
+        }
+      }
+    },
     "frameworkId": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
@@ -350,7 +375,7 @@
       },
       "additionalProperties": {
         "type": "string",
-        "description": "The reason a status asks for, under the field its definition names (statuses[].reasonField; OPTICA's 'declineReason')."
+        "description": "The reason a status asks for, under the field its definition names (statuses[].reasonField; OPTICA's 'declineReason'). For a framework this schema names (the 'chai-review/2' and 'example-review/1' conditions), an answer's fields are listed there, its reason fields by name, and any other field is refused."
       }
     },
     "refs": {

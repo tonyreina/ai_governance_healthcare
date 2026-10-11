@@ -17,13 +17,14 @@ Exported and validated:
     payloads of tests/test_injection.py), and evidence references (a link and a
     file); the export in every language is the English one, so the schema's
     English values cover them all;
-  * the example framework's build (app/frameworks/example/): its samples, an empty
-    project and a hostile one, and its definition's values (statuses, categories,
-    sections, checkpoints, phases) are the ones its export uses.
+  * the example framework's build (app/frameworks/example/): its samples (in
+    every language), an empty project and a hostile one, and its definition's
+    values (statuses, categories, sections, checkpoints, phases) are the ones its
+    export uses.
 
-Where the schema fixes the published framework's values (the `chai-review/2`
-condition), each list is checked against CHAI's definition, so the two cannot
-drift either.
+Where the schema fixes a framework's values (the `chai-review/2` and
+`example-review/1` conditions), each list is checked against the definition, so
+the two cannot drift either, and every primary definition must have a condition.
 
 And the fingerprint (#150) is recomputed from every export by
 examples/load_export.py, including a record keyed by numbers ("9", "10"), which
@@ -39,10 +40,25 @@ schema is at least as precise as the one before #177
 (tests/fixtures/project.schema.before-177.json): every mutant of a real export
 that one refused, this one refuses, but for another framework's export id.
 
-Every sample exports the same file in every language, a dated flag included (its
-date was in the reader's language). An older record, missing fields the
-dashboard fills in, is hashed and exported as stored, as the server hashes it.
-A lone surrogate survives the trip from the downloaded file to load_export.py.
+Every sample, of both builds, exports the same file in every language, a dated
+flag included (its date was in the reader's language), and so does a record
+planted with a review due soon, whose amber flag is checked for its shape and its
+English date. An older record, missing fields the dashboard fills in, is hashed
+and exported as stored, as the server hashes it: in the JSON, the HTML (and so
+PDF) and Markdown reports and the history view, and again after an edit, once
+the store has sent the record back. A record made by a signed-in person (access
+lists, createdBy) with an OPTICA answer declined with its reason, an owner, a due
+date and a file added through the evidence form is exported and its shapes
+checked, a file's size an integer. A lone surrogate survives the trip from the
+downloaded file to load_export.py. tests/fixtures/sample_export.json, a real
+export the server's tests hash, still carries the dashboard's digest.
+
+The example framework's build is held to its condition in the schema: an answer
+has only the fields every framework writes (its definition names no reason
+field), so a text field added to one, or `due` under another name, is refused.
+
+Coverage: every path the schema describes has a value in some valid export made
+here, or is listed in UNEXERCISED with the reason.
 
 The validator is shown failing: a missing field, a foreign export id, a value
 outside the published framework's lists, an undescribed field (closed only), a
@@ -55,6 +71,7 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
+import hashlib
 import importlib.util
 import json
 import re
@@ -73,6 +90,10 @@ FRAMEWORK_SCHEMA = ROOT / "schema" / "framework.schema.json"
 CHAI_DEF = ROOT / "app" / "frameworks" / "chai" / "framework.json"
 EXAMPLE_CONFIG = ROOT / "app" / "frameworks" / "example" / "build.json"
 GOLDEN = ROOT / "tests" / "fixtures" / "fingerprint_record.json"
+# A real export of a sample (the published build's "Sepsis early warning (sample)",
+# a link and a file added as evidence): the server's tests hash its record and must
+# get the digest the dashboard wrote into it (server/tests/test_fingerprint.py).
+SAMPLE_EXPORT = ROOT / "tests" / "fixtures" / "sample_export.json"
 # The schema as it was before #177 (chai-review/2 only), to show the new one refuses
 # everything it refused, but for the export id it now lets other frameworks use.
 BEFORE = ROOT / "tests" / "fixtures" / "project.schema.before-177.json"
@@ -102,13 +123,17 @@ LOADER = load_module("load_export", ROOT / "examples" / "load_export.py")
 SCHEMA = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
+# The frameworks the schema names under a condition of their own export id.
+CONDITIONS = {"chai-review/2": "chai", "example-review/1": "example"}
+
+
 def closed(schema: object, path: tuple[str, ...] = ()) -> object:
     """The schema with every object it describes closed to other fields.
 
-    The published framework's conditional lists (`$defs/chai`) only narrow
+    A framework's conditional lists (`$defs/chai`, `$defs/example`) only narrow
     values the open part already describes, so they are left as they are."""
     if isinstance(schema, dict):
-        if path[-2:] == ("$defs", "chai"):
+        if len(path) >= 2 and path[-2] == "$defs" and path[-1] in CONDITIONS.values():
             return schema
         out = {k: closed(v, (*path, k)) for k, v in schema.items()}
         if "properties" in out and "additionalProperties" not in out:
@@ -145,9 +170,15 @@ def problems(export: dict) -> list[str]:
     return out
 
 
+# Every export found valid, for the coverage walk (schema_covered).
+VALID_EXPORTS: list[dict] = []
+
+
 def valid(name: str, export: dict) -> None:
     found = problems(export)
     check(name, not found, "; ".join(sorted(set(found))[:6]))
+    if not found:
+        VALID_EXPORTS.append(copy.deepcopy(export))
 
 
 def verified(name: str, export: dict) -> None:
@@ -301,7 +332,7 @@ def validator_fails(page_export: dict) -> None:
     )
     check("and is refused closed", bool(list(CLOSED.iter_errors(e))))
     e = copy.deepcopy(base)
-    e["schema"] = "example-review/1"
+    e["schema"] = "acme-review/1"
     e["checklist"][0]["status"] = "done"
     e["checklist"][0]["principle"] = "benefit"
     e["checklist"][0]["id"] = "plan-purpose"
@@ -570,6 +601,16 @@ STATE_BOGUS_CHAI = [
         "an OPTICA answer under an id OPTICA does not have",
         "e['_state']['optica']['answers']['zz-9'] = {}",
     ),
+    (
+        "a reference file's size that is text (X04: an integer)",
+        "e['_state']['items'][I]['refs'] = {'rfile0001': {'file': {'name': 'a',"
+        " 'size': '1', 'sha256': 'ab' * 32}}}",
+    ),
+    (
+        "a reference file's size that is a fraction (X04: an integer)",
+        "e['_state']['items'][I]['refs'] = {'rfile0001': {'file': {'name': 'a',"
+        " 'size': 1.5, 'sha256': 'ab' * 32}}}",
+    ),
     ("an access list that is not of user ids", "e['_state']['access']['owners'] = [3]"),
     ("a field access does not have", "e['_state']['access']['surprise'] = []"),
     ("a model card field CHAI does not have", "e['model_card']['surprise'] = 'x'"),
@@ -605,6 +646,88 @@ STATE_BOGUS_GENERAL = [
     ),
     ("a card field that is not text", "e['_state']['card']['x'] = 5"),
 ]
+
+
+# What the example framework's build must not write (J11, J12): its definition
+# names no reason field, so an answer holds only the fields every framework writes.
+STATE_BOGUS_EXAMPLE = [
+    (
+        "a text field an answer does not have (its definition names no reason)",
+        "e['_state']['items'][I]['surprise'] = 'x'",
+    ),
+    (
+        "an answer's due date written under another name",
+        "a = e['_state']['items'][I]; a['dueDate'] = a.pop('due', '')",
+    ),
+    ("a supplement the build does not have", "e['_state']['optica'] = {}"),
+    (
+        "a model card field (the build has no model card)",
+        "e['_state']['card']['x'] = 'y'",
+    ),
+]
+
+
+def example_condition(page, d: dict) -> None:
+    """The schema's `example-review/1` condition is the example's definition: an
+    answer's fields are the ones every framework writes and the reasons its
+    statuses ask for (none), and the record's keys are the described ones and the
+    build's supplements (none)."""
+    cond = SCHEMA.get("$defs", {}).get("example", {}).get("properties", {})
+    check(
+        "the schema names the example framework, by its export id",
+        CONDITIONS.get(d["export"]["schemaId"]) == "example" and bool(cond),
+    )
+    if not cond:
+        return
+    fields = list(SCHEMA["$defs"]["answer"]["properties"])
+    reasons = [s["reasonField"] for s in d["statuses"] if "reasonField" in s]
+    answer = cond["_state"]["properties"]["items"]["additionalProperties"]
+    check(
+        "an answer's fields: the ones every framework writes, and its reasons",
+        answer["propertyNames"]["enum"] == [*fields, *reasons],
+        str(answer["propertyNames"]["enum"]),
+    )
+    supplements = page.evaluate(
+        "FRAMEWORKS.filter(f => f.def && !f.primary).map(f => f.id)"
+    )
+    check(
+        "the record's keys: the described ones, and the build's supplements",
+        cond["_state"]["propertyNames"]["enum"]
+        == [*SCHEMA["properties"]["_state"]["properties"], *supplements],
+        f"{cond['_state']['propertyNames']['enum']} vs {supplements}",
+    )
+    check(
+        "the record's model card is empty, as the build has no card fields",
+        cond["_state"]["properties"]["card"].get("maxProperties") == 0
+        and page.evaluate("typeof CARD_FIELDS === 'undefined'"),
+    )
+    conditioned = [
+        c["if"]["properties"]["schema"]["const"] for c in SCHEMA.get("allOf", [])
+    ]
+    primaries = sorted(
+        json.loads(f.read_text(encoding="utf-8"))["export"]["schemaId"]
+        for f in (ROOT / "app" / "frameworks").glob("*/framework.json")
+        if json.loads(f.read_text(encoding="utf-8")).get("role") == "primary"
+    )
+    check(
+        "every primary framework in this repository has a condition, and no other",
+        sorted(conditioned) == sorted(CONDITIONS) == primaries,
+        f"{conditioned} vs {primaries}",
+    )
+
+
+def unnamed_framework_reason(base: dict) -> None:
+    """A framework the schema does not name may carry the reason field its own
+    definition names: the schema cannot list it, so any text field is allowed."""
+    e = copy.deepcopy(base)
+    e["schema"] = "acme-review/1"
+    first = next(iter(e["_state"]["items"]))
+    e["_state"]["items"][first]["whyNot"] = "a reason"
+    check(
+        "another framework's answer may carry its reason field (a text field)",
+        not problems(e),
+        str(problems(e)[:2]),
+    )
 
 
 def state_closed(base: dict, where: str, cases: list, good: list = ()) -> None:
@@ -669,11 +792,29 @@ def as_precise_as_before(base: dict) -> None:
         f"{len(loosened)} now pass: {loosened[:8]}",
     )
     e = copy.deepcopy(base)
-    e["schema"] = "example-review/1"
+    e["schema"] = "acme-review/1"
     check(
-        "the one intended difference: another framework's export id",
+        "the one intended difference: another framework's export id (one the schema"
+        " names no lists for)",
         bool(list(OLD.iter_errors(e))) and not refused(e),
     )
+
+
+def reports_carry(page, md5: str, sha256: str, where: str, not_md5: str = "") -> None:
+    """The HTML report (which the PDF prints) and the Markdown report print the
+    fingerprint of the stored record, not of the copy filled in to show it."""
+    for name, expr in (
+        ("the HTML and PDF report", "exportHTML()"),
+        ("the Markdown report", "exportMD()"),
+    ):
+        text = page.evaluate(expr)
+        check(
+            f"{where}: {name} prints the stored record's fingerprint (regression)",
+            md5 in text and sha256 in text and (not not_md5 or not_md5 not in text),
+            "the stored record's digests are not in it"
+            if md5 not in text or sha256 not in text
+            else "the filled-in copy's digest is in it",
+        )
 
 
 def older_record(page) -> None:
@@ -681,7 +822,9 @@ def older_record(page) -> None:
     dashboard hashed its filled-in copy and the server the stored record, so the
     same record had two fingerprints (#177). It is the stored record's, everywhere
     the dashboard shows or writes one, and the export's record is the stored one, so
-    a reader recomputes the same digest."""
+    a reader recomputes the same digest. That holds after an edit too, once the
+    store has sent the record back (onProjects), which is when the dashboard builds
+    its copies again."""
     print("An older record, missing fields the dashboard fills in")
     pid = "p-older"
     stored = page.evaluate(
@@ -697,11 +840,17 @@ def older_record(page) -> None:
         pid,
     )
     wait_until(page, f"PROJECTS.has({json.dumps(pid)})")
-    page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
+    page.evaluate(f"openProject({json.dumps(pid)}, 'changelog')")
     settle(page)
     want = LOADER.fingerprint({"_state": stored, "project_id": pid})
     filled = page.evaluate("S.meta.chaiUseCase")
     check("the dashboard fills it in to show it", filled == "", repr(filled))
+    of_filled = page.evaluate("contentHashes(S)")
+    check(
+        "the filled-in copy hashes differently, so the checks below can tell them"
+        " apart",
+        of_filled["md5"] != want["md5"],
+    )
     exported = export_of(page)
     got = {k: exported["fingerprint"][k] for k in ("md5", "sha256")}
     check(
@@ -717,10 +866,11 @@ def older_record(page) -> None:
     )
     verified("load_export.py recomputes it", exported)
     valid("it validates", exported)
+    reports_carry(page, want["md5"], want["sha256"], "older record", of_filled["md5"])
     shown = page.evaluate("changelogHTML()")
     check(
         "the history view shows the stored record's fingerprint",
-        want["md5"] in shown,
+        want["md5"] in shown and of_filled["md5"] not in shown,
         "not in the view",
     )
     n = page.evaluate("LOG.length")
@@ -730,20 +880,61 @@ def older_record(page) -> None:
     wait_until(
         page, "!Object.keys(pending).length && !Object.values(flushing).some(Boolean)"
     )
+    # And sent back: the store's copy reached onProjects, which built S again.
+    wait_until(page, f"PROJECTS.get({json.dumps(pid)}).meta.org === 'Later'")
+    settle(page)
     after = json.loads(
         page.evaluate(f"JSON.stringify(STORE.d.projects[{json.dumps(pid)}])")
     )
-    want_after = LOADER.fingerprint({"_state": after, "project_id": pid})["md5"]
+    want_after = LOADER.fingerprint({"_state": after, "project_id": pid})
     entry = page.evaluate("LOG[0].hash")
     check(
         "an edit's history entry carries the fingerprint of what was stored",
-        entry == want_after,
-        f"{entry} != {want_after}",
+        entry == want_after["md5"],
+        f"{entry} != {want_after['md5']}",
     )
     check(
         "what was stored is the older record and the edit, nothing filled in",
         "chaiUseCase" not in after["meta"] and "card" not in after,
         str(sorted(after)),
+    )
+    print("  after the store sent the record back (onProjects)")
+    kept = json.loads(page.evaluate("JSON.stringify(storedRecord(S))"))
+    kept.pop("id", None)
+    check(
+        "the dashboard's stored record is the store's, nothing filled in (regression)",
+        kept == after,
+        str(sorted(set(kept) ^ set(after)) or "the values differ"),
+    )
+    still_filled = page.evaluate("S.meta.chaiUseCase")
+    check("and it still shows the filled-in copy", still_filled == "")
+    filled_after = page.evaluate("contentHashes(S)")["md5"]
+    check(
+        "the filled-in copy still hashes differently after the edit",
+        filled_after != want_after["md5"],
+    )
+    page_shown = page.inner_html("#main")
+    check(
+        "the history page on screen shows the stored record's fingerprint",
+        want_after["md5"] in page_shown and filled_after not in page_shown,
+        "the rendered page does not show it",
+    )
+    shown = page.evaluate("changelogHTML()")
+    check(
+        "changelogHTML() shows the stored record's fingerprint",
+        want_after["md5"] in shown and filled_after not in shown,
+        "not in the view",
+    )
+    exported = export_of(page)
+    check(
+        "the export's fingerprint and record are the stored record's",
+        {k: exported["fingerprint"][k] for k in ("md5", "sha256")} == want_after
+        and exported["_state"] == after,
+        str(exported["fingerprint"]),
+    )
+    verified("load_export.py recomputes it after the edit", exported)
+    reports_carry(
+        page, want_after["md5"], want_after["sha256"], "after the edit", filled_after
     )
 
 
@@ -785,6 +976,212 @@ def lone_surrogate(page) -> None:
     )
 
 
+def english_day(day: str) -> str:
+    """A date as the dashboard writes it in English: "Sep 5, 2026"."""
+    d = dt.date.fromisoformat(day)
+    return f"{d.strftime('%b')} {d.day}, {d.year}"
+
+
+def review_due(page, pids: list) -> None:
+    """J07: a live project whose next review falls within the framework's
+    dueSoonDays exports the amber 'review due' flag. No sample has one (their
+    reviews are overdue), so one is planted: a sample's record, its clock moved,
+    stored as a new project."""
+    print("A review due soon: the amber flag, its date in English")
+    locales = page.evaluate("[...LOCALE_CHOICES, Locale.PSEUDO]")
+    for _, src in pids:
+        page.evaluate(f"openProject({json.dumps(src)}, 'setup')")
+        settle(page)
+        if any(
+            (f.get("msg") or [""])[0] == "flag.reviewOverdue"
+            for f in export_of(page)["flags"]
+        ):
+            break
+    planted = page.evaluate(
+        """async (src) => {
+          const E = ENGINES[primaryFramework().id], R = E.review;
+          const doc = clone(storedRecord(PROJECTS.get(src))); delete doc.id;
+          doc.meta.solution = "A review due soon";
+          doc.meta.reviewCadence = "1";
+          // The clock starts at the first anchor with a decision (nextReview).
+          const k = R.anchors.find(a => (doc.gates[a] || {}).decision)
+            || R.anchors[R.anchors.length - 1];
+          const target = addDays(parseDay(TODAY()), 10);
+          const date = ymd(addMonths(target, -1));
+          doc.gates[k] = Object.assign(doc.gates[k] || {}, {date});
+          await STORE.create("p-due", doc);
+          return {soon: R.dueSoonDays};
+        }""",
+        src,
+    )
+    wait_until(page, "PROJECTS.has('p-due')")
+    page.evaluate("openProject('p-due', 'setup')")
+    settle(page)
+    english = export_of(page)
+    nr = english["next_review"]
+    left = (dt.date.fromisoformat(nr) - dt.date.today()).days if nr else None
+    check(
+        "the planted record's next review is within dueSoonDays",
+        left is not None and 0 <= left <= planted["soon"],
+        f"{nr} ({left} days; dueSoonDays {planted['soon']})",
+    )
+    due = [f for f in english["flags"] if (f.get("msg") or [""])[0] == "flag.reviewDue"]
+    check(
+        "it exports the amber 'review due' flag, shaped as the schema says",
+        len(due) == 1
+        and due[0]["sev"] == "amber"
+        and due[0]["msg"] == ["flag.reviewDue", {"date": nr}]
+        and set(due[0]) == {"sev", "text", "msg"},
+        json.dumps(english["flags"]),
+    )
+    if due:
+        check(
+            "its text writes the date in English",
+            due[0]["text"] == f"Periodic review due {english_day(nr)}",
+            due[0]["text"],
+        )
+    valid("the export with a review due validates", english)
+    verified("its fingerprint recomputes", english)
+    english = without_stamp(english)
+    differ = []
+    for loc in locales:
+        page.evaluate(f"setLocale({json.dumps(loc)}); relocalize()")
+        other = without_stamp(export_of(page))
+        if other != english:
+            differ.append(f"{loc}: {other.get('flags')}"[:200])
+    page.evaluate("setLocale('en'); relocalize()")
+    check(
+        f"the review-due export is the English one in all {len(locales)} languages",
+        not differ,
+        "; ".join(differ[:2]),
+    )
+
+
+# A file chosen in the evidence form, as a person adds one.
+ADDED_FILE = b"%PDF-1.4 bias audit"
+
+
+def access_and_optica(page) -> None:
+    """J13: a record made by a signed-in person (ME.id set), so its access lists
+    and createdBy are not empty, with OPTICA on and one of its answers declined
+    with a reason, an owner, a due date and a file added through the evidence
+    form. Every write goes through the page's own edits and the store."""
+    print("A record with a person's id, access lists and OPTICA's fields")
+    page.evaluate("ME.id = 'u-alice'")
+    pid = page.evaluate(
+        "async () => createProject(normalize(blankProject('Access and OPTICA')),"
+        " 'Project created')"
+    )
+    wait_until(page, f"PROJECTS.has({json.dumps(pid)})")
+    page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
+    settle(page)
+    page.evaluate(
+        "edit('access.writers', ['u-bob']); edit('access.readers', ['u-carol'])"
+    )
+    n = page.evaluate("LOG.length")
+    page.evaluate("setFrameworkEnabled('optica', true)")
+    wait_until(page, f"LOG.length > {n}")
+    settle(page)
+    item, section, reason = page.evaluate(
+        "[ENGINES.optica.items[0].id, ENGINES.optica.items[0].section.n,"
+        " FACADES.optica.reason]"
+    )
+    path = f"optica.answers.{item}"
+    page.evaluate(
+        f"""() => {{
+          edit({json.dumps(path + ".status")}, {json.dumps(reason["value"])});
+          edit({json.dumps(path + "." + reason["reasonField"])}, "Out of scope here");
+          edit({json.dumps(path + ".owner")}, "Data science");
+          edit({json.dumps(path + ".due")}, "2027-01-15");
+        }}"""
+    )
+    page.evaluate(f"go('o{section}')")
+    page.click(f'li[data-item="{item}"] [data-toggle="{item}"]')
+    row = page.locator(f'li[data-item="{item}"]')
+    row.locator('[data-refin="title"]').fill("Bias audit")
+    row.locator('[data-refin="file"]').set_input_files(
+        files=[
+            {"name": "audit.pdf", "mimeType": "application/pdf", "buffer": ADDED_FILE}
+        ]
+    )
+    row.locator("[data-addref]").click()
+    wait_until(
+        page,
+        f"Object.keys((FACADES.optica.answers(S)[{json.dumps(item)}] || {{}}).refs"
+        " || {}).length === 1",
+    )
+    wait_until(
+        page, "!Object.keys(pending).length && !Object.values(flushing).some(Boolean)"
+    )
+    settle(page)
+    exported = export_of(page)
+    state = exported["_state"]
+    valid("it validates", exported)
+    verified("its fingerprint recomputes", exported)
+    stored = json.loads(
+        page.evaluate(f"JSON.stringify(STORE.d.projects[{json.dumps(pid)}])")
+    )
+    stored.pop("id", None)
+    check("its export's record is the one in the store", state == stored)
+    check(
+        "the access lists hold user ids",
+        state.get("access")
+        == {"owners": ["u-alice"], "writers": ["u-bob"], "readers": ["u-carol"]},
+        json.dumps(state.get("access")),
+    )
+    check(
+        "createdBy and updatedBy are the person's id",
+        state.get("createdBy") == "u-alice" and state.get("updatedBy") == "u-alice",
+        f"{state.get('createdBy')!r} {state.get('updatedBy')!r}",
+    )
+    answer = (state.get("optica") or {}).get("answers", {}).get(item, {})
+    check(
+        "OPTICA's answer: declined, with its reason, an owner and a due date",
+        answer.get("status") == reason["value"]
+        and answer.get(reason["reasonField"]) == "Out of scope here"
+        and answer.get("owner") == "Data science"
+        and answer.get("due") == "2027-01-15"
+        and set(answer) == {"status", reason["reasonField"], "owner", "due", "refs"},
+        json.dumps(answer)[:300],
+    )
+    refs = answer.get("refs") or {}
+    ref = next(iter(refs.values()), {}) or {}
+    file = ref.get("file") or {}
+    check(
+        "the reference: under a reference id, the fields the form writes",
+        len(refs) == 1
+        and all(re.fullmatch(r"r[a-z0-9]{6,24}", k) for k in refs)
+        and set(ref) == {"title", "url", "date", "at", "file"}
+        and ref["title"] == "Bias audit"
+        and set(file) == {"name", "size", "sha256"},
+        json.dumps(refs)[:300],
+    )
+    check(
+        "the file's size is an integer, its byte count (X04), and its SHA-256 the"
+        " file's",
+        type(file.get("size")) is int
+        and file.get("size") == len(ADDED_FILE)
+        and file.get("sha256") == hashlib.sha256(ADDED_FILE).hexdigest(),
+        json.dumps(file),
+    )
+    page.evaluate("ME.id = null")
+
+
+def sample_export_fixture(page) -> None:
+    """tests/fixtures/sample_export.json, a real export, is the record the server's
+    tests hash: the dashboard still gives its record the digest written in it."""
+    fixture = json.loads(SAMPLE_EXPORT.read_text(encoding="utf-8"))
+    got = page.evaluate("e => contentHashes({...e._state, id: e.project_id})", fixture)
+    check(
+        "the committed sample export's fingerprint is the dashboard's digest of its"
+        " record",
+        got == {k: fixture["fingerprint"][k] for k in ("md5", "sha256")},
+        str(got),
+    )
+    valid("the committed sample export validates", fixture)
+    verified("load_export.py recomputes it", fixture)
+
+
 def golden(page, where: str) -> None:
     fixture = json.loads(GOLDEN.read_text(encoding="utf-8"))
     got = page.evaluate("r => contentHashes(r)", fixture["record"])
@@ -800,6 +1197,7 @@ def published(browser) -> dict:
     print("The published build")
     page, errors = open_app(browser, APP)
     golden(page, "published")
+    sample_export_fixture(page)
     chai_lists_match_definition(page)
 
     page.evaluate("loadSamples()")
@@ -888,6 +1286,7 @@ def published(browser) -> dict:
         not differ,
         str(differ),
     )
+    review_due(page, pids)
 
     print("An empty project, references, a hostile one, one keyed by numbers")
     pid = pids[0][1]
@@ -904,6 +1303,17 @@ def published(browser) -> dict:
     refs = export_of(page)
     listed = next(c for c in refs["checklist"] if c["id"] == item)["references"]
     check("evidence references are exported", len(listed) == 2, str(listed))
+    sizes = [r["file"]["size"] for r in listed if r.get("file")] + [
+        r["file"]["size"]
+        for r in refs["_state"]["items"][item]["refs"].values()
+        if r and r.get("file")
+    ]
+    check(
+        "a file's size is exported as an integer, in the checklist and the record"
+        " (X04)",
+        sizes == [1048576, 1048576] and all(type(n) is int for n in sizes),
+        repr(sizes),
+    )
     valid("a project with a link and a file as evidence", refs)
     verified("references: fingerprint recomputed", refs)
 
@@ -969,6 +1379,7 @@ def published(browser) -> dict:
     state_closed(rich, "published", STATE_BOGUS_CHAI, STATE_GOOD_CHAI)
     as_precise_as_before(rich)
 
+    access_and_optica(page)
     older_record(page)
     page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
     settle(page)
@@ -998,11 +1409,26 @@ def example_build(browser) -> None:
         items = {i["id"] for s in d["sections"] for i in s["items"]}
         gates = {g["id"]: {o["value"] for o in g["options"]} for g in d["gates"]}
         phases = {p["label"] for p in d["phases"]} | {"Retired", "Stopped"}
+        example_condition(page, d)
         exports = []
+        locales = page.evaluate("[...LOCALE_CHOICES, Locale.PSEUDO]")
         for pid in page.evaluate("[...PROJECTS.keys()].sort()"):
             page.evaluate(f"openProject({json.dumps(pid)}, 'setup')")
             settle(page)
             exports.append(export_of(page))
+            english = without_stamp(exports[-1])
+            differ = []
+            for loc in locales:
+                page.evaluate(f"setLocale({json.dumps(loc)}); relocalize()")
+                if without_stamp(export_of(page)) != english:
+                    differ.append(loc)
+            page.evaluate("setLocale('en'); relocalize()")
+            check(
+                f"{english['meta']['solution']}: the export is the English one in all"
+                f" {len(locales)} languages",
+                not differ,
+                str(differ),
+            )
         page.evaluate(
             "() => { S = normalize(blankProject(''));"
             " S.id = 'p-empty'; CUR = 'p-empty'; }"
@@ -1033,7 +1459,8 @@ def example_build(browser) -> None:
                 json.dumps({k: e[k] for k in ("phase", "scores")}),
             )
         required_fields(exports[0], "example", chai=False)
-        state_closed(exports[0], "example", STATE_BOGUS_GENERAL)
+        state_closed(exports[0], "example", STATE_BOGUS_GENERAL + STATE_BOGUS_EXAMPLE)
+        unnamed_framework_reason(exports[0])
         with tempfile.TemporaryDirectory() as files:
             path = Path(files) / "example-review.json"
             path.write_text(json.dumps(exports[0]), encoding="utf-8")
@@ -1052,14 +1479,109 @@ def example_build(browser) -> None:
         settle(page)
         page.evaluate(
             "() => { S.items = Object.assign("
-            "{'9': {status: 'done'}, '10': {status: 'todo'}}, S.items); }"
+            "{'9': {status: 'done'}, '10': {status: 'todo'}}, S.items);"
+            # Written here, not saved: this copy is the record.
+            " STORED.delete(S); }"
         )
         numeric = export_of(page)
+        check(
+            "the answers keyed by numbers are in the exported record",
+            {"9", "10"} <= set(numeric["_state"]["items"]),
+            str(sorted(numeric["_state"]["items"])[:6]),
+        )
+        canonical = page.evaluate("canonicalJSON(storedRecord(S))")
+        check(
+            "and in what the dashboard hashed, as strings sort: 10 before 9",
+            canonical.find('"10":') != -1
+            and canonical.find('"10":') < canonical.find('"9":'),
+            canonical[:120],
+        )
         verified(
             "answers keyed by numbers: fingerprint recomputed (regression)", numeric
         )
         check("the example build raised no error", not errors, "; ".join(errors[:3]))
         page.close()
+
+
+def resolve(node: dict) -> dict:
+    while isinstance(node, dict) and "$ref" in node:
+        node = SCHEMA["$defs"][node["$ref"].rsplit("/", 1)[1]]
+    return node
+
+
+def schema_paths(node: dict, path: tuple = (), out: set | None = None) -> set:
+    """Every place the schema describes: a named field, `*` for a map's values
+    (additionalProperties), `[]` for a list's items."""
+    out = set() if out is None else out
+    node = resolve(node)
+    for key, sub in node.get("properties", {}).items():
+        out.add((*path, key))
+        schema_paths(sub, (*path, key), out)
+    for step, sub in (
+        ("*", node.get("additionalProperties")),
+        ("[]", node.get("items")),
+    ):
+        if isinstance(sub, dict):
+            out.add((*path, step))
+            schema_paths(sub, (*path, step), out)
+    return out
+
+
+def exercised(node: dict, value: object, path: tuple, out: set) -> None:
+    """The schema paths a real export has a value at."""
+    node = resolve(node)
+    if isinstance(value, dict):
+        props, extra = node.get("properties", {}), node.get("additionalProperties")
+        for key, v in value.items():
+            if key in props:
+                step, sub = key, props[key]
+            elif isinstance(extra, dict):
+                step, sub = "*", extra
+            else:
+                continue
+            out.add((*path, step))
+            exercised(sub, v, (*path, step), out)
+    elif isinstance(value, list) and isinstance(node.get("items"), dict):
+        for v in value:
+            out.add((*path, "[]"))
+            exercised(node["items"], v, (*path, "[]"), out)
+
+
+# Described by the schema and written by no export these tests make, each with why.
+UNEXERCISED = {
+    ("_state", "items", "*", "*"): "a primary framework's reason field: neither CHAI"
+    " nor the example framework names one (OPTICA's, a supplement's, is exercised)",
+}
+
+
+def schema_covered() -> None:
+    """Coverage: every path the schema describes has a value in some real export
+    above, or is listed in UNEXERCISED with the reason. A described field no export
+    writes is a field the tests above never validated a real value of."""
+    print("Every path the schema describes is in some real export")
+    described = schema_paths(SCHEMA)
+    seen: set = set()
+    for export in VALID_EXPORTS:
+        exercised(SCHEMA, export, (), seen)
+    missing = sorted(described - seen - set(UNEXERCISED))
+    check(
+        f"{len(VALID_EXPORTS)} valid exports reach {len(described & seen)} of the"
+        f" {len(described)} paths the schema describes; the rest are listed with why",
+        not missing and len(VALID_EXPORTS) > 20,
+        "never exported: " + ", ".join("/".join(p) for p in missing),
+    )
+    surprise = copy.deepcopy(SCHEMA)
+    surprise["properties"]["surprise"] = {"type": "string"}
+    check(
+        "a field the schema describes and no export writes is caught (mutation)",
+        ("surprise",) in schema_paths(surprise) - seen,
+    )
+    stale = sorted(p for p in UNEXERCISED if p in seen or p not in described)
+    check(
+        "nothing listed as unexercised is exercised, or no longer described",
+        not stale,
+        str(stale),
+    )
 
 
 def main() -> int:
@@ -1068,6 +1590,7 @@ def main() -> int:
         published(browser)
         example_build(browser)
         browser.close()
+    schema_covered()
     print()
     if failures:
         print(f"{len(failures)} check(s) failed")

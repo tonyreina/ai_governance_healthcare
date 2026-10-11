@@ -1,5 +1,5 @@
 {
-  "about": "One record, and the fingerprint all three implementations must give it (#177): the dashboard (tests/test_export_schema.py), examples/load_export.py and the server (server/tests/test_fingerprint.py). Integer-like keys, keys whose order differs between UTF-16 code units and code points, every volatile field at more than one depth, text that JSON and UTF-8 treat specially, and lone surrogates (in a key and in a value), which JSON.stringify writes as \\u escapes. Regenerate only if the rule changes, and say why.",
+  "about": "One record, and the fingerprint all three implementations must give it (#177): the dashboard (tests/test_export_schema.py), examples/load_export.py and the server (server/tests/test_fingerprint.py). Integer-like keys, keys whose order differs between UTF-16 code units and code points, every volatile field at more than one depth, text that JSON and UTF-8 treat specially, lone surrogates (in a key and in a value), which JSON.stringify writes as \\u escapes, and the fields a real record carries (a checkpoint's date, an answer's evidence, owner, due date and references), so an implementation that leaves out a field the rule keeps (a date, say) disagrees. Regenerate only if the rule changes, and say why.",
   "record": {
     "id": "p-golden",
     "meta": {
@@ -27,8 +27,30 @@
       },
       "s1-1": {
         "status": "met",
-        "evidence": "",
-        "contentHash": "left out"
+        "evidence": "Validated on 2025 data",
+        "owner": "Data science",
+        "due": "2026-04-01",
+        "contentHash": "left out",
+        "refs": {
+          "rlink0001": {
+            "title": "Validation report",
+            "url": "https://example.org/report?id=7",
+            "date": "2026-03-04",
+            "at": "2026-03-04T10:00:00Z"
+          },
+          "rfile0001": {
+            "title": "",
+            "url": "",
+            "date": "",
+            "at": "2026-03-05T10:00:00Z",
+            "file": {
+              "name": "validation.pdf",
+              "size": 1048576,
+              "sha256": "abababababababababababababababababababababababababababababababab"
+            }
+          },
+          "rgone0001": null
+        }
       }
     },
     "card": {
@@ -41,8 +63,15 @@
     "gates": {
       "A": {
         "decision": "Approve",
+        "by": "AI governance committee",
+        "date": "2025-05-08",
+        "rationale": "Met criteria.",
         "signedBy": null,
-        "signedAt": null
+        "signedAt": "2025-05-08T22:50:43.686Z"
+      },
+      "B": {
+        "decision": "Proceed",
+        "date": "2025-07-07"
       }
     },
     "metrics": [
@@ -83,6 +112,6 @@
     },
     "generated": "left out"
   },
-  "md5": "b244f1b194c72b09e0d1a07e1dc22f1a",
-  "sha256": "cdf8d1e04b91d2498460b3a914e08a2931086474bcbb30b1535ff05e6955dfd2"
+  "md5": "2c5b25f37e21d1db4db54ff1b50eca5e",
+  "sha256": "020eeaceee9f1296b80f07a119568f0713c46be137c9823c78d089810c357197"
 }

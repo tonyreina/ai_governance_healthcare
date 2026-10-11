@@ -1,0 +1,1029 @@
+{
+  "schema": "chai-review/2",
+  "generated": "2026-10-10T22:51:11.077Z",
+  "storage": {
+    "mode": "local",
+    "label": "This browser only",
+    "note": "Kept in one browser on one computer. Sign-offs here are self-asserted: nothing verifies who made them, and there is no server-side audit log or version history."
+  },
+  "project_id": "pmv2znb4ixsbj60",
+  "fingerprint": {
+    "md5": "80d96049e4d2b33f74400225b636ad21",
+    "sha256": "812cbf939880daa94f3e978c4abafabda59a183cee4c2a55436344f65dfae39d",
+    "of": "The project record as stored, including its id, as compact canonical JSON in UTF-8: keys sorted at every level by UTF-16 code unit (as JavaScript sorts them, so 10 before 9), strings written as JSON.stringify writes them (a lone surrogate as its lowercase \\u escape), with updatedAt, updatedBy, cardUpdatedAt, _state, contentHash and generated left out."
+  },
+  "status": "Out of compliance",
+  "phase": "Deployed",
+  "next_review": "2026-09-05",
+  "flags": [
+    {
+      "sev": "red",
+      "text": "1 action past due",
+      "msg": [
+        "flag.pastDue",
+        {
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sev": "red",
+      "text": "Live with 1 criterion not met",
+      "msg": [
+        "flag.liveNotMet",
+        {
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sev": "red",
+      "text": "Periodic review overdue since Sep 5, 2026",
+      "msg": [
+        "flag.reviewOverdue",
+        {
+          "date": "2026-09-05"
+        }
+      ]
+    },
+    {
+      "sev": "amber",
+      "text": "Model card not updated since Checkpoint C",
+      "msg": [
+        "flag.cardStale",
+        {
+          "gateKey": "C"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "solution": "Sepsis early warning (sample)",
+    "org": "Example Regional Health",
+    "developer": "Example Vendor, Inc.",
+    "sourcing": "Purchased from a vendor",
+    "sponsor": "Dr. L. Chen, Critical Care",
+    "reviewers": "",
+    "riskTier": "High",
+    "reviewCadence": "12 months",
+    "startDate": "",
+    "scope": "All adult inpatient units",
+    "chaiUseCase": "sepsis-risk-prediction"
+  },
+  "gates": {
+    "A": {
+      "decision": "Proceed",
+      "by": "AI governance committee",
+      "date": "2025-05-08",
+      "rationale": "Met criteria for this stage.",
+      "signedBy": null,
+      "signedAt": "2025-05-08T22:51:08.942Z"
+    },
+    "B": {
+      "decision": "Proceed",
+      "by": "AI governance committee",
+      "date": "2025-07-07",
+      "rationale": "Met criteria for this stage.",
+      "signedBy": null,
+      "signedAt": "2025-07-07T22:51:08.942Z"
+    },
+    "C": {
+      "decision": "Proceed",
+      "by": "AI governance committee",
+      "date": "2025-09-05",
+      "rationale": "Met criteria for this stage.",
+      "signedBy": null,
+      "signedAt": "2025-09-05T22:51:08.942Z"
+    },
+    "D": {}
+  },
+  "metrics": [
+    {
+      "cat": "Usefulness, usability & efficacy",
+      "name": "AUROC, 12-hour deterioration",
+      "value": "0.82",
+      "ci": "0.80–0.84",
+      "pop": "All adults, local validation"
+    },
+    {
+      "cat": "Fairness & equity",
+      "name": "Sensitivity at threshold",
+      "value": "0.71",
+      "ci": "0.66–0.76",
+      "pop": "Age 18–30"
+    },
+    {
+      "cat": "Fairness & equity",
+      "name": "Sensitivity at threshold",
+      "value": "0.79",
+      "ci": "0.77–0.81",
+      "pop": "Age 65+"
+    },
+    {
+      "cat": "Safety & reliability",
+      "name": "Calibration slope",
+      "value": "0.94",
+      "ci": "",
+      "pop": "All adults"
+    },
+    {
+      "cat": "Usefulness, usability & efficacy",
+      "name": "Area under the curve (AUC)—receiver operating characteristic (ROC) (AUC-ROC)",
+      "value": "0.81",
+      "ci": "0.79–0.83",
+      "pop": "Local validation, 18 months"
+    }
+  ],
+  "model_card": {
+    "name": "Sepsis early warning (sample)",
+    "developer": "Example Vendor, Inc.",
+    "contact": "aigovernance@example.org",
+    "releaseStage": "General availability",
+    "releaseDate": "",
+    "version": "3.2-local",
+    "availability": "United States",
+    "regulatory": "Not FDA-cleared; deployed as clinical decision support",
+    "summary": "Flags adult inpatients at risk of sepsis for rapid assessment.",
+    "keywords": "early warning, deterioration, inpatient",
+    "intendedUse": "Hourly risk score on the unit patient list; scores above threshold prompt a bedside nurse assessment.",
+    "users": "Bedside and charge nurses on adult med-surg units",
+    "howTo": "Review flagged patients within 30 minutes and document the assessment; escalate per rapid-response policy.",
+    "population": "Adults 18+ admitted to medical-surgical units",
+    "outOfScope": "ICU, pediatrics, obstetrics, emergency department, and comfort-care patients",
+    "risks": "Alert fatigue; reduced sensitivity in younger adults; depends on timely vital-sign charting.",
+    "biases": "Development cohort demographics not yet disclosed by vendor.",
+    "riskLevel": "Moderate: informs escalation decisions",
+    "outputs": "Risk score 0–100 and a threshold flag",
+    "modelType": "Gradient-boosted trees",
+    "foundation": "None",
+    "inputSource": "EHR vital signs, labs, nursing assessments",
+    "dataType": "Structured EHR data in; numeric score out",
+    "devData": "",
+    "biasMitigation": "",
+    "maintenance": "Monthly performance and drift report to the AI governance committee; vendor recalibration annually or on drift alert.",
+    "security": "",
+    "evalRefs": "",
+    "trials": "",
+    "pubs": "",
+    "reimbursement": "",
+    "consent": ""
+  },
+  "checklist": [
+    {
+      "id": "s1-1",
+      "stage": 1,
+      "principle": "U",
+      "criterion": "Problem statement and target outcome agreed with clinical and operational stakeholders",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s1-2",
+      "stage": 1,
+      "principle": "U",
+      "criterion": "Current-state or root-cause analysis shows AI is an appropriate intervention, not just a possible one",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s1-3",
+      "stage": 1,
+      "principle": "U",
+      "criterion": "Success measures and a baseline to compare against are defined",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s1-4",
+      "stage": 1,
+      "principle": "F",
+      "criterion": "Affected patient populations identified, including groups at risk of being underserved or harmed",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s1-5",
+      "stage": 1,
+      "principle": "S",
+      "criterion": "Potential harms and failure modes listed, with severity and likelihood",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s1-6",
+      "stage": 1,
+      "principle": "T",
+      "criterion": "Accountable owner, governance body, and decision rights named",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s1-7",
+      "stage": 1,
+      "principle": "P",
+      "criterion": "Data needs, privacy, consent, and regulatory constraints scoped",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s2-1",
+      "stage": 2,
+      "principle": "U",
+      "criterion": "End users took part in workflow and interface design",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s2-2",
+      "stage": 2,
+      "principle": "U",
+      "criterion": "Intended use, users, and care setting documented, with out-of-scope uses listed",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s2-3",
+      "stage": 2,
+      "principle": "F",
+      "criterion": "Subgroups and fairness criteria for evaluation pre-specified",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s2-4",
+      "stage": 2,
+      "principle": "S",
+      "criterion": "Decision thresholds defined and clinically justified",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s2-5",
+      "stage": 2,
+      "principle": "S",
+      "criterion": "Human oversight and override path designed into the workflow",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s2-6",
+      "stage": 2,
+      "principle": "T",
+      "criterion": "Pathway for reporting safety issues and harms drafted, naming who reports to whom",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s2-7",
+      "stage": 2,
+      "principle": "P",
+      "criterion": "Threat model, access controls, and data flows designed",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s3-1",
+      "stage": 3,
+      "principle": "T",
+      "criterion": "Data provenance and known data limitations documented",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s3-2",
+      "stage": 3,
+      "principle": "F",
+      "criterion": "Demographic and socio-demographic make-up of development data characterized",
+      "status": "notmet",
+      "evidence": "Vendor declined to share cohort demographics.",
+      "owner": "Procurement",
+      "due": "2026-09-20",
+      "references": [
+        {
+          "title": "Validation report",
+          "url": "https://example.org/report?id=7",
+          "date": "2026-03-04",
+          "file": null
+        },
+        {
+          "title": "",
+          "url": null,
+          "date": null,
+          "file": {
+            "name": "validation.pdf",
+            "size": 1048576,
+            "sha256": "abababababababababababababababababababababababababababababababab"
+          }
+        }
+      ]
+    },
+    {
+      "id": "s3-3",
+      "stage": 3,
+      "principle": "F",
+      "criterion": "Bias mitigation approach chosen and documented",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s3-4",
+      "stage": 3,
+      "principle": "S",
+      "criterion": "Data quality checks and handling of missing data documented",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s3-5",
+      "stage": 3,
+      "principle": "T",
+      "criterion": "Version control in place for datasets, code, and model artifacts",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s3-6",
+      "stage": 3,
+      "principle": "P",
+      "criterion": "De-identification or other privacy-enhancing techniques applied where appropriate",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s3-7",
+      "stage": 3,
+      "principle": "S",
+      "criterion": "People responsible for monitoring data and model behavior designated",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s4-1",
+      "stage": 4,
+      "principle": "U",
+      "criterion": "Performance validated on local data representative of the deployment population",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s4-2",
+      "stage": 4,
+      "principle": "F",
+      "criterion": "Performance compared across demographic subgroups, with gaps explained",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s4-3",
+      "stage": 4,
+      "principle": "S",
+      "criterion": "Calibration checked, not only discrimination",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s4-4",
+      "stage": 4,
+      "principle": "S",
+      "criterion": "Silent (shadow) evaluation run in the live environment",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s4-5",
+      "stage": 4,
+      "principle": "S",
+      "criterion": "Installation qualification completed, where applicable",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s4-6",
+      "stage": 4,
+      "principle": "T",
+      "criterion": "Explanations of outputs are suited to the intended users",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s4-7",
+      "stage": 4,
+      "principle": "P",
+      "criterion": "Security review or vendor security assessment completed",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s4-8",
+      "stage": 4,
+      "principle": "T",
+      "criterion": "Safety reporting pathway updated with what assessment revealed",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s5-1",
+      "stage": 5,
+      "principle": "U",
+      "criterion": "Pilot scope, sites, duration, and stop rules defined",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s5-2",
+      "stage": 5,
+      "principle": "U",
+      "criterion": "Usability and workflow fit assessed with frontline users",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s5-3",
+      "stage": 5,
+      "principle": "U",
+      "criterion": "Real-world effect on outcomes or process measured against baseline",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s5-4",
+      "stage": 5,
+      "principle": "F",
+      "criterion": "Pilot results checked for differences across patient groups",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s5-5",
+      "stage": 5,
+      "principle": "S",
+      "criterion": "Adverse events and near misses tracked and reviewed",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s5-6",
+      "stage": 5,
+      "principle": "T",
+      "criterion": "Users trained, and the approach to patient disclosure decided",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s6-1",
+      "stage": 6,
+      "principle": "S",
+      "criterion": "Performance and drift monitoring live, with alert thresholds and an owner",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s6-2",
+      "stage": 6,
+      "principle": "F",
+      "criterion": "Subgroup performance monitored on an ongoing basis",
+      "status": "partial",
+      "evidence": "Subgroup dashboard built for age and sex only.",
+      "owner": "Data science",
+      "due": "2026-11-09",
+      "references": []
+    },
+    {
+      "id": "s6-3",
+      "stage": 6,
+      "principle": "T",
+      "criterion": "Audit schedule and change control set, with a revised model card for each version",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s6-4",
+      "stage": 6,
+      "principle": "S",
+      "criterion": "Incident response, rollback, and retirement criteria documented",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s6-5",
+      "stage": 6,
+      "principle": "P",
+      "criterion": "Access reviews and security patching scheduled",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    },
+    {
+      "id": "s6-6",
+      "stage": 6,
+      "principle": "U",
+      "criterion": "Value to patients and staff re-evaluated periodically",
+      "status": "met",
+      "evidence": "",
+      "owner": "",
+      "due": "",
+      "references": []
+    }
+  ],
+  "scores": {
+    "overall": 96,
+    "U": 100,
+    "F": 79,
+    "S": 100,
+    "T": 100,
+    "P": 100
+  },
+  "_state": {
+    "meta": {
+      "solution": "Sepsis early warning (sample)",
+      "org": "Example Regional Health",
+      "developer": "Example Vendor, Inc.",
+      "sourcing": "Purchased from a vendor",
+      "sponsor": "Dr. L. Chen, Critical Care",
+      "reviewers": "",
+      "riskTier": "High",
+      "reviewCadence": "12 months",
+      "startDate": "",
+      "scope": "All adult inpatient units",
+      "chaiUseCase": "sepsis-risk-prediction"
+    },
+    "items": {
+      "s1-1": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s1-2": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s1-3": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s1-4": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s1-5": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s1-6": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s1-7": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s2-1": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s2-2": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s2-3": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s2-4": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s2-5": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s2-6": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s2-7": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s3-1": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s3-2": {
+        "status": "notmet",
+        "evidence": "Vendor declined to share cohort demographics.",
+        "owner": "Procurement",
+        "due": "2026-09-20",
+        "refs": {
+          "rlink0001": {
+            "title": "Validation report",
+            "url": "https://example.org/report?id=7",
+            "date": "2026-03-04",
+            "at": "2026-03-04T10:00:00Z"
+          },
+          "rfile0001": {
+            "title": "",
+            "url": "",
+            "date": "",
+            "at": "2026-03-05T10:00:00Z",
+            "file": {
+              "name": "validation.pdf",
+              "size": 1048576,
+              "sha256": "abababababababababababababababababababababababababababababababab"
+            }
+          }
+        }
+      },
+      "s3-3": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s3-4": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s3-5": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s3-6": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s3-7": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s4-1": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s4-2": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s4-3": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s4-4": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s4-5": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s4-6": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s4-7": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s4-8": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s5-1": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s5-2": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s5-3": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s5-4": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s5-5": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s5-6": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s6-1": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s6-2": {
+        "status": "partial",
+        "evidence": "Subgroup dashboard built for age and sex only.",
+        "owner": "Data science",
+        "due": "2026-11-09"
+      },
+      "s6-3": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s6-4": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s6-5": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      },
+      "s6-6": {
+        "status": "met",
+        "evidence": "",
+        "owner": "",
+        "due": ""
+      }
+    },
+    "gates": {
+      "A": {
+        "decision": "Proceed",
+        "by": "AI governance committee",
+        "date": "2025-05-08",
+        "rationale": "Met criteria for this stage.",
+        "signedBy": null,
+        "signedAt": "2025-05-08T22:51:08.942Z"
+      },
+      "B": {
+        "decision": "Proceed",
+        "by": "AI governance committee",
+        "date": "2025-07-07",
+        "rationale": "Met criteria for this stage.",
+        "signedBy": null,
+        "signedAt": "2025-07-07T22:51:08.942Z"
+      },
+      "C": {
+        "decision": "Proceed",
+        "by": "AI governance committee",
+        "date": "2025-09-05",
+        "rationale": "Met criteria for this stage.",
+        "signedBy": null,
+        "signedAt": "2025-09-05T22:51:08.942Z"
+      },
+      "D": {}
+    },
+    "metrics": [
+      {
+        "cat": "Usefulness, usability & efficacy",
+        "name": "AUROC, 12-hour deterioration",
+        "value": "0.82",
+        "ci": "0.80–0.84",
+        "pop": "All adults, local validation"
+      },
+      {
+        "cat": "Fairness & equity",
+        "name": "Sensitivity at threshold",
+        "value": "0.71",
+        "ci": "0.66–0.76",
+        "pop": "Age 18–30"
+      },
+      {
+        "cat": "Fairness & equity",
+        "name": "Sensitivity at threshold",
+        "value": "0.79",
+        "ci": "0.77–0.81",
+        "pop": "Age 65+"
+      },
+      {
+        "cat": "Safety & reliability",
+        "name": "Calibration slope",
+        "value": "0.94",
+        "ci": "",
+        "pop": "All adults"
+      },
+      {
+        "cat": "Usefulness, usability & efficacy",
+        "name": "Area under the curve (AUC)—receiver operating characteristic (ROC) (AUC-ROC)",
+        "value": "0.81",
+        "ci": "0.79–0.83",
+        "pop": "Local validation, 18 months"
+      }
+    ],
+    "card": {
+      "contact": "aigovernance@example.org",
+      "releaseStage": "General availability",
+      "version": "3.2-local",
+      "availability": "United States",
+      "regulatory": "Not FDA-cleared; deployed as clinical decision support",
+      "summary": "Flags adult inpatients at risk of sepsis for rapid assessment.",
+      "keywords": "early warning, deterioration, inpatient",
+      "intendedUse": "Hourly risk score on the unit patient list; scores above threshold prompt a bedside nurse assessment.",
+      "users": "Bedside and charge nurses on adult med-surg units",
+      "howTo": "Review flagged patients within 30 minutes and document the assessment; escalate per rapid-response policy.",
+      "population": "Adults 18+ admitted to medical-surgical units",
+      "outOfScope": "ICU, pediatrics, obstetrics, emergency department, and comfort-care patients",
+      "risks": "Alert fatigue; reduced sensitivity in younger adults; depends on timely vital-sign charting.",
+      "biases": "Development cohort demographics not yet disclosed by vendor.",
+      "riskLevel": "Moderate: informs escalation decisions",
+      "outputs": "Risk score 0–100 and a threshold flag",
+      "modelType": "Gradient-boosted trees",
+      "foundation": "None",
+      "inputSource": "EHR vital signs, labs, nursing assessments",
+      "dataType": "Structured EHR data in; numeric score out",
+      "maintenance": "Monthly performance and drift report to the AI governance committee; vendor recalibration annually or on drift alert."
+    },
+    "access": {
+      "owners": [],
+      "writers": [],
+      "readers": []
+    },
+    "archived": false,
+    "createdAt": "2026-10-10T22:51:08.942Z",
+    "createdBy": null,
+    "updatedAt": "2026-09-10T22:51:08.942Z",
+    "updatedBy": null,
+    "cardUpdatedAt": "2025-08-16T22:51:08.942Z"
+  }
+}

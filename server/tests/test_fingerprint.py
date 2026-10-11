@@ -10,7 +10,16 @@ built to separate them, and the digests the dashboard gives it
 * integer-like keys ("9", "10"), which a JavaScript object reorders;
 * keys whose order differs between UTF-16 code units (the browser's sort) and code
   points (Python's), an emoji beside a character from U+E000 to U+FFFF;
-* every volatile field, at more than one depth.
+* every volatile field, at more than one depth;
+* the fields a real record carries, a checkpoint's date, an answer's evidence,
+  owner, due date and references among them.
+
+And tests/fixtures/sample_export.json is a real export, the published build's
+"Sepsis early warning (sample)" with a link and a file added as evidence, so the
+fingerprint the dashboard wrote into it is the dashboard's digest of a record shaped
+as the dashboard stores one (tests/test_export_schema.py checks the dashboard still
+gives it that digest). A server that left out a field the rule keeps, a ``date``
+say, agreed with itself on any record built by hand without one, and disagrees here.
 
 The server used to sort by code point, and its revisions were hashed without the
 project's id, so the same record had one fingerprint on the setup page and in the
@@ -34,6 +43,25 @@ LONE = re.compile("[\ud800-\udfff]")
 FIXTURE = json.loads(
     (REPO / "tests" / "fixtures" / "fingerprint_record.json").read_text("utf-8")
 )
+SAMPLE = json.loads(
+    (REPO / "tests" / "fixtures" / "sample_export.json").read_text("utf-8")
+)
+
+
+def paths(value: object, path: tuple = ()) -> set[tuple]:
+    """Every key path in a document, list positions left out."""
+    out = {path}
+    if isinstance(value, dict):
+        for k, v in value.items():
+            out |= paths(v, (*path, k))
+    elif isinstance(value, list):
+        for v in value:
+            out |= paths(v, path)
+    return out
+
+
+def keys_at_the_end(doc: object) -> set[str]:
+    return {p[-1] for p in paths(doc) if p}
 
 
 def load_export():
@@ -47,6 +75,25 @@ def load_export():
 
 def test_the_server_gives_the_record_the_dashboards_fingerprint():
     assert content_md5(FIXTURE["record"]) == FIXTURE["md5"]
+
+
+def test_the_shared_record_carries_the_fields_a_real_record_does():
+    """Without them, a server that dropped one of them would still agree."""
+    record = FIXTURE["record"]
+    assert record["gates"]["A"]["date"] and record["gates"]["B"]["date"]
+    answer = record["items"]["s1-1"]
+    assert answer["evidence"] and answer["owner"] and answer["due"]
+    assert answer["refs"]["rfile0001"]["file"]["size"] == 1048576
+
+
+def test_the_server_gives_a_real_export_the_dashboards_fingerprint():
+    """The digest the dashboard wrote into a real export of a sample record."""
+    record = {**SAMPLE["_state"], "id": SAMPLE["project_id"]}
+    have = keys_at_the_end(record)
+    # The fields a real record carries are in it, so dropping any is noticed.
+    for key in ("date", "decision", "rationale", "evidence", "owner", "due", "refs"):
+        assert key in have, key
+    assert content_md5(record) == SAMPLE["fingerprint"]["md5"]
 
 
 def test_load_export_gives_it_the_same():
@@ -128,6 +175,34 @@ def test_a_lone_surrogate_is_written_as_javascript_writes_it():
     # A real pair is one character, written as itself, not escaped.
     pair = '{"k":"\U0001f600"}'
     assert content_md5({"k": "\U0001f600"}) == hashlib.md5(pair.encode()).hexdigest()
+
+
+@requires_db
+class TestARealSampleRecordsRevision:
+    async def test_the_version_history_gives_it_the_exports_fingerprint(
+        self, client: AsyncClient
+    ):
+        """The sample's record, sent as the dashboard sends it. The server makes the
+        creator an owner and attributes each signed checkpoint, so what it stores is
+        not byte for byte what was sent; its revision is the fingerprint of what it
+        stored, by the rule the dashboard's export of the sample was checked by, and
+        the dates, answers and references are stored as sent."""
+        pid = SAMPLE["project_id"]
+        sent = SAMPLE["_state"]
+        r = await client.post(f"/api/projects/{pid}", json=sent)
+        assert r.status_code in (200, 201), r.text
+        versions = (await client.get(f"/api/projects/{pid}/versions")).json()
+        stored = (await client.get(f"/api/projects/{pid}/versions/1")).json()["doc"]
+        assert stored["items"] == sent["items"]
+        assert {k: g.get("date") for k, g in stored["gates"].items()} == {
+            k: g.get("date") for k, g in sent["gates"].items()
+        }
+        reader = load_export()
+        export = {"_state": stored, "project_id": pid}
+        assert versions[-1]["md5"] == reader.fingerprint(export)["md5"]
+        # Had the server stored exactly what was sent, it would be the export's.
+        same = {**stored, "access": sent["access"], "gates": sent["gates"]}
+        assert content_md5({**same, "id": pid}) == SAMPLE["fingerprint"]["md5"]
 
 
 @requires_db

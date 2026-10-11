@@ -1383,6 +1383,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_fingerprint.py::TestARevisionCarriesTheRecordsFingerprint::test_the_version_history_agrees_with_an_export`
   `server/tests/test_fingerprint.py::TestAnOlderRecordIsHashedAsStored::test_the_revision_is_the_stored_records_fingerprint`
   `server/tests/test_fingerprint.py::test_a_lone_surrogate_is_written_as_javascript_writes_it`
+  `server/tests/test_fingerprint.py::test_the_server_gives_a_real_export_the_dashboards_fingerprint`
+  `server/tests/test_fingerprint.py::TestARealSampleRecordsRevision::test_the_version_history_gives_it_the_exports_fingerprint`
+  `tests/test_export_schema.py::the committed sample export's fingerprint is the dashboard's digest of its`
+  `tests/test_export_schema.py::the dashboard's stored record is the store's, nothing filled in`
   `tests/test_export_schema.py::the shared record's fingerprint is the one the server and`
   `tests/test_export_schema.py::its export's fingerprint is the stored record's`
   `tests/test_export_schema.py::an edit's history entry carries the fingerprint of what was stored`

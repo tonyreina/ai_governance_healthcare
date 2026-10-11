@@ -132,18 +132,30 @@ stores it. A flag's `text` is English, its dates included ("Periodic review due
 Sep 5, 2026"), whatever the language of the dashboard that exported it; the
 portfolio CSV's flags are the same text.
 
-The `schema` field names the framework: `chai-review/2` for the published
-build, and the definition's own id, of the form `<id>-review/<n>`, for a
-[build of another framework](frameworks/custom.md). One schema describes every
-framework's export, because the structure is the same. Where a value comes from
-the framework's definition (item ids, statuses, categories, phases,
-checkpoints, model card fields and supplements), the schema lists it for CHAI
-only; another framework's values are the ones in its definition. Every field the
-export always writes is required. Every export the published build and the
-example framework's build produce, in every language, with hostile text in every
-typed field, is validated against the schema in CI, which also fails on a field
-the export writes and the schema does not describe, and on any field the export
-always writes that the schema does not require. An export from before the
+The `schema` field names the framework: `chai-review/2` for the published build,
+and the definition's own id, of the form `<id>-review/<n>`, for a [build of
+another framework](frameworks/custom.md). One schema describes every framework's
+export, because the structure is the same. Where a value comes from the
+framework's definition (item ids, statuses, categories, phases, checkpoints,
+model card fields and supplements), the schema lists it for CHAI; for the
+example framework's build (`example-review/1`) it lists the record's keys and an
+answer's fields, and says it has no model card; another framework's values are
+the ones in its definition. An answer holds a status, evidence, an owner, a due
+date and references, and the reason a status asks for under the field the
+definition names: for CHAI and the example framework any other field is refused,
+while another framework's answer may hold any text field, since the schema
+cannot know its reason field's name. Every field the export always writes is
+required.
+
+CI validates against the schema the exports of every sample of the published
+build and of the example framework's build, in English and in every other
+language the dashboard offers (each the same file as the English one), and, in
+English, an empty project, one with hostile text in every typed field, and
+records with evidence references, OPTICA's answers, access lists and a review
+due soon. It also fails on a field one of those exports writes and the schema
+does not describe, on any field the export always writes that the schema does
+not require, and on any field the schema describes that none of those exports
+writes, unless the test lists it with the reason. An export from before the
 provenance and the fingerprint were added (#93, #150) lacks them, and the schema
 no longer describes it.
 

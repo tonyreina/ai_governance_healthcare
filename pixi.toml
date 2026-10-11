@@ -130,6 +130,10 @@ check-injection = "python scripts/check_injection.py"
 test-check-injection = "python tests/test_check_injection.py"
 # Every export carries a SHA-256 and MD5 of its record, which Python recomputes from the file (#150).
 test-fingerprint = "python tests/test_fingerprint.py"
+# Real exports, published and custom builds, against schema/project.schema.json (#177).
+test-export-schema = "python tests/test_export_schema.py"
+# The fingerprint's skip list is one list in all six places that state it, and the rule is stated whole (#177).
+test-fingerprint-skip = "python tests/test_fingerprint_skip.py"
 # The data scope (governance metadata only, never patient data, any mode) leads the docs (#34).
 test-data-scope = "python tests/test_data_scope.py"
 # `make verify-backup` restores a dump into a throwaway PostgreSQL and checks the

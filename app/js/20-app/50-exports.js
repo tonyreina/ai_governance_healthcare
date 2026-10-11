@@ -23,7 +23,7 @@ function exportHTML(){
      assessments and clinical rationale. STANDALONE_CSS() goes to real trouble
      to inline everything else; this was the one hole left in it. The font
      stacks below end in system-ui. -->
-<style>${STANDALONE_CSS()}</style></head><body><main class="report">${spine().reportBody(true)}<p class="disclaimer" data-provenance><strong>${esc(t("export.storedIn",{label:prov.label}))}</strong> ${esc(prov.note)}</p><p class="disclaimer" data-fingerprint>${esc(t("export.fingerprint",contentHashes(S)))}</p></main></body></html>`;
+<style>${STANDALONE_CSS()}</style></head><body><main class="report">${spine().reportBody(true)}<p class="disclaimer" data-provenance><strong>${esc(t("export.storedIn",{label:prov.label}))}</strong> ${esc(prov.note)}</p><p class="disclaimer" data-fingerprint>${esc(t("export.fingerprint",contentHashes(storedRecord(S))))}</p></main></body></html>`;
 }
 /* PDF, via the browser's own print-to-PDF.
 
@@ -105,18 +105,20 @@ function exportMD(){
   L.push(`## ${t("report.history")}`,""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${line(String(e.at||"").slice(0,10))}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push(t("md.none")); L.push("");
   L.push(`## ${t("report.appendix")}`,"");
   fw.sections().forEach(s=>{L.push(`### ${line(s.n)}. ${line(fw.sectionLabel(s))}`,""); all.filter(it=>it.section===s).forEach(it=>{const d=answers[it.id]||{}; L.push(`- [${line(it.category)}] ${line(fw.itemLabel(it))}: **${st(d.status)}**${d.evidence?` (${mdInlineMarkdown(d.evidence)})`:""}`); refsMarkdown(d,line).forEach(x=>L.push(`  - ${t("refs.title")}: ${x}`));}); L.push("");});
-  L.push("---",`_${t(uiKey(UiSlot.MD_FOOTER),named)}_`,"",t("export.fingerprint",contentHashes(S)));
+  L.push("---",`_${t(uiKey(UiSlot.MD_FOOTER),named)}_`,"",t("export.fingerprint",contentHashes(storedRecord(S))));
   return L.join("\n");
 }
 /* What the fingerprint is computed over, so a reader can recompute it from the file
    (examples/load_export.py does). */
-const FINGERPRINT_OF = "The project record, including its id, as canonical JSON in UTF-8: keys sorted at every level, with updatedAt, updatedBy, cardUpdatedAt, _state, contentHash and generated left out.";
+const FINGERPRINT_OF = "The project record as stored, including its id, as compact canonical JSON in UTF-8: keys sorted at every level by UTF-16 code unit (as JavaScript sorts them, so 10 before 9), strings written as JSON.stringify writes them (a lone surrogate as its lowercase \\u escape), with updatedAt, updatedBy, cardUpdatedAt, _state, contentHash and generated left out.";
 function projectJSON(p){
   const fw=spine(), all=fw.items(), answers=fw.answers(p);
-  const state=clone(p); delete state.id;
+  // The record as stored, not the copy filled in to show it: the fingerprint is the
+  // stored record's, and a reader recomputes it from _state (storedRecord, #177).
+  const record=storedRecord(p), state=clone(record); delete state.id;
   return {
     schema:fw.schemaId, generated:new Date().toISOString(), storage:storageNote(),
-    project_id:p.id||null, fingerprint:{...contentHashes(p), of:FINGERPRINT_OF},
+    project_id:p.id||null, fingerprint:{...contentHashes({...record, id:p.id}), of:FINGERPRINT_OF},
     status:fw.status(p).label, phase:fw.phase(p).label, next_review:fw.nextReview(p), flags:fw.flags(p),
     meta:p.meta, gates:p.gates, metrics:p.metrics,
     ...(fw.jsonExtras ? fw.jsonExtras(p) : {}),

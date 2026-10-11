@@ -1053,6 +1053,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_fingerprint.py::an edited record fails to verify`
   `tests/test_fingerprint.py::the HTML report (which the PDF prints) has both digests`
   `tests/test_fingerprint.py::the notice says a SHA-256 travels in the JSON export, and now it does`
+  `tests/test_export_schema.py::a record keyed by numbers: fingerprint recomputed (regression)`
+  `tests/test_export_schema.py::answers keyed by numbers: fingerprint recomputed (regression)`
+  `tests/test_export_schema.py::load_export.py reads it and says the fingerprint matches`
+  `tests/test_fingerprint_skip.py::all six places name the same fields`
 
 ### C-82 Text a person types stays text, on every screen and in every export
 
@@ -1384,3 +1388,27 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_rules_banner.py::unsynced rules show the banner`
   `tests/test_rules_banner.py::rules that agree show no banner`
   `tests/test_rules_banner.py::the page embeds its manifest's rule-set hash`
+
+### C-96 A revision's fingerprint is the record's, as the dashboard shows it
+
+- **Claim:** The server hashes each revision in the version history by the rule
+  the dashboard and `examples/load_export.py` use (the record as stored, the same
+  fields left out, keys in the same order, strings written alike, the project's
+  id included), so the same record has one fingerprint on the setup page, in an
+  export and in the history, an older record missing fields the dashboard fills
+  in included.
+- **Asserted in:** `docs/exports.md` — "a revision's fingerprint is the one the setup page and an export showed for that record"
+- **Status:** enforced
+- **Enforced by:**
+  `server/tests/test_fingerprint.py::test_the_server_gives_the_record_the_dashboards_fingerprint`
+  `server/tests/test_fingerprint.py::TestARevisionCarriesTheRecordsFingerprint::test_the_version_history_agrees_with_an_export`
+  `server/tests/test_fingerprint.py::TestAnOlderRecordIsHashedAsStored::test_the_revision_is_the_stored_records_fingerprint`
+  `server/tests/test_fingerprint.py::test_a_lone_surrogate_is_written_as_javascript_writes_it`
+  `server/tests/test_fingerprint.py::test_the_server_gives_a_real_export_the_dashboards_fingerprint`
+  `server/tests/test_fingerprint.py::TestARealSampleRecordsRevision::test_the_version_history_gives_it_the_exports_fingerprint`
+  `tests/test_export_schema.py::the committed sample export's fingerprint is the dashboard's digest of its`
+  `tests/test_export_schema.py::the dashboard's stored record is the store's, nothing filled in`
+  `tests/test_export_schema.py::the shared record's fingerprint is the one the server and`
+  `tests/test_export_schema.py::its export's fingerprint is the stored record's`
+  `tests/test_export_schema.py::an edit's history entry carries the fingerprint of what was stored`
+  `tests/test_fingerprint_skip.py::all six places name the same fields`

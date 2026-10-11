@@ -1290,3 +1290,21 @@ honest answer and is a gap worth closing; see R-19.
   and makes no record (`tests/test_rules_banner.py`, "the example's page on the
   published build's server says so", "a new record is refused under another
   primary"; D-83).
+
+### R-68 An export matches its published schema, and anyone can recompute its fingerprint
+
+- Status: Active
+- Every JSON export, of the published build and of a build of any other
+  framework, validates against `schema/project.schema.json`, and the schema
+  describes every field the export writes and requires every field it always
+  writes.
+- The fingerprint of a record is one rule, computed alike by the dashboard, the
+  server's version history and `examples/load_export.py`: over the record as
+  stored, the same fields left out, keys in the same order (UTF-16 code units),
+  strings written alike (a lone surrogate as its `\u` escape), the project's id
+  included. Each place that states which fields are left out names the same
+  ones, and the export and the documentation state the whole rule.
+- Source: #177 (the schema "can drift from projectJSON() unnoticed", and the
+  skip list is "defined three times ... with no test pinning them equal"); D-82.
+- Enforced by: `tests/test_export_schema.py`, `tests/test_fingerprint_skip.py`,
+  `server/tests/test_fingerprint.py`.

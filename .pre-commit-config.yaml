@@ -15,7 +15,13 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-toml
+      # The fingerprint's golden record holds lone surrogates (\ud800), which the
+      # JSON grammar allows (RFC 8259, section 8.2) and a JavaScript string can
+      # hold, so the fingerprint rule must say how they hash (#177). This hook's
+      # parser refuses them. Three tests parse the file with Python's json, so a
+      # file that is not JSON still fails, there.
       - id: check-json
+        exclude: '^tests/fixtures/fingerprint_record\.json$'
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=512]

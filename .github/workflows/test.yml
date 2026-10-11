@@ -54,6 +54,7 @@ jobs:
       - run: pixi run test-build-config
 
       - run: pixi run test-enums
+      - run: pixi run test-fingerprint-skip
       - run: pixi run test-check-injection
       - run: pixi run test-check-i18n
 
@@ -220,6 +221,9 @@ jobs:
       - name: fingerprint
         if: ${{ !cancelled() }}
         run: pixi run test-fingerprint
+      - name: real exports validate against the published schema
+        if: ${{ !cancelled() }}
+        run: pixi run test-export-schema
 
       # Text a person types stays text, on every screen and in every export: each string
       # in a project poisoned with markup and script payloads, then audited (#154).

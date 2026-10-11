@@ -21,6 +21,18 @@ function normalize(p){
   p.access=Object.assign(blankAccess(), p.access||{});
   frameworkNormalize(p); return p;
 }
+/* The record as the store holds it, kept beside the copy normalize() fills in.
+
+   A record an older dashboard wrote lacks fields normalize() now fills
+   (meta.chaiUseCase, card, access, a checkpoint), so the filled-in copy is not the
+   record. The fingerprint is the stored record's: it is what the server hashes into
+   each revision, and what an export's _state is, so the setup page, the export and
+   the version history give the same record one fingerprint. Hashing the filled-in
+   copy gave an older record two (#177). The stored record moves with every patch
+   the store is sent (queuePatch), so it stays what the store will hold. */
+const STORED = new WeakMap();
+function normalizeStored(raw){ const p = normalize(clone(raw)); STORED.set(p, raw); return p; }
+const storedRecord = p => (p && STORED.get(p)) || p;
 const cardValOf = (p,k) => ((p.card||{})[k]||"").trim() || (k==="name"?(p.meta.solution||"").trim():"") || (k==="developer"?(p.meta.developer||"").trim():"");
 
 /* What a checkpoint decision means, whatever a framework calls it. A framework

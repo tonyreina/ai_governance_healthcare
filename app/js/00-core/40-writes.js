@@ -15,6 +15,7 @@ function stamp(extra){ return Object.assign({updatedAt:new Date().toISOString(),
 function queuePatch(pid,patch){
   if(RO) return;
   deepMerge(pending[pid]||(pending[pid]={}), patch);
+  if(S && pid===CUR && STORED.has(S)) deepMerge(STORED.get(S), patch);  // see storedRecord()
   setSaved(t("saved.saving"));
   clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid),550);
 }
@@ -154,7 +155,7 @@ function flushChanges(pid, path){
     const before = buf[key];
     delete buf[key];
     const now = key.startsWith("metrics.") ? clone(S && S.metrics) : (S ? get(key) : undefined);
-    logChange(pid, key, before, now, S);
+    logChange(pid, key, before, now, storedRecord(S));
   }
   if(!Object.keys(buf).length) delete changeBuf[pid];
 }
@@ -245,9 +246,12 @@ async function createProject(data,logText){
     await STORE.create(id,data);
     // Goes through the same queue as every other entry, so a transient
     // failure here is retried rather than dropped. See writeLog().
+    // The hash is the record's with its id, as every later entry, the setup page
+    // and the exports compute it; without the id it was a different number for
+    // the same record (#177).
     enqueueLog(id, {
       at:new Date().toISOString(), by:ME.id||null,
-      text:logText||"Project created", hash:contentHash(data)});
+      text:logText||"Project created", hash:contentHash({...data, id})});
     return id;
   }
   catch(e){ toast(e&&e.code==="quota_exceeded"?t("toast.full"):t("toast.createFailed")); return null; }

@@ -1,30 +1,39 @@
-"""Summarize a project export from the CHAI governance review tool.
+"""Summarize a project export from the governance review tool.
 
 Usage:
     python examples/load_export.py my-project-chai-review.json
 
-Needs only the standard library. If pandas is installed, also prints the open
-gaps as a DataFrame.
+Reads the published build's exports (`chai-review/2`) and a build of any other
+framework's (`<id>-review/<n>`, schema/project.schema.json). Needs only the
+standard library. If pandas is installed, also prints a CHAI export's open gaps
+as a DataFrame.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
 
+# The published build's export, and the shape of any framework's export id: the
+# `schema` pattern in schema/project.schema.json.
+CHAI_SCHEMA = "chai-review/2"
+EXPORT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}-review/[1-9][0-9]*$")
+
 
 def load(path: str | Path) -> dict:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if data.get("schema") != "chai-review/2":
-        raise ValueError(f"{path} is not a chai-review/2 project export")
+    if not EXPORT_ID.match(str(data.get("schema", ""))):
+        raise ValueError(f"{path} is not a project export (no <id>-review/<n> schema)")
     return data
 
 
 # Left out of the fingerprint at every depth: touched by every save, or the
 # fingerprint's own container (the dashboard's CANON_SKIP, app/js/00-core/12-hash.js).
+# tests/test_fingerprint_skip.py fails if this list and the dashboard's differ.
 CANON_SKIP = {
     "updatedAt",
     "updatedBy",
@@ -38,11 +47,14 @@ CANON_SKIP = {
 def _canonical(value):
     """Keys sorted at every level, volatile fields dropped. JavaScript sorts keys by
     UTF-16 code unit, which differs from Python's code-point order for characters
-    outside the Basic Multilingual Plane, so sort by the UTF-16 bytes to match."""
+    outside the Basic Multilingual Plane, so sort by the UTF-16 bytes to match (a
+    lone surrogate, which JavaScript allows in a string, sorts by its own unit)."""
     if isinstance(value, dict):
         return {
             k: _canonical(value[k])
-            for k in sorted(value, key=lambda key: key.encode("utf-16-be"))
+            for k in sorted(
+                value, key=lambda key: key.encode("utf-16-be", "surrogatepass")
+            )
             if k not in CANON_SKIP
         }
     if isinstance(value, list):
@@ -53,12 +65,17 @@ def _canonical(value):
 def fingerprint(export: dict) -> dict:
     """The MD5 and SHA-256 the dashboard computes over this record, recomputed from
     the file alone: the project (`_state` plus its id) as compact canonical JSON in
-    UTF-8. Written from the rule, not from the dashboard's code."""
+    UTF-8. Written from the rule, not from the dashboard's code.
+
+    A lone surrogate (half of a pair, alone; JavaScript allows one in a string) is
+    written as its lowercase \\u escape, as JSON.stringify writes it, so the text
+    is UTF-8 that the dashboard hashed. UTF-8 cannot encode one, and every other
+    character encodes, so backslashreplace changes nothing else."""
     record = dict(export["_state"])
     if export.get("project_id") is not None:
         record["id"] = export["project_id"]
     text = json.dumps(_canonical(record), ensure_ascii=False, separators=(",", ":"))
-    data = text.encode("utf-8")
+    data = text.encode("utf-8", "backslashreplace")
     return {
         "md5": hashlib.md5(data).hexdigest(),
         "sha256": hashlib.sha256(data).hexdigest(),
@@ -76,7 +93,8 @@ def verify_fingerprint(export: dict) -> bool | None:
 
 
 def open_gaps(export: dict) -> list[dict]:
-    """Checklist items that are not met, partial, or unanswered."""
+    """Checklist items of a CHAI export that are not met, partial, or unanswered.
+    Another framework's statuses are its own, named in its definition."""
     return [
         c for c in export["checklist"] if c["status"] in (None, "notmet", "partial")
     ]
@@ -84,13 +102,15 @@ def open_gaps(export: dict) -> list[dict]:
 
 def summarize(export: dict) -> str:
     meta = export["meta"]
+    scores = dict(export["scores"])
+    overall = scores.pop("overall")
     counts = Counter(c["status"] or "unanswered" for c in export["checklist"])
     lines = [
         f"{meta.get('solution') or 'Untitled AI solution'}",
         f"  status:      {export.get('status')}  ({export.get('phase')})",
         f"  next review: {export.get('next_review') or '-'}",
-        f"  readiness:   {export['scores']['overall']}%  "
-        + "  ".join(f"{k}={export['scores'][k]}%" for k in "UFSTP"),
+        f"  readiness:   {overall}%  "
+        + "  ".join(f"{k}={v}%" for k, v in scores.items()),
         "  checklist:   " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())),
     ]
     for f in export.get("flags", []):
@@ -112,7 +132,13 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     export = load(argv[1])
+    # A lone surrogate (JavaScript allows one in a string) cannot be written to a
+    # UTF-8 terminal: show it as its escape rather than fail on it.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     print(summarize(export))
+    if export["schema"] != CHAI_SCHEMA:
+        return 0
     try:
         import pandas as pd
     except ImportError:

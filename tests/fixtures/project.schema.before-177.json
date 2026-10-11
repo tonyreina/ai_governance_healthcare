@@ -1,0 +1,376 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tonyreina.github.io/ai_governance_healthcare/schema/project.schema.json",
+  "title": "CHAI governance review: project export",
+  "description": "One project as written by 'Download project data (JSON)'. Fields other than _state are derived for convenience; import reads _state.",
+  "type": "object",
+  "required": [
+    "schema",
+    "meta",
+    "checklist",
+    "_state"
+  ],
+  "properties": {
+    "schema": {
+      "const": "chai-review/2"
+    },
+    "generated": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "project_id": {
+      "type": ["string", "null"],
+      "description": "The id of the project this was exported from. Part of what the fingerprint covers, so a reader can recompute it. Import ignores it and creates a new project."
+    },
+    "fingerprint": {
+      "type": "object",
+      "description": "Identifies this exact version of the record, so a report or a filed copy can be tied to it. MD5 is a version fingerprint only; SHA-256 is the digest to quote if a hash is ever offered as evidence that a record was not altered. Recompute with examples/load_export.py (verify_fingerprint). Absent in older exports (#150).",
+      "required": ["md5", "sha256", "of"],
+      "properties": {
+        "md5": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "of": {"type": "string", "description": "What was hashed, in words."}
+      }
+    },
+    "storage": {
+      "type": "object",
+      "description": "Where the record was kept when this was exported, so a filed copy carries its own provenance (#93). Absent in older exports.",
+      "required": ["mode", "label", "note"],
+      "properties": {
+        "mode": {
+          "description": "'artifact' was a mode of earlier versions (a Claude artifact); it is no longer produced, and is accepted so older exports still validate.",
+          "enum": ["local", "api", "artifact", "connecting"]
+        },
+        "label": {"type": "string"},
+        "note": {"type": "string"}
+      }
+    },
+    "status": {
+      "enum": [
+        "Out of compliance",
+        "Needs update",
+        "On track",
+        "Retired",
+        "Stopped"
+      ]
+    },
+    "phase": {
+      "enum": [
+        "Intake & planning",
+        "Design, build & assess",
+        "Pilot",
+        "Deployed",
+        "Retired",
+        "Stopped"
+      ]
+    },
+    "next_review": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "flags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "sev",
+          "text"
+        ],
+        "properties": {
+          "sev": {
+            "enum": [
+              "red",
+              "amber"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "meta": {
+      "$ref": "#/$defs/meta"
+    },
+    "gates": {
+      "$ref": "#/$defs/gates"
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/metric"
+      }
+    },
+    "model_card": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "checklist": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "stage",
+          "principle",
+          "criterion",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^s[1-6]-[0-9]+$"
+          },
+          "stage": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6
+          },
+          "principle": {
+            "enum": [
+              "U",
+              "F",
+              "S",
+              "T",
+              "P"
+            ],
+            "description": "U usefulness, F fairness, S safety, T transparency, P security & privacy"
+          },
+          "criterion": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "met",
+              "partial",
+              "notmet",
+              "na",
+              null
+            ]
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "due": {
+            "type": "string"
+          },
+          "references": {
+            "type": "array",
+            "description": "Evidence references: links and file fingerprints. A file is never included, only its name, size and SHA-256.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {"type": "string"},
+                "url": {"type": ["string", "null"], "description": "An http or https address, or null."},
+                "date": {"type": ["string", "null"]},
+                "file": {
+                  "type": ["object", "null"],
+                  "properties": {
+                    "name": {"type": "string"},
+                    "size": {"type": "integer"},
+                    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "properties": {
+        "overall": {
+          "type": "integer"
+        },
+        "U": {
+          "type": "integer"
+        },
+        "F": {
+          "type": "integer"
+        },
+        "S": {
+          "type": "integer"
+        },
+        "T": {
+          "type": "integer"
+        },
+        "P": {
+          "type": "integer"
+        }
+      }
+    },
+    "_state": {
+      "type": "object",
+      "description": "The stored project document. This is what import reads.",
+      "required": [
+        "meta",
+        "items"
+      ],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/meta"
+        },
+        "items": {
+          "type": "object"
+        },
+        "gates": {
+          "$ref": "#/$defs/gates"
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/metric"
+          }
+        },
+        "card": {
+          "type": "object"
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "cardUpdatedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "meta": {
+      "type": "object",
+      "properties": {
+        "solution": {
+          "type": "string"
+        },
+        "org": {
+          "type": "string"
+        },
+        "developer": {
+          "type": "string"
+        },
+        "sourcing": {
+          "type": "string"
+        },
+        "sponsor": {
+          "type": "string"
+        },
+        "reviewers": {
+          "type": "string"
+        },
+        "riskTier": {
+          "enum": [
+            "",
+            "Low",
+            "Moderate",
+            "High"
+          ]
+        },
+        "reviewCadence": {
+          "type": "string"
+        },
+        "startDate": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "chaiUseCase": {
+          "type": "string",
+          "description": "CHAI use case slug whose Testing & Evaluation framework this project draws suggested metrics from."
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "signedBy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "properties": {
+        "A": {
+          "$ref": "#/$defs/gate"
+        },
+        "B": {
+          "$ref": "#/$defs/gate"
+        },
+        "C": {
+          "$ref": "#/$defs/gate"
+        },
+        "D": {
+          "$ref": "#/$defs/gate"
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "required": [
+        "cat",
+        "name",
+        "value"
+      ],
+      "properties": {
+        "cat": {
+          "enum": [
+            "Usefulness, usability & efficacy",
+            "Fairness & equity",
+            "Safety & reliability"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ci": {
+          "type": "string"
+        },
+        "pop": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

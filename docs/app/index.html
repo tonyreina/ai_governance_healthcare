@@ -4,7 +4,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-E8guoN3oLRIbnZ+h5YrH/sJFVtFzIl4c9h6Sf2Aaq38='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-XdpEU1D7sJvPnGf/YqohU5/5pCV/uVwxjbL1DQ5y07A='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Health AI assurance review</title>
@@ -454,8 +454,10 @@ function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; 
 function addMonths(d,n){ const x=new Date(d); x.setMonth(x.getMonth()+n); return x; }
 function daysBetween(a,b){ return Math.round((b-a)/86400000); }
 /* Dates and relative times in the reader's chosen language (02-i18n.js), not the
-   browser's, so the text around a date and the date itself cannot disagree. */
-function fmtDay(s){ const d=parseDay(s); return d? new Intl.DateTimeFormat(intlTag(),{year:"numeric",month:"short",day:"numeric"}).format(d) : ""; }
+   browser's, so the text around a date and the date itself cannot disagree. `tag`
+   names another: a flag's English text, which the JSON and CSV exports carry,
+   writes its date in English whatever the reader's language (#177). */
+function fmtDay(s, tag){ const d=parseDay(s); return d? new Intl.DateTimeFormat(tag||intlTag(),{year:"numeric",month:"short",day:"numeric"}).format(d) : ""; }
 function ago(iso){ if(!iso) return ""; const d=new Date(iso); if(isNaN(d)) return ""; const m=Math.round((Date.now()-d)/60000);
   const rel=new Intl.RelativeTimeFormat(intlTag(),{numeric:"auto"});
   if(m<1) return rel.format(0,"minute"); if(m<60) return rel.format(-m,"minute"); const h=Math.round(m/60); if(h<24) return rel.format(-h,"hour"); const dd=Math.round(h/24); if(dd<45) return rel.format(-dd,"day"); return fmtDay(iso.slice(0,10)); }
@@ -659,6 +661,18 @@ function normalize(p){
   p.access=Object.assign(blankAccess(), p.access||{});
   frameworkNormalize(p); return p;
 }
+/* The record as the store holds it, kept beside the copy normalize() fills in.
+
+   A record an older dashboard wrote lacks fields normalize() now fills
+   (meta.chaiUseCase, card, access, a checkpoint), so the filled-in copy is not the
+   record. The fingerprint is the stored record's: it is what the server hashes into
+   each revision, and what an export's _state is, so the setup page, the export and
+   the version history give the same record one fingerprint. Hashing the filled-in
+   copy gave an older record two (#177). The stored record moves with every patch
+   the store is sent (queuePatch), so it stays what the store will hold. */
+const STORED = new WeakMap();
+function normalizeStored(raw){ const p = normalize(clone(raw)); STORED.set(p, raw); return p; }
+const storedRecord = p => (p && STORED.get(p)) || p;
 const cardValOf = (p,k) => ((p.card||{})[k]||"").trim() || (k==="name"?(p.meta.solution||"").trim():"") || (k==="developer"?(p.meta.developer||"").trim():"");
 
 /* What a checkpoint decision means, whatever a framework calls it. A framework
@@ -702,30 +716,42 @@ const ADVANCES = Object.freeze(new Set([GateClass.GO, GateClass.CONDITIONAL]));
    substantive did is a hash nobody will trust. See CANON_SKIP.
    ============================================================ */
 
-/* Excluded from the fingerprint, each for a reason:
+/* Excluded from the fingerprint, at every depth, each for a reason:
      updatedAt/updatedBy  touched by every save, including a no-op
      cardUpdatedAt        same
      _state               the app's working copy, not the record
-     contentHash          cannot hash a document containing its own hash */
+     contentHash          cannot hash a document containing its own hash
+     generated            an export's own time stamp, not the record's
+   The same list is _HASH_SKIP in server/app/routes.py, CANON_SKIP in
+   examples/load_export.py, and the words of FINGERPRINT_OF and docs/exports.md:
+   tests/test_fingerprint_skip.py fails if any of them differs (#177). */
 const CANON_SKIP = new Set([
   "updatedAt", "updatedBy", "cardUpdatedAt", "_state", "contentHash", "generated",
 ]);
 
-/* Deterministic JSON: keys sorted at every level, volatile fields
-   dropped, undefined treated as absent. */
-function canonicalize(value) {
-  if (value === null || typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.map(canonicalize);
-  const out = {};
-  for (const key of Object.keys(value).sort()) {
-    if (CANON_SKIP.has(key)) continue;
-    const v = value[key];
-    if (v !== undefined) out[key] = canonicalize(v);
-  }
-  return out;
-}
+/* Deterministic JSON: keys sorted at every level (by UTF-16 code unit, which is
+   what sort() does), volatile fields dropped, undefined treated as absent.
 
-const canonicalJSON = doc => JSON.stringify(canonicalize(doc));
+   Written out rather than built as an object and handed to JSON.stringify: an
+   object lists integer-like keys ("9", "10") first, in numeric order, whatever
+   order they were added in, so the sorted order did not survive. A record keyed
+   by numbers (a framework whose item ids are "1".."12") then hashed differently
+   from the rule every reader recomputes it by, and examples/load_export.py
+   reported a true record as altered (#177). */
+function canonicalJSON(doc) {
+  const write = value => {
+    if (value === null || typeof value !== "object") return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(v => write(v) ?? "null").join(",")}]`;
+    const parts = [];
+    for (const key of Object.keys(value).sort()) {
+      if (CANON_SKIP.has(key)) continue;
+      const text = write(value[key]);
+      if (text !== undefined) parts.push(`${JSON.stringify(key)}:${text}`);
+    }
+    return `{${parts.join(",")}}`;
+  };
+  return write(doc);
+}
 
 /* MD5, implemented here because browsers do not provide it:
    crypto.subtle offers SHA family digests only, and deliberately so.
@@ -1425,6 +1451,7 @@ function stamp(extra){ return Object.assign({updatedAt:new Date().toISOString(),
 function queuePatch(pid,patch){
   if(RO) return;
   deepMerge(pending[pid]||(pending[pid]={}), patch);
+  if(S && pid===CUR && STORED.has(S)) deepMerge(STORED.get(S), patch);  // see storedRecord()
   setSaved(t("saved.saving"));
   clearTimeout(timers[pid]); timers[pid]=setTimeout(()=>flush(pid),550);
 }
@@ -1564,7 +1591,7 @@ function flushChanges(pid, path){
     const before = buf[key];
     delete buf[key];
     const now = key.startsWith("metrics.") ? clone(S && S.metrics) : (S ? get(key) : undefined);
-    logChange(pid, key, before, now, S);
+    logChange(pid, key, before, now, storedRecord(S));
   }
   if(!Object.keys(buf).length) delete changeBuf[pid];
 }
@@ -1655,9 +1682,12 @@ async function createProject(data,logText){
     await STORE.create(id,data);
     // Goes through the same queue as every other entry, so a transient
     // failure here is retried rather than dropped. See writeLog().
+    // The hash is the record's with its id, as every later entry, the setup page
+    // and the exports compute it; without the id it was a different number for
+    // the same record (#177).
     enqueueLog(id, {
       at:new Date().toISOString(), by:ME.id||null,
-      text:logText||"Project created", hash:contentHash(data)});
+      text:logText||"Project created", hash:contentHash({...data, id})});
     return id;
   }
   catch(e){ toast(e&&e.code==="quota_exceeded"?t("toast.full"):t("toast.createFailed")); return null; }
@@ -2628,8 +2658,8 @@ function engineFramework(def) {
           if (!nr) F.push({ sev: Severity.RED, text: `Live with no deployment date recorded at ${gateById[entry.gate].title}`, msg: [slotKey(UiSlot.FLAG_NO_DEPLOY_DATE), { gateKey: entry.gate }] });
           else {
             const left = daysBetween(today, parseDay(nr));
-            if (left < 0) F.push({ sev: Severity.RED, text: `Periodic review overdue since ${fmtDay(nr)}`, msg: ["flag.reviewOverdue", { date: nr }] });
-            else if (left <= review.dueSoonDays) F.push({ sev: Severity.AMBER, text: `Periodic review due ${fmtDay(nr)}`, msg: ["flag.reviewDue", { date: nr }] });
+            if (left < 0) F.push({ sev: Severity.RED, text: `Periodic review overdue since ${fmtDay(nr, Locale.EN)}`, msg: ["flag.reviewOverdue", { date: nr }] });
+            else if (left <= review.dueSoonDays) F.push({ sev: Severity.AMBER, text: `Periodic review due ${fmtDay(nr, Locale.EN)}`, msg: ["flag.reviewDue", { date: nr }] });
           }
           break;
         }
@@ -3276,7 +3306,7 @@ const roleNote = () => {
    meeting" is how a committee reads it.
    ============================================================ */
 function changelogHTML(){
-  const now = contentHash(S);
+  const now = contentHash(storedRecord(S));
 
   if(!LOG.length){
     return `<p class="eyebrow">${esc(t("log.eyebrow"))}</p><h1>${esc(t("log.title"))}</h1>
@@ -4270,7 +4300,7 @@ function openProject(id,view){
   const p=PROJECTS.get(id); if(!p) return;
   if(!isOwnRecord(p)){ toast(t("toast.foreignRecord",{name:String(recordFramework(p)).slice(0,64)})); return; }
   if(unsubLog){ unsubLog(); unsubLog=null; }
-  CUR=id; S=normalize(clone(p)); LOG=[]; LOG_TOTAL=null; openItems.clear();
+  CUR=id; S=normalizeStored(clone(storedRecord(p))); LOG=[]; LOG_TOTAL=null; openItems.clear();
   // Read-only is a property of this project and this user, not of the
   // workspace: the same person may own one review and only read another.
   RO = !canWrite(S);
@@ -4286,13 +4316,13 @@ function go(view){ flushAllChanges(); UI.view=view; saveUI(); renderRail(); rend
    Data arrival
    ============================================================ */
 function onProjects(list){
-  PROJECTS=new Map(list.map(p=>[p.id,normalize(p)]));
+  PROJECTS=new Map(list.map(p=>[p.id,normalizeStored(p)]));
   const first=!LOADED; LOADED=true;
   if(first && UI.project && PROJECTS.has(UI.project) && !CUR){ openProject(UI.project,UI.view); return; }
   if(CUR){
     const r=PROJECTS.get(CUR);
     if(!r){ toast(t("toast.deletedElsewhere")); goHome(); return; }
-    S=normalize(deepMerge(clone(r), clone(pending[CUR]||{})));
+    S=normalizeStored(deepMerge(clone(storedRecord(r)), clone(pending[CUR]||{})));
     softRefresh();
   } else updateDashboard();
 }
@@ -4428,7 +4458,7 @@ function exportHTML(){
      assessments and clinical rationale. STANDALONE_CSS() goes to real trouble
      to inline everything else; this was the one hole left in it. The font
      stacks below end in system-ui. -->
-<style>${STANDALONE_CSS()}</style></head><body><main class="report">${spine().reportBody(true)}<p class="disclaimer" data-provenance><strong>${esc(t("export.storedIn",{label:prov.label}))}</strong> ${esc(prov.note)}</p><p class="disclaimer" data-fingerprint>${esc(t("export.fingerprint",contentHashes(S)))}</p></main></body></html>`;
+<style>${STANDALONE_CSS()}</style></head><body><main class="report">${spine().reportBody(true)}<p class="disclaimer" data-provenance><strong>${esc(t("export.storedIn",{label:prov.label}))}</strong> ${esc(prov.note)}</p><p class="disclaimer" data-fingerprint>${esc(t("export.fingerprint",contentHashes(storedRecord(S))))}</p></main></body></html>`;
 }
 /* PDF, via the browser's own print-to-PDF.
 
@@ -4510,18 +4540,20 @@ function exportMD(){
   L.push(`## ${t("report.history")}`,""); if(logWindowNote()) L.push(`_${logWindowNote()}_`,""); if(LOG.length) LOG.forEach(e=>L.push(`- ${line(String(e.at||"").slice(0,10))}: ${line(e.text)} (${line(nm(e.by))})`)); else L.push(t("md.none")); L.push("");
   L.push(`## ${t("report.appendix")}`,"");
   fw.sections().forEach(s=>{L.push(`### ${line(s.n)}. ${line(fw.sectionLabel(s))}`,""); all.filter(it=>it.section===s).forEach(it=>{const d=answers[it.id]||{}; L.push(`- [${line(it.category)}] ${line(fw.itemLabel(it))}: **${st(d.status)}**${d.evidence?` (${mdInlineMarkdown(d.evidence)})`:""}`); refsMarkdown(d,line).forEach(x=>L.push(`  - ${t("refs.title")}: ${x}`));}); L.push("");});
-  L.push("---",`_${t(uiKey(UiSlot.MD_FOOTER),named)}_`,"",t("export.fingerprint",contentHashes(S)));
+  L.push("---",`_${t(uiKey(UiSlot.MD_FOOTER),named)}_`,"",t("export.fingerprint",contentHashes(storedRecord(S))));
   return L.join("\n");
 }
 /* What the fingerprint is computed over, so a reader can recompute it from the file
    (examples/load_export.py does). */
-const FINGERPRINT_OF = "The project record, including its id, as canonical JSON in UTF-8: keys sorted at every level, with updatedAt, updatedBy, cardUpdatedAt, _state, contentHash and generated left out.";
+const FINGERPRINT_OF = "The project record as stored, including its id, as compact canonical JSON in UTF-8: keys sorted at every level by UTF-16 code unit (as JavaScript sorts them, so 10 before 9), strings written as JSON.stringify writes them (a lone surrogate as its lowercase \\u escape), with updatedAt, updatedBy, cardUpdatedAt, _state, contentHash and generated left out.";
 function projectJSON(p){
   const fw=spine(), all=fw.items(), answers=fw.answers(p);
-  const state=clone(p); delete state.id;
+  // The record as stored, not the copy filled in to show it: the fingerprint is the
+  // stored record's, and a reader recomputes it from _state (storedRecord, #177).
+  const record=storedRecord(p), state=clone(record); delete state.id;
   return {
     schema:fw.schemaId, generated:new Date().toISOString(), storage:storageNote(),
-    project_id:p.id||null, fingerprint:{...contentHashes(p), of:FINGERPRINT_OF},
+    project_id:p.id||null, fingerprint:{...contentHashes({...record, id:p.id}), of:FINGERPRINT_OF},
     status:fw.status(p).label, phase:fw.phase(p).label, next_review:fw.nextReview(p), flags:fw.flags(p),
     meta:p.meta, gates:p.gates, metrics:p.metrics,
     ...(fw.jsonExtras ? fw.jsonExtras(p) : {}),

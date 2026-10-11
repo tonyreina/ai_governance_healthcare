@@ -29,8 +29,10 @@ function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; 
 function addMonths(d,n){ const x=new Date(d); x.setMonth(x.getMonth()+n); return x; }
 function daysBetween(a,b){ return Math.round((b-a)/86400000); }
 /* Dates and relative times in the reader's chosen language (02-i18n.js), not the
-   browser's, so the text around a date and the date itself cannot disagree. */
-function fmtDay(s){ const d=parseDay(s); return d? new Intl.DateTimeFormat(intlTag(),{year:"numeric",month:"short",day:"numeric"}).format(d) : ""; }
+   browser's, so the text around a date and the date itself cannot disagree. `tag`
+   names another: a flag's English text, which the JSON and CSV exports carry,
+   writes its date in English whatever the reader's language (#177). */
+function fmtDay(s, tag){ const d=parseDay(s); return d? new Intl.DateTimeFormat(tag||intlTag(),{year:"numeric",month:"short",day:"numeric"}).format(d) : ""; }
 function ago(iso){ if(!iso) return ""; const d=new Date(iso); if(isNaN(d)) return ""; const m=Math.round((Date.now()-d)/60000);
   const rel=new Intl.RelativeTimeFormat(intlTag(),{numeric:"auto"});
   if(m<1) return rel.format(0,"minute"); if(m<60) return rel.format(-m,"minute"); const h=Math.round(m/60); if(h<24) return rel.format(-h,"hour"); const dd=Math.round(h/24); if(dd<45) return rel.format(-dd,"day"); return fmtDay(iso.slice(0,10)); }

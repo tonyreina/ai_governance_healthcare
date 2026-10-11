@@ -2082,3 +2082,55 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   "other changes still save" said to a reader) each caught.
   `tests/test_stack.py` checks the real stack's page shows no banner. Claim
   C-95.
+
+### D-84 The crosswalk is checked against OPTICA's definition
+
+- Status: Proposed (built for #174; the owner has not yet confirmed it)
+- **The problem.** docs/crosswalk.md described the reviewed, corrected crosswalk
+  (0 equivalent, 61 partial, 16 OPTICA-only, 36 CHAI criteria cited) while OPTICA's
+  definition, which the dashboard's "covered by CHAI" chips and the generated
+  OPTICA checklist are drawn from, still held the earlier pass (3 equivalent, 60
+  partial, 14 OPTICA-only, 35 cited, no s3-7). Nothing connected the two, so the
+  page, the checklist and the app disagreed for as long as the data existed.
+- **The data follows the page.** The definition now records every change the
+  page states (its "Corrections applied", the 7.1 and 7.2 rulings, the s2-7 and
+  role-dual extensions, and the producer reassignments of 1.4, 11.3, 11.4 and
+  11.6). Nothing was inferred: the page is the reviewed source, and only what
+  it says was copied.
+- **The page's item table is generated.** `scripts/gen_crosswalk.py` writes
+  section 7 of the page (each item's who answers, relation and CHAI criteria)
+  from the definition, between two markers, as part of `pixi run gen-docs`. The
+  per-item view on the page is the definition, so it cannot drift.
+- **The prose is checked.** `pixi run check-crosswalk` reads every count, list
+  and named correction the page states (headline relations, criteria cited and
+  never cited, the stage and chapter tables, corrections applied and rejected,
+  the producer split, the relay of completion stages, the most-cited criterion)
+  and recomputes each from the definition. A reworded sentence the checker can
+  no longer read is a failure, so a claim cannot silently fall out of the
+  check. It also checks the OPTICA checklist's "There are no *equivalent* rows"
+  (`app/frameworks/optica/docs.toml`).
+- **Reviewed but not recorded.** The page moves 5.3 and 7.4 from OPTICA-only to
+  partial without naming the CHAI criteria they reach. A partial with no
+  criteria would show in the app as "No CHAI criterion covers this", so the
+  definition keeps them OPTICA-only and the page says so in section 7. The check
+  reads them as the page's relation, requires the definition to still hold them
+  unrecorded (so recording them means removing them from that sentence), and
+  checks the one count their criteria would change (chapter 5's criteria) as a
+  lower bound. Which criteria they cite is the owner's to answer (#174).
+- **Rejected:** generating the whole page from the definition (its argument is
+  prose, written by a reviewer, not data); hand-maintaining a second per-item
+  table on the page (two copies, the failure #174 already was); parsing only the
+  headline numbers (a changed criterion id would pass whenever the counts
+  happened to hold); guessing 5.3's and 7.4's criteria from the chapter table's
+  totals (the page constrains them but does not name them).
+- Source: #174; the #168 coupling map that found it; docs/crosswalk.md.
+- Enforced by: `pixi run check-crosswalk` (pre-commit and CI) and
+  `tests/test_crosswalk.py` (`pixi run test-crosswalk`, CI's workflows job): the
+  committed page and definitions agree; the original #174 disagreement, from a
+  fixture of the earlier pass, is found; one relation, one criterion id added,
+  removed or swapped, one "who answers", an equivalence back and a
+  not-yet-recorded item recorded are each caught in the definition, with the
+  table stale and with it regenerated; a headline count, an id or relation in
+  the table, the never-cited list, a citation fix, a chapter count, the
+  producer split, a reworded claim, the markers and the "not yet recorded"
+  sentence are each caught on the page.

@@ -52,7 +52,7 @@ from jsonschema.exceptions import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from framework_enums import ENDING_CLASSES, GateClass
+from framework_enums import ENDING_CLASSES, CrossRefRelation, GateClass
 
 ROOT = Path(__file__).resolve().parent.parent
 FRAMEWORKS = ROOT / "app" / "frameworks"
@@ -195,12 +195,6 @@ class UiSlot(StrEnum):
 class CategoriesOn(StrEnum):
     ITEMS = "items"
     SECTIONS = "sections"
-
-
-class CrossRefRelation(StrEnum):
-    EQUIVALENT = "equivalent"
-    PARTIAL = "partial"
-    OPTICA_ONLY = "optica-only"
 
 
 class RiskTier(StrEnum):

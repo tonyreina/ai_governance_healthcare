@@ -393,9 +393,12 @@ In short:
   (camelCase and SHOUTING_CASE). It also reports a lowercase word that holds a
   British medical segment anywhere in it, such as
   haem, oedem or -aemia. <!-- spelling-ok -->
-  It reports every hit whatever word stands before it, except the Latin epithet
-  of a binomial after its genus. Words with an accented letter, URLs, email
-  addresses, domains, file names, paths and encoded data are skipped.
+  It reports every hit whatever word stands before it, except a true Latin
+  epithet after its genus: a word with a Latin ending that is not an English
+  medical form (-ia, -oea, -oma, -itis, -sis) and not a listed word, but for
+  the one listed epithet, so a British medical word after a genus is still
+  reported. Words with an accented letter, URLs, email addresses, domains,
+  file names, paths and encoded data are skipped.
   **Nothing rewrites your files.** `pixi run fix-spelling` prints a patch of
   suggested respellings on stdout, under a header saying it is a suggestion,
   and lists on stderr every other hit for you to fix by hand, with the reason
@@ -409,7 +412,11 @@ In short:
   the line, or with a `glob: phrase` entry in `.spelling-allow`, which exempts
   that exact phrase only in the files the glob matches, and not the rest of its
   line. Run with no arguments, it reads every text file, as the pre-commit hook
-  does. `pixi run test-check-spelling` shows the checker failing.
+  does. A symbolic link named on the command line is skipped, and said to be.
+  `fix-spelling` cannot name a file outside the repository given by an
+  absolute path or with "..", because `git apply` refuses such a path: it says
+  so and leaves that file's suggestions out of the patch.
+  `pixi run test-check-spelling` shows the checker failing.
 
 ## The documentation site
 

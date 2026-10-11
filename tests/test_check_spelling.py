@@ -13,9 +13,10 @@ What is pinned, both ways:
   (snake_case, camelCase, kebab-case), in lower, Title and UPPER case;
 * a table written by hand, independently of the checker, is caught with the
   American form it names. It names every EXPLICIT word, a form of every stem,
-  ending and prefix of every family, and a form of every MEDICAL stem and
-  prefix, and the tests demand it does, so dropping any part of the checker
-  leaves a row uncaught; no EXPLICIT word may also be generated, so dropping one
+  ending and prefix of every family, and a form of every MEDICAL stem with
+  each of its own prefixes, and the tests demand it does, so dropping any part
+  of the checker leaves a row uncaught, or out of the suggestion patch (every
+  row is suggested in it); no EXPLICIT word may also be generated, so dropping one
   is always noticed; no MEDICAL form has a Latin ending, and no British word is
   spelled with the letters a-f alone;
 * a lowercase word holding a British medical segment anywhere is reported by
@@ -27,7 +28,9 @@ What is pinned, both ways:
   dictionary accepts are not;
 * the epithet of a binomial is not reported after a genus in GENERA or an
   abbreviated one, past markup and across a line, and is reported after any
-  other word or with an English ending;
+  other word, with an English ending (-ous, -al, and the medical -ia, -oea,
+  -oma, -itis, -sis), or when it is a listed word other than one of
+  LISTED_EPITHETS (BINOMIALS has the verifier's eleven cases);
 * no rule matches a lowercase word of the en_US Hunspell dictionary (pinned in
   pixi.toml), read as the checker reads words, except the two in
   CAUGHT_ON_PURPOSE, which CLAUDE.md rules out;
@@ -56,7 +59,13 @@ What is pinned, both ways:
   after it; FIX_CASES pins every boundary character both ways, every kind of
   file, every kind of code, and each of the verifier's cases; the report says,
   of each hit the patch leaves, why;
-* the patch never names a file skip() skips;
+* the patch never names a file skip() skips; a symbolic link named on the
+  command line is skipped and said to be, so the patch names its target once
+  and applies; a file outside the repository named by an absolute path or with
+  ".." is refused from the patch, said to be, and exits 1;
+* American scientific words the dictionary lacks
+  (spelling_corpus/american.txt: "leucocratic", "nonaesthetic", "oestrid",
+  "asafoetida" and more) are not reported;
 * URLs of every listed scheme, also after "_" and not inside a longer word,
   email and git addresses, domains, file names, paths (with ./, ../, ~/ or /,
   or an extension), digests and encoded data from 16 characters are neither
@@ -87,10 +96,15 @@ What is pinned, both ways:
 
 Then the checker is broken on purpose, at least once for each property above
 (MUTATIONS lists them), and the same assertions must notice. A check never
-shown to fail is a claim, not a control. One mutation proposed in review is not
-here because it changes nothing: removing a lookbehind from the slash pattern,
-which matched from the leftmost character anyway, so the lookbehind was
-deleted instead.
+shown to fail is a claim, not a control. A mutant stops at the first property
+that notices it, the fast ones first (noticed()), and the dictionary is
+expanded once and handed to every mutant's process, so the run takes well
+under a minute on a laptop; the real checker runs every property. One
+mutation proposed in review is not here because it changes nothing: removing a
+lookbehind from the slash pattern, which matched from the leftmost character
+anyway, so the lookbehind was deleted instead. Nor are two others, for the same
+reason: "-ensis" and "-ii" were dropped from EPITHET_ENDINGS, which "-is" and
+"-i" already cover.
 
 The tests of the in-place rewrite that --fix used to do were deleted with it,
 not weakened: what they pinned (where a rewrite may happen) is now pinned as
@@ -858,6 +872,54 @@ sulphapyridine sulfapyridine  spelling-ok
 sulphation sulfation  spelling-ok
 sulphanilamide sulfanilamide  spelling-ok
 anaesthetically anesthetically  spelling-ok
+# Added after the verifier's seventh pass (#169): closed compounds of the -our
+# and -re roots, the "re" prefix of the -our family, and two more endings.
+recoloured recolored  spelling-ok
+colourblind colorblind  spelling-ok
+colourant colorant  spelling-ok
+colourants colorants  spelling-ok
+colourway colorway  spelling-ok
+colourways colorways  spelling-ok
+harbourmaster harbormaster  spelling-ok
+harbourmasters harbormasters  spelling-ok
+flavoursome flavorsome  spelling-ok
+centrefold centerfold  spelling-ok
+centrefolds centerfolds  spelling-ok
+centreboard centerboard  spelling-ok
+centreboards centerboards  spelling-ok
+fibreboard fiberboard  spelling-ok
+theatregoer theatergoer  spelling-ok
+theatregoers theatergoers  spelling-ok
+leukaemogenesis leukemogenesis  spelling-ok
+leukaemogenic leukemogenic  spelling-ok
+# A form of every MEDICAL stem with each of its own prefixes.
+nonanaesthetic nonanesthetic  spelling-ok
+hypocalcaemia hypocalcemia  spelling-ok
+normocalcaemia normocalcemia  spelling-ok
+euglycaemia euglycemia  spelling-ok
+nonhaemolytic nonhemolytic  spelling-ok
+nonhaemorrhagic nonhemorrhagic  spelling-ok
+prehaemorrhagic prehemorrhagic  spelling-ok
+hypoinsulinaemia hypoinsulinemia  spelling-ok
+nonischaemic nonischemic  spelling-ok
+hyperkalaemia hyperkalemia  spelling-ok
+normokalaemia normokalemia  spelling-ok
+hyperlipidaemia hyperlipidemia  spelling-ok
+hypermagnesaemia hypermagnesemia  spelling-ok
+eunatraemia eunatremia  spelling-ok
+hypernatraemia hypernatremia  spelling-ok
+normonatraemia normonatremia  spelling-ok
+nonoedematous nonedematous  spelling-ok
+nonpaediatric nonpediatric  spelling-ok
+hyperphosphataemia hyperphosphatemia  spelling-ok
+hyperpnoea hyperpnea  spelling-ok
+hypopnoea hypopnea  spelling-ok
+dysproteinaemia dysproteinemia  spelling-ok
+hyperproteinaemia hyperproteinemia  spelling-ok
+hypoproteinaemia hypoproteinemia  spelling-ok
+hypouricaemia hypouricemia  spelling-ok
+hypervolaemia hypervolemia  spelling-ok
+normovolaemia normovolemia  spelling-ok
 """
 
 # The ligatures, read as their two letters.
@@ -1122,7 +1184,18 @@ def table(mod: ModuleType) -> list[str]:
         ]
         if found.get(n) != want:
             missed.append(f"{b}->{found.get(n)}")
-    return [f"the table is caught (missed {missed[:8]})"] if missed else []
+    bad = [f"the table is caught (missed {missed[:8]})"] if missed else []
+    # Every row is listed, so the patch suggests each one written alone. A row
+    # found only by its shape would be reported and left out of the patch.
+    single = [(b, a) for b, a in TABLE_ROWS if "-" not in b]
+    text = "".join(f"The {b} here.\n" for b, _ in single)
+    want = "".join(f"The {a} here.\n" for _, a in single)
+    got = suggested(mod, text)
+    if got != want:
+        lines = zip(text.splitlines(), got.splitlines(), want.splitlines(), strict=True)
+        wrong = [line for line, g, w in lines if g != w]
+        bad.append(f"the patch suggests every row of the table ({wrong[:8]})")
+    return bad
 
 
 def ligatures(mod: ModuleType) -> list[str]:
@@ -1207,7 +1280,11 @@ def corpus(mod: ModuleType) -> list[str]:
     word are not in the patch; every British line is found, and suggested
     exactly; every medical word and every word after an opener is found."""
     bad = []
-    clean = corpus_lines("clean.txt") + corpus_lines("unlisted.txt")
+    clean = (
+        corpus_lines("clean.txt")
+        + corpus_lines("unlisted.txt")
+        + corpus_lines("american.txt")
+    )
     found = scan(mod, clean)
     if found:
         flagged = {clean[n - 1]: hits for n, hits in found.items()}
@@ -1357,13 +1434,11 @@ def fix_exit_codes(mod: ModuleType) -> list[str]:
         latin.write_bytes("Our café.\n".encode("latin-1"))
         name = Path(tmp) / "name.md"
         name.write_text("Colour Springs\n", encoding="utf-8")  # spelling-ok
-        codes = []
-        for path in (clean, good, latin, name):
-            with (
-                contextlib.redirect_stdout(io.StringIO()),
-                contextlib.redirect_stderr(io.StringIO()),
-            ):
-                codes.append(mod.main(["--fix", str(path)]))
+        # Inside the repository, so the suggestion is one the patch can name.
+        codes = [
+            run_fix(mod, Path(tmp), [str(path)])[0]
+            for path in (clean, good, latin, name)
+        ]
     return [] if codes == [0, 1, 1, 1] else [f"--fix exits 0, 1, 1, 1 ({codes})"]
 
 
@@ -1822,8 +1897,35 @@ BINOMIALS = [
     ("Severe foetus", ["foetus"]),  # spelling-ok
     ("Tritrichomonas, foetus", ["foetus"]),  # spelling-ok
     ("Enterococcus faecal contamination", ["faecal"]),  # spelling-ok
+    ("Enterococcus praecordial pain", ["praecordial"]),  # spelling-ok
     ("Streptococcus haematogenous spread", ["haematogenous"]),  # spelling-ok
     ("the foetus", ["foetus"]),  # spelling-ok
+    # Still skipped: a true Latin epithet, listed or by its shape.
+    ("Enterococcus faecalis", []),  # spelling-ok
+    ("Staphylococcus haemolyticus", []),  # spelling-ok
+    ("Mycoplasma haemocanis", []),  # spelling-ok
+    ("B. foetus in bulls", []),  # spelling-ok
+    # An English medical word after a genus is reported (the verifier's seventh
+    # pass): listed ones, each English ending, and across a line.
+    ("Staphylococcus bacteraemia", ["bacteraemia"]),  # spelling-ok
+    ("Campylobacter diarrhoea", ["diarrhoea"]),  # spelling-ok
+    ("Streptococcus septicaemia", ["septicaemia"]),  # spelling-ok
+    ("Clostridium diarrhoea", ["diarrhoea"]),  # spelling-ok
+    ("Enterococcus bacteraemia", ["bacteraemia"]),  # spelling-ok
+    ("Haemophilus bacteraemia", ["bacteraemia"]),  # spelling-ok
+    ("Neisseria gonorrhoea", ["gonorrhoea"]),  # spelling-ok
+    ("Mycoplasma oesophagitis", ["oesophagitis"]),  # spelling-ok
+    ("See Appendix B. oedema", ["oedema"]),  # spelling-ok
+    ("Hepatitis C. ischaemia", ["ischaemia"]),  # spelling-ok
+    ("B. oesophagus", ["oesophagus"]),  # spelling-ok
+    ("Infection with Clostridium", []),
+    ("diarrhoea", ["diarrhoea"]),  # spelling-ok
+    # Found by shape, not listed, so only the English ending tells.
+    ("Streptococcus candidaemia", ["candidaemia"]),  # spelling-ok
+    ("Haemophilus otorrhoea", ["otorrhoea"]),  # spelling-ok
+    ("Streptococcus haemangioendothelioma", ["haemangioendothelioma"]),  # spelling-ok
+    ("Clostridium caecitis", ["caecitis"]),  # spelling-ok
+    ("Clostridium haemosiderosis", ["haemosiderosis"]),  # spelling-ok
 ]
 
 
@@ -2095,6 +2197,48 @@ def patch_applies(mod: ModuleType) -> list[str]:
     return bad
 
 
+def named_files(mod: ModuleType) -> list[str]:
+    """A symbolic link named on the command line is skipped, and said to be, so
+    the patch names its target once and applies; a file outside the repository
+    named by an absolute path or one that climbs ("..") is refused, said to be,
+    and makes the exit 1, because `git apply` refuses such a path."""
+    bad = []
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "repo"
+        root.mkdir()
+        target = root / "a.md"
+        target.write_text(f"the {W} here\n", encoding="utf-8")
+        link = root / "link.md"
+        link.symlink_to(target)
+        code, patch, err = run_fix(mod, root, [str(target), str(link)])
+        if patch.count("diff --git") != 1 or mod.SYMLINK not in err:
+            bad.append(f"--fix skips a named symbolic link ({patch!r}, {err!r})")
+        copy = Path(tmp) / "copy"
+        shutil.copytree(root, copy, symlinks=True)
+        applied = git_apply(patch, copy)
+        if applied.returncode != 0 or code != 1:
+            bad.append(f"the patch applies with a link named ({applied.stderr!r})")
+        saved = mod.ROOT
+        mod.ROOT = root
+        try:
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                code = mod.main([str(link)])
+        finally:
+            mod.ROOT = saved
+        if code != 0 or mod.SYMLINK not in err.getvalue():
+            bad.append(f"the check skips a named symbolic link ({err.getvalue()!r})")
+
+        outside = Path(tmp) / "outside.md"
+        outside.write_text(f"the {W} here\n", encoding="utf-8")
+        for given in (str(outside), os.path.relpath(outside)):
+            code, patch, err = run_fix(mod, root, [given])
+            if code != 1 or patch or mod.OUTSIDE not in err:
+                bad.append(
+                    f"--fix refuses {given!r} outside the repository ({patch!r})"
+                )
+    return bad
+
+
 # British by their shape, not listed: each is reported with the suggestion,
 # and never in the patch (the verifier's third and fifth passes, #169). Each
 # pattern of SHAPES has a word here that no other pattern matches.
@@ -2147,6 +2291,27 @@ SHAPED = [
     ("eupnoeic", "eupneic"),  # spelling-ok
     ("glycaemically", "glycemically"),  # spelling-ok
     ("milligramme", "milligram"),  # spelling-ok
+    # Each British leuco- stem, with a word no other pattern matches.
+    ("leucocytoclastic", "leukocytoclastic"),  # spelling-ok
+    ("leucopenias", "leukopenias"),  # spelling-ok
+    ("leucotome", "leukotome"),  # spelling-ok
+    ("leucotriene", "leukotriene"),  # spelling-ok
+    ("leucopoiesis", "leukopoiesis"),  # spelling-ok
+    ("leucoencephalopathy", "leukoencephalopathy"),  # spelling-ok
+    ("leucaemogenic", "leukemogenic"),  # spelling-ok
+    ("leucoplakia", "leukoplakia"),  # spelling-ok
+    ("leucoderma", "leukoderma"),  # spelling-ok
+    # aesthe after each prefix.
+    ("kinaesthetically", "kinesthetically"),  # spelling-ok
+    ("paraesthetic", "paresthetic"),  # spelling-ok
+    ("dysaesthetic", "dysesthetic"),  # spelling-ok
+    ("hyperaesthetic", "hyperesthetic"),  # spelling-ok
+    ("hypoaesthetic", "hypoesthetic"),  # spelling-ok
+    ("hypaesthetic", "hypesthetic"),  # spelling-ok
+    ("cenaesthesia", "cenesthesia"),  # spelling-ok
+    # An oe- segment after each letter that may precede it.
+    ("paraoesophageal", "paraesophageal"),  # spelling-ok
+    ("antioedema", "antiedema"),  # spelling-ok
 ]
 # Not reported: capitalized and not listed, a segment alone, hex, a Latin ending
 # or epithet, an exception, a word the en_US dictionary accepts, or an American
@@ -2174,6 +2339,11 @@ NOT_SHAPED = [
     "faecium",  # spelling-ok
     "haematobium",  # spelling-ok
     "haemofelis",  # spelling-ok
+    "haemocanis",  # spelling-ok
+    "haemominutum",  # spelling-ok
+    # An -ensis epithet, constructed: no real one in the corpus has a British
+    # shape, and LATIN_ENDINGS keeps one from being reported.
+    "faecensis",  # spelling-ok
     "alphaemission",  # spelling-ok
     "videoedema",  # spelling-ok
     "phytoestrogen",  # spelling-ok
@@ -2317,11 +2487,23 @@ def hunspell_words(stem: Path) -> set[str]:
 AMERICAN_WORDS: list[str] = []
 
 
-def dictionary(mod: ModuleType) -> list[str]:
-    if not AMERICAN_WORDS:
-        if not DICTIONARY.with_suffix(".dic").exists():
-            return [f"the en_US dictionary is installed ({DICTIONARY}.dic)"]
+def american_words() -> list[str]:
+    """The dictionary's words, expanded once per process (and shared with the
+    mutants' processes, see share_words()), or [] if it is not installed."""
+    if not AMERICAN_WORDS and DICTIONARY.with_suffix(".dic").exists():
         AMERICAN_WORDS.extend(sorted(hunspell_words(DICTIONARY)))
+    return AMERICAN_WORDS
+
+
+def share_words(words: list[str]) -> None:
+    """A mutant process's initializer: the parent's expansion of the
+    dictionary, so no process expands it again, whatever the start method."""
+    AMERICAN_WORDS[:] = words
+
+
+def dictionary(mod: ModuleType) -> list[str]:
+    if not american_words():
+        return [f"the en_US dictionary is installed ({DICTIONARY}.dic)"]
     # Each word as the checker reads it: its runs of letters ("pharmacopoeia's"
     # is "pharmacopoeia" and "s").
     matched = {
@@ -2372,12 +2554,29 @@ PROPERTIES = [
     accented,
     still_prose,
     is_text_window,
+    named_files,
     dictionary,
 ]
+# The two properties that read every word: a mutant reaches them only if every
+# other property passed (see noticed()).
+SLOWEST = (every_word, dictionary)
 
 
 def run_properties(mod: ModuleType) -> list[str]:
     return [problem for prop in PROPERTIES for problem in prop(mod)]
+
+
+def noticed(mod: ModuleType) -> list[str]:
+    """The problems of the first property that fails on `mod`, trying the fast
+    ones first. A mutant is noticed when any property fails, so once one has,
+    the rest (every_word alone reads some 250,000 lines) would not change the
+    verdict. The real checker runs every property (run_properties())."""
+    fast = [prop for prop in PROPERTIES if prop not in SLOWEST]
+    for prop in (*fast, *SLOWEST):
+        problems = prop(mod)
+        if problems:
+            return problems
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -2436,12 +2635,14 @@ def coverage() -> None:
         check(f"{family}: a form of every ending", not missing, str(missing))
         missing = [p for p in prefixes if p not in {d[1] for d in used}]
         check(f"{family}: a form of every prefix", not missing, str(missing))
-    medical = [d for w in british for d in medical_decompositions(cs, w)]
+    medical = {d for w in british for d in medical_decompositions(cs, w)}
     missing = [m[0] for m in cs.MEDICAL if m[0] not in {d[0] for d in medical}]
     check("MEDICAL: a form of every stem", not missing, str(missing))
-    prefixes = {p for m in cs.MEDICAL for p in m[3]}
-    missing = sorted(prefixes - {d[1] for d in medical})
-    check("MEDICAL: a form of every prefix", not missing, str(missing))
+    # Of every stem with every one of its own prefixes: a prefix another row
+    # also has ("non") would not be missed if it were dropped from this one.
+    pairs = {(m[0], p) for m in cs.MEDICAL for p in m[3]}
+    missing = sorted(pairs - medical)
+    check("MEDICAL: a form of every stem with each prefix", not missing, str(missing))
 
     # A species epithet is never generated: no medical form has a Latin ending.
     generated = cs.generate({}, {}, cs.MEDICAL)
@@ -2605,6 +2806,33 @@ def command_line() -> None:
         )
         check("the file itself still fails the check", run(str(bad)).returncode == 1)
 
+        link = Path(tmp) / "link.md"
+        link.symlink_to(bad)
+        linked = run(str(link))
+        check(
+            "a named symbolic link is skipped, and said to be",
+            linked.returncode == 0 and cs.SYMLINK in linked.stderr,
+            linked.stderr,
+        )
+        fix = run("--fix", "bad.md", "link.md")
+        copy = Path(tmp) / "copy2"
+        copy.mkdir()
+        shutil.copy(bad, copy / "bad.md")
+        applied = git_apply(fix.stdout, copy)
+        check(
+            "--fix with a link named patches its target once, and the patch applies",
+            fix.stdout.count("diff --git") == 1
+            and applied.returncode == 0
+            and (copy / "bad.md").read_text(encoding="utf-8") == "Our judgments.\n",
+            fix.stdout + applied.stderr.decode(errors="replace"),
+        )
+        fix = run("--fix", str(bad))
+        check(
+            "--fix refuses a file outside the repository named by an absolute path",
+            fix.returncode == 1 and not fix.stdout and cs.OUTSIDE in fix.stderr,
+            fix.stdout + fix.stderr,
+        )
+
         name = Path(tmp) / "name.md"
         text = "Haemorrhage was noted; the colour too.\n"  # spelling-ok
         name.write_text(text, encoding="utf-8")
@@ -2660,6 +2888,33 @@ def malformed_allowlist_exit(mod: ModuleType) -> int | str:
 # Mutation tests: break a copy of the checker, demand the properties notice.
 # ---------------------------------------------------------------------------
 
+# The source of patterns the mutations take apart.
+PEDIATRIC_ROW_SOURCE = (
+    '("paediatric", "pediatric", '  # spelling-ok
+    '("", "s", "ian", "ians", "ally"), ("", "non"))'
+)
+OE_SOURCE = 'r"(?:^|(?<=[aioy]))(?:oedem|oesophag|oestr)"'
+AESTHE_SOURCE = 'r"(?:an|kin|syn|par|dys|hyper|hypo|hyp|cen)aesthe"'
+LEUCO_SOURCE = 'r"leuc(?:o(?:cyt|pen|dystroph|tom|trien|poie|encephal|plak|derm)|aem)"'
+ENGLISH_FORM_SOURCE = 'r"(?:ia|oea|oma|itis|sis)$"'
+LATIN_EPITHETS_SOURCE = (
+    'LATIN_EPITHETS = ("faecium", "haematobium", "haemominutum", "haemofelis", '
+    '"haemocanis")'
+)
+DICTIONARY_WORDS_SOURCE = (
+    'DICTIONARY_WORDS = ("leucotomy", "leucotomies", "pharmacopoeia", "pharmacopoeias")'
+)
+
+
+def drop_alternative(source: str, alt: str) -> str:
+    """`source`, a pattern's text, with the alternative `alt` taken out of its
+    group of alternatives."""
+    for old, new in ((f"(?:{alt}|", "(?:"), (f"|{alt})", ")"), (f"|{alt}|", "|")):
+        if old in source:
+            return source.replace(old, new, 1)
+    raise ValueError(f"{alt!r} is not an alternative of {source}")
+
+
 MUTATIONS: list[tuple[str, str, str]] = [
     # (what is broken, text in the checker, replacement)
     ("a root is dropped", '"behavi",', ""),  # spelling-ok
@@ -2677,6 +2932,13 @@ MUTATIONS: list[tuple[str, str, str]] = [
         "a MEDICAL prefix is dropped",
         '("glycaem", "glycem", AEMIA, ("", "hypo", "hyper", "normo", "eu"))',
         '("glycaem", "glycem", AEMIA, ("", "hyper", "normo", "eu"))',
+    ),
+    (
+        # The prefix another row also has: only the patch notices, since the
+        # word is still found by its shape.
+        "the paediatric row's 'non' is dropped",  # spelling-ok
+        PEDIATRIC_ROW_SOURCE,
+        PEDIATRIC_ROW_SOURCE.replace('("", "non"))', '("",))'),
     ),
     (
         "a MEDICAL British ending is not respelled",
@@ -2986,8 +3248,8 @@ MUTATIONS += [
     ("'.' may not stand after", AFTER_SOURCE, AFTER_SOURCE.replace(".", "", 1)),
     (
         "--fix ignores skip()",
-        "            if path.is_file() and not skip(path):\n                try:",
-        "            if path.is_file():\n                try:",
+        "            elif path.is_file() and not skip(path):\n                name =",
+        "            elif path.is_file():\n                name =",
     ),
     (
         "column 0 reads the end of the line",
@@ -3102,32 +3364,89 @@ MUTATIONS += [
         'SHAPE_WORDS = ("gynae",)',  # spelling-ok
         "SHAPE_WORDS = ()",
     ),
-    (
-        "no word is excepted from the shapes",
-        "SHAPE_EXCEPTIONS = ("
-        + '"paedomorph", "paedogen", "caecilian", "leucovorin", "unaesthe")',
-        'SHAPE_EXCEPTIONS = ("-",)',
-    ),
-    ("caecilian is not excepted", '"paedogen", "caecilian", ', '"paedogen", '),
-    ("unaesthetic is not excepted", '"leucovorin", "unaesthe")', '"leucovorin")'),
     # Each narrowing of a pattern, undone, matches an American word.
     ("haem matches anywhere", 'r"^haem|haem(?=[ao])"', 'r"haem"'),
-    ("oedem matches after any letter", 'r"(?:^|(?<=[aiouy]))oedem"', 'r"oedem"'),
     (
-        "oedem matches after an e",
-        'r"(?:^|(?<=[aiouy]))oedem"',
-        'r"(?:^|(?<=[aeiouy]))oedem"',
+        "an oe- segment matches after any letter",
+        OE_SOURCE,
+        'r"(?:oedem|oesophag|oestr)"',
     ),
-    ("oestr matches after any letter", 'r"(?:^|(?<=[aiouy]))oestr"', 'r"oestr"'),
     (
-        "oesophag matches after any letter",
-        'r"(?:^|(?<=[aiouy]))oesophag"',
-        'r"oesophag"',
+        "an oe- segment matches after an e",
+        OE_SOURCE,
+        OE_SOURCE.replace("[aioy]", "[aeioy]"),
     ),
     ("foet matches anywhere", 'r"foet(?=al|us|id|o|icid)"', 'r"foet"'),
-    ("aesthe matches at the start", 'r"(?<=.)aesthe"', 'r"aesthe"'),
+    ("aesthe matches after any letter", AESTHE_SOURCE, 'r"(?<=.)aesthe"'),
+    ("aesthe matches after two letters", AESTHE_SOURCE, 'r"(?<=..)aesthe"'),
     ("gramme matches anywhere", 'r"grammes?$"', 'r"grammes?"'),  # spelling-ok
-    ("the shape leuc is added", 'r"leuco",', 'r"leuc",'),
+    ("leuco matches in any word", LEUCO_SOURCE, 'r"leuco|leucaem"'),
+    ("the shape leuc is added", LEUCO_SOURCE, 'r"leuc"'),
+    # Each part of a narrowed pattern, dropped: a British word only it matches
+    # is missed.
+    *[
+        (
+            f"an oe- segment no longer matches after {c!r}",
+            OE_SOURCE,
+            OE_SOURCE.replace(c, "", 1),
+        )
+        for c in "aioy"
+    ],
+    *[
+        (
+            f"the oe- segment {alt} is dropped",
+            OE_SOURCE,
+            drop_alternative(OE_SOURCE, alt),
+        )
+        for alt in ("oedem", "oesophag", "oestr")
+    ],
+    *[
+        (
+            f"aesthe after {alt} is dropped",
+            AESTHE_SOURCE,
+            drop_alternative(AESTHE_SOURCE, alt),
+        )
+        for alt in ("an", "kin", "syn", "par", "dys", "hyper", "hypo", "hyp", "cen")
+    ],
+    *[
+        (
+            f"the leuco stem {alt} is dropped",
+            LEUCO_SOURCE,
+            drop_alternative(LEUCO_SOURCE, alt),
+        )
+        for alt in (
+            "cyt",
+            "pen",
+            "dystroph",
+            "tom",
+            "trien",
+            "poie",
+            "encephal",
+            "plak",
+            "derm",
+            "aem",
+        )
+    ],
+    # Each word excepted from the shapes, and each Latin epithet and dictionary
+    # word, dropped: the word is reported.
+    *[(f"{w} is no longer excepted", f'    "{w}",\n', "") for w in cs.SHAPE_EXCEPTIONS],
+    *[
+        (
+            f"{w} is no longer a Latin epithet",
+            LATIN_EPITHETS_SOURCE,
+            LATIN_EPITHETS_SOURCE.replace(f'"{w}", ', "").replace(f', "{w}"', ""),
+        )
+        for w in cs.LATIN_EPITHETS
+    ],
+    *[
+        (
+            f"{w} is no longer a dictionary word",
+            DICTIONARY_WORDS_SOURCE,
+            DICTIONARY_WORDS_SOURCE.replace(f'"{w}", ', "").replace(f', "{w}"', ""),
+        )
+        for w in cs.DICTIONARY_WORDS
+    ],
+    ("-ensis is not a Latin ending", '"icum", "ensis")', '"icum")'),
     # The binomial skip.
     (
         "the binomial skip is off",
@@ -3147,8 +3466,55 @@ MUTATIONS += [
     ),
     (
         "-ous is an epithet",
-        "    if key.endswith(NOT_LATIN):\n        return False\n",
+        " or key.endswith(NOT_LATIN):\n        return False\n    if ENGLISH",
+        ":\n        return False\n    if ENGLISH",
+    ),
+    # Only a true Latin epithet is skipped (the verifier's seventh pass).
+    (
+        "an English medical form is an epithet",
+        "    if ENGLISH_FORM.search(key):\n        return False\n",
         "",
+    ),
+    *[
+        (
+            f"-{alt} is not an English form",
+            ENGLISH_FORM_SOURCE,
+            drop_alternative(ENGLISH_FORM_SOURCE, alt),
+        )
+        for alt in ("ia", "oea", "oma", "itis", "sis")
+    ],
+    (
+        "a listed word is an epithet",
+        "return key not in BRITISH or key in LISTED_EPITHETS",
+        "return True",
+    ),
+    (
+        "the listed epithet is not an epithet",
+        'LISTED_EPITHETS = ("foetus",)',  # spelling-ok
+        "LISTED_EPITHETS = ()",
+    ),
+    # A symbolic link named on the command line, and a file outside the
+    # repository the patch cannot name.
+    (
+        "a named symbolic link is read by --fix",
+        '            if path.is_symlink():\n                print(f"  skipped',
+        '            if False:\n                print(f"  skipped',
+    ),
+    (
+        "a named symbolic link is read by the check",
+        '        if path.is_symlink():\n            print(f"skipped',
+        '        if False:\n            print(f"skipped',
+    ),
+    (
+        "an absolute path outside is named in the patch",
+        "if path.is_absolute() or ",
+        "if ",
+    ),
+    ("a path that climbs is named in the patch", ' or ".." in path.parts:', ":"),
+    (
+        "a file the patch cannot name is passed in silence",
+        '{OUTSIDE}", file=sys.stderr)\n                    unread += 1\n',
+        '{OUTSIDE}", file=sys.stderr)\n',
     ),
     ("markup hides the genus", 'text = MARKUP.sub(" ", before)', "text = before"),
     (
@@ -3165,8 +3531,8 @@ MUTATIONS += [
     # Nothing is written, and the patch is one git applies.
     (
         "--fix writes the file",
-        "                if after != before:\n                    patches.append",
-        "                if after != before:\n"
+        "                elif after != before:\n                    patches.append",
+        "                elif after != before:\n"
         '                    path.write_text(after, encoding="utf-8")\n'
         "                    patches.append",
     ),
@@ -3182,7 +3548,7 @@ MUTATIONS += [
     ),
     (
         "--fix does not list the rest",
-        '                hand.extend(f"  {name}:{hit}" for hit in left)\n',
+        '                hand.extend(f"  {name or path}:{hit}" for hit in left)\n',
         "",
     ),
     (
@@ -3291,7 +3657,7 @@ def run_mutant(n: int) -> tuple[list[str], str]:
     source = SCRIPT.read_text(encoding="utf-8")
     mutant = load(source.replace(old, new), name=f"check_spelling_mutant_{n}")
     try:
-        return run_properties(mutant), ""
+        return noticed(mutant), ""
     except Exception as error:  # a crash is not a mutation worth the name
         return [], repr(error)
 
@@ -3304,7 +3670,9 @@ def mutations() -> None:
         check(f"mutation applies once: {what}", present, f"{old!r} not once")
     # Each mutant runs every property over every word, so they run in parallel.
     todo = [n for n, present in enumerate(applies) if present]
-    with ProcessPoolExecutor() as pool:
+    with ProcessPoolExecutor(
+        initializer=share_words, initargs=(american_words(),)
+    ) as pool:
         results = list(pool.map(run_mutant, todo))
     for n, (problems, error) in zip(todo, results, strict=True):
         what = MUTATIONS[n][0]

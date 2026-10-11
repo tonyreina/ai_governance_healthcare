@@ -25,20 +25,27 @@ one costs the rule. Every hit is reported, whatever word stands before it.
   "judgements" while it listed "judgement" (#169). The British medical
   spellings are roots too (MEDICAL: "haemorrhag-", "oedem-", "oesophag-", the
   -aemia words and the rest), each with a closed set of English endings and a
-  few known prefixes. A listed word is matched whole, so "phytoestrogen" and
-  "proestrus" are not touched, and no listed form has a Latin ending, so
-  "faecalis" is never listed.
+  few known prefixes, and the -our and -re roots take a few closed compounds
+  ("colourblind", "harbourmaster", "centrefold", "theatregoer"). A listed word
+  is matched whole, so "phytoestrogen" and "proestrus" are not touched. No
+  listed ending is one of the Latin endings -alis, -ium, -icus, -ica, -ae or
+  -ensis, so "faecalis" and "gonorrhoeae" are never listed; a few listed English
+  words do end in a Latin-looking -us or -i ("foetus", "oestrus",
+  "oesophagus", "oesophagi").
 * A lowercase word by its shape: it holds a British medical segment anywhere
   in it (SHAPES: haem, oedem, oesophag, oestr, foet, faec, caec, paed, aesthe
-  (which every anaes- word holds), gynae, leuco, aetio, palaeo, praecord,
-  pharmacopoei, spirochaet, sulph, tumour, -rrhoe-, -pnoe-, -aemia and -aemic;
-  and -litre and -gramme at its end), and is longer than the segment. See
-  by_shape(). A segment that an American word can hold by accident is
-  narrowed: oe- segments count only at
-  the start or after a vowel other than "e" ("videoedema" and "phytoestrogen"
-  are American), "haem" inside a word only before "a" or "o"
-  ("alphaemission"), "foet" only before an English ending ("infoetl"),
-  "aesthe" never at the start ("aesthetic").
+  after an-, kin-, syn-, par-, dys-, hyper-, hypo-, hyp- or cen- (so every
+  anaes- word), gynae, the British leuco- stems (leucocyt-, leucopen-,
+  leucodystroph-, leucotom-, leucotrien-, leucopoie-, leucoencephal-,
+  leucoplak-, leucoderm-, leucaem-; leucorrhoea is caught by -rrhoe-), aetio,
+  palaeo, praecord, pharmacopoei, spirochaet, sulph, tumour, -rrhoe-, -pnoe-,
+  -aemia and -aemic; and -litre and -gramme at its end), and is longer than the
+  segment. See by_shape(). A segment that an American word can hold by accident is
+  narrowed: oe- segments count only at the start or after "a", "i", "o" or
+  "y" ("videoedema" and "phytoestrogen" are American), "haem" inside a word
+  only before "a" or "o" ("alphaemission"), "foet" only before an English
+  ending ("infoetl"), "aesthe" only after those prefixes ("aesthetic",
+  "nonaesthetic"), "leuco" only in those stems ("leucocratic", "leucoplast").
 
 A word found by its shape is not reported when:
 
@@ -47,16 +54,21 @@ A word found by its shape is not reported when:
   -ensis) or is one of LATIN_EPITHETS, Latin epithets whose ending looks
   English ("faecium", "haematobium");
 * it contains one of SHAPE_EXCEPTIONS, words American biology spells this way
-  ("caecilian", "leucovorin", "paedomorphosis"), or is one of DICTIONARY_WORDS,
-  which the en_US dictionary accepts as American ("leucotomy",
-  "pharmacopoeia").
+  ("caecilian", "paedomorphosis", "oestrid", "asafoetida"), or is one of
+  DICTIONARY_WORDS, which the en_US dictionary accepts as American
+  ("leucotomy", "pharmacopoeia").
 
 And no word, listed or found by its shape, is reported when it is the epithet
-of a binomial (see binomial()): it ends in a Latin form (-a, -ae, -i, -ii, -is,
--um, -us but not -ous, -ensis), and the word before it, past markup such as
-"*", "_" and HTML tags, and on the line before if it is first on its line, is
-one of GENERA or an abbreviated genus such as "E.". So "Tritrichomonas foetus"
-and "T. foetus" pass, and "Severe foetus" does not.
+of a binomial (see binomial()): it is a Latin epithet (epithet()): it ends in
+a Latin form (-a, -ae, -i, -is, -um, -us but not -ous), does not end in an
+English medical form (-ia, so every -aemia; -oea, so every -rrhoea and -pnoea;
+-oma; -itis; -sis), and is not a listed word, except "foetus"
+(LISTED_EPITHETS); and the word before it, past markup such as "*", "_" and
+HTML tags, and on the line before if it is first on its line, is one of GENERA
+or an abbreviated genus such as "E.". So "Tritrichomonas foetus", "T. foetus"
+and "Enterococcus faecalis" pass, and "Severe foetus", "Staphylococcus
+bacteraemia", "Neisseria gonorrhoea", "Mycoplasma oesophagitis" and "B. oedema"
+are reported.
 
 A British word that neither the list nor a shape covers passes
 (tests/fixtures/spelling_corpus/unlisted.txt keeps a few), and so does a
@@ -80,7 +92,11 @@ The suggestion patch
 --fix never writes a file; there is no flag that makes it. It prints to stdout
 a unified diff, which ``git apply`` takes, of suggested respellings, under a
 header saying the patch is a suggestion to review before applying. Paths are
-relative to the repository root (a file outside it is named as given). It
+relative to the repository root. A file outside it is named as given when that
+is a relative path that does not climb (".."), for `git apply` to take from
+where the command ran; one named by an absolute path or with ".." cannot be
+named (git apply refuses those paths), so its suggestions are left out of the
+patch, said so on stderr, and make the exit 1. It
 prints to stderr every other hit, for a person to fix by hand, with the reason
 it is not in the patch, and exits 1 when there is any hit or a file it cannot
 read.
@@ -122,7 +138,9 @@ rule pre-commit's ``types: [text]`` uses for a file it cannot name (see
 is_text()), so a whole-repository run and the hook read the same kinds of file:
 a shell script, a .caddy file, .env.example and .gitignore as well as code and
 documentation. Symbolic links are not read (pre-commit does not pass them; the
-target is read on its own), nor anything under SKIP_DIRS.
+target is read on its own), nor anything under SKIP_DIRS. A symbolic link named
+on the command line is not read either, and is said to be skipped on stderr, so
+a patch never names one file twice.
 
 tests/test_check_spelling.py pins all of this, against a corpus a verifier
 built (tests/fixtures/spelling_corpus/).
@@ -133,7 +151,6 @@ Run via: pixi run check-spelling  (suggestions: pixi run fix-spelling)
 from __future__ import annotations
 
 import difflib
-import os
 import re
 import sys
 from enum import StrEnum
@@ -239,8 +256,18 @@ FAMILIES: dict[str, Family] = {
             ("ourising", "orizing"),
             ("ourisation", "orization"),
             ("ouration", "oration"),
+            # Closed compounds of the commonest roots ("colourblind",
+            # "harbourmaster", "flavoursome", "odourant").
+            ("ourblind", "orblind"),
+            ("ourant", "orant"),
+            ("ourants", "orants"),
+            ("ourway", "orway"),
+            ("ourways", "orways"),
+            ("ourmaster", "ormaster"),
+            ("ourmasters", "ormasters"),
+            ("oursome", "orsome"),
         ),
-        ("", "mis", "dis", "un", "water", "multi", "mal"),
+        ("", "mis", "dis", "un", "re", "water", "multi", "mal"),
         (
             "ard",
             "arm",
@@ -280,6 +307,13 @@ FAMILIES: dict[str, Family] = {
             ("res", "ers"),
             ("red", "ered"),
             ("ring", "ering"),
+            # Closed compounds ("centrefold", "fibreboard", "theatregoer").
+            ("refold", "erfold"),
+            ("refolds", "erfolds"),
+            ("reboard", "erboard"),
+            ("reboards", "erboards"),
+            ("regoer", "ergoer"),
+            ("regoers", "ergoers"),
         ),
         (
             "",
@@ -752,7 +786,7 @@ EXPLICIT: dict[str, str] = {
     "neurones": "neurons",
     "caesium": "cesium",
     # The English plural of "paraesthesia", which MEDICAL does not generate: no
-    # MEDICAL ending is Latin.
+    # MEDICAL ending is -ae.
     "paraesthesiae": "paresthesiae",
 }
 
@@ -766,9 +800,10 @@ EXPLICIT: dict[str, str] = {
 # an English word ("Oestrus") is capitalized, and a capitalized word is
 # reported but never rewritten by --fix (see left_by()).
 #
-# This is a list, so a British word whose stem is not here passes ("haem" alone,
-# "leucoplakia", "foetid" are not here). Add the stem, its endings and its
-# prefixes when one turns up; the tests demand every stem has a row.
+# This is a list, so a British word whose stem is not here is not listed
+# ("leucoplakia"); a shape may still find it, and one no shape finds passes
+# ("haem" alone, "paeony"). Add the stem, its endings and its prefixes when one
+# turns up; the tests demand every stem has a row, with each of its prefixes.
 Ending = str | tuple[str, str]
 Medical = tuple[str, str, tuple[Ending, ...], tuple[str, ...]]
 AEMIA: tuple[Ending, ...] = ("ia", "ias", "ic")
@@ -868,7 +903,7 @@ MEDICAL: tuple[Medical, ...] = (
     ("gynaecolog", "gynecolog", ("y", "ic", "ical", "ist", "ists"), ("", "uro")),
     ("gynaecomasti", "gynecomasti", ("a",), ("",)),
     ("anaem", "anem", AEMIA, ("", "non")),
-    ("leukaem", "leukem", AEMIA, ("", "pre")),
+    ("leukaem", "leukem", (*AEMIA, "ogenesis", "ogenic"), ("", "pre")),
     ("leucaem", "leukem", AEMIA, ("",)),
     ("septicaem", "septicem", AEMIA, ("",)),
     ("ischaem", "ischem", AEMIA, ("", "non")),
@@ -1032,22 +1067,24 @@ def american(word: str) -> str | None:
 SHAPES = (
     # "haem" inside a word only before "a" or "o": "alphaemission" is not.
     r"^haem|haem(?=[ao])",
-    # An oe- segment only at the start or after a vowel other than "e": an
-    # American prefix ending in "o" before "edema" or "estrogen" makes the same
-    # letters ("videoedema", "phytoestrogen", "shoestring").
-    r"(?:^|(?<=[aiouy]))oedem",
-    r"(?:^|(?<=[aiouy]))oesophag",
-    r"(?:^|(?<=[aiouy]))oestr",
+    # An oe- segment only at the start or after "a", "i", "o" or "y"
+    # ("paraoesophageal", "antioedema", "tracheooesophageal", "polyoestrous"):
+    # an American prefix ending in "o" before "edema" or "estrogen" makes the
+    # same letters ("videoedema", "phytoestrogen", "shoestring").
+    r"(?:^|(?<=[aioy]))(?:oedem|oesophag|oestr)",
     # "foet" only before an English ending: "infoetl" is not.
     r"foet(?=al|us|id|o|icid)",
     r"faec",
     r"caec",
     r"paed",
-    # Never at the start: "aesthetic" is American. Every British "anaes-" word
-    # holds it ("anaesthesia", "unanaesthetised").
-    r"(?<=.)aesthe",
+    # Only after the medical prefixes: "aesthetic", "nonaesthetic" and
+    # "antiaesthetic" are American. Every British "anaes-" word holds "anaesthe"
+    # ("anaesthesia", "unanaesthetised").
+    r"(?:an|kin|syn|par|dys|hyper|hypo|hyp|cen)aesthe",
     r"gynae",
-    r"leuco",
+    # Only the British medical stems: "leucocratic", "leucoplast", "leucon"
+    # and the rest of American geology and botany keep "leuco".
+    r"leuc(?:o(?:cyt|pen|dystroph|tom|trien|poie|encephal|plak|derm)|aem)",
     r"aetio",
     r"palaeo",
     r"praecord",
@@ -1066,7 +1103,18 @@ SHAPE = re.compile("|".join(SHAPES))
 # A word that is all segment and still a shape.
 SHAPE_WORDS = ("gynae",)
 # American spellings that hold a segment, as parts of words.
-SHAPE_EXCEPTIONS = ("paedomorph", "paedogen", "caecilian", "leucovorin", "unaesthe")
+SHAPE_EXCEPTIONS = (
+    "paedomorph",
+    "paedogen",
+    "caecilian",
+    # Zoology and botany the en_US dictionary lacks: the botfly family, blood
+    # parasites, a stomach worm's disease, and the spice.
+    "oestrid",
+    "haemosporid",
+    "haemogregarin",
+    "haemonch",
+    "asafoetid",
+)
 # Whole words the en_US dictionary accepts as American spellings: not reported,
 # though their derivatives the dictionary does not list ("pharmacopoeial") are.
 DICTIONARY_WORDS = ("leucotomy", "leucotomies", "pharmacopoeia", "pharmacopoeias")
@@ -1093,6 +1141,7 @@ SHAPE_RESPELL = (
     ("paed", "ped"),
     ("aesthe", "esthe"),
     ("gynae", "gyne"),
+    ("leucaem", "leukem"),
     ("leuco", "leuko"),
     ("aetio", "etio"),
     ("palaeo", "paleo"),
@@ -1134,10 +1183,11 @@ def by_shape(word: str) -> str | None:
 
 # The epithet of a binomial, which is Latin, not English: "Tritrichomonas
 # foetus", "T. foetus", "*Schistosoma* *haematobium*". Neither a listed word
-# nor a shape is reported there. The epithet must end in a Latin form, and the
-# genus must be one of GENERA or a capital and a period. Any other capitalized
-# word before it ("Severe", "NHS", "Paediatric") is no genus, so a British word
-# after it is reported.
+# nor a shape is reported there. The epithet must be Latin (see epithet()), and
+# the genus must be one of GENERA or a capital and a period. Any other
+# capitalized word before it ("Severe", "NHS", "Paediatric") is no genus, so a
+# British word after it is reported. An English medical word after a genus is
+# reported too: "Staphylococcus bacteraemia" is a bacteremia, not a species.
 GENERA = frozenset(
     {
         "Arcanobacterium",
@@ -1157,7 +1207,18 @@ GENERA = frozenset(
         "Tritrichomonas",
     }
 )
-EPITHET_ENDINGS = ("a", "ae", "i", "ii", "is", "um", "us", "ensis")
+# "-is" covers "-ensis", and "-i" covers "-ii".
+EPITHET_ENDINGS = ("a", "ae", "i", "is", "um", "us")
+# English medical endings among those Latin ones: -ia (every -aemia word, and
+# -paedia), -oea (every -rrhoea and -pnoea word), -oma, -itis, and -sis (-osis,
+# -ysis, -esis). A word ending so is English, not an epithet. An -ensis epithet
+# is never a hit at all: no listed word ends so, and LATIN_ENDINGS keeps it from
+# being a shape.
+ENGLISH_FORM = re.compile(r"(?:ia|oea|oma|itis|sis)$")
+# A listed word is English, so never an epithet, except these, which are also
+# species epithets ("Tritrichomonas foetus", "Campylobacter fetus" written the
+# British way).
+LISTED_EPITHETS = ("foetus",)
 # Markup between a genus and its epithet: an HTML tag or a non-breaking space.
 MARKUP = re.compile(r"<[^>]*>|&nbsp;")
 # The genus at the end of the text before an epithet, past emphasis, quotes and
@@ -1165,15 +1226,24 @@ MARKUP = re.compile(r"<[^>]*>|&nbsp;")
 GENUS = re.compile(r"(?<![A-Za-z])(?:([A-Z][a-z]+)|([A-Z])\.)[\s*_\"'()\[\]]*$")
 
 
-def binomial(word: str, before: str, previous: str) -> bool:
-    """Whether `word` is the epithet of a binomial: it is lowercase with a Latin
-    ending, and `before` (the text before it on its line) ends in its genus. If
-    nothing but markup is before it, the genus may end `previous`, the line
-    before (empty after a blank line)."""
-    key = word.translate(LIGATURES)
-    if not word.islower() or not key.endswith(EPITHET_ENDINGS):
+def epithet(key: str) -> bool:
+    """Whether `key`, a lowercase word, can be a Latin epithet: it ends in a
+    Latin form (EPITHET_ENDINGS, but not -ous), not in an English medical one
+    (ENGLISH_FORM), and it is not a listed word, but for LISTED_EPITHETS."""
+    if not key.endswith(EPITHET_ENDINGS) or key.endswith(NOT_LATIN):
         return False
-    if key.endswith(NOT_LATIN):
+    if ENGLISH_FORM.search(key):
+        return False
+    return key not in BRITISH or key in LISTED_EPITHETS
+
+
+def binomial(word: str, before: str, previous: str) -> bool:
+    """Whether `word` is the epithet of a binomial: it is lowercase and Latin
+    (epithet()), and `before` (the text before it on its line) ends in its
+    genus. If nothing but markup is before it, the genus may end `previous`, the
+    line before (empty after a blank line)."""
+    key = word.translate(LIGATURES)
+    if not word.islower() or not epithet(key):
         return False
     text = MARKUP.sub(" ", before)
     if not re.search(r"[A-Za-z0-9]", text):
@@ -1710,16 +1780,27 @@ def unified(name: str, before: str, after: str) -> str:
     return f"diff --git a/{name} b/{name}\n{body}"
 
 
-def patch_name(path: Path) -> str:
-    """The path the patch names: from the repository root, or, for a file
-    outside it, as given (relative to the current directory if it can be)."""
+def patch_name(path: Path) -> str | None:
+    """The path the patch names: from the repository root; for a file outside
+    it, the path as given, if that is relative and does not climb ("..") so
+    `git apply` takes it from where the command ran; otherwise None, because
+    `git apply` refuses an absolute path or one that climbs."""
     try:
         return path.resolve().relative_to(ROOT).as_posix()
     except ValueError:
-        try:
-            return Path(os.path.relpath(path)).as_posix()
-        except ValueError:
-            return path.as_posix().lstrip("/")
+        if path.is_absolute() or ".." in path.parts:
+            return None
+        return path.as_posix()
+
+
+# Said of a file named on the command line that is not read.
+SYMLINK = "a symbolic link, so not read (its target is read on its own)"
+# Said by --fix of a file it cannot name in a patch.
+OUTSIDE = (
+    "outside the repository and named by an absolute path or one with '..', "
+    "which `git apply` refuses, so its suggestions are not in the patch: name "
+    "it relative to a directory above it and run fix-spelling there"
+)
 
 
 PATCH_HEADER = """\
@@ -1745,18 +1826,23 @@ def main(argv: list[str]) -> int:
         unread = 0
         suggested = 0
         for path in targets(argv):
-            if path.is_file() and not skip(path):
+            if path.is_symlink():
+                print(f"  skipped {path}: {SYMLINK}", file=sys.stderr)
+            elif path.is_file() and not skip(path):
+                name = patch_name(path)
                 try:
                     before, after, left = suggest(path, allow)
                 except (UnicodeDecodeError, OSError) as error:
                     print(f"  could not read {path}: {error}", file=sys.stderr)
                     unread += 1
                     continue
-                name = patch_name(path)
-                if after != before:
+                if after != before and name is None:
+                    print(f"  {path}: {OUTSIDE}", file=sys.stderr)
+                    unread += 1
+                elif after != before:
                     patches.append(unified(name, before, after))
                     suggested += 1
-                hand.extend(f"  {name}:{hit}" for hit in left)
+                hand.extend(f"  {name or path}:{hit}" for hit in left)
         if patches:
             print(PATCH_HEADER + "".join(patches), end="")
         for line in hand:
@@ -1770,12 +1856,12 @@ def main(argv: list[str]) -> int:
         )
         return 1 if unread or patches or hand else 0
 
-    problems = [
-        msg
-        for path in targets(argv)
-        if path.is_file() and not skip(path)
-        for msg in check(path, allow)
-    ]
+    problems = []
+    for path in targets(argv):
+        if path.is_symlink():
+            print(f"skipped {path}: {SYMLINK}", file=sys.stderr)
+        elif path.is_file() and not skip(path):
+            problems.extend(check(path, allow))
 
     for msg in problems:
         print(msg, file=sys.stderr)

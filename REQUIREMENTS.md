@@ -944,8 +944,11 @@ honest answer and is a gap worth closing; see R-19.
   workflow's `prek run --all-files`), which generates each listed root's
   inflections, the British medical roots among them, matches listed words only
   whole, and also reports a lowercase word that holds a British medical segment
-  anywhere in it, whatever word stands before it, except a binomial's Latin
-  epithet after its genus (D-81). Nothing rewrites a file: `pixi run
+  anywhere in it, whatever word stands before it, except a true Latin epithet
+  after its genus (D-81): a word with a Latin ending that is neither an English
+  medical form (-ia, so every -aemia, -oea, so every -rrhoea and -pnoea, -oma,
+  -itis, -sis) nor a listed word, but for the one listed epithet, so an English
+  word after a genus is still reported. Nothing rewrites a file: `pixi run
   fix-spelling` prints a patch of suggested respellings for a person to review
   and `git apply`, and lists every other hit to fix by hand. So quoted material
   is never respelled by a tool; the check still reports a quoted British word,

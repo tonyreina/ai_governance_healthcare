@@ -1984,7 +1984,10 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - **Nothing is ever written.** `pixi run check-spelling` reports. `pixi run
   fix-spelling` (`--fix`) prints, on stdout, a unified diff of suggested
   respellings that `git apply` takes, with paths from the repository root
-  (a file outside it is named as given), under a header saying the patch is a
+  (a file outside it is named as given when that is a relative path that does
+  not climb; one given by an absolute path or with "..", which `git apply`
+  refuses, is left out of the patch, said so on stderr, and makes the exit 1),
+  under a header saying the patch is a
   suggestion to review before applying, and lists on stderr every other hit,
   with the reason it is not in the patch, for a person to fix by hand. It
   exits 1 when there is any hit, or a file it cannot read. There is no flag
@@ -2013,8 +2016,13 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   and the rest), each with a closed set of English endings and a few known
   prefixes. A listed word is caught only if it is one of the generated forms,
   entire, so "phytoestrogen" and "proestrus" are not touched. No listed ending
-  is Latin (-alis, -ium, -icus, -ica, -ae), so a species epithet is never
-  listed.
+  is -alis, -ium, -icus, -ica, -ae or -ensis, so a species epithet such as
+  faecalis is never listed; <!-- spelling-ok -->
+  a few listed English words end in a Latin-looking -us or -i
+  (foetus, oestrus, oesophagus, oesophagi). <!-- spelling-ok -->
+  The -our and -re roots also take a few closed compounds
+  (colourblind, harbourmaster, centrefold, theatregoer), <!-- spelling-ok -->
+  and the -our family the prefix re-.
 - **Reporting is broad.** A false report costs a `spelling-ok` marker; a
   missed one costs the rule. Every listed hit is reported, in any case, and
   every shape hit, whatever word stands before it: the earlier rule that
@@ -2025,19 +2033,27 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   British medical segment anywhere and is longer than the segment
   (`SHAPES`, `by_shape()`):
   haem, oedem, oesophag, oestr, foet, faec, caec, paed, <!-- spelling-ok -->
-  aesthe (which every anaes- word holds), <!-- spelling-ok -->
-  gynae, leuco, aetio, <!-- spelling-ok -->
+  aesthe after an-, kin-, syn-, par-, dys-, hyper-, <!-- spelling-ok -->
+  hypo-, hyp- or cen- (so every anaes- word), <!-- spelling-ok -->
+  gynae, aetio, the British leuco- stems (leucocyt-, <!-- spelling-ok -->
+  leucopen-, leucodystroph-, leucotom-, leucotrien-, <!-- spelling-ok -->
+  leucopoie-, leucoencephal-, leucoplak-, leucoderm-, <!-- spelling-ok -->
+  leucaem-), <!-- spelling-ok -->
   palaeo, praecord, pharmacopoei, spirochaet, sulph, tumour, <!-- spelling-ok -->
   -rrhoe-, -pnoe-, -aemia and -aemic, and, only at the end, <!-- spelling-ok -->
   -litre and -gramme; and the word gynae. <!-- spelling-ok -->
   Where an American word holds a segment's letters by accident, the pattern is
-  narrowed: an oe- segment counts only at the start or after a vowel other
-  than "e" (American "videoedema", "phytoestrogen", "shoestring" are clean, so
-  a British compound with a consonant before it, such as
+  narrowed: an oe- segment counts only at the start or after "a", "i", "o"
+  or "y", each with a British word only it lets through (American
+  "videoedema", "phytoestrogen", "shoestring" are clean, so a British compound
+  with another letter before it, such as
   lipoedema, must be listed); <!-- spelling-ok -->
   "haem" inside a word only before "a" or "o" ("alphaemission"); "foet" only
-  before an English ending ("infoetl"); "aesthe" never at the start
-  ("aesthetic"). The verifier's 131 medical words
+  before an English ending ("infoetl"); "aesthe" only after those prefixes
+  ("aesthetic", "nonaesthetic", "antiaesthetic"); "leuco" only in those
+  stems, because American geology, botany and chemistry keep it
+  ("leucocratic", "leucoplast", "leucomalachite"; `spelling_corpus/american.txt`
+  keeps the verifier's list of them). The verifier's 131 medical words
   (`tests/fixtures/spelling_corpus/medical.txt`) are reported, but for two the
   en_US dictionary accepts (below). The suggested respelling
   of a shape is a guess, so a shape is never in the patch.
@@ -2045,23 +2061,33 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   alone (hex); a word with a Latin ending (-us but not -ous, -ae, -ii, -alis,
   -icus, -ica, -icum, -ensis), or one of `LATIN_EPITHETS`, Latin epithets whose
   ending looks English ("faecium", "haematobium"); a word holding one of
-  `SHAPE_EXCEPTIONS`, American biology ("caecilian", "leucovorin",
-  "paedomorphosis", and "unaesthetic", which the dictionary accepts); and
+  `SHAPE_EXCEPTIONS`, American biology the dictionary lacks ("caecilian",
+  "paedomorphosis", "oestrid", "haemosporidian", "haemogregarine",
+  "haemonchosis", "asafoetida"); and
   `DICTIONARY_WORDS`, whole words the en_US dictionary accepts as American
   ("leucotomy", "pharmacopoeia" and their plurals). The verifier listed those
   two as British; the dictionary test below and the verifier disagree, and the
   dictionary wins until the owner decides otherwise. Their derivatives the
   dictionary does not list ("pharmacopoeial") are reported. <!-- spelling-ok -->
 - **The binomial skip.** No word, listed or by shape, is reported when it is a
-  binomial's epithet: it is lowercase and ends in a Latin form (-a, -ae, -i,
-  -ii, -is, -um, -us but not -ous, -ensis), and the word before it, past
+  binomial's epithet: it is lowercase and a true Latin epithet (`epithet()`):
+  it ends in a Latin form (-a, -ae, -i, -is, -um, -us but not -ous), does not
+  end in an English medical form (`ENGLISH_FORM`: -ia, so every -aemia; -oea,
+  so every -rrhoea and -pnoea; -oma; -itis; -sis), and is not a listed word,
+  except foetus (`LISTED_EPITHETS`, a species epithet too); <!-- spelling-ok -->
+  and the word before it, past
   emphasis, quotes, brackets, HTML tags and `&nbsp;`, and on the line before if
   nothing but markup precedes it on its own (a blank line ends that), is one of
   `GENERA` (genera with British-looking epithets: Tritrichomonas,
   Campylobacter, Enterococcus, Schistosoma, Mycoplasma and others) or a capital
   and a period ("T.").
-  So "Tritrichomonas foetus" passes, <!-- spelling-ok -->
-  and "Severe foetus" does not. <!-- spelling-ok -->
+  So "Tritrichomonas foetus" and <!-- spelling-ok -->
+  "Enterococcus faecalis" pass, <!-- spelling-ok -->
+  and "Severe foetus", "Staphylococcus bacteraemia", <!-- spelling-ok -->
+  "Neisseria gonorrhoea", "Mycoplasma oesophagitis", <!-- spelling-ok -->
+  "B. oedema" and "Hepatitis C. ischaemia" are reported <!-- spelling-ok -->
+  (the verifier's seventh pass found eleven such English words skipped as
+  epithets by the first rule, which asked only for a Latin-looking ending).
   The genus list is closed: an epithet after a genus not on it is reported,
   and needs a marker or a new `GENERA` entry.
 - **The en_US dictionary is the guard against false reports.** The test
@@ -2151,15 +2177,18 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   TAB, LF, VT, FF, CR and ESC (so no NUL, other control byte or DEL). So
   `pixi run check-spelling` reads shell scripts, `.caddy` files, `.env.example`,
   the ignore files and the lock file, as the hook does. Symbolic links are not
-  read (pre-commit does not pass them; the target is read on its own). The one
+  read (pre-commit does not pass them; the target is read on its own), and a
+  symbolic link named on the command line is skipped and said to be, so a
+  patch never names one file twice and always applies. The one
   difference left: the hook reads only files git tracks, while the no-argument
   run also reads untracked files that are not in `SKIP_DIRS`.
 - **Shown to fail:** `tests/test_check_spelling.py` checks every generated word,
   and every word of a hand-written table, in each of the nine contexts it lists
   (prose, a comment, a string, snake_case, kebab-case, camelCase, Title case,
   UPPER CASE, UPPER_SNAKE). The table names every `EXPLICIT` word, a form of
-  every family stem, ending and prefix, and a form of every `MEDICAL` stem and
-  prefix, and the test demands it does. It runs the verifier's corpus
+  every family stem, ending and prefix, and a form of every `MEDICAL` stem with
+  each of its own prefixes, and the test demands it does, and that the patch
+  suggests every row. It runs the verifier's corpus
   (`tests/fixtures/spelling_corpus/`: about 1,100 lines of organisms, drugs,
   places, journal titles, names, American words, code, URLs, hex and encoded
   data, the line-wrapped binomial, the demonstration that the first version
@@ -2188,7 +2217,15 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   removed, and each boundary character added or dropped; `--fix` writing a
   file, ignoring `skip()`, losing its header, its exit code, its list of the
   rest, the no-newline marker, git's line splitting or the file's line
-  endings; and the file rules), and the test demands the break is noticed. The
+  endings, reading a named symbolic link or naming a path `git apply`
+  refuses; each alternative of each narrowed pattern, each exception, Latin
+  epithet and dictionary word, and each English form of the binomial skip
+  dropped; and the file rules), and the test demands the break is noticed.
+  A mutant stops at the first property that notices it, the fast ones first,
+  and the en_US dictionary is expanded once and handed to every mutant's
+  process, so the whole run takes about half a minute (it took ten, because
+  every mutant ran every property, the 250,000 lines of the every-word check
+  among them). The
   tests of the removed in-place rewrite were deleted with it, not weakened.
 - **Rejected:** narrowing `--fix` further (each of five rounds narrowed it,
   and each round's verifier found another kind of text it corrupted; a

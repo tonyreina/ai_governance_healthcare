@@ -208,7 +208,7 @@ def start() -> str:
         "run", "-d", "--rm", "--name", name,
         "-e", "POSTGRES_USER=chai", "-e", "POSTGRES_DB=chai",
         "-e", f"POSTGRES_PASSWORD={secrets.token_hex(8)}",
-        "--network", "none", "--tmpfs", "/var/lib/postgresql/data",
+        "--network", "none", "--tmpfs", vb.DATA_MOUNT,
         vb.production_image(),
     )  # fmt: skip
     assert done.returncode == 0, done.stderr.decode()[-300:]

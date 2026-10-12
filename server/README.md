@@ -291,7 +291,7 @@ a trigger refusing an `UPDATE`. A fake would test the fake.
 
 ```bash
 docker run -d --name chai-test-db -p 55432:5432 \
-  -e POSTGRES_PASSWORD=test -e POSTGRES_DB=chai_test postgres:17-alpine
+  -e POSTGRES_PASSWORD=test -e POSTGRES_DB=chai_test postgres:18-alpine
 
 pip install -e '.[dev]'
 TEST_DATABASE_URL=postgresql://postgres:test@localhost:55432/chai_test pytest -q

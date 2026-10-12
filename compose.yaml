@@ -51,11 +51,12 @@ services:
   # ---------------------------------------------------------------------------
   db:
     # Pinned to a major version, never :latest. Postgres does not auto-migrate
-    # its on-disk format: moving 17 -> 18 under a live volume makes the cluster
-    # unreadable and needs pg_upgrade or a dump/restore. A floating tag would
-    # make that happen by surprise on some unrelated `docker compose pull`.
+    # its on-disk format: moving one major to the next under a live volume makes
+    # the cluster unreadable and needs pg_upgrade or a dump/restore. A floating
+    # tag would make that happen by surprise on some unrelated
+    # `docker compose pull`. PostgreSQL 18 since D-94.
     logging: *default-logging
-    image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    image: postgres:18@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     restart: unless-stopped
 
     # Container baseline (#50). The cluster's entrypoint starts as root and drops
@@ -82,17 +83,20 @@ services:
       # quietly standing up a database with a password someone copied from a
       # sample file. Put a real one in .env.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (cp .env.example .env)}
-      # Keep the cluster in a subdirectory of the mount point. Cosmetic with a
-      # named volume; load-bearing the moment somebody swaps in a bind mount,
-      # where initdb refuses a directory that already contains lost+found.
-      PGDATA: /var/lib/postgresql/data/pgdata
 
     volumes:
       # NAMED VOLUME -- this is what makes the data survive `docker compose
       # down`. `down` removes containers and networks but leaves named volumes
       # alone; only `docker compose down -v` destroys this one. See the
       # `volumes:` block at the bottom.
-      - pgdata:/var/lib/postgresql/data
+      #
+      # Mounted at /var/lib/postgresql, the layout the PostgreSQL 18 image
+      # expects (D-94). The image's default PGDATA is /var/lib/postgresql/18/docker,
+      # a subdirectory of the mount named for the major version, so no PGDATA is
+      # set here, and a bind mount's lost+found does not get in initdb's way. Its
+      # entrypoint refuses to start if anything is mounted at the old
+      # /var/lib/postgresql/data.
+      - pgdata:/var/lib/postgresql
 
     healthcheck:
       # Over TCP on 127.0.0.1 rather than the Unix socket, because TCP is how

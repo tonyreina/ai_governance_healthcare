@@ -74,7 +74,7 @@ def start_source() -> str:
         "run", "-d", "--rm", "--name", name,
         "-e", "POSTGRES_USER=chai", "-e", "POSTGRES_DB=chai",
         "-e", f"POSTGRES_PASSWORD={secrets.token_hex(8)}",
-        "--network", "none", "--tmpfs", "/var/lib/postgresql/data",
+        "--network", "none", "--tmpfs", vb.DATA_MOUNT,
         vb.production_image(),
         check_rc=True,
     )  # fmt: skip
@@ -396,7 +396,7 @@ def main() -> int:
     )
     check(
         "the throwaway database is the production major version",
-        vb.production_image().startswith("postgres:17"),
+        vb.production_image().startswith("postgres:18"),
         vb.production_image(),
     )
 

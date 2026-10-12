@@ -323,7 +323,7 @@ trigger refusing to rewrite history:
 
 ```bash
 docker run -d --name chai-test-db -p 55432:5432 \
-  -e POSTGRES_PASSWORD=test -e POSTGRES_DB=chai_test postgres:17-alpine
+  -e POSTGRES_PASSWORD=test -e POSTGRES_DB=chai_test postgres:18-alpine
 cd server
 pip install -e '.[dev]'
 TEST_DATABASE_URL=postgresql://postgres:test@localhost:55432/chai_test pytest
@@ -342,7 +342,7 @@ into a failure; CI always does.
 ### In CI
 
 Every pull request and every push to `main` runs all of the above in GitHub
-Actions (`.github/workflows/test.yml`): the server suite against a PostgreSQL 17
+Actions (`.github/workflows/test.yml`): the server suite against a PostgreSQL 18
 service container, the dashboard suites in Chromium, the proxy against a real
 Caddy, and the whole Compose stack end to end. One job, **tests passed**, fails
 if any of them failed, was canceled, or was skipped.

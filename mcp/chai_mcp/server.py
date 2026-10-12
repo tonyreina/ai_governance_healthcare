@@ -22,11 +22,12 @@ from enum import StrEnum
 from functools import wraps
 from typing import Annotated, Any, TypeVar
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, InputRequiredResult, ToolAnnotations
 from pydantic import Field
+from starlette.applications import Starlette
 
 from .bearer import bearer_token, is_token_shaped
 from .config import Settings
@@ -81,8 +82,13 @@ _COMMON = (
     "is returned in this version (no names, notes or titles)."
 )
 
+# The SDK's field names (2.x). The model ignores a name it does not know, so a
+# misspelled hint would be dropped silently: a test reads them back from the protocol.
 _READ_ONLY = ToolAnnotations(
-    readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
+    read_only_hint=True,
+    destructive_hint=False,
+    idempotent_hint=True,
+    open_world_hint=False,
 )
 
 
@@ -213,34 +219,50 @@ def clean_error(text: str) -> str:
     return cut if len(cut) <= MAX_ERROR_TEXT else cut[: MAX_ERROR_TEXT - 3] + "..."
 
 
-class _Server(FastMCP):
-    """FastMCP, with every tool error's text cleaned before it leaves (review L8)."""
+class _Server(MCPServer):
+    """MCPServer, with every tool error's text cleaned before it leaves (review L8).
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+    The SDK turns a raised error into the call's result text. A ToolError carries text
+    this service chose or the caller's own input (a validation error quotes it); an
+    UnexpectedToolError (anything ``_guarded`` did not see, such as a result that fails
+    output conversion) carries only the tool's name. Both are cleaned and cut short,
+    and neither keeps its cause: the SDK logs a cause's traceback, and a traceback can
+    quote a frame. The unexpected one stays unexpected, so the SDK still logs it as an
+    error (its text withheld by the log filter).
+    """
+
+    async def call_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        context: Context[Any, Any] | None = None,
+    ) -> CallToolResult | InputRequiredResult:
         try:
-            return await super().call_tool(name, arguments)
+            return await super().call_tool(name, arguments, context)
+        except UnexpectedToolError as error:
+            raise UnexpectedToolError(clean_error(str(error))) from None
         except ToolError as error:
             raise ToolError(clean_error(str(error))) from None
 
 
 def build_server(
     settings: Settings, upstream: Upstream | None = None
-) -> tuple[FastMCP, Upstream]:
+) -> tuple[MCPServer, Upstream]:
     upstream = upstream or Upstream(settings)
     slots = Slots(
         settings.max_in_flight,
         settings.max_in_flight_per_source,
         settings.queue_wait_seconds,
     )
+    # The transport's own settings (stateless, JSON responses, the path, the body cap
+    # and Host/Origin validation) are given to the HTTP app: see http_app below.
     mcp = _Server(
         name="governance-readonly",
         instructions=INSTRUCTIONS,
-        stateless_http=True,
-        json_response=True,
-        streamable_http_path="/mcp",
-        max_request_body_size=settings.max_body_bytes,
-        transport_security=transport_security(settings),
         log_level="WARNING",
+        # No subscriptions/listen (served by default in 2.x, D-95): a request meant
+        # to stay open for change notices, and this service has none to send.
+        subscriptions=False,
     )
 
     @mcp.tool(
@@ -403,3 +425,15 @@ def build_server(
             )
 
     return mcp, upstream
+
+
+def http_app(mcp: MCPServer, settings: Settings) -> Starlette:
+    """The SDK's Streamable HTTP app: stateless, one JSON response per POST, at /mcp,
+    with the body cap and Host/Origin validation. Nothing is kept between requests."""
+    return mcp.streamable_http_app(
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        json_response=True,
+        max_request_body_size=settings.max_body_bytes,
+        transport_security=transport_security(settings),
+    )

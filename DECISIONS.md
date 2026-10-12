@@ -3133,7 +3133,9 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   on #164, and the defaults listed in this entry (the owner, 2026-10-11). Before
   that, the decisions were Accepted and the defaults Proposed, for the owner to
   confirm. Defaults (d), (e) and (n) to (w), added or changed in fixing the review
-  findings, were confirmed by the owner on 2026-10-12.
+  findings, were confirmed by the owner on 2026-10-12. Its SDK line (the SDK
+  version and `FastMCP` in "SDK and transport", and default (g)) is superseded by
+  D-95 (the owner, 2026-10-12); everything else in it stands.
 - **The question.** D-89 gave a program a per-user, read-only way into the
   register. #164 PR 3 asks for the chatbot's way in: an MCP server, so a person
   can ask "which projects have criteria marked Not met?" in an interactive client.
@@ -3324,7 +3326,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
     - (f) `MCP_ALLOWED_HOSTS` is required to start; the loopback names are always
       allowed (for the container's health check).
     - (g) The SDK is pinned to the 1.x line (1.30.0). A 2.x exists and was not
-      adopted.
+      adopted. (Superseded by D-95: the owner moved the service to the 2.x line,
+      2.3.0.)
     - (h) A query string on `/mcp` is refused (`400`), and the proxy's log
       redacts it
       anyway.
@@ -3528,3 +3531,85 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   `/var/lib/postgresql`, no `PGDATA`), `tests/test_verify_backup.py` (the
   throwaway is `postgres:18`), and every Docker suite above, which starts the
   real image.
+
+### D-95 The MCP service runs on the 2.x line of the official SDK
+
+- Status: Accepted (the owner, 2026-10-12). Supersedes D-91's SDK line ("SDK and
+  transport": `mcp` 1.30.0 and `FastMCP`; default (g), "pinned to the 1.x line").
+  Everything else in D-91 stands, and R-73 is unchanged.
+- **The question.** Dependabot proposed `mcp` 2.3.0 (#213), a major version that
+  does not import the service's code: `mcp.server.fastmcp` is gone. Stay on 1.x
+  (D-91 (g)), or port?
+- **Decided (owner).** Port now, to `mcp>=2.3,<3.0`, locked at 2.3.0 in
+  `mcp/requirements.txt`. This replaces #213.
+- **What changed in the code.**
+    - `FastMCP` is `mcp.server.mcpserver.MCPServer`; `Context` and `ToolError`
+      moved with it. The transport settings (stateless, JSON responses, the
+      `/mcp` path, the body cap, Host and Origin validation) are no longer
+      constructor arguments: `chai_mcp.server.http_app` passes them to
+      `streamable_http_app(...)`, with the same values.
+    - `_Server.call_tool` keeps cleaning every tool error's text (D-91 (w)) under
+      the new signature (`context`, returning `CallToolResult |
+      InputRequiredResult`). A crash `_guarded` cannot see (a result the SDK's own
+      output check refuses) now arrives as the SDK's `UnexpectedToolError`, whose
+      text is only `Error executing tool <name>`; it is cleaned too and re-raised
+      without its cause, so the traceback the SDK logs cannot quote the value
+      (and the log filter, D-91 (q), withholds it anyway).
+    - `subscriptions=False`. 2.x serves `subscriptions/listen` and advertises
+      `listChanged` and `subscribe` (resources) by default: a request meant to
+      stay open for change notices, and a promise of notices this service never
+      sends. It is off, and the capabilities say `false`.
+    - The tool annotations use the SDK's 2.x field names (`read_only_hint` and so
+      on). The model silently ignores a name it does not know, so a misspelled
+      hint would vanish; the tests read them back from the protocol.
+    - The 2.x SDK also serves protocol revision `2026-07-28`, a per-request
+      envelope with no `initialize`. It goes through the same front (`Guard`, the
+      body cap, Host and Origin) and the same tools, and the token is read from
+      the same header; a test drives it with raw requests.
+    - `httpx2` and `httpcore2` join `QUIET` in `chai_mcp.logs`, as `httpx` and
+      `httpcore` are.
+    - `serverInfo.version` is now empty (1.x reported the SDK's version), and
+      `docs/mcp.md`'s example says so.
+- **The new dependencies, reviewed.**
+    - `mcp-types` 2.3.0: the protocol's wire types split out of the SDK, from the
+      same publisher (Model Context Protocol, a Series of LF Projects, LLC), MIT.
+      Depends only on `pydantic` and `typing-extensions`. `mcp` requires it at
+      one exact version.
+    - `httpx2` 2.13.1 and `httpcore2` 2.13.1: "the next generation" of `httpx`
+      and `httpcore`, authored by Tom Christie (who wrote `httpx`) and maintained
+      by Pydantic Services Inc. (`github.com/pydantic/httpx2`), BSD-3-Clause.
+      The SDK's client transport uses it, and the server package imports it,
+      but the service makes no request with it: its one outbound call, to the
+      gate, is still `httpx` in `chai_mcp.upstream` with its own timeouts and no
+      redirects. `httpx2` requires one exact `httpcore2`.
+    - `truststore` 0.10.4 (MIT, Seth Michael Larson and David Glick), pulled in
+      by `httpx2` to verify TLS against the OS trust store. Unused here: the
+      service's one call is plain HTTP on the internal network, through `httpx`.
+    - `opentelemetry-api` 1.45.1 (Apache-2.0, the OpenTelemetry authors, CNCF).
+      The SDK opens spans through it. The API alone, without
+      `opentelemetry-sdk` or an exporter (neither is installed), records and
+      sends nothing.
+    - Gone from the lock: `httpx-sse`, `pydantic-settings`, `python-dotenv`.
+    - Dependabot ignores `mcp-types` and `httpcore2` alone, as it does
+      `pydantic-core` (PR #112): each is pinned exactly by its parent and must
+      move with it. `tests/test_supply_chain.py` checks the ignores.
+- **Rejected.**
+    - *Staying on 1.x* (D-91 (g)): every later Dependabot pull request for `mcp`
+      would be this same port, done later.
+    - *Pinning `mcp<2` in Dependabot* (an `ignore` on the major): it hides the
+      port instead of making it.
+    - *Leaving subscriptions on*: see above.
+- **Not changed.** R-73 and D-91's guarantees: read-only, exactly three tools, no
+  resource or prompt, the token forwarded per request and kept nowhere,
+  stateless, no free text, the tool descriptions, `_guarded` and `clean_error`,
+  Host and Origin, the body cap, the timeouts and the per-source limits. Every
+  existing test in `mcp/tests` passes unweakened. The tests changed only where
+  the SDK's Python names changed (`isError` to `is_error` and the like on the
+  client's objects; the wire spelling is still pinned by the raw-request tests),
+  and the test client is an `httpx2.AsyncClient`, as the SDK's client now takes.
+- Enforced by: `mcp/tests/` (all of it), including
+  `test_mcp_service.py::test_the_per_request_protocol_offers_the_same_three_tools_and_nothing_else`,
+  `test_mcp_abuse.py::test_a_crash_outside_the_tools_guard_is_one_plain_message_and_not_logged`,
+  and two new mutants in `test_mcp_mutations.py` (subscriptions offered; a crash
+  keeping its cause); `tests/test_supply_chain.py` (the Dependabot ignores).
+- Source: the owner's decision of 2026-10-12; #213 (superseded); D-91; R-73.

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import socket
 import time
 
@@ -97,7 +98,7 @@ async def test_garbage_is_the_one_rejected_message_with_no_slot_and_no_request(
         # The one slot is still free, and nothing was asked of the governance server.
         assert api.seen == []
         async with session(svc) as client:
-            assert not (await client.call_tool("whoami", {})).isError
+            assert not (await client.call_tool("whoami", {})).is_error
 
 
 def test_a_token_shaped_credential_is_exactly_what_the_api_mints() -> None:
@@ -684,7 +685,52 @@ async def test_a_validation_error_is_short_and_has_no_control_characters() -> No
             ]
     for result in results:
         text = result.content[0].text
-        assert result.isError
+        assert result.is_error
         assert len(text) <= MAX_ERROR_TEXT, len(text)
         assert not any(ch in text for ch in "\u2028\u2029\x1b\x00\n\r"), repr(text[:80])
     assert api.seen == []
+
+
+# --- a crash the tool's own guard never sees (mcp 2.x, D-95) ---------------------------
+
+
+async def test_a_crash_outside_the_tools_guard_is_one_plain_message_and_not_logged(
+    monkeypatch: pytest.MonkeyPatch, sweep
+) -> None:
+    """A result that fails the SDK's own output check is refused by the SDK after
+    ``_guarded`` has returned, as UnexpectedToolError. The caller gets the SDK's generic
+    words and nothing of the cause, and the cause (a validation error quoting the
+    value) is not chained into the traceback the SDK logs."""
+    import chai_mcp.upstream as up
+
+    marker = "SECRETCAUSE"
+
+    async def wrong_shape(*args, **kwargs):
+        # Not a Whoami: the SDK's output conversion refuses it, quoting the value.
+        return {"user": f"{marker} {TOKEN_OK}"}
+
+    monkeypatch.setattr(up.Upstream, "get", wrong_shape)
+    api = FakeAPI()
+    from .harness import Served
+
+    # The sweep must see each record whole, traceback included. A handler an earlier
+    # test installed (configure_logging) reduces a record in place before the sweep
+    # sees it, which would hide exactly what this test looks for, so it is set aside.
+    root = logging.getLogger()
+    others = [h for h in root.handlers if h is not sweep]
+    for handler in others:
+        root.removeHandler(handler)
+    try:
+        with Served(api.app()) as upstream, running_service(upstream.url) as svc:
+            async with session(svc) as client:
+                result = await client.call_tool("whoami", {})
+    finally:
+        for handler in others:
+            root.addHandler(handler)
+    text = " ".join(getattr(c, "text", "") for c in result.content)
+    assert result.is_error
+    assert text == "Error executing tool whoami", text
+    log = sweep.text()
+    assert "raised an unexpected exception" in log  # the sweep saw the SDK's record
+    assert marker not in log and TOKEN_OK not in log
+    assert "ValidationError" not in log

@@ -23,7 +23,7 @@ from chai_mcp import models
 from chai_mcp.config import ConfigError, Settings
 from chai_mcp.server import ALLOWED_TOOLS, ToolName, build_server
 from chai_mcp.upstream import Message, Route
-from mcp.server.fastmcp.exceptions import ToolError  # noqa: F401
+from mcp.server.mcpserver.exceptions import ToolError  # noqa: F401
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -87,7 +87,7 @@ async def test_the_protocol_lists_exactly_the_allowlist(api: FakeAPI) -> None:
             assert {t.name for t in tools} == {t.value for t in ALLOWED_TOOLS}
             assert len(tools) == len(ALLOWED_TOOLS)
             assert (await client.list_resources()).resources == []
-            assert (await client.list_resource_templates()).resourceTemplates == []
+            assert (await client.list_resource_templates()).resource_templates == []
             assert (await client.list_prompts()).prompts == []
     assert api.seen == []  # listing asked the governance server nothing
 
@@ -100,9 +100,9 @@ async def test_every_tool_is_read_only_typed_and_says_how_to_read_it(
             tools = (await client.list_tools()).tools
     for tool in tools:
         hints = tool.annotations
-        assert hints.readOnlyHint is True and hints.destructiveHint is False
-        assert hints.openWorldHint is False
-        assert tool.outputSchema, f"{tool.name} has no output schema"
+        assert hints.read_only_hint is True and hints.destructive_hint is False
+        assert hints.open_world_hint is False
+        assert tool.output_schema, f"{tool.name} has no output schema"
         words = tool.description.lower()
         for must in (
             "read-only",
@@ -114,9 +114,9 @@ async def test_every_tool_is_read_only_typed_and_says_how_to_read_it(
         ):
             assert must in words, (tool.name, must)
         # No tool takes a URL, a path, a host or a command: only what the docs name.
-        schema = json.dumps(tool.inputSchema)
+        schema = json.dumps(tool.input_schema)
         assert '"format": "uri"' not in schema
-        for name in tool.inputSchema.get("properties", {}):
+        for name in tool.input_schema.get("properties", {}):
             assert not re.search(r"url|uri|path|host|file|command|query", name), name
 
 
@@ -124,8 +124,8 @@ async def test_input_schemas_are_exactly_the_documented_ones(api: FakeAPI) -> No
     with running_service(api.served.url) as svc:
         async with session(svc) as client:
             tools = {t.name: t for t in (await client.list_tools()).tools}
-    assert tools["whoami"].inputSchema.get("properties", {}) == {}
-    assert set(tools["list_portfolio"].inputSchema["properties"]) == {
+    assert tools["whoami"].input_schema.get("properties", {}) == {}
+    assert set(tools["list_portfolio"].input_schema["properties"]) == {
         "status",
         "decision",
         "overdue",
@@ -136,13 +136,13 @@ async def test_input_schemas_are_exactly_the_documented_ones(api: FakeAPI) -> No
         "limit",
         "offset",
     }
-    assert tools["list_portfolio"].inputSchema.get("required", []) == []
-    assert set(tools["get_project"].inputSchema["properties"]) == {"ref"}
-    assert tools["get_project"].inputSchema["required"] == ["ref"]
+    assert tools["list_portfolio"].input_schema.get("required", []) == []
+    assert set(tools["get_project"].input_schema["properties"]) == {"ref"}
+    assert tools["get_project"].input_schema["required"] == ["ref"]
     # The result schemas are the models, which are what a response is checked against.
-    assert tools["whoami"].outputSchema == models.Whoami.model_json_schema()
-    assert tools["get_project"].outputSchema == models.Project.model_json_schema()
-    assert tools["list_portfolio"].outputSchema == models.Portfolio.model_json_schema()
+    assert tools["whoami"].output_schema == models.Whoami.model_json_schema()
+    assert tools["get_project"].output_schema == models.Project.model_json_schema()
+    assert tools["list_portfolio"].output_schema == models.Portfolio.model_json_schema()
 
 
 def test_the_upstream_routes_are_the_three_get_routes_and_no_others() -> None:
@@ -173,11 +173,11 @@ async def test_each_tool_returns_its_documented_result_and_forwards_the_callers_
                 },
             )
             one = await client.call_tool("get_project", {"ref": REF})
-    assert not me.isError and not listed.isError and not one.isError
-    models.Whoami.model_validate(me.structuredContent)
-    models.Portfolio.model_validate(listed.structuredContent)
-    models.Project.model_validate(one.structuredContent)
-    assert me.structuredContent["user"] == PERSON
+    assert not me.is_error and not listed.is_error and not one.is_error
+    models.Whoami.model_validate(me.structured_content)
+    models.Portfolio.model_validate(listed.structured_content)
+    models.Project.model_validate(one.structured_content)
+    assert me.structured_content["user"] == PERSON
     assert api.paths == [
         "/api/agent/me",
         "/api/agent/portfolio",
@@ -196,9 +196,9 @@ async def test_each_tool_returns_its_documented_result_and_forwards_the_callers_
         "offset": "0",
     }
     # Who and when are in the result for every recorded status and decision.
-    gate = one.structuredContent["gates"][0]
+    gate = one.structured_content["gates"][0]
     assert gate["signed_by"] == PERSON and gate["signed_at"]
-    assert one.structuredContent["items"][0]["overdue"] is True
+    assert one.structured_content["items"][0]["overdue"] is True
 
 
 async def test_only_the_bearer_is_forwarded_no_identity_and_no_other_credential(
@@ -245,7 +245,7 @@ async def test_a_call_asks_for_a_reference_it_can_name_and_nothing_else(
                 "",
             ):
                 result = await client.call_tool("get_project", {"ref": bad})
-                assert result.isError, bad
+                assert result.is_error, bad
     assert api.seen == []
 
 
@@ -258,7 +258,7 @@ async def test_no_tool_can_reach_any_route_but_the_three(api: FakeAPI) -> None:
             # Unknown tools, and tools with a name that suggests more, do not exist.
             for name in ("create_project", "update_project", "delete_project", "api"):
                 result = await client.call_tool(name, {"path": "/api/projects"})
-                assert result.isError
+                assert result.is_error
     assert set(api.paths) <= {
         "/api/agent/me",
         "/api/agent/portfolio",
@@ -284,7 +284,7 @@ async def test_a_redirect_is_not_followed_so_the_token_goes_nowhere_else(
         with running_service(api.served.url) as svc:
             async with session(svc, TOKEN) as client:
                 result = await client.call_tool("whoami", {})
-        assert result.isError
+        assert result.is_error
         assert Message.UNAVAILABLE.value in text_of(result)
         assert elsewhere.seen == []
 
@@ -321,7 +321,7 @@ async def test_a_token_the_api_rejects_is_one_message_and_is_never_echoed(
                 await client.call_tool("get_project", {"ref": REF}),
             ]
     for result in results:
-        assert result.isError
+        assert result.is_error
         assert Message.REJECTED.value in text_of(result)
         assert TOKEN not in text_of(result) and "SECRETSECRET" not in text_of(result)
         assert "alice" not in text_of(result) and "Smith" not in text_of(result)
@@ -357,7 +357,7 @@ async def test_a_failure_is_a_fixed_message_and_never_the_upstream_body(
     with running_service(api.served.url) as svc:
         async with session(svc, TOKEN) as client:
             result = await client.call_tool("list_portfolio", {})
-    assert result.isError
+    assert result.is_error
     said = text_of(result)
     assert expected in said
     for leak in ("hunter2", "Traceback", "SELECT", TOKEN, *HOSTILE):
@@ -458,7 +458,7 @@ async def test_an_answer_that_is_not_the_documented_shape_is_refused_whole(
     with running_service(api.served.url) as svc:
         async with session(svc, TOKEN) as client:
             result = await client.call_tool("whoami", {})
-    assert result.isError and Message.UNEXPECTED.value in text_of(result)
+    assert result.is_error and Message.UNEXPECTED.value in text_of(result)
     assert "Jane-Doe" not in text_of(result) and TOKEN not in text_of(result)
 
 
@@ -522,15 +522,15 @@ async def test_a_value_that_is_not_a_vocabulary_word_never_reaches_a_model(
             for body in spots:
                 api.body = body
                 result = await client.call_tool("get_project", {"ref": REF})
-                assert result.isError, body
+                assert result.is_error, body
                 assert Message.UNEXPECTED.value in text_of(result)
                 assert poison not in text_of(result)
             api.body = portfolio_body(projects=[spots[0]])
             result = await client.call_tool("list_portfolio", {})
-            assert result.isError and poison not in text_of(result)
+            assert result.is_error and poison not in text_of(result)
             api.body = me_body(user=poison)
             result = await client.call_tool("whoami", {})
-            assert result.isError and poison not in text_of(result)
+            assert result.is_error and poison not in text_of(result)
 
 
 async def test_an_unexpected_failure_inside_the_service_is_one_plain_message(
@@ -545,7 +545,7 @@ async def test_an_unexpected_failure_inside_the_service_is_one_plain_message(
     with running_service(api.served.url) as svc:
         async with session(svc, TOKEN) as client:
             result = await client.call_tool("whoami", {})
-    assert result.isError
+    assert result.is_error
     assert Message.INTERNAL.value in text_of(result)
     assert "secret internals" not in text_of(result) and TOKEN not in text_of(result)
 
@@ -675,6 +675,71 @@ def test_the_service_keeps_no_session(api: FakeAPI) -> None:
         assert other.status_code == 200
 
 
+# The per-request protocol revision the 2.x SDK also serves (D-95): no initialize, no
+# session, the version and the method in headers and in each request's own _meta.
+MODERN = "2026-07-28"
+MODERN_META = {
+    "io.modelcontextprotocol/protocolVersion": MODERN,
+    "io.modelcontextprotocol/clientCapabilities": {},
+    "io.modelcontextprotocol/clientInfo": {"name": "test", "version": "0"},
+}
+
+
+def modern(svc: Served, method: str, params: dict | None = None, **headers: str):
+    params = {**(params or {}), "_meta": MODERN_META}
+    named = {"Mcp-Name": params["name"]} if "name" in params else {}
+    return post(
+        svc,
+        {"jsonrpc": "2.0", "id": 7, "method": method, "params": params},
+        **{"MCP-Protocol-Version": MODERN, "Mcp-Method": method, **named, **headers},
+    )
+
+
+def test_the_per_request_protocol_offers_the_same_three_tools_and_nothing_else(
+    api: FakeAPI,
+) -> None:
+    """A client on the newer protocol revision reaches the same surface as one that
+    says initialize: the three tools, no resource, no prompt, nothing to subscribe to,
+    the caller's own token forwarded per call, and no session kept."""
+    with running_service(api.served.url) as svc:
+        found = modern(svc, "server/discover")
+        assert found.status_code == 200, found.text
+        caps = found.json()["result"]["capabilities"]
+        assert set(caps) <= {"tools", "resources", "prompts"}, caps
+        # Nothing changes and nothing can be watched: no subscription is offered.
+        assert caps["resources"] == {"listChanged": False, "subscribe": False}
+        assert caps["prompts"] == {"listChanged": False}
+        assert caps["tools"] == {"listChanged": False}
+
+        listed = modern(svc, "tools/list").json()["result"]["tools"]
+        assert sorted(t["name"] for t in listed) == sorted(t.value for t in ToolName)
+        assert all(t["annotations"]["readOnlyHint"] is True for t in listed)
+        assert modern(svc, "resources/list").json()["result"]["resources"] == []
+        assert modern(svc, "prompts/list").json()["result"]["prompts"] == []
+        assert api.seen == []
+
+        answer = modern(
+            svc,
+            "tools/call",
+            {"name": "whoami", "arguments": {}},
+            Authorization=f"Bearer {TOKEN}",
+        )
+        assert answer.status_code == 200, answer.text
+        assert "mcp-session-id" not in {k.lower() for k in answer.headers}
+        result = answer.json()["result"]
+        assert result["isError"] is False
+        assert result["structuredContent"]["user"] == PERSON
+        assert TOKEN not in answer.text
+        assert [s.headers["authorization"] for s in api.seen] == [f"Bearer {TOKEN}"]
+
+        # Without a token it is refused at the front door, as on the older revision.
+        bare = modern(
+            svc, "tools/call", {"name": "whoami", "arguments": {}}, Authorization=None
+        )
+        assert bare.status_code == 401
+    assert len(api.seen) == 1
+
+
 async def test_interleaved_callers_with_different_tokens_never_see_each_others_data(
     api: FakeAPI,
 ) -> None:
@@ -694,7 +759,7 @@ async def test_interleaved_callers_with_different_tokens_never_see_each_others_d
                 results = await asyncio.gather(
                     *[client.call_tool("whoami", {}) for _ in range(4)]
                 )
-            return n, {r.structuredContent["user"] for r in results}.pop()
+            return n, {r.structured_content["user"] for r in results}.pop()
 
         got = await asyncio.gather(*[one(n) for n in range(8)])
     for n, user in got:
@@ -793,10 +858,10 @@ async def test_concurrency_is_bounded_and_the_overflow_is_refused(
             results = await asyncio.gather(
                 *[client.call_tool("whoami", {}) for _ in range(6)]
             )
-    errors = [text_of(r) for r in results if r.isError]
+    errors = [text_of(r) for r in results if r.is_error]
     assert len(errors) >= 3
     assert all(Message.BUSY.value in e for e in errors)
-    assert len([r for r in results if not r.isError]) >= 2
+    assert len([r for r in results if not r.is_error]) >= 2
 
 
 # --- the token is in no log -------------------------------------------------------
@@ -890,4 +955,4 @@ async def test_a_name_that_is_shaped_like_a_word_is_the_apis_to_stop(
     with running_service(api.served.url) as svc:
         async with session(svc) as client:
             result = await client.call_tool("get_project", {"ref": REF})
-    assert not result.isError
+    assert not result.is_error

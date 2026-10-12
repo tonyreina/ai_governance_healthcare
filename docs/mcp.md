@@ -287,7 +287,7 @@ its README, gated access), attach remote MCP servers over HTTPS with an
 | Setting | Value |
 |---|---|
 | URL | `https://governance.example.org/mcp` (your host name, then `/mcp`) |
-| Transport | Streamable HTTP. The service is stateless and answers each `POST` with JSON. It serves no `GET` stream, so a client that tries one is told `405`. |
+| Transport | Streamable HTTP. The service is stateless and answers each `POST` with JSON. It serves no `GET` stream, so a client that tries one is told `405`. A client on the newer per-request protocol revision (`2026-07-28`, no `initialize`) reaches the same three tools, with nothing to subscribe to. |
 | Header | `Authorization: Bearer <token>` on every request |
 
 Client configuration formats differ and change. A typical shape, **illustrative
@@ -332,7 +332,7 @@ Example response (abridged):
   "result": {
     "protocolVersion": "2025-06-18",
     "capabilities": { "tools": { "listChanged": false } },
-    "serverInfo": { "name": "governance-readonly", "version": "1.30.0" },
+    "serverInfo": { "name": "governance-readonly", "version": "" },
     "instructions": "Read-only access to a governance dashboard's recorded statuses, ..."
   }
 }

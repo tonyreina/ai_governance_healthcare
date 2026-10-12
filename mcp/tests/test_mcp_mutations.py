@@ -622,6 +622,21 @@ MUTANTS: tuple[Mutant, ...] = (
         ("test_a_validation_error_is_short_and_has_no_control_characters",),
         suite=ABUSE,
     ),
+    Mutant(
+        "a crash outside the guard keeps its cause, which the SDK logs",
+        "chai_mcp/server.py",
+        "raise UnexpectedToolError(clean_error(str(error))) from None",
+        "raise UnexpectedToolError(clean_error(str(error))) from error",
+        ("test_a_crash_outside_the_tools_guard_is_one_plain_message_and_not_logged",),
+        suite=ABUSE,
+    ),
+    Mutant(
+        "subscriptions are offered",
+        "chai_mcp/server.py",
+        "        subscriptions=False,\n",
+        "",
+        ("test_the_per_request_protocol_offers_the_same_three_tools_and_nothing_else",),
+    ),
     # Equivalent here, and so not mutants (each judged so by the second review, and
     # checked): the body timer never marking the body complete (nothing calls
     # receive() once the body is in); ensure_ascii=False in the log formatter (no

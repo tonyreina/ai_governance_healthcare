@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
+import httpx2
 import uvicorn
 from chai_mcp.asgi import create_app
 from chai_mcp.config import Settings
@@ -231,11 +232,12 @@ async def session(served: Served, token: str | None = TOKEN_OK, **headers: str):
     sent = {"Host": "mcp.example.test", **headers}
     if token is not None:
         sent["Authorization"] = f"Bearer {token}"
-    async with httpx.AsyncClient(headers=sent, timeout=30) as http:
+    # The SDK's client takes an httpx2 client (mcp 2.x, D-95); the service's own
+    # upstream calls and the raw tests here use httpx.
+    async with httpx2.AsyncClient(headers=sent, timeout=30) as http:
         async with streamable_http_client(f"{served.url}/mcp", http_client=http) as (
             r,
             w,
-            _,
         ):
             async with ClientSession(r, w) as client:
                 await client.initialize()

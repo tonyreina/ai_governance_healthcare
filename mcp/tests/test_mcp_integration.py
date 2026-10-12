@@ -52,7 +52,7 @@ def text_of(result) -> str:
 
 
 def every_text(result) -> str:
-    return text_of(result) + str(result.structuredContent or "")
+    return text_of(result) + str(result.structured_content or "")
 
 
 def sample_doc(**over):
@@ -99,15 +99,15 @@ async def test_every_tool_returns_its_documented_result_from_real_records(stack)
         none = await client.call_tool("list_portfolio", {"overdue": False})
         one = await client.call_tool("get_project", {"ref": project_ref("p-one")})
     for r in (me, listed, notmet, late, none, one):
-        assert not r.isError, text_of(r)
-    who = models.Whoami.model_validate(me.structuredContent)
+        assert not r.is_error, text_of(r)
+    who = models.Whoami.model_validate(me.structured_content)
     assert who.user == opaque(ALICE)
     assert who.as_of.isoformat() == "2026-10-10"
-    assert models.Portfolio.model_validate(listed.structuredContent).total == 2
-    refs = lambda r: {p["ref"] for p in r.structuredContent["projects"]}  # noqa: E731
+    assert models.Portfolio.model_validate(listed.structured_content).total == 2
+    refs = lambda r: {p["ref"] for p in r.structured_content["projects"]}  # noqa: E731
     assert refs(notmet) == refs(late) == {project_ref("p-one")}
     assert refs(none) == {project_ref("p-two")}
-    project = models.Project.model_validate(one.structuredContent)
+    project = models.Project.model_validate(one.structured_content)
     assert project.has_overdue is True
     bad = next(i for i in project.items if i.id == "s1-3")
     assert (bad.status, bad.due.isoformat(), bad.overdue) == (
@@ -196,16 +196,16 @@ async def test_hostile_text_planted_in_a_stored_record_never_reaches_a_model(sta
             ("get_project", {"ref": h[0]}),
             ("list_portfolio", {"status": h[5]}),
         ):
-            assert (await client.call_tool(tool, args)).isError
+            assert (await client.call_tool(tool, args)).is_error
     shown = ""
     for result in results:
         shown += every_text(result)
-    assert not results[3].isError, text_of(results[3])
+    assert not results[3].is_error, text_of(results[3])
     for planted in (*PLANTED, ALICE, BOB, "Alice Principal-Name", "A Named Solution"):
         assert planted not in shown, planted
     for piece in ("Alice", "alice", "Smith", "MRN", "secret-hospital", "script", "@"):
         assert piece not in shown, piece
-    project = models.Project.model_validate(results[3].structuredContent)
+    project = models.Project.model_validate(results[3].structured_content)
     assert [i.id for i in project.items] == ["s1-1"]
     assert {g.id for g in project.gates} == {"A", "B"}
     assert next(g for g in project.gates if g.id == "B").decision is None
@@ -228,7 +228,7 @@ async def test_a_token_that_is_wrong_in_any_way_gets_the_one_message(stack):
                 ("get_project", {"ref": project_ref("x")}),
             ):
                 result = await client.call_tool(tool, args)
-                assert result.isError
+                assert result.is_error
                 said = text_of(result)
                 seen.add(said.split(": ", 1)[-1])
                 assert token not in said and token.split(".")[-1] not in said
@@ -242,7 +242,7 @@ async def test_a_token_that_is_wrong_in_any_way_gets_the_one_message(stack):
     # Still fine just inside the bound.
     api.app.state.clock = lambda: NOW + timedelta(hours=7, minutes=59)
     async with session(svc, good["token"]) as client:
-        assert not (await client.call_tool("whoami", {})).isError
+        assert not (await client.call_tool("whoami", {})).is_error
 
 
 async def test_two_people_calling_at_once_never_see_each_others_projects(stack):
@@ -265,10 +265,10 @@ async def test_two_people_calling_at_once_never_see_each_others_projects(stack):
     done = await asyncio.gather(*[one(w) for w in (ALICE, BOB) * 3])
     for who, results in done:
         for r in results[:5]:
-            assert [p["ref"] for p in r.structuredContent["projects"]] == [mine[who]]
+            assert [p["ref"] for p in r.structured_content["projects"]] == [mine[who]]
         # Someone else's project is a not-found, and says nothing more.
-        assert results[5].isError and Message.NO_PROJECT.value in text_of(results[5])
-        assert results[6].structuredContent["user"] == opaque(who)
+        assert results[5].is_error and Message.NO_PROJECT.value in text_of(results[5])
+        assert results[6].structured_content["user"] == opaque(who)
 
 
 async def test_the_apis_rate_limit_is_reported_with_when_to_retry():
@@ -277,7 +277,7 @@ async def test_the_apis_rate_limit_is_reported_with_when_to_retry():
             token = mint(api)["token"]
             async with session(svc, token) as client:
                 results = [await client.call_tool("whoami", {}) for _ in range(4)]
-    assert [r.isError for r in results] == [False, False, True, True]
+    assert [r.is_error for r in results] == [False, False, True, True]
     said = text_of(results[2])
     assert "too many requests for this token" in said
     assert "retry after" in said or "retry later" in said

@@ -45,25 +45,42 @@ AFTER_HANDOFF = (
     "\t\t\t}\n\t\t}\n\t}\n\n\thandle /api/agent/* {"
 )
 FULL_REGEXP = (
-    r'"(?i)^(?:([^?]*(?:agent|%|//|/\.{1,2}(?:/|$))[^?]*)\?.*'
-    r"|([^?]*)\?.*agent.*)$"
+    r'"(?i)^(?:([^?]*(?:agent|mcp|%|//|/\.{1,2}(?:/|$))[^?]*)\?.*'
+    r"|([^?]*)\?.*(?:agent|mcp).*)$"
     r'" "$1$2?[redacted]"'
 )
 MUTATIONS: list[tuple[str, str, str]] = [
     (
+        "the agent route reports a forwarding claim as the source",
+        "\t\t\t\t# per-source limit. The API sets nothing on it.\n"
+        "\t\t\t\theader_up X-Real-IP {remote_host}",
+        "\t\t\t\t# per-source limit. The API sets nothing on it.\n"
+        "\t\t\t\theader_up X-Real-IP {client_ip}",
+    ),
+    (
+        "every /api route reports a forwarding claim as the source",
+        "\t\t\t\t# by Caddy already.)\n\t\t\t\theader_up X-Real-IP {remote_host}",
+        "\t\t\t\t# by Caddy already.)\n\t\t\t\theader_up X-Real-IP {client_ip}",
+    ),
+    (
+        "Caddy's own logs keep the shared secret",
+        "\t\t\t\trequest>headers>X-Proxy-Secret delete\n",
+        "",
+    ),
+    (
         "the log keeps a query string on the agent routes",
-        "(?:agent|%|",
-        "(?:nothing|%|",
+        "(?:agent|mcp|%|",
+        "(?:nothing|mcp|%|",
     ),
     (
         "the log keeps the query of a percent-encoded path",
-        "(?:agent|%|//|",
-        "(?:agent|//|",
+        "(?:agent|mcp|%|//|",
+        "(?:agent|mcp|//|",
     ),
     (
         "the log keeps the query of a doubled slash",
-        r"(?:agent|%|//|/\.{1,2}",
-        r"(?:agent|%|/\.{1,2}",
+        r"(?:agent|mcp|%|//|/\.{1,2}",
+        r"(?:agent|mcp|%|/\.{1,2}",
     ),
     (
         "the log keeps the query of a dot segment",
@@ -72,7 +89,7 @@ MUTATIONS: list[tuple[str, str, str]] = [
     ),
     (
         "the log keeps a query that only mentions agent",
-        r"|([^?]*)\?.*agent.*",
+        r"|([^?]*)\?.*(?:agent|mcp).*",
         "",
     ),
     (

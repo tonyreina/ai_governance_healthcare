@@ -72,6 +72,10 @@ def world(root: Path, **overrides) -> cc.Context:
     (root / "docs").mkdir(exist_ok=True)
     (root / "tests").mkdir(exist_ok=True)
     (root / "server" / "tests").mkdir(parents=True, exist_ok=True)
+    (root / "mcp" / "tests").mkdir(parents=True, exist_ok=True)
+    (root / "mcp" / "tests" / "test_m.py").write_text(
+        "async def test_m():\n    pass\n", encoding="utf-8"
+    )
     (root / "docs" / "doc.md").write_text(
         "Intro.\n\nThe proxy strips it,\nand sets its own.\n", encoding="utf-8"
     )
@@ -85,12 +89,17 @@ def world(root: Path, **overrides) -> cc.Context:
         "class TestZ:\n    async def test_z(self):\n        pass\n", encoding="utf-8"
     )
     (root / "Makefile").write_text("check-isolation:\n\t@true\n", encoding="utf-8")
+    # Last, so a case can replace any file above.
+    for name, body in overrides.get("extra_files", {}).items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(body, encoding="utf-8")
     return cc.Context(
         root=root,
         workflow_text=overrides.get(
             "workflow_text",
             "jobs:\n  server:\n    steps:\n      - run: pytest\n"
-            "        working-directory: server\n  w:\n    steps:\n"
+            "        working-directory: server\n      - run: pytest\n"
+            "        working-directory: mcp\n  w:\n    steps:\n"
             "      - run: pixi run test-a\n",
         ),
         pixi_tasks=overrides.get("pixi_tasks", {"test-a": "python tests/test_a.py"}),
@@ -265,6 +274,115 @@ def main() -> int:
                 workflow_text="jobs: {}",
             )
         ),
+    )
+    check(
+        "an MCP pytest test is run by CI",
+        problems_for(page(evidence="`mcp/tests/test_m.py::test_m`")) == [],
+    )
+    check(
+        "an MCP test is NOT counted if CI does not run pytest in mcp/",
+        any(
+            "mcp/" in p
+            for p in problems_for(
+                page(evidence="`mcp/tests/test_m.py::test_m`"),
+                workflow_text=SERVER_ONLY,
+            )
+        ),
+    )
+    # A helper pytest never collects is not evidence, however it is named (review L4).
+    for helper in ("harness.py", "conftest.py", "stack.py", "helpers_test_x.py"):
+        for tree in ("mcp", "server"):
+            check(
+                f"{tree}/tests/{helper} is not collected by pytest, so not evidence",
+                any(
+                    "collect" in p
+                    for p in problems_for(
+                        page(evidence=f"`{tree}/tests/{helper}::test_m`"),
+                        extra_files={f"{tree}/tests/{helper}": "def test_m(): pass\n"},
+                    )
+                ),
+            )
+    # The cited test must be one pytest collects and runs (second review, LOW-7).
+    cases = {
+        "only in a comment": "# def test_m(): pass\nX = 'def test_m'\n",
+        "nested in a function": "def helper():\n    def test_m():\n        pass\n",
+        "skipped": "import pytest\n@pytest.mark.skip\ndef test_m():\n    pass\n",
+        "skipped with a reason": (
+            "import pytest\n@pytest.mark.skip(reason='x')\ndef test_m():\n    pass\n"
+        ),
+        "skipped on a condition": (
+            "import pytest\n@pytest.mark.skipif(True, reason='x')\n"
+            "def test_m():\n    pass\n"
+        ),
+        "an xfail that does not run": (
+            "import pytest\n@pytest.mark.xfail(run=False)\ndef test_m():\n    pass\n"
+        ),
+    }
+    for label, body in cases.items():
+        check(
+            f"a cited test {label} is not evidence",
+            bool(
+                problems_for(
+                    page(evidence="`mcp/tests/test_m.py::test_m`"),
+                    extra_files={"mcp/tests/test_m.py": body},
+                )
+            ),
+        )
+    check(
+        "a method of a class pytest does not collect is not evidence",
+        bool(
+            problems_for(
+                page(evidence="`mcp/tests/test_m.py::Helper::test_m`"),
+                extra_files={
+                    "mcp/tests/test_m.py": (
+                        "class Helper:\n    def test_m(self):\n        pass\n"
+                    )
+                },
+            )
+        ),
+    )
+    check(
+        "a file a conftest tells pytest to ignore is not evidence",
+        bool(
+            problems_for(
+                page(evidence="`mcp/tests/test_m.py::test_m`"),
+                extra_files={
+                    "mcp/tests/conftest.py": "collect_ignore = ['test_m.py']\n"
+                },
+            )
+        ),
+    )
+    check(
+        "a real test, an async one and one in a Test class are evidence",
+        not problems_for(
+            page(evidence="`mcp/tests/test_m.py::test_m`"),
+            extra_files={
+                "mcp/tests/test_m.py": (
+                    "import pytest\n@pytest.mark.parametrize('a', [1])\n"
+                    "async def test_m(a):\n    pass\n"
+                )
+            },
+        )
+        and not problems_for(
+            page(evidence="`mcp/tests/test_m.py::TestK::test_m`"),
+            extra_files={
+                "mcp/tests/test_m.py": (
+                    "class TestK:\n    def test_m(self):\n        pass\n"
+                )
+            },
+        ),
+    )
+    check(
+        "a file named test_*.py under mcp/tests is collected",
+        problems_for(page(evidence="`mcp/tests/test_m.py::test_m`")) == [],
+    )
+    check(
+        "so is one named *_test.py",
+        problems_for(
+            page(evidence="`mcp/tests/m_test.py::test_m`"),
+            extra_files={"mcp/tests/m_test.py": "def test_m(): pass\n"},
+        )
+        == [],
     )
     check(
         "a script suite with a pixi task CI runs is counted", problems_for(page()) == []

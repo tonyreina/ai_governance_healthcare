@@ -665,13 +665,18 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Asserted in:** `docs/self-hosting.md` — "it **cannot** disable or drop a
   trigger, truncate, alter a table or create one"
 - **Asserted in:** `docs/index.md` — "the shipped stack runs the service as a database role that cannot switch that protection off"
+- **Asserted in:** `docs/deploy.md` — "An API whose connection owns the tables or is a superuser **refuses to start**"
+- **Asserted in:** `server/README.md` — "The API **refuses to start** when its connection is the table owner or a superuser"
 - **Status:** partial
 - **Gap:** A PostgreSQL superuser bypasses it, and the owner's password is still
-  in `.env` on the host and in the `migrate` job. A deployment that does not set
-  `APP_POSTGRES_PASSWORD` serves as the owner (reported on `/api/health`, logged,
-  and failed by `make doctor`). The cloud job definitions have not been run against
-  a real managed database. #48
+  in `.env` on the host and in the `migrate` job. An API whose connection is the
+  owner's refuses to start (R-74), but an operator who sets `ALLOW_OWNER_ROLE=true`
+  gets the weaker setup (reported on `/api/health`, logged, and failed by `make
+  doctor`). The cloud job definitions have not been run against a real managed
+  database. #48
 - **Enforced by:**
+  `server/tests/test_app_role_config.py::test_serving_as_the_owner_is_refused_unless_allowed`
+  `server/tests/test_app_role_config.py::test_serving_as_the_owner_is_not_allowed_by_default`
   `server/tests/test_roles.py::test_it_is_refused_every_statement_that_removes_a_guarantee`
   `server/tests/test_roles.py::test_its_table_privileges_are_exactly_the_documented_ones`
   `server/tests/test_roles.py::test_every_table_has_a_decided_grant`

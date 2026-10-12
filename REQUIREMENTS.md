@@ -219,7 +219,8 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-35 The API serves as a role that cannot undo the append-only triggers
 
-- Status: Active
+- Status: Superseded by R-74 (2026-10-12): owner mode is refused unless an
+  operator allows it, rather than working with a warning
 - The append-only guarantees (R-10, R-12, R-27) are triggers, and a table's owner
   or a superuser can disable them in one statement. So the API serves as a
   restricted role (`app/roles.py`): the project tables' DML it needs, no
@@ -1511,3 +1512,35 @@ honest answer and is a gap worth closing; see R-19.
   chatbot over these tools (an evaluation plan is documented, and no model can run
   in CI), and that a front door other than this repository's Caddy lets `/mcp`
   through (the documentation says how, per front door, and says where it cannot).
+
+### R-74 The API refuses to serve as the database owner unless told to
+
+- Status: Active
+- Everything R-35 required still holds: the append-only guarantees (R-10, R-12,
+  R-27) are triggers, so the API serves as a restricted role (`app/roles.py`) with
+  only the project tables' DML it needs, and the owner's credential lives in the
+  one-shot `migrate` job, not in the API's environment. `GRANTS` lists every
+  table, and a test fails if one exists that it does not name.
+- **Changed from R-35:** an API whose connection is the table owner or a
+  superuser **refuses to start**, with a message naming `APP_POSTGRES_PASSWORD`,
+  `RUN_MIGRATIONS=false` and `python -m app.migrate`, unless
+  `ALLOW_OWNER_ROLE=true`. With it set, the API serves as the owner as before:
+  it logs a warning at startup, reports `"db_role":"owner"` on `/api/health`, and
+  fails `make doctor`. The setting is for a laptop or a test, never a deployment.
+- History: under R-35 a deployment that forgot `APP_POSTGRES_PASSWORD`, or followed
+  a cloud recipe that handed the service the owner's `DATABASE_URL`, served as the
+  owner with only a log line to say so. An adversarial review named it the one
+  gap the code could close (2026-10-12).
+- Not covered: a PostgreSQL superuser bypasses everything; guard that password.
+  An operator who sets `ALLOW_OWNER_ROLE=true` in production gets R-35's weaker
+  setup. The cloud recipes in `docs/deploy.md` have not been run against a real
+  managed database.
+- Source: the owner's instruction of 2026-10-12; #48; DECISIONS D-37, D-92.
+- Enforced by:
+  `server/tests/test_app_role_config.py::test_serving_as_the_owner_is_refused_unless_allowed`,
+  `::test_serving_as_the_owner_is_not_allowed_by_default` and
+  `::test_serving_as_the_owner_when_allowed_is_reported_and_warned_about`; the
+  whole `server/` suite run as the restricted role (`TEST_APP_ROLE=1`, in CI)
+  without the setting; and everything that enforced R-35 (`server/tests/test_roles.py`,
+  `tests/test_compose_isolation.py`, `tests/test_stack.py`, `tests/test_preflight.py`,
+  `tests/test_doctor.py`).

@@ -1184,7 +1184,8 @@ def main() -> int:
             "RUN rm -rf /usr/local/bin/pip",
             "RUN echo /usr/local/bin/pip",
         ),
-        ("a floating base image", "python:3.12-slim@sha256:", "python:3.12-slim#"),
+        # Versionless, so it still bites after the next base-image bump (D-93).
+        ("a floating base image", "-slim@sha256:", "-slim#"),
         ("no health check", "HEALTHCHECK", "# HEALTHCHECK"),
         (
             "a shell-form CMD",

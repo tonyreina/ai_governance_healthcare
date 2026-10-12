@@ -14,7 +14,7 @@
 # Nothing in this image refers to its directory by name, so the build context
 # can be ./server or ./api without edits.
 
-FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f AS build
+FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS build
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
@@ -35,7 +35,7 @@ RUN python -m venv /opt/venv \
 # scanners (rightly) flag, in a place the application can never use them (#37).
 
 
-FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f AS runtime
+FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS runtime
 
 # PYTHONUNBUFFERED: without it, logs sit in a pipe buffer and a container that
 # dies takes its last words with it.
@@ -48,6 +48,22 @@ ENV PYTHONUNBUFFERED=1 \
 # neither; a process that cannot write to disk cannot be made to persist
 # anything an attacker leaves behind.
 RUN useradd --system --no-create-home --shell /usr/sbin/nologin --uid 10001 chai
+
+# The base image ships pip, setuptools and ensurepip for its own interpreter, outside
+# the venv. Nothing here installs anything at runtime, so they go too: R-43 says the
+# runtime image ships no pip, and from Python 3.14 the base image's pip carries an SBOM
+# of vendored libraries that the image scan rightly flags (D-93). The paths name no
+# Python version (python3.*), so the next base image is covered without an edit.
+RUN rm -rf /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.* \
+           /usr/local/bin/wheel /usr/local/bin/easy_install* \
+           /usr/local/lib/python3.*/site-packages/pip \
+           /usr/local/lib/python3.*/site-packages/pip-* \
+           /usr/local/lib/python3.*/site-packages/setuptools* \
+           /usr/local/lib/python3.*/site-packages/pkg_resources \
+           /usr/local/lib/python3.*/site-packages/wheel* \
+           /usr/local/lib/python3.*/site-packages/_distutils_hack \
+           /usr/local/lib/python3.*/site-packages/distutils-precedence.pth \
+           /usr/local/lib/python3.*/ensurepip
 
 WORKDIR /app
 COPY --from=build /opt/venv /opt/venv

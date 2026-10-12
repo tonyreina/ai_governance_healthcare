@@ -198,12 +198,12 @@ phi-scan:  ## Look for pasted patient identifiers (never prints them): make phi-
 # in the SAME Python the image uses, so the pins are the ones that image will resolve.
 # Review the diff: a changed hash is a changed dependency.
 lock:  ## Regenerate server/requirements.txt (hash-pinned) from server/pyproject.toml
-	docker run --rm -v "$(CURDIR)/server:/work" -w /work python:3.12-slim sh -c \
+	docker run --rm -v "$(CURDIR)/server:/work" -w /work python:3.14-slim sh -c \
 	  "pip install -q pip-tools==7.6.2 && pip-compile --quiet --generate-hashes --strip-extras --output-file=requirements.txt pyproject.toml && chown \$$(stat -c %u:%g pyproject.toml) requirements.txt"
 
 # The optional MCP service's lock, the same way (#164).
 lock-mcp:  ## Regenerate mcp/requirements.txt (hash-pinned) from mcp/pyproject.toml
-	docker run --rm -v "$(CURDIR)/mcp:/work" -w /work python:3.12-slim sh -c \
+	docker run --rm -v "$(CURDIR)/mcp:/work" -w /work python:3.14-slim sh -c \
 	  "pip install -q pip-tools==7.6.2 && pip-compile --quiet --generate-hashes --strip-extras --output-file=requirements.txt pyproject.toml && chown \$$(stat -c %u:%g pyproject.toml) requirements.txt"
 
 # A backup that has never been restored is a hypothesis (#52). This restores one into a

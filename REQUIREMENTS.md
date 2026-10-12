@@ -432,10 +432,19 @@ honest answer and is a gap worth closing; see R-19.
 - Private vulnerability reporting, Dependabot alerts and Dependabot security
   updates are **repository settings**, turned on by the owner on 2026-10-08.
   Nothing in CI checks that they stay on.
-- Source: #37; DECISIONS D-45.
+- Known violation (fixed by D-93): the API runtime image kept the base image's
+  own `pip`, `setuptools` and `ensurepip` under `/usr/local`, so "ships no `pip`"
+  was false for it. Only the venv's pip was removed, and the only test ran
+  `/opt/venv/bin/python -m pip`, which cannot see the base interpreter's. The MCP
+  image removed them, but by paths naming `python3.12`, which would have stopped
+  matching on the next base image.
+- Source: #37; DECISIONS D-45, D-93.
 - Enforced by: `tests/test_supply_chain.py` (every rule, with a mutation test,
   and the real image built from the lock, importing, with no pip and the locked
-  version), `tests/test_workflows.py` (the new test is run by CI), and
+  version; since D-93 also: both Dockerfiles remove the base image's pip,
+  setuptools and ensurepip by a version-agnostic path, and both built images are
+  probed for any of them on disk and for a `pip` the system interpreter can
+  import), `tests/test_workflows.py` (the new test is run by CI), and
   `security.yml` itself.
 
 ### R-44 How fast the append-only tables grow is visible

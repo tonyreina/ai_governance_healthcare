@@ -3432,6 +3432,52 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   variable whose only purpose is this cannot be set by accident.
 - Source: the owner's instruction of 2026-10-12; R-74 (supersedes R-35); D-37; #48.
 
+### D-93 Both images run Python 3.14 and drop the base image's pip
+
+- Status: Accepted (the owner, 2026-10-12)
+- **Decided.** The API image (`server/Dockerfile`) and the MCP image
+  (`mcp/Dockerfile`) move from `python:3.12-slim` to `python:3.14-slim`, pinned
+  by digest, in one change that supersedes Dependabot's #210 and #208. Everything
+  that must match the images moves with them: `make lock` and `make lock-mcp`
+  resolve in `python:3.14-slim` (D-45: the lock is resolved in the image's own
+  Python), CI's server tests run 3.14, the Pixi environment runs 3.14 (its
+  constraint now allows up to 3.14), and the proxy test's echo container uses
+  the same image. `tests/test_supply_chain.py` fails if the images, the lock
+  targets and CI's server tests stop agreeing on one Python.
+- **Why the Dependabot bumps failed.** Not our dependencies: the base image's own
+  pip. `python:3.14-slim` ships pip 26.2.1 for `/usr/local`'s interpreter, and that
+  pip vendors a CycloneDX SBOM (`pip/_vendor/bom.cdx.json`) that Trivy reads, so
+  the image scan reported four fixable HIGH findings in libraries pip vendors
+  (msgpack, setuptools, urllib3 twice). The 3.12 image's pip 25.0.1 carries no
+  SBOM, so the same files were present and unreported.
+- **What that exposed.** R-43 says the runtime image ships no `pip`. For the API
+  image it was false: only the venv's pip was uninstalled, and the only test
+  (`/opt/venv/bin/python -m pip`) could not see the base interpreter's. Both
+  runtime stages now delete the base image's pip, setuptools, wheel and ensurepip
+  by paths that say `python3.*`, not a version, and both built images are probed
+  for any of them on disk and for an importable `pip`. The MCP image already
+  removed them, by paths naming `python3.12` that would have silently stopped
+  matching on this bump. The locks regenerated in 3.14 pin the same versions and
+  hashes as before; only pip-compile's provenance comments changed.
+- **Rejected.**
+    - Stay on 3.12: it leaves the API image shipping a pip R-43 says it does not,
+      and only postpones the same scan failure to whenever 3.12's base image
+      updates its pip.
+    - List the four findings in `.trivyignore`: R-43 requires it empty, with an
+      entry only for a finding that is unreachable or unfixable. These are fixable,
+      by not shipping the pip that contains them.
+    - Python 3.15, which the owner asked about: only release candidates exist
+      (3.15.0rc3; no final 3.15.0 and no `python:3.15-slim` tag). A release
+      candidate is not meant for production and gets no security fixes after the
+      final. Move to 3.15 when 3.15.0 ships, by taking Dependabot's bump; the
+      version-agnostic pip removal makes that a version-and-digest change.
+- Source: the owner's decision of 2026-10-12; Dependabot #208 and #210; R-43; D-45.
+- Enforced by: `tests/test_supply_chain.py` (the built-image probes, the static
+  rule that both runtime stages remove the base image's pip by a versionless path,
+  the one-Python check, each with mutation tests);
+  `tests/test_compose_isolation.py` (the MCP image's rules, with a mutation that
+  names no Python version); `.github/workflows/security.yml` (the scan).
+
 ### D-94 PostgreSQL 18, with the 18 image's data layout, and no upgrade procedure
 
 - Status: Accepted: the owner's decision of 2026-10-12.

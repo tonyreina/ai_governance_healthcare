@@ -16,8 +16,9 @@ This reads the real compose.yaml and fails if the property is edited away:
 * the proxy publishes on loopback by default, because the stack speaks plain HTTP;
 * the dev override (which DOES publish the API) is a named file, never
   compose.override.yaml, which a bare `docker compose up` would pick up silently;
-* the database lives on a named volume (so `down` keeps the data) and its image is
-  pinned to a major version (Postgres does not migrate its on-disk format);
+* the database lives on a named volume (so `down` keeps the data), mounted where
+  the PostgreSQL 18 image expects it, and its image is pinned to a major version
+  (Postgres does not migrate its on-disk format);
 * the page the proxy serves and the manifest the migrate job loads the retirement
   rules from are one build directory, APP_DIR (D-76), read-only, with today's paths
   as the defaults;
@@ -129,6 +130,29 @@ def database_persists(compose: dict) -> list[str]:
         problems.append(f"db does not mount the named volume '{VOLUME}'")
     if VOLUME not in (compose.get("volumes") or {}):
         problems.append(f"'{VOLUME}' is not declared as a named volume")
+    return problems
+
+
+# PostgreSQL 18's image keeps its cluster in /var/lib/postgresql/<major>/docker and
+# its entrypoint refuses to start if anything is mounted at the old
+# /var/lib/postgresql/data, so the volume goes on the parent and PGDATA is the
+# image's own (D-94).
+DATA_MOUNT = "/var/lib/postgresql"
+
+
+def database_layout(compose: dict) -> list[str]:
+    db = service(compose, DB)
+    problems = []
+    if f"{VOLUME}:{DATA_MOUNT}" not in [str(m) for m in db.get("volumes", [])]:
+        problems.append(
+            f"db does not mount '{VOLUME}' at {DATA_MOUNT}, where the PostgreSQL 18 "
+            "image expects its data"
+        )
+    if "PGDATA" in (db.get("environment") or {}):
+        problems.append(
+            "db sets PGDATA; the PostgreSQL 18 image's default, a directory named "
+            "for the major version inside the volume, is the layout (D-94)"
+        )
     return problems
 
 
@@ -625,6 +649,7 @@ def every_rule(compose: dict) -> list[str]:
         *edge_members(compose),
         *proxy_binds_loopback(compose),
         *database_persists(compose),
+        *database_layout(compose),
         *database_image_pinned(compose),
         *override_file_is_named(),
         *shared_secret_reaches_both_ends(compose),
@@ -760,6 +785,19 @@ def main() -> int:
     check(
         "the database leaving its named volume is noticed",
         bool(database_persists(broken)),
+    )
+
+    broken = copy.deepcopy(compose)
+    broken["services"][DB]["volumes"] = [f"{VOLUME}:/var/lib/postgresql/data"]
+    check(
+        "the volume at the pre-18 path, which the 18 image refuses, is noticed",
+        bool(database_layout(broken)),
+    )
+
+    broken = copy.deepcopy(compose)
+    broken["services"][DB]["environment"]["PGDATA"] = "/var/lib/postgresql/data/pg"
+    check(
+        "the database setting its own PGDATA is noticed", bool(database_layout(broken))
     )
 
     broken = copy.deepcopy(compose)

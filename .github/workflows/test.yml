@@ -103,7 +103,7 @@ jobs:
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
 
   server:
-    name: server (unit + integration, PostgreSQL 17)
+    name: server (unit + integration, PostgreSQL 18)
     runs-on: ubuntu-latest
     # The agent API's mutation tests run a copy of the server once per broken guard.
     timeout-minutes: 25
@@ -111,7 +111,7 @@ jobs:
       postgres:
         # The major version compose.yaml pins. test_workflows.py fails if the two
         # drift, because a test against the wrong Postgres proves nothing.
-        image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+        image: postgres:18@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
         env:
           POSTGRES_PASSWORD: test
           POSTGRES_DB: chai_test

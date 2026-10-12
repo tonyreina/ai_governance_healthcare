@@ -16,7 +16,7 @@ does hold: personal data about the staff who use it.
 |---|---|
 | `proxy` | The front door, and the only service reachable from outside. It serves the dashboard, forwards `/api`, and owns the identity header |
 | `api` | The FastAPI service. It never authenticates anyone: it reads identity from the header the proxy sets |
-| `db` | PostgreSQL 17, on a network with no route off the host |
+| `db` | PostgreSQL 18, on a network with no route off the host |
 | `migrate` | A one-shot job that applies the schema and creates the restricted database role the API serves as |
 
 What you provide: a host, a sign-in in front of the proxy (single sign-on, or an

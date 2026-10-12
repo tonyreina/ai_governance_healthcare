@@ -151,7 +151,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 
 ### D-14 Postgres is pinned to a major version
 
-- Status: Accepted
+- Status: **Superseded by D-94** for the major version (17 becomes 18). Pinning
+  to a major version, never a floating tag, still holds and D-94 keeps it.
 - Postgres does not migrate its on-disk format. Moving 17 to 18 under a live
   volume makes the cluster unreadable and needs `pg_upgrade` or a dump and
   restore. A floating tag would do that on an unrelated `docker compose pull`.
@@ -3430,3 +3431,54 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   check would either refuse every dev container or trust a guess. An explicit
   variable whose only purpose is this cannot be set by accident.
 - Source: the owner's instruction of 2026-10-12; R-74 (supersedes R-35); D-37; #48.
+
+### D-94 PostgreSQL 18, with the 18 image's data layout, and no upgrade procedure
+
+- Status: Accepted: the owner's decision of 2026-10-12.
+- **Decided (owner).** Move the database from PostgreSQL 17 to 18 now. In the
+  owner's words: "we haven't deployed any real servers so upgrading to 18 now is
+  fine and we don't need instructions for updating the existing dbs (because
+  there are none)." So this change ships **no upgrade procedure**. It supersedes
+  the major version recorded in D-14; D-14's rule, a pinned major version and
+  never a floating tag, stays, because it is still true that moving a live
+  volume from one major to the next makes the cluster unreadable and needs
+  `pg_upgrade` or a dump and restore. Anyone who had a 17 volume would need one
+  of those; there is none to move.
+- **How it is built.**
+    - `compose.yaml` pins `postgres:18` by digest, and the CI service container
+      in `.github/workflows/test.yml` pins the same image
+      (`tests/test_workflows.py` fails if they drift).
+    - The 18 image's own layout. Its default `PGDATA` is
+      `/var/lib/postgresql/18/docker`, a directory named for the major version,
+      and its entrypoint exits with an error if anything is mounted at the old
+      `/var/lib/postgresql/data`. So the `pgdata` volume is mounted at
+      `/var/lib/postgresql` and `compose.yaml` sets no `PGDATA`
+      (`tests/test_compose_isolation.py` fails on either). The cluster still lives
+      in a subdirectory of the mount, which is what the old `PGDATA` setting was
+      for (a bind mount's `lost+found`).
+    - The throwaway clusters started by `make verify-backup`
+      (`scripts/verify_backup.py`) and by the subject-access, PHI-scan,
+      purge-ledger and verify-backup suites put their tmpfs on
+      `/var/lib/postgresql` too (`verify_backup.DATA_MOUNT`), since a tmpfs at
+      the old path stops the 18 image from starting.
+- **Rejected.**
+    - *Keep the 17 layout by setting `PGDATA=/var/lib/postgresql/data/pgdata` and
+      mounting the volume at `/var/lib/postgresql/data`.* The 18 image refuses that
+      mount, and fighting the image's layout means each later major needs the
+      same workaround. The image's layout also leaves room for `pg_upgrade --link`
+      between major-named directories on one volume, should that ever be wanted.
+    - *Stay on 17 and leave Dependabot's #207 open.* With no deployment to
+      migrate, upgrading now is free; later it would need the procedure.
+    - *Write an upgrade guide anyway.* The owner said it is not needed, because
+      there are no databases to upgrade.
+- Notes. D-23 (Accepted) describes the server job as testing "against a
+  PostgreSQL 17 service container"; that was true when written, and from this
+  change the job runs 18. Comments in `server/tests` and in D-76's "shown against
+  PostgreSQL 17 in review" record what was run at the time and stay as they are.
+- Source: the owner's decision of 2026-10-12; supersedes Dependabot PR #207;
+  D-14; D-43 (the throwaway is the production major version).
+- Enforced by: `tests/test_workflows.py` (CI's Postgres matches the compose pin),
+  `tests/test_compose_isolation.py` (pinned major, the volume at
+  `/var/lib/postgresql`, no `PGDATA`), `tests/test_verify_backup.py` (the
+  throwaway is `postgres:18`), and every Docker suite above, which starts the
+  real image.

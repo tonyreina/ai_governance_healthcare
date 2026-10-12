@@ -187,6 +187,13 @@ def _rules_drift(report: Report) -> list[str]:
     ]
 
 
+# Where a throwaway cluster's tmpfs goes. From PostgreSQL 18 the official image
+# keeps its data in /var/lib/postgresql/<major>/docker and its entrypoint refuses
+# to start if anything is mounted at the old /var/lib/postgresql/data, so the
+# mount is the parent directory (D-94).
+DATA_MOUNT = "/var/lib/postgresql"
+
+
 def production_image() -> str:
     """The PostgreSQL image compose.yaml runs, so the restore tests the same major."""
     text = (ROOT / "compose.yaml").read_text(encoding="utf-8")
@@ -358,7 +365,7 @@ def start_container() -> str:
         "run", "-d", "--rm", "--name", name,
         "-e", "POSTGRES_USER=chai", "-e", "POSTGRES_DB=chai",
         "-e", f"POSTGRES_PASSWORD={secrets.token_hex(16)}",
-        "--network", "none", "--tmpfs", "/var/lib/postgresql/data",
+        "--network", "none", "--tmpfs", DATA_MOUNT,
         "--memory", "512m",
         production_image(),
     )  # fmt: skip

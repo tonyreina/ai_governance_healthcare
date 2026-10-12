@@ -97,7 +97,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** Postgres sits on an `internal: true` network and publishes no port.
 - **Asserted in:** `docs/self-hosting.md` — "on an `internal: true` network with
   no route off the host at all"
-- **Asserted in:** `docs/self-hosting.md` — "PostgreSQL 17, on a network with no route off the host"
+- **Asserted in:** `docs/self-hosting.md` — "PostgreSQL 18, on a network with no route off the host"
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_compose_isolation.py::an internal network made routable is noticed`

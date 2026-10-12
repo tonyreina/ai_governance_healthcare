@@ -340,12 +340,6 @@ jobs:
       - name: proxy, the agent route's guards
         run: pixi run test-proxy-agent
 
-      # The optional MCP service's route in the Caddyfile and its gate: only the
-      # transport's methods on /mcp, every identity header stripped and none set,
-      # a 502 with nothing behind it, each guard broken in a copy and noticed (#164).
-      - name: proxy, the MCP route's and the gate's guards
-        run: pixi run test-proxy-mcp
-
       # Locked and hashed dependencies, digest-pinned images and actions, a watch for
       # updates, a security policy, and the real image built from the lock (#37).
       - name: supply chain
@@ -451,6 +445,24 @@ jobs:
   # two suites that depend on it run in Firefox and WebKit as well (#160). The
   # matrix value reaches the tests as TEST_BROWSER, and an unknown value is an
   # error there, not a fallback to Chromium.
+  # The optional MCP service's route in the Caddyfile and its gate: only the
+  # transport's methods on /mcp, every identity header stripped and none set, a 502
+  # with nothing behind it, each guard broken in a copy and noticed (#164). Its own
+  # job: it restarts a real Caddy for every broken copy and takes about 35 minutes,
+  # which timed out the stack job it first ran in.
+  proxy-mcp:
+    name: proxy, the MCP route and the gate (each guard broken)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        with:
+          locked: true
+
+      - run: pixi run test-proxy-mcp
+
   engines:
     name: browser engines (${{ matrix.engine }})
     runs-on: ubuntu-latest
@@ -496,7 +508,7 @@ jobs:
   tests-passed:
     name: tests passed
     if: ${{ always() }}
-    needs: [workflows, server, browser, engines, stack]
+    needs: [workflows, server, browser, engines, stack, proxy-mcp]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

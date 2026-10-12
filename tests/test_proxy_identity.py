@@ -205,6 +205,15 @@ ThreadingHTTPServer(("0.0.0.0", 8000), H).serve_forever()
 failures: list[str] = []
 
 
+def described(value: str | None, expected: str | None = None) -> str:
+    """What a check saw in a header, without writing a secret into the output."""
+    if not value:
+        return "nothing was forwarded"
+    if expected is not None and value == expected:
+        return "the configured value was forwarded"
+    return f"another value was forwarded ({len(value)} characters)"
+
+
 def check(name: str, ok: bool, detail: str = "") -> None:
     if ok:
         print(f"  ok    {name}")
@@ -391,7 +400,7 @@ def check_proxy_shared_secret(workdir: Path) -> None:
     check(
         "the proxy sends X-Proxy-Secret to the API",
         got.get("x-proxy-secret") == secret,
-        f"got {got.get('x-proxy-secret')!r}",
+        described(got.get("x-proxy-secret"), secret),
     )
 
     _, body = get("/api/me", {**door[2], "X-Proxy-Secret": "chosen-by-the-client"})
@@ -399,7 +408,7 @@ def check_proxy_shared_secret(workdir: Path) -> None:
     check(
         "a client-supplied X-Proxy-Secret is replaced, not forwarded",
         got.get("x-proxy-secret") == secret,
-        f"got {got.get('x-proxy-secret')!r}",
+        described(got.get("x-proxy-secret"), secret),
     )
 
     start_caddy(workdir, door[1])
@@ -408,7 +417,7 @@ def check_proxy_shared_secret(workdir: Path) -> None:
     check(
         "with no secret configured a client value is not forwarded as a secret",
         got.get("x-proxy-secret", "") == "",
-        f"got {got.get('x-proxy-secret')!r}",
+        described(got.get("x-proxy-secret"), secret),
     )
 
 
@@ -641,8 +650,8 @@ def check_agent_route(workdir: Path) -> None:
     logs = docker("logs", CADDY)
     text = logs.stdout + logs.stderr
     for what, target in leaks.items():
-        secret = target.split("=")[1].split("&")[0]
-        check(f"the proxy's log keeps no query of {what}", secret not in text, secret)
+        marker = target.split("=")[1].split("&")[0]
+        check(f"the proxy's log keeps no query of {what}", marker not in text, what)
     check(
         "the proxy's log keeps no token-like request header",
         "LEAKMEHDR" not in text,
@@ -663,7 +672,7 @@ def check_agent_route(workdir: Path) -> None:
     check(
         "agent route: X-Proxy-Secret is the proxy's, not the client's",
         got.get("x-proxy-secret") == "agent/route+secret=",
-        f"got {got.get('x-proxy-secret')!r}",
+        described(got.get("x-proxy-secret"), "agent/route+secret="),
     )
 
 
@@ -1081,7 +1090,7 @@ def check_mcp_gate(workdir: Path) -> None:
         check(
             f"gate: {label}: the secret is the gate's, not the sender's",
             got.get("x-proxy-secret") == secret,
-            f"got {got.get('x-proxy-secret')!r}",
+            described(got.get("x-proxy-secret"), secret),
         )
         check(
             f"gate: {label}: the caller's address becomes the API's source",

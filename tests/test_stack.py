@@ -653,6 +653,8 @@ def main() -> int:
                 headers={
                     "Authorization": f"Bearer agt_{i:016x}." + "A" * 43,
                     "X-Real-IP": f"203.0.113.{i % 250}",
+                    "X-Forwarded-For": f"198.51.100.{i % 250}",
+                    "Forwarded": f"for=192.0.2.{i % 250}",
                 },
             )
             try:
@@ -699,6 +701,30 @@ def main() -> int:
             written == "0",
             written,
         )
+
+    print("The source the read trail records is the peer, never a claim")
+    req = urllib.request.Request(
+        BASE + "/api/projects",
+        headers={"X-Forwarded-For": "203.0.113.250", "X-Real-IP": "203.0.113.251"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        r.read()
+    claimed = subprocess.run(
+        [
+            "docker", "compose", "exec", "-T", "db", "psql", "-U", "chai", "-d",
+            "chai", "-tA", "-c",
+            "SELECT count(*) FROM access_event WHERE source_ip LIKE '203.0.113.%' "
+            "OR source_ip LIKE '198.51.100.%' OR source_ip LIKE '192.0.2.%'",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    ).stdout.strip()  # fmt: skip
+    check(
+        "no read-trail row's source is an address a client claimed (session or agent)",
+        claimed == "0",
+        claimed,
+    )
 
     print("Security events (#38)")
     # The earlier checks created, purged and deleted projects through the real proxy.

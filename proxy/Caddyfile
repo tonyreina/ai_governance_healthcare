@@ -37,6 +37,27 @@
 	# nothing here needs it.
 	admin off
 
+	# Caddy's own logs (not the access log below) can carry a request's headers: an
+	# aborted response from the API logs the request it was proxying, with the
+	# X-Proxy-Secret this proxy added. Delete the secret and every credential-like
+	# header from every log Caddy writes (#164 review LOW-4).
+	log default {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>headers>X-Proxy-Secret delete
+				request>headers>Authorization delete
+				request>headers>Cookie delete
+				request>headers>X-Api-Key delete
+				request>headers>Api-Key delete
+				request>headers>X-Auth-Token delete
+				request>headers>X-Authorization delete
+				request>headers>X-Access-Token delete
+			}
+		}
+	}
+
 	# Trust X-Forwarded-For only from private ranges, so {remote_host} in the
 	# access log is the real peer rather than whatever a client claimed. This
 	# affects LOGGING only -- identity never comes from a forwarded header.
@@ -89,6 +110,7 @@
 				request>headers>X-Auth-Token replace REDACTED
 				request>headers>X-Authorization replace REDACTED
 				request>headers>X-Access-Token replace REDACTED
+				request>headers>X-Proxy-Secret delete
 			}
 		}
 	}

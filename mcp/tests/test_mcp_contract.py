@@ -108,6 +108,9 @@ def test_the_second_wall_refuses_what_the_reviewer_got_through() -> None:
         "Jane Marie Doe Smith",
         "Jane-Doe-MRN-12345678-has-cancer",
         "MRN 12345678",
+        "12345678901",
+        "Stop2",
+        "2 Stop",
     ):
         assert not word.fullmatch(refused), refused
     for refused in ("Jane Doe", "has a space", "a" * 33, "x@y", "-lead", "a/b"):

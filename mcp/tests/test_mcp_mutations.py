@@ -562,6 +562,73 @@ MUTANTS: tuple[Mutant, ...] = (
         ("test_an_upstream_failure_logs_the_class_and_never_the_exception_text",),
         suite=ABUSE,
     ),
+    # --- the second review
+    Mutant(
+        "the per-source bound on requests in progress is off",
+        "chai_mcp/asgi.py",
+        "if counted and self._in_progress[source] > self._per_source:",
+        "if False:",
+        ("test_one_sources_trickles_cannot_stop_another_sources_calls",),
+        suite=ABUSE,
+    ),
+    Mutant(
+        "a source's requests in progress are never released",
+        "chai_mcp/asgi.py",
+        "left = self._in_progress[source] - 1",
+        "left = self._in_progress[source]",
+        ("test_one_sources_trickles_cannot_stop_another_sources_calls",),
+        suite=ABUSE,
+    ),
+    Mutant(
+        "the service holds any number of connections",
+        "chai_mcp/__main__.py",
+        "        limit_concurrency=settings.max_connections,\n",
+        "",
+        (
+            "test_the_service_holds_a_bounded_number_of_connections",
+            "test_the_server_is_started_with_the_safe_settings",
+        ),
+        suite=ABUSE,
+    ),
+    Mutant(
+        "the wait for a slot is unbounded",
+        "chai_mcp/server.py",
+        "async with asyncio.timeout(self._wait):",
+        "async with asyncio.timeout(None):",
+        ("test_a_call_waits_a_short_bounded_time_for_a_slot",),
+        suite=ABUSE,
+    ),
+    Mutant(
+        "a status may start with a number",
+        "chai_mcp/models.py",
+        'WORD = r"^[A-Za-z]+( [A-Za-z]+){0,2}$"',
+        'WORD = r"^[A-Za-z0-9]+( [A-Za-z]+){0,2}$"',
+        ("test_the_second_wall_refuses_what_the_reviewer_got_through",),
+        suite="tests/test_mcp_contract.py",
+    ),
+    Mutant(
+        "the HTTP verb is logged as the client sent it",
+        "chai_mcp/asgi.py",
+        'verb = scope["method"] if scope["method"] in KNOWN_METHODS else "(other)"',
+        'verb = scope["method"]',
+        ("test_a_hostile_request_cannot_write_a_line_or_a_marker_into_the_log",),
+        suite=ABUSE,
+    ),
+    Mutant(
+        "a refused call's own error text is passed back whole",
+        "chai_mcp/server.py",
+        "raise ToolError(clean_error(str(error))) from None",
+        "raise ToolError(str(error)) from None",
+        ("test_a_validation_error_is_short_and_has_no_control_characters",),
+        suite=ABUSE,
+    ),
+    # Equivalent here, and so not mutants (each judged so by the second review, and
+    # checked): the body timer never marking the body complete (nothing calls
+    # receive() once the body is in); ensure_ascii=False in the log formatter (no
+    # text a client chose reaches the service's own log lines: the method and path
+    # are logged only when they are ours, so no U+2028 can arrive there); and the
+    # reviewer's P9, P9b, P18 and P3b, which it called near-equivalent and which
+    # changed nothing these suites can observe.
     Mutant(
         "it starts without an allowed host",
         "chai_mcp/config.py",

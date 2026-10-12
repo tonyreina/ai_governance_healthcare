@@ -535,6 +535,13 @@ def mcp_image_is_unprivileged(dockerfile: str) -> list[str]:
         problems.append("no numeric non-root USER")
     if "--shell /usr/sbin/nologin" not in dockerfile:
         problems.append("its user has a login shell")
+    last_run = re.findall(r"^RUN (.*?)(?=^\S)", dockerfile, re.M | re.S)
+    if (
+        not last_run
+        or "/usr/bin/sh" not in last_run[-1]
+        or "/usr/bin/dpkg" not in last_run[-1]
+    ):
+        problems.append("the runtime image keeps a shell or the package manager")
     if "--require-hashes" not in dockerfile:
         problems.append("the lock is not verified by hash")
     if "pip uninstall" not in dockerfile:
@@ -1127,6 +1134,11 @@ def main() -> int:
         ("dropping USER", "USER 10002:10002", ""),
         ("USER root", "USER 10002:10002", "USER 0:0"),
         ("a login shell", "--shell /usr/sbin/nologin", "--shell /bin/bash"),
+        (
+            "keeping the shells",
+            "/usr/bin/dash /usr/bin/bash /usr/bin/sh",
+            "/usr/bin/zz",
+        ),
         ("an unlocked install", "--require-hashes", ""),
         ("keeping pip", "&& /opt/venv/bin/pip uninstall --yes pip setuptools", ""),
         (

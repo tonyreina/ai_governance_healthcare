@@ -163,6 +163,12 @@ TIMEOUTS_GATE: list[tuple[str, str, str, int]] = [
 
 GATE: list[tuple[str, str, str, int]] = [
     (
+        "the gate's own logs keep the shared secret",
+        "\t\t\t\trequest>headers>X-Proxy-Secret delete\n",
+        "",
+        1,
+    ),
+    (
         "the gate takes the address from a forwarding header",
         "\t\t\treverse_proxy {$MCP_UPSTREAM:mcp:8000} {\n\t\t\t\tflush_interval -1\n",
         "\t\t\treverse_proxy {$MCP_UPSTREAM:mcp:8000} {\n\t\t\t\tflush_interval -1\n"

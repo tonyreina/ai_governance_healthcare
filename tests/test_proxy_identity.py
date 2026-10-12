@@ -186,6 +186,15 @@ class H(BaseHTTPRequestHandler):
             if truncated:
                 return
             time.sleep(float(self.headers.get("X-Echo-Delay") or 0))
+            if self.headers.get("X-Echo-Truncate"):
+                # Promise a body and stop short: the proxy aborts the response.
+                self.send_response(200)
+                self.send_header("Content-Length", "1000")
+                self.end_headers()
+                self.wfile.write(b"partial")
+                self.wfile.flush()
+                self.close_connection = True
+                return
             body = json.dumps(dict(self.headers)).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -391,24 +400,24 @@ def check_proxy_shared_secret(workdir: Path) -> None:
     sends in that header reaches the API as a usable secret either.
     """
     door = FRONT_DOORS[3]
-    secret = "s3cret/with+base64=chars"
-    start_caddy(workdir, {**door[1], "PROXY_SHARED_SECRET": secret})
+    configured = "s3cret/with+base64=chars"
+    start_caddy(workdir, {**door[1], "PROXY_SHARED_SECRET": configured})
 
     status, body = get("/api/me", door[2])
     got = {k.lower(): v for k, v in json.loads(body).items()}
     check("with a secret set the request is forwarded", status == 200, f"HTTP {status}")
     check(
         "the proxy sends X-Proxy-Secret to the API",
-        got.get("x-proxy-secret") == secret,
-        described(got.get("x-proxy-secret"), secret),
+        got.get("x-proxy-secret") == configured,
+        described(got.get("x-proxy-secret"), configured),
     )
 
     _, body = get("/api/me", {**door[2], "X-Proxy-Secret": "chosen-by-the-client"})
     got = {k.lower(): v for k, v in json.loads(body).items()}
     check(
         "a client-supplied X-Proxy-Secret is replaced, not forwarded",
-        got.get("x-proxy-secret") == secret,
-        described(got.get("x-proxy-secret"), secret),
+        got.get("x-proxy-secret") == configured,
+        described(got.get("x-proxy-secret"), configured),
     )
 
     start_caddy(workdir, door[1])
@@ -417,7 +426,7 @@ def check_proxy_shared_secret(workdir: Path) -> None:
     check(
         "with no secret configured a client value is not forwarded as a secret",
         got.get("x-proxy-secret", "") == "",
-        described(got.get("x-proxy-secret"), secret),
+        described(got.get("x-proxy-secret"), configured),
     )
 
 
@@ -675,6 +684,52 @@ def check_agent_route(workdir: Path) -> None:
         described(got.get("x-proxy-secret"), "agent/route+secret="),
     )
 
+    # The address the API limits and records (X-Real-IP) is the peer this proxy saw,
+    # never a forwarding claim, on the agent route and on every /api route (#164
+    # second review, LOW-1/LOW-2). The peer here is the rig network's gateway: the
+    # address every request from this host arrives from.
+    peer = peer_address()
+    for i, claimed in enumerate(("203.0.113.250", "203.0.113.251", "203.0.113.252")):
+        forged = {
+            "X-Forwarded-For": claimed,
+            "X-Real-IP": claimed,
+            "Forwarded": f"for={claimed}",
+        }
+        for label, path, headers in (
+            ("agent route", "/api/agent/me", BEARER),
+            ("session route", "/api/me", oauth2[2]),
+        ):
+            status, body, _ = request(path, {**headers, **forged})
+            got = (
+                {k.lower(): v for k, v in json.loads(body).items()}
+                if status == 200
+                else {}
+            )
+            check(
+                f"{label}: X-Real-IP is the peer, not a claim (case {i + 1})",
+                bool(peer) and got.get("x-real-ip") == peer,
+                f"got {got.get('x-real-ip')!r}, the peer is {peer!r}",
+            )
+
+    # Caddy's own logs (not the access log) carry a request's headers when a response
+    # is aborted. The X-Proxy-Secret this proxy adds must not be among them (LOW-4).
+    marker_value = "agent/route+secret="
+    for path, headers in (("/api/agent/me", BEARER), ("/api/me", oauth2[2])):
+        with contextlib.suppress(Exception):
+            request(path, {**headers, "X-Echo-Truncate": "1"})
+    time.sleep(1)
+    logs = docker("logs", CADDY)
+    text = logs.stdout + logs.stderr
+    check(
+        "an aborted response was logged (so the next check looked at something)",
+        "aborting with incomplete response" in text,
+    )
+    check(
+        "Caddy's own logs never carry the shared secret",
+        marker_value not in text and "X-Proxy-Secret" not in text,
+        "the secret or its header name is in the proxy's output",
+    )
+
 
 # --- the MCP route (#164, R-73, D-91) -------------------------------------------------
 
@@ -686,6 +741,14 @@ MCP_HEADERS = {
     "Origin": "https://chat.example.test",
 }
 FORGED_IDENTITY = {h: "forged@evil.example" for h in IDENTITY_HEADERS}
+
+
+def peer_address() -> str:
+    """The address a request from this host arrives from inside the rig network."""
+    done = docker(
+        "network", "inspect", NET, "--format", "{{(index .IPAM.Config 0).Gateway}}"
+    )
+    return done.stdout.strip()
 
 
 def echo_seen() -> list[dict]:
@@ -895,8 +958,8 @@ def check_mcp_route(workdir: Path) -> None:
     time.sleep(1)
     logs = docker("logs", CADDY)
     text = logs.stdout + logs.stderr
-    for secret in ("LEAKMCP111", "LEAKMCP222", "LEAKMCP333"):
-        check(f"the proxy's log keeps no query of /mcp ({secret})", secret not in text)
+    for n, marker in enumerate(("LEAKMCP111", "LEAKMCP222", "LEAKMCP333"), 1):
+        check(f"the proxy's log keeps no query of /mcp (case {n})", marker not in text)
     check(
         "the proxy's log keeps no bearer token",
         BEARER["Authorization"].split(" ")[1] not in text,
@@ -1041,16 +1104,17 @@ def check_mcp_gate(workdir: Path) -> None:
     """The MCP gate (#164): the service's only two doors, each as narrow as it looks.
 
     :8081 (service to API) forwards the three GET routes and nothing else, with the
-    caller's token untouched, the caller's address as the API's source, and the shared
-    secret the service never holds. :8082 (proxy to service) forwards the transport's
-    three methods on /mcp and nothing else, and sets the caller's address itself.
+    caller's token untouched, the caller's address as the API's source, and the
+    shared secret the service never holds. :8082 (proxy to service) forwards the
+    transport's three methods on /mcp and nothing else, and passes on the caller's
+    address as the proxy set it.
     """
-    secret = "gate/secret+value="
+    gate_value = "gate/secret+value="
     earlier = len(echo_seen())
     start_gate(
         workdir,
         {
-            "PROXY_SHARED_SECRET": secret,
+            "PROXY_SHARED_SECRET": gate_value,
             # The echo upstream stands in for the service, and also for the API.
             "MCP_UPSTREAM": "api:8000",
         },
@@ -1089,8 +1153,8 @@ def check_mcp_gate(workdir: Path) -> None:
         )
         check(
             f"gate: {label}: the secret is the gate's, not the sender's",
-            got.get("x-proxy-secret") == secret,
-            described(got.get("x-proxy-secret"), secret),
+            got.get("x-proxy-secret") == gate_value,
+            described(got.get("x-proxy-secret"), gate_value),
         )
         check(
             f"gate: {label}: the caller's address becomes the API's source",
@@ -1268,8 +1332,27 @@ def check_mcp_gate(workdir: Path) -> None:
     time.sleep(1)
     logs = docker("logs", CADDY)
     text = logs.stdout + logs.stderr
-    for leaked in ("LEAKGATE1", "LEAKGATE2", BEARER["Authorization"].split(" ")[1]):
-        check(f"gate: its log keeps no {leaked[:10]}...", leaked not in text)
+    for n, marker in enumerate(
+        ("LEAKGATE1", "LEAKGATE2", BEARER["Authorization"].split(" ")[1]), 1
+    ):
+        check(f"gate: its log keeps no query or bearer (case {n})", marker not in text)
+
+    # An aborted response on the API listener: the gate's own log must not carry the
+    # shared secret it adds (LOW-4).
+    with contextlib.suppress(Exception):
+        request("/api/agent/me", {**BEARER, "X-Echo-Truncate": "1"}, port=out)
+    time.sleep(1)
+    logs = docker("logs", CADDY)
+    text = logs.stdout + logs.stderr
+    check(
+        "gate: an aborted response was logged",
+        "aborting with incomplete response" in text,
+    )
+    check(
+        "gate: its own logs never carry the shared secret",
+        gate_value not in text and "X-Proxy-Secret" not in text,
+        "the secret or its header name is in the gate's output",
+    )
 
 
 def docker_usable() -> bool:

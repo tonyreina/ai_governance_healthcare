@@ -15,6 +15,7 @@ import asyncio
 import contextlib
 import ipaddress
 import logging
+import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import date
 from enum import StrEnum
@@ -199,6 +200,29 @@ def _guarded(
     return inner
 
 
+# How much of a refused call's own error text goes back to the caller. A validation
+# error quotes the caller's input; it is theirs, but a model must not be handed a large
+# or hostile string back.
+MAX_ERROR_TEXT = 300
+_UNSAFE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f\u2028\u2029]")
+
+
+def clean_error(text: str) -> str:
+    """An error's text with control and line-separator characters removed, cut short."""
+    cut = _UNSAFE.sub("", text.replace("\n", " "))
+    return cut if len(cut) <= MAX_ERROR_TEXT else cut[: MAX_ERROR_TEXT - 3] + "..."
+
+
+class _Server(FastMCP):
+    """FastMCP, with every tool error's text cleaned before it leaves (review L8)."""
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        try:
+            return await super().call_tool(name, arguments)
+        except ToolError as error:
+            raise ToolError(clean_error(str(error))) from None
+
+
 def build_server(
     settings: Settings, upstream: Upstream | None = None
 ) -> tuple[FastMCP, Upstream]:
@@ -208,7 +232,7 @@ def build_server(
         settings.max_in_flight_per_source,
         settings.queue_wait_seconds,
     )
-    mcp = FastMCP(
+    mcp = _Server(
         name="governance-readonly",
         instructions=INSTRUCTIONS,
         stateless_http=True,

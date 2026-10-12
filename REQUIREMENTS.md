@@ -1485,7 +1485,8 @@ honest answer and is a gap worth closing; see R-19.
       the
       API's shared secret and sits on `edge`), and the documentation says so. The
       source address the API limits and audits is the one the proxy itself
-      observed, never a client's claim.
+      observed, never a client's claim (a compromised service behind the proxy
+      can claim one, and the documentation says so).
     - **Client-agnostic, and no model or client bundled.** The documentation shows
       how to point any MCP-capable client at it and at an OpenAI-compatible
       endpoint. No client code ships and no client is endorsed. Which model reads

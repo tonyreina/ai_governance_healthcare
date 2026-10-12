@@ -249,7 +249,8 @@ def test_the_documented_settings_are_the_ones_the_service_and_compose_use():
     for row in rows:
         documented |= set(re.findall(r"`([A-Z][A-Z_]+)`", row[0]))
     config = (ROOT / "mcp" / "chai_mcp" / "config.py").read_text(encoding="utf-8")
-    read = set(re.findall(r'(?:env\.get\(|_positive\(env, )"([A-Z_]+)"', config))
+    # Every quoted setting name in config.py, wherever a formatter put the line break.
+    read = set(re.findall(r'"((?:MCP|API)_[A-Z_]+)"', config))
     assert read, "found no settings in config.py"
     assert read <= documented, f"read but not documented: {sorted(read - documented)}"
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
@@ -272,6 +273,8 @@ def test_the_documented_defaults_are_the_codes():
         ("MCP_MAX_IN_FLIGHT_PER_SOURCE", config.DEFAULT_MAX_IN_FLIGHT_PER_SOURCE),
         ("MCP_QUEUE_WAIT_SECONDS", int(config.DEFAULT_QUEUE_WAIT_SECONDS)),
         ("MCP_BODY_TIMEOUT_SECONDS", int(config.DEFAULT_BODY_TIMEOUT_SECONDS)),
+        ("MCP_MAX_REQUESTS_PER_SOURCE", config.DEFAULT_MAX_REQUESTS_PER_SOURCE),
+        ("MCP_MAX_CONNECTIONS", config.DEFAULT_MAX_CONNECTIONS),
         ("MCP_PORT", config.DEFAULT_PORT),
     ):
         assert f"| `{name}` | `{value}` |" in text, name
@@ -281,7 +284,7 @@ def test_the_documented_defaults_are_the_codes():
         "10 seconds",
         "64 in all and 4 from one source",
         "up to a second",
-        "Not bounded per source",
+        "not bounded per source",
     ):
         assert must in limits, must
     # The compose defaults are the code's.
@@ -291,6 +294,8 @@ def test_the_documented_defaults_are_the_codes():
         ("MCP_MAX_IN_FLIGHT_PER_SOURCE", config.DEFAULT_MAX_IN_FLIGHT_PER_SOURCE),
         ("MCP_QUEUE_WAIT_SECONDS", int(config.DEFAULT_QUEUE_WAIT_SECONDS)),
         ("MCP_BODY_TIMEOUT_SECONDS", int(config.DEFAULT_BODY_TIMEOUT_SECONDS)),
+        ("MCP_MAX_REQUESTS_PER_SOURCE", config.DEFAULT_MAX_REQUESTS_PER_SOURCE),
+        ("MCP_MAX_CONNECTIONS", config.DEFAULT_MAX_CONNECTIONS),
     ):
         assert f"{name}: ${{{name}:-{value}}}" in compose, name
 
@@ -303,6 +308,8 @@ def test_the_page_does_not_promise_what_the_review_found_false():
         "more are refused, not queued",
         "up to four plain words of at most 48",
         "The caller's own address is passed on, so one person's failures",
+        "and nothing at the service",
+        "a caller's token to the three agent routes.",
     ):
         assert gone not in TEXT, gone
     text = " ".join(TEXT.split())
@@ -314,7 +321,12 @@ def test_the_page_does_not_promise_what_the_review_found_false():
         "can only **lower** the limit",
         "a request with no `Origin` (or an empty one) is accepted",
         "A credential that is not shaped like a token never takes one",
-        "Not bounded per source",
+        "not bounded per source",
+        "at most `MCP_MAX_REQUESTS_PER_SOURCE` (8) requests at a time",
+        "can stay open well past 120 seconds",
+        "That holds against a client, not against the parts behind the proxy.",
+        "a real error line can be among those dropped",
+        "delete the shared secret and every credential-like header",
     ):
         assert true in text, true
 

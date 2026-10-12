@@ -20,6 +20,11 @@ DEFAULT_MAX_IN_FLIGHT = 64
 DEFAULT_MAX_IN_FLIGHT_PER_SOURCE = 4
 # How long a call may wait for a free slot before it is refused as busy.
 DEFAULT_QUEUE_WAIT_SECONDS = 1.0
+# Requests in progress from one source, counted from when the headers arrive (a body
+# still being read included). More are answered 429 at once.
+DEFAULT_MAX_REQUESTS_PER_SOURCE = 8
+# Connections the service holds at once, in all; more are answered 503.
+DEFAULT_MAX_CONNECTIONS = 256
 # A request whose body is not complete by then is dropped with 408.
 DEFAULT_BODY_TIMEOUT_SECONDS = 10.0
 # The host names a request may carry whatever is configured: this machine, which is
@@ -86,6 +91,8 @@ class Settings:
     max_in_flight_per_source: int = DEFAULT_MAX_IN_FLIGHT_PER_SOURCE
     queue_wait_seconds: float = DEFAULT_QUEUE_WAIT_SECONDS
     body_timeout_seconds: float = DEFAULT_BODY_TIMEOUT_SECONDS
+    max_requests_per_source: int = DEFAULT_MAX_REQUESTS_PER_SOURCE
+    max_connections: int = DEFAULT_MAX_CONNECTIONS
     hosts_with_loopback: tuple[str, ...] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -137,5 +144,13 @@ class Settings:
             ),
             body_timeout_seconds=_positive(
                 env, "MCP_BODY_TIMEOUT_SECONDS", DEFAULT_BODY_TIMEOUT_SECONDS
+            ),
+            max_requests_per_source=int(
+                _positive(
+                    env, "MCP_MAX_REQUESTS_PER_SOURCE", DEFAULT_MAX_REQUESTS_PER_SOURCE
+                )
+            ),
+            max_connections=int(
+                _positive(env, "MCP_MAX_CONNECTIONS", DEFAULT_MAX_CONNECTIONS)
             ),
         )

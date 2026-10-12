@@ -123,7 +123,8 @@ upstream per listener and a config of three `GET` routes and one path. It parses
 only requests the proxy has already parsed, from a single internal client. It
 runs no code of ours. The service is on a network of its own with the gate and
 nothing else, so a flaw in the service reaches the gate's two listeners and
-nothing more: a caller's token to the three agent routes.
+nothing more: the three agent routes, which still need a caller's token for any
+read, and the source address the API records for those calls (below).
 
 **If you cannot accept that, leave the profile off.** Nothing else on this page
 works without the gate. The image is not shell-less (it is Caddy's); its
@@ -139,6 +140,17 @@ a load balancer or another front door, the peer the proxy sees is that balancer*
 (as it is for [the agent route](agent-api.md#the-rate-limit)), so every client behind it
 is one source to the rate limit, the read trail and the per-source slots below.
 Raise `MCP_MAX_IN_FLIGHT_PER_SOURCE` there.
+
+**That holds against a client, not against the parts behind the proxy.** The gate
+takes `X-Client-Address` from whoever reaches it, and only the proxy and the service
+can. So a compromised service, or anything else that gets onto the `edge` network,
+can choose the address the API records and rate-limits for the calls it makes. It
+still needs a person's token for every call, but for calls with the tokens it holds
+it can spread its failures over invented addresses (so only the API's global
+failure budget, not the per-source one, bounds them), and it can spend another
+address's failure allowance. The address cannot be bound to the original request
+in this design without signing it, which this version does not do; a test pins the
+behavior either way.
 
 ## Turn it on
 
@@ -182,6 +194,8 @@ proxy, and nothing is behind it. Nothing it can reach is the main API.
 | `MCP_MAX_IN_FLIGHT_PER_SOURCE` | `4` | Calls answered at once from one source, so one caller cannot take every slot. |
 | `MCP_QUEUE_WAIT_SECONDS` | `1` | How long a call waits for a free slot before it is refused as "busy". |
 | `MCP_BODY_TIMEOUT_SECONDS` | `10` | A request whose body is not complete by then is dropped with `408`. |
+| `MCP_MAX_REQUESTS_PER_SOURCE` | `8` | Requests in progress from one source, counted from the moment the headers arrive, so a body still arriving counts. More are answered `429` at once, before any body is read. |
+| `MCP_MAX_CONNECTIONS` | `256` | Connections the service holds at once, in all. More are answered `503`. |
 | `API_BASE_URL` | set by compose to the gate | The address the token is sent to: an `http` or `https` URL with no credentials, query or fragment. It is the only place a token goes, and a redirect is never followed. |
 | `MCP_MEM_LIMIT`, `MCP_CPUS`, `MCP_IMAGE` | `256m`, `1`, built locally | Container limits, and a registry tag (pinned by digest) to run instead of building `./mcp`. |
 
@@ -741,7 +755,11 @@ start a line of its own. Only the service's own messages are written: a record f
 the SDK or any library is reduced to its logger, its level and the class of its
 exception, because those libraries quote the request they were given. A burst is
 bounded (a burst of 50 records, then 10 a second, with a note of how many were
-dropped), so a small request cannot make a large log. The proxy's log redacts a query string on `/mcp` and the
+dropped), so a small request cannot make a large log; during a flood a real error
+line can be among those dropped, and the count of dropped lines is logged when the
+flood ends. Caddy's own logs, the proxy's and the gate's, as well as the access
+logs, delete the shared secret and every credential-like header from any request
+they record (an aborted response logs the request it was proxying). The proxy's log redacts a query string on `/mcp` and the
 `Authorization` header. The gate's log redacts the query string of every request. A
 test sweeps the logs of every part of the running stack for a token's secret.
 
@@ -755,10 +773,10 @@ front door in front of this stack may log what it likes.
 |---|---|
 | Request body, size | 64 KB at the proxy and the gate, whatever the setting; `MCP_MAX_BODY_BYTES` (64 KB by default) can only lower it at the service |
 | Request headers | 10 seconds to arrive, at the proxy and the gate |
-| Request body, time | 10 seconds, complete, at the service (`MCP_BODY_TIMEOUT_SECONDS`, then `408`), and at the gate (`read_body`, which cuts off the gate's own leg to the service). **Not bounded at the proxy:** Caddy holds a slow client's own connection open, as it does on every route, because it has no per-route body deadline and a global one would also end the dashboard's `/api/events` streams. A client trickling a body therefore ties up a connection at the proxy and the gate, and nothing at the service. Bound that at your front door or load balancer (idle and request timeouts) |
+| Request body, time | 10 seconds, complete, at the service (`MCP_BODY_TIMEOUT_SECONDS`, then `408`), and at the gate (`read_body`, which cuts off the gate's own leg to the service). **Not bounded at the proxy:** Caddy holds a slow client's own connection open, as it does on every route, because it has no per-route body deadline and a global one would also end the dashboard's `/api/events` streams; such a connection can stay open well past 120 seconds. So one source trickling bodies holds, at the proxy and the gate, as many connections as it opens, and, at the service, at most `MCP_MAX_REQUESTS_PER_SOURCE` (8) requests at a time, each for at most 10 seconds; its further requests are answered `429` at once. Bound the rest at your front door or load balancer (idle and request timeouts) |
 | One call to the API | 10 seconds (`MCP_TIMEOUT_SECONDS`), connection and total; the proxy and the gate answer an error if the service does not respond in 30 |
 | Calls at once | 64 in all and 4 from one source (`MCP_MAX_IN_FLIGHT`, `MCP_MAX_IN_FLIGHT_PER_SOURCE`). A call waits up to a second (`MCP_QUEUE_WAIT_SECONDS`) for a slot and is then refused as busy. A credential that is not shaped like a token never takes one. A source is the address the proxy observed, so behind a load balancer all clients share one |
-| Connections | Not bounded per source: Caddy has no such setting. The service answers `503` past 256 connections at once. Caddy's own connections are unbounded |
+| Connections | At the service, 256 in all (`MCP_MAX_CONNECTIONS`, then `503`) and 8 requests in progress per source (`MCP_MAX_REQUESTS_PER_SOURCE`, then `429`), so one source cannot hold every connection. At the proxy and the gate, not bounded per source: Caddy has no such setting |
 | Rate | The agent API's: a token, a person and a source each have an allowance ([the rate limit](agent-api.md#the-rate-limit)). The source is the address the proxy itself observed (never one a client sent), and behind a load balancer that is the balancer |
 | Results | A page is at most 100 projects, and a project at most 500 items |
 

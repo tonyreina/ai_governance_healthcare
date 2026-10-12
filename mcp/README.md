@@ -42,7 +42,7 @@ first. This file is for someone changing the code.
 | `chai_mcp/upstream.py` | The one hop to the agent API, and the error messages. |
 | `chai_mcp/server.py` | The FastMCP server and its three tools. |
 | `chai_mcp/asgi.py` | The HTTP front: path, method, Host, Origin, bearer, query. |
-| `Dockerfile`, `requirements.txt` | The image, built like the API's: two stages, a lock verified by hash, digest-pinned bases, non-root, no pip. |
+| `Dockerfile`, `requirements.txt` | The image, built like the API's: two stages, a lock verified by hash, digest-pinned bases, non-root, no pip, no shell, no package manager. |
 | `tests/` | See below. |
 
 ## Tests

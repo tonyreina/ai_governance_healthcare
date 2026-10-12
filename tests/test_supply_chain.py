@@ -519,6 +519,23 @@ def main() -> int:
                 gone.stdout.strip() == "[] None None None",
                 gone.stdout + gone.stderr,
             )
+            # No shell and no package manager either (second review, LOW-3): the
+            # service and its health check are exec form and need neither.
+            tools = in_image(
+                "-c",
+                "import glob, os\n"
+                "names = ['/bin/sh', '/usr/bin/sh', '/bin/bash', '/usr/bin/bash', "
+                "'/bin/dash', '/usr/bin/dash', '/usr/bin/rbash']\n"
+                "found = [p for p in names if os.path.lexists(p)]\n"
+                "found += glob.glob('/usr/bin/apt*') + glob.glob('/usr/bin/dpkg*')\n"
+                "found += glob.glob('/usr/sbin/dpkg*')\n"
+                "print(found)\n",
+            )
+            check(
+                "no shell and no apt or dpkg is in the MCP runtime image",
+                tools.stdout.strip() == "[]",
+                tools.stdout + tools.stderr,
+            )
             check(
                 "and the system interpreter cannot import pip either",
                 subprocess.run(

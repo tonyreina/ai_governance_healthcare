@@ -19,12 +19,36 @@
 # =============================================================================
 {
 	admin off
+
+	# Caddy's own logs (not the access log below) can carry a request's headers: an
+	# aborted response from the API logs the request it was proxying, with the
+	# X-Proxy-Secret this proxy added. Delete the secret and every credential-like
+	# header from every log Caddy writes (#164 review LOW-4).
+	log default {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>headers>X-Proxy-Secret delete
+				request>headers>Authorization delete
+				request>headers>Cookie delete
+				request>headers>X-Api-Key delete
+				request>headers>Api-Key delete
+				request>headers>X-Auth-Token delete
+				request>headers>X-Authorization delete
+				request>headers>X-Access-Token delete
+			}
+		}
+	}
 	# Plain HTTP on an internal network: nothing here is a public name.
 	auto_https off
 
 	# NO trusted_proxies, and no {client_ip} anywhere: the caller's address is the
 	# X-Client-Address the proxy sets from the peer it observed, taken as it is. This
-	# file never reads X-Forwarded-For, which a client could have written.
+	# file never reads X-Forwarded-For, which a client could have written. Against a
+	# client that address is the edge's observation; against whatever reaches this
+	# gate directly (the MCP service, or another member of `edge`) it is that party's
+	# claim, which docs/mcp.md states.
 	servers {
 		timeouts {
 			read_header 10s
@@ -49,6 +73,7 @@ http://:8081 {
 				request>headers>X-Auth-Token replace REDACTED
 				request>headers>X-Authorization replace REDACTED
 				request>headers>X-Access-Token replace REDACTED
+				request>headers>X-Proxy-Secret delete
 			}
 		}
 	}
@@ -122,6 +147,7 @@ http://:8082 {
 				request>headers>X-Auth-Token replace REDACTED
 				request>headers>X-Authorization replace REDACTED
 				request>headers>X-Access-Token replace REDACTED
+				request>headers>X-Proxy-Secret delete
 			}
 		}
 	}

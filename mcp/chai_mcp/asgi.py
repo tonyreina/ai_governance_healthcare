@@ -20,6 +20,7 @@ right is the agent API's answer, given to the tool that asked.
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import time
 from collections.abc import MutableMapping
@@ -55,6 +56,21 @@ def _body_complete(message: MutableMapping[str, Any]) -> bool:
     return not is_piece or not message.get("more_body")
 
 
+def _source_of(scope: Scope) -> str:
+    """The source the proxy observed (X-Client-Address, set by the proxy and passed on
+    by the gate), as an IP address; ``unknown`` for anything else."""
+    for name, value in scope.get("headers") or ():
+        if name == b"x-client-address":
+            try:
+                return str(ipaddress.ip_address(value.decode("latin-1").strip()))
+            except ValueError:
+                return UNKNOWN
+    return UNKNOWN
+
+
+UNKNOWN = "unknown"
+
+
 class BodyTimeout(Exception):
     """The request's body was not complete in time."""
 
@@ -65,6 +81,10 @@ class Guard:
     def __init__(self, app: ASGIApp, settings: Settings) -> None:
         self.app = app
         self._body_timeout = settings.body_timeout_seconds
+        self._per_source = settings.max_requests_per_source
+        # Requests in progress, by source, counted from the moment the headers are in
+        # (before the body), so one source's slow bodies cannot hold every connection.
+        self._in_progress: dict[str, int] = {}
         self._security = TransportSecurityMiddleware(transport_security(settings))
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -98,8 +118,19 @@ class Guard:
             complete = _body_complete(message)
             return message  # type: ignore[return-value]
 
+        source = _source_of(scope)
+        counted = scope["path"] == MCP_PATH
+        if counted:
+            self._in_progress[source] = self._in_progress.get(source, 0) + 1
         try:
-            refusal = await self._refusal(scope)
+            if counted and self._in_progress[source] > self._per_source:
+                refusal: Response | None = PlainTextResponse(
+                    "Too many requests in progress from this source.",
+                    status_code=429,
+                    headers={"Retry-After": "1"},
+                )
+            else:
+                refusal = await self._refusal(scope)
             if refusal is not None:
                 await refusal(scope, receive, watching)
             else:
@@ -110,6 +141,12 @@ class Guard:
                     scope, receive, watching
                 )
         finally:
+            if counted:
+                left = self._in_progress[source] - 1
+                if left:
+                    self._in_progress[source] = left
+                else:
+                    del self._in_progress[source]
             # The method, the path if it is ours, and the status. Never the query, a
             # header or a body: a token a client put there is not logged.
             # A path is logged only if it is one of ours; any other is a client's text.

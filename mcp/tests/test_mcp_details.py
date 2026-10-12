@@ -231,3 +231,4 @@ def test_the_server_is_started_with_the_safe_settings(monkeypatch) -> None:
     assert seen["log_config"] is None and seen["log_level"] == "warning"
     assert seen["limit_concurrency"] and seen["timeout_keep_alive"] <= 5
     assert seen["port"] == 8000
+    assert seen["http"] == "h11"

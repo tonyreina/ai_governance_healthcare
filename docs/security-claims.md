@@ -2085,7 +2085,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-134 The MCP image is non-root, locked and pinned, and its containers are hardened
 
 - **Claim:** The image installs only from a hash-verified lock with no pip, from
-  digest-pinned bases, runs as a numeric non-root user with no login shell and a
+  digest-pinned bases, runs as a numeric non-root user with no login shell, and has no shell and no
+  package manager at all, and a
   health check, is started directly and not through a shell, and its containers have
   a read-only root filesystem, no capability, no new privileges and no published port.
 - **Asserted in:** `mcp/Dockerfile` — "Non-root, no login shell, no home directory."
@@ -2098,6 +2099,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_compose_isolation.py::the mcp image: the real Dockerfile passes`
   `tests/test_supply_chain.py::the MCP image's bases are pinned`
   `tests/test_supply_chain.py::its user has no login shell`
+  `tests/test_supply_chain.py::no shell and no apt or dpkg is in the MCP runtime image`
+  `tests/test_compose_isolation.py::keeping the shells`
   `tests/test_supply_chain.py::no pip, setuptools or ensurepip is anywhere in the MCP runtime image`
   `tests/test_stack_mcp.py::mcp has a read-only root filesystem`
 
@@ -2134,7 +2137,12 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   bound, in all or from one source, are refused after a short wait, and a credential
   that is not shaped like a token never takes a slot or reaches the API. The page
   says what is not bounded: a slow client's own connection to the proxy, which
-  Caddy holds as it does on every route, and connections per source.
+  Caddy holds as it does on every route, and connections per source at the proxy
+  and the gate. At the service one source holds at most a fixed number of requests
+  in progress, a body still arriving included, and the service holds a fixed
+  number of connections in all, so one source's slow bodies cannot stop another
+  source's calls.
+- **Asserted in:** `docs/mcp.md` — "8 requests in progress per source (`MCP_MAX_REQUESTS_PER_SOURCE`, then `429`), so one source cannot hold every connection."
 - **Asserted in:** `docs/mcp.md` — "A call waits up to a second (`MCP_QUEUE_WAIT_SECONDS`) for a slot and is then refused as busy."
 - **Asserted in:** `docs/mcp.md` — "A request whose body is not complete by then is dropped with `408`."
 - **Status:** enforced
@@ -2154,6 +2162,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_stack_mcp.py::a body trickled to /mcp through the proxy is dropped by the service`
   `tests/test_proxy_identity.py::mcp route: a body over the cap is refused`
   `tests/test_proxy_identity.py::mcp route: a service that does not answer in 30 seconds is an error`
+  `mcp/tests/test_mcp_abuse.py::test_one_sources_trickles_cannot_stop_another_sources_calls`
+  `mcp/tests/test_mcp_abuse.py::test_the_service_holds_a_bounded_number_of_connections`
 
 ### C-138 The proxy and the gate keep a token out of their logs
 
@@ -2169,8 +2179,9 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-139 The address a call is limited and recorded by is the one the edge observed
 
-- **Claim:** The source address the API rate-limits and audits for a call through
-  `/mcp` is the address of the peer the proxy itself observed. The proxy deletes any
+- **Claim:** Against a client, the source address the API rate-limits and audits
+  for a call through `/mcp` is the address of the peer the proxy itself observed.
+  (Against a compromised service or member of `edge` it is not: see C-142.) The proxy deletes any
   `X-Forwarded-For`, `Forwarded`, `X-Real-IP` and `X-Client-Address` a client sent and
   sets `X-Client-Address`; the gate passes it on as it is and never reads a
   forwarding header; and no client can set `X-Client-Address` on any route. Rotating
@@ -2222,3 +2233,30 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `mcp/tests/test_mcp_abuse.py::test_a_traceback_is_reduced_to_its_class`
   `mcp/tests/test_mcp_abuse.py::test_a_line_is_one_json_object_whatever_the_message_holds`
   `mcp/tests/test_mcp_mutations.py::test_each_guard_is_noticed_when_broken`
+
+### C-142 Behind the proxy, the address the API records is the caller's claim, and the page says so
+
+- **Claim:** The gate believes `X-Client-Address` from whatever reaches it, so a
+  compromised MCP service (or any member of `edge`) can choose the address the API
+  records and rate-limits for calls it makes with tokens it holds; a client cannot.
+  The page states this, and a stack test pins it both ways, so a change in either
+  direction is noticed.
+- **Asserted in:** `docs/mcp.md` — "**That holds against a client, not against the parts behind the proxy.**"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_stack_mcp.py::from inside mcp the gate believes X-Client-Address on an authenticated call`
+  `tests/test_stack_mcp.py::a valid call's source in the read trail is the peer, not a claim`
+
+### C-143 Caddy's own logs never carry the shared secret or a credential header
+
+- **Claim:** Every log the proxy and the gate write, not only the access log, deletes
+  `X-Proxy-Secret`, `Authorization`, `Cookie` and the token-like headers from any
+  request it records. An aborted response, which logs the request it was proxying,
+  is the case shown.
+- **Asserted in:** `docs/mcp.md` — "Caddy's own logs, the proxy's and the gate's, as well as the access logs, delete the shared secret and every credential-like header from any request they record"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_proxy_identity.py::Caddy's own logs never carry the shared secret`
+  `tests/test_proxy_identity.py::gate: its own logs never carry the shared secret`
+  `tests/test_proxy_agent_mutations.py`
+  `tests/test_proxy_mcp_mutations.py`

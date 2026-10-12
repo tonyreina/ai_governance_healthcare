@@ -37,6 +37,7 @@ Evidence is one of:
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 import tomllib
@@ -231,6 +232,97 @@ def _ci_problem(path: str, ctx: Context) -> str | None:
     )
 
 
+# pytest's own names: the markers that stop a test running, and its conftest setting.
+_SKIP_MARKS = frozenset(
+    {"pytest.mark.skip", "pytest.mark.skipif", "mark.skip", "mark.skipif"}
+)
+_XFAIL_MARKS = frozenset({"pytest.mark.xfail", "mark.xfail"})
+_RUN, _COLLECT_IGNORE = "run", "collect_ignore"
+
+
+def _skips(node: ast.AST) -> bool:
+    """Is this decorator one that stops pytest running the test? pytest.mark.skip,
+    pytest.mark.skipif(...), or pytest.mark.xfail(run=False)."""
+    call = node if isinstance(node, ast.Call) else None
+    dotted = ast.unparse(call.func if call else node)
+    if dotted in _SKIP_MARKS:
+        return True
+    if dotted in _XFAIL_MARKS and call is not None:
+        return any(
+            k.arg == _RUN
+            and isinstance(k.value, ast.Constant)
+            and k.value.value is False
+            for k in call.keywords
+        )
+    return False
+
+
+def _ignored_by_conftest(path: str, ctx: Context) -> bool:
+    """Does a conftest.py beside it, or above it, name the file in collect_ignore?"""
+    parts = path.split("/")
+    for depth in range(len(parts) - 1, 0, -1):
+        conftest = _read(ctx, "/".join([*parts[:depth], "conftest.py"]))
+        if not conftest:
+            continue
+        try:
+            tree = ast.parse(conftest)
+        except SyntaxError:
+            continue
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == _COLLECT_IGNORE
+                for t in node.targets
+            ):
+                try:
+                    ignored = ast.literal_eval(node.value)
+                except ValueError:
+                    continue
+                if parts[-1] in ignored or "/".join(parts[depth:]) in ignored:
+                    return True
+    return False
+
+
+def _not_collected(text: str, names: list[str], path: str, ctx: Context) -> str | None:
+    """Why pytest would not run ``path::names`` (a test, or a class and a method), or
+    None if it would: a real top-level def (or a method of a Test* class), named as
+    pytest collects, not skipped by its decorators, in a file no conftest ignores."""
+    if _ignored_by_conftest(path, ctx):
+        return f"a conftest's collect_ignore names {path}"
+    try:
+        scope: list[ast.stmt] = ast.parse(text).body
+    except SyntaxError:
+        return f"{path} does not parse"
+    defs = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+    if len(names) == 1:
+        # A bare test name may be a method of a Test class (pytest -k finds it).
+        for cls in [n for n in scope if isinstance(n, ast.ClassDef)]:
+            if not any(isinstance(n, defs) and n.name == names[0] for n in scope):
+                method = next(
+                    (m for m in cls.body if isinstance(m, defs) and m.name == names[0]),
+                    None,
+                )
+                if method is not None:
+                    names = [cls.name, names[0]]
+                    break
+    for i, name in enumerate(names):
+        node = next((n for n in scope if isinstance(n, defs) and n.name == name), None)
+        if node is None:
+            return f"{name} is not a top-level test or class in {path}"
+        last = i == len(names) - 1
+        if isinstance(node, ast.ClassDef):
+            if not name.startswith("Test"):  # enum-ok: pytest's class-name pattern
+                return f"pytest does not collect class {name}"
+        elif not name.startswith("test"):  # enum-ok: pytest's function-name pattern
+            return f"pytest does not collect {name}"
+        if any(_skips(d) for d in node.decorator_list):
+            return f"{name} is skipped by its decorator"
+        if not last:
+            if not isinstance(node, ast.ClassDef):
+                return f"{name} is not a class"
+            scope = node.body
+    return None
+
+
 def _evidence_problems(ref: str, ctx: Context) -> list[str]:
     path, *names = ref.split("::")
     # The hook list comes from the context, not a file read: the context is what
@@ -246,6 +338,12 @@ def _evidence_problems(ref: str, ctx: Context) -> list[str]:
                     f"evidence {ref}: hook '{name}' is not defined in {path}"
                 )
     else:
+        pytest_file = path.startswith((SERVER_TESTS, MCP_TESTS))
+        if pytest_file and names and PYTEST_NAME.fullmatch(names[-1]):
+            why = _not_collected(text, names, path, ctx)
+            if why:
+                problems.append(f"evidence {ref}: {why}")
+            names = []
         for name in names:
             if PYTEST_NAME.fullmatch(name):
                 if not re.search(rf"\b(class|def)\s+{re.escape(name)}\b", text):

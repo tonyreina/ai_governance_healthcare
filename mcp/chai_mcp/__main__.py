@@ -29,7 +29,10 @@ def main() -> int:
         timeout_graceful_shutdown=10,
         timeout_keep_alive=5,
         # More simultaneous connections than this are answered 503, not held.
-        limit_concurrency=256,
+        limit_concurrency=settings.max_connections,
+        # The pure-Python parser the image installs, whatever else is present, so a
+        # test and the container parse a request the same way.
+        http="h11",
         log_config=None,
         # Its own lines are reduced to nothing by the log filter anyway.
         log_level="warning",

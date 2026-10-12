@@ -3232,7 +3232,13 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
       believes only from the gate's address inside `TRUSTED_PROXY_CIDR` (R-71, C-115).
       The service validates it as an IP address before forwarding. Behind a load
       balancer the peer is the balancer, so everyone is one source; the page
-      says so.
+      says so. This holds against a client only (second review, MEDIUM-2): the gate
+      believes the header from whatever reaches it, so a compromised service, or
+      any member of `edge`, can choose the address recorded for calls with tokens
+      it holds, which reduces the per-source failure bound for those calls to the
+      global budget and lets it spend another address's allowance. Binding the
+      address to the request would take signing it, which was not added; a stack
+      test pins the behavior and the page says so.
     - Slots (review H3). A credential not shaped like a token the API mints (`agt_`,
       16 hex, `.`, 43 URL-safe characters, ASCII) is refused with the one rejected
       message before a slot is taken or a request is made. Calls take a slot
@@ -3362,6 +3368,19 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
       the gate has no `trusted_proxies`.
     - (s) Added after the owner's acceptance; confirm. `mcp-gate` has a health
       route and a Docker health check, and the image has no pip of its own.
+    - (t) Added after the owner's acceptance; confirm. At the service, 8 requests
+      in progress per source, counted from when the headers arrive so a body still
+      arriving counts (`MCP_MAX_REQUESTS_PER_SOURCE`, then `429` at once), and 256
+      connections in all (`MCP_MAX_CONNECTIONS`, then `503`).
+    - (u) Added after the owner's acceptance; confirm. Caddy's own logs (proxy and
+      gate, through `log default`) delete `X-Proxy-Secret`, `Authorization`,
+      `Cookie` and the token-like headers.
+    - (v) Added after the owner's acceptance; confirm. The MCP image's final stage
+      has no shell (`sh`, `dash`, `bash`) and no `apt` or `dpkg`; its `CMD` and
+      `HEALTHCHECK` are exec form.
+    - (w) Added after the owner's acceptance; confirm. A tool's own error text sent
+      back to a caller is cut to 300 characters with control and line-separator
+      characters removed.
 - **Cost, stated.** `/mcp` is a second path reachable without single sign-on, so
   the
   token is the only thing between a caller and the data on it, and a front door

@@ -2,7 +2,7 @@
 #
 # The optional MCP service (#164, R-73, D-91). Built exactly like the API image
 # (server/Dockerfile): two stages, a lock verified by hash, base images pinned by
-# digest, a non-root user with no shell, and no pip in the runtime image.
+# digest, a non-root user, and no pip, shell or package manager in the runtime image.
 #
 # It holds NO credential and writes nothing: compose runs it read-only with every
 # capability dropped, and it is in a profile, so it does not start unless asked.
@@ -49,6 +49,14 @@ RUN rm -rf /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.* \
 WORKDIR /app
 COPY --from=build /opt/venv /opt/venv
 COPY --chown=root:root chai_mcp ./chai_mcp
+
+# Last, because RUN needs a shell: take the shells and the package manager out of the
+# runtime image. Nothing here starts a shell (CMD and HEALTHCHECK are exec form), and
+# nothing installs anything at runtime. After this line no RUN can follow.
+RUN rm -f /usr/bin/dash /usr/bin/bash /usr/bin/sh /bin/sh /bin/bash /bin/dash \
+          /usr/bin/rbash /usr/bin/apt /usr/bin/apt-get /usr/bin/apt-cache \
+          /usr/bin/apt-config /usr/bin/apt-mark /usr/bin/apt-key /usr/bin/apt-cdrom \
+          /usr/bin/dpkg /usr/bin/dpkg-* /usr/sbin/dpkg-*
 
 USER 10002:10002
 

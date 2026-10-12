@@ -213,6 +213,7 @@ def settings_for(api_url: str, **over: Any) -> Settings:
         "max_in_flight_per_source": 16,
         "queue_wait_seconds": 0.0,
         "body_timeout_seconds": 5.0,
+        "max_requests_per_source": 10_000,
     }
     base.update(over)
     return Settings(**base)

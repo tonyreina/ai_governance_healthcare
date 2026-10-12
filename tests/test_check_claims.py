@@ -69,9 +69,6 @@ def page(
 
 
 def world(root: Path, **overrides) -> cc.Context:
-    for name, body in overrides.get("extra_files", {}).items():
-        (root / name).parent.mkdir(parents=True, exist_ok=True)
-        (root / name).write_text(body, encoding="utf-8")
     (root / "docs").mkdir(exist_ok=True)
     (root / "tests").mkdir(exist_ok=True)
     (root / "server" / "tests").mkdir(parents=True, exist_ok=True)
@@ -92,6 +89,10 @@ def world(root: Path, **overrides) -> cc.Context:
         "class TestZ:\n    async def test_z(self):\n        pass\n", encoding="utf-8"
     )
     (root / "Makefile").write_text("check-isolation:\n\t@true\n", encoding="utf-8")
+    # Last, so a case can replace any file above.
+    for name, body in overrides.get("extra_files", {}).items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(body, encoding="utf-8")
     return cc.Context(
         root=root,
         workflow_text=overrides.get(
@@ -301,6 +302,76 @@ def main() -> int:
                     )
                 ),
             )
+    # The cited test must be one pytest collects and runs (second review, LOW-7).
+    cases = {
+        "only in a comment": "# def test_m(): pass\nX = 'def test_m'\n",
+        "nested in a function": "def helper():\n    def test_m():\n        pass\n",
+        "skipped": "import pytest\n@pytest.mark.skip\ndef test_m():\n    pass\n",
+        "skipped with a reason": (
+            "import pytest\n@pytest.mark.skip(reason='x')\ndef test_m():\n    pass\n"
+        ),
+        "skipped on a condition": (
+            "import pytest\n@pytest.mark.skipif(True, reason='x')\n"
+            "def test_m():\n    pass\n"
+        ),
+        "an xfail that does not run": (
+            "import pytest\n@pytest.mark.xfail(run=False)\ndef test_m():\n    pass\n"
+        ),
+    }
+    for label, body in cases.items():
+        check(
+            f"a cited test {label} is not evidence",
+            bool(
+                problems_for(
+                    page(evidence="`mcp/tests/test_m.py::test_m`"),
+                    extra_files={"mcp/tests/test_m.py": body},
+                )
+            ),
+        )
+    check(
+        "a method of a class pytest does not collect is not evidence",
+        bool(
+            problems_for(
+                page(evidence="`mcp/tests/test_m.py::Helper::test_m`"),
+                extra_files={
+                    "mcp/tests/test_m.py": (
+                        "class Helper:\n    def test_m(self):\n        pass\n"
+                    )
+                },
+            )
+        ),
+    )
+    check(
+        "a file a conftest tells pytest to ignore is not evidence",
+        bool(
+            problems_for(
+                page(evidence="`mcp/tests/test_m.py::test_m`"),
+                extra_files={
+                    "mcp/tests/conftest.py": "collect_ignore = ['test_m.py']\n"
+                },
+            )
+        ),
+    )
+    check(
+        "a real test, an async one and one in a Test class are evidence",
+        not problems_for(
+            page(evidence="`mcp/tests/test_m.py::test_m`"),
+            extra_files={
+                "mcp/tests/test_m.py": (
+                    "import pytest\n@pytest.mark.parametrize('a', [1])\n"
+                    "async def test_m(a):\n    pass\n"
+                )
+            },
+        )
+        and not problems_for(
+            page(evidence="`mcp/tests/test_m.py::TestK::test_m`"),
+            extra_files={
+                "mcp/tests/test_m.py": (
+                    "class TestK:\n    def test_m(self):\n        pass\n"
+                )
+            },
+        ),
+    )
     check(
         "a file named test_*.py under mcp/tests is collected",
         problems_for(page(evidence="`mcp/tests/test_m.py::test_m`")) == [],

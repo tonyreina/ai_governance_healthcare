@@ -371,6 +371,31 @@ def main() -> int:
         f"no 408 in the service's log after {time.monotonic() - began:.0f}s",
     )
 
+    print("Behind the proxy, the address is the caller's claim (documented)")
+    # A compromised service can name the address the API records for calls with a
+    # token it holds; a client cannot (checked above). Pinned so a change either way
+    # is noticed, and docs/mcp.md says it.
+    probe_call = (
+        "import urllib.request, sys\n"
+        "req = urllib.request.Request('http://mcp-gate:8081/api/agent/me', "
+        "headers={'Authorization': 'Bearer ' + sys.argv[1], "
+        "'X-Client-Address': '100.64.0.200'})\n"
+        "print(urllib.request.urlopen(req, timeout=10).status)\n"
+    )
+    inside = compose(
+        "--profile", "agent-mcp", "exec", "-T", "mcp", "python", "-c", probe_call, token
+    )  # fmt: skip
+    recorded = compose(
+        "exec", "-T", "db", "psql", "-U", "chai", "-d", "chai", "-tA", "-c",
+        "SELECT count(*) FROM access_event "
+        f"WHERE token_id = '{minted['id']}' AND source_ip = '100.64.0.200'",
+    ).stdout.strip()  # fmt: skip
+    check(
+        "from inside mcp the gate believes X-Client-Address on an authenticated call",
+        inside.stdout.strip() == "200" and recorded not in ("", "0"),
+        f"{inside.stdout.strip()} {inside.stderr[-200:]} rows={recorded}",
+    )
+
     print("Isolation")
     facts = {}
     for cid in containers():

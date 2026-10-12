@@ -51,6 +51,23 @@ FULL_REGEXP = (
 )
 MUTATIONS: list[tuple[str, str, str]] = [
     (
+        "the agent route reports a forwarding claim as the source",
+        "\t\t\t\t# per-source limit. The API sets nothing on it.\n"
+        "\t\t\t\theader_up X-Real-IP {remote_host}",
+        "\t\t\t\t# per-source limit. The API sets nothing on it.\n"
+        "\t\t\t\theader_up X-Real-IP {client_ip}",
+    ),
+    (
+        "every /api route reports a forwarding claim as the source",
+        "\t\t\t\t# by Caddy already.)\n\t\t\t\theader_up X-Real-IP {remote_host}",
+        "\t\t\t\t# by Caddy already.)\n\t\t\t\theader_up X-Real-IP {client_ip}",
+    ),
+    (
+        "Caddy's own logs keep the shared secret",
+        "\t\t\t\trequest>headers>X-Proxy-Secret delete\n",
+        "",
+    ),
+    (
         "the log keeps a query string on the agent routes",
         "(?:agent|mcp|%|",
         "(?:nothing|mcp|%|",

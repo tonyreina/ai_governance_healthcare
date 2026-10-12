@@ -40,7 +40,7 @@ first. This file is for someone changing the code.
 | `chai_mcp/config.py` | Settings from the environment. None is a secret. |
 | `chai_mcp/models.py` | The tool results, mirroring the API's response models. |
 | `chai_mcp/upstream.py` | The one hop to the agent API, and the error messages. |
-| `chai_mcp/server.py` | The FastMCP server and its three tools. |
+| `chai_mcp/server.py` | The SDK's `MCPServer` and its three tools, and the stateless HTTP app it serves. |
 | `chai_mcp/asgi.py` | The HTTP front: path, method, Host, Origin, bearer, query. |
 | `Dockerfile`, `requirements.txt` | The image, built like the API's: two stages, a lock verified by hash, digest-pinned bases, non-root, no pip, no shell, no package manager. |
 | `tests/` | See below. |
@@ -74,4 +74,8 @@ in `tests/test_stack_mcp.py`.
 
 `requirements.txt` is the lock the image installs from, verified by hash.
 Regenerate it with `make lock-mcp` and review the diff: a changed hash is a changed
-dependency. The SDK is pinned to the 1.x line in `pyproject.toml`.
+dependency. The SDK is pinned to the 2.x line in `pyproject.toml` (D-95). It brings
+`mcp-types` (its wire types, one exact version per SDK release) and `httpx2` (the
+HTTP client its own client code uses; the service's one outbound call is made with
+`httpx`). Dependabot ignores `mcp-types` and `httpcore2` on their own: each moves
+with its parent.

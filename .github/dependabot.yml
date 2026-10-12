@@ -26,8 +26,13 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # The same for the SDK's wire types and httpx2's transport: mcp requires one
+    # exact mcp-types, and httpx2 one exact httpcore2 (D-95). Each moves with its
+    # parent.
     ignore:
       - dependency-name: pydantic-core
+      - dependency-name: mcp-types
+      - dependency-name: httpcore2
 
   - package-ecosystem: docker
     directory: /server

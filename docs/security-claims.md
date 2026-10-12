@@ -1943,6 +1943,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_stack_mcp.py::the token's secret is in no log of the proxy, gate, service or API`
   `mcp/tests/test_mcp_mutations.py::test_each_guard_is_noticed_when_broken`
   `mcp/tests/test_mcp_abuse.py::test_a_hostile_request_cannot_write_a_line_or_a_marker_into_the_log`
+  `mcp/tests/test_mcp_abuse.py::test_a_crash_outside_the_tools_guard_is_one_plain_message_and_not_logged`
+  `mcp/tests/test_mcp_service.py::test_the_per_request_protocol_offers_the_same_three_tools_and_nothing_else`
 
 ### C-126 The MCP tools are exactly three read-only ones
 
@@ -1951,9 +1953,11 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   or a path. Each tool is one call to one of the agent API's three `GET` routes, and
   no tool can reach another route.
 - **Asserted in:** `docs/mcp.md` — "There is no write tool, no resource, no prompt, and no tool that takes a URL or a path."
+- **Asserted in:** `docs/mcp.md` — "A client on the newer per-request protocol revision (`2026-07-28`, no `initialize`) reaches the same three tools, with nothing to subscribe to."
 - **Status:** enforced
 - **Enforced by:**
   `mcp/tests/test_mcp_service.py::test_only_the_three_allowlisted_tools_are_registered`
+  `mcp/tests/test_mcp_service.py::test_the_per_request_protocol_offers_the_same_three_tools_and_nothing_else`
   `mcp/tests/test_mcp_service.py::test_no_resource_template_or_prompt_is_registered`
   `mcp/tests/test_mcp_service.py::test_the_protocol_lists_exactly_the_allowlist`
   `mcp/tests/test_mcp_service.py::test_every_tool_is_read_only_typed_and_says_how_to_read_it`
@@ -2015,6 +2019,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `mcp/tests/test_mcp_service.py::test_a_422_carries_the_apis_message_cut_to_plain_text`
   `mcp/tests/test_mcp_service.py::test_a_429_says_when_to_retry`
   `mcp/tests/test_mcp_service.py::test_an_unexpected_failure_inside_the_service_is_one_plain_message`
+  `mcp/tests/test_mcp_abuse.py::test_a_crash_outside_the_tools_guard_is_one_plain_message_and_not_logged`
   `mcp/tests/test_mcp_integration.py::test_a_token_that_is_wrong_in_any_way_gets_the_one_message`
   `mcp/tests/test_mcp_docs.py::test_the_error_table_is_every_message_the_service_can_say`
 
@@ -2138,6 +2143,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Status:** enforced
 - **Enforced by:**
   `mcp/tests/test_mcp_service.py::test_the_service_keeps_no_session`
+  `mcp/tests/test_mcp_service.py::test_the_per_request_protocol_offers_the_same_three_tools_and_nothing_else`
   `mcp/tests/test_mcp_service.py::test_interleaved_callers_with_different_tokens_never_see_each_others_data`
   `mcp/tests/test_mcp_integration.py::test_two_people_calling_at_once_never_see_each_others_projects`
   `mcp/tests/test_mcp_docs.py::test_the_documented_curl_commands_run_and_answer_what_the_page_shows`

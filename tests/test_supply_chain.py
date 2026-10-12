@@ -214,6 +214,17 @@ def dependabot_problems(config: dict) -> list[str]:
             problems.append(
                 "pip does not ignore pydantic-core, which moves with pydantic"
             )
+    # The MCP SDK requires one exact mcp-types, and httpx2 one exact httpcore2 (D-95):
+    # a bump of either alone cannot install beside its parent.
+    for update in pip:
+        if update.get("directory") != "/mcp":
+            continue
+        ignored = {i.get("dependency-name") for i in update.get("ignore", [])}
+        for pinned, parent in (("mcp-types", "mcp"), ("httpcore2", "httpx2")):
+            if pinned not in ignored:
+                problems.append(
+                    f"/mcp pip does not ignore {pinned}, which moves with {parent}"
+                )
     for update in config.get("updates", []):
         if not update.get("schedule", {}).get("interval"):
             problems.append(f"{update.get('package-ecosystem')} has no schedule")
@@ -485,6 +496,15 @@ def main() -> int:
         "dropping the pydantic-core ignore is noticed",
         any("pydantic-core" in p for p in dependabot_problems(no_ignore)),
     )
+    for pinned in ("mcp-types", "httpcore2"):
+        dropped = yaml.safe_load(yaml.safe_dump(dep))
+        for u in dropped["updates"]:
+            if u.get("directory") == "/mcp" and u.get("ignore"):
+                u["ignore"] = [i for i in u["ignore"] if i["dependency-name"] != pinned]
+        check(
+            f"dropping the {pinned} ignore is noticed",
+            any(pinned in p for p in dependabot_problems(dropped)),
+        )
     check(
         "a missing ecosystem is noticed",
         bool(dependabot_problems({"updates": dep["updates"][1:]})),

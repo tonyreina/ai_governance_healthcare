@@ -199,7 +199,7 @@ async def test_the_inputs_are_bounded() -> None:
     with Served(api.app()) as upstream, running_service(upstream.url) as svc:
         async with session(svc) as client:
             tools = {t.name: t for t in (await client.list_tools()).tools}
-            props = tools["list_portfolio"].inputSchema["properties"]
+            props = tools["list_portfolio"].input_schema["properties"]
             assert props["limit"]["minimum"] == 1 and props["limit"]["maximum"] == 100
             assert props["limit"]["default"] == 50
             assert props["offset"]["minimum"] == 0
@@ -211,7 +211,7 @@ async def test_the_inputs_are_bounded() -> None:
                 {"offset": -1},
             ):
                 result = await client.call_tool("list_portfolio", args)
-                assert result.isError, args
+                assert result.is_error, args
     assert api.seen == []
 
 

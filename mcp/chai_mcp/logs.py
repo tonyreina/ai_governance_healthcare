@@ -24,7 +24,7 @@ import sys
 import time
 
 # Libraries that log a request's URL or headers. At WARNING, and reduced besides.
-QUIET = ("httpx", "httpcore", "hpack")
+QUIET = ("httpx", "httpcore", "httpx2", "httpcore2", "hpack")
 OWN = "chai.mcp"
 MAX_RECORD = 300
 MAX_FIELD = 120

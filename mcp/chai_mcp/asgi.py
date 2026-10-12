@@ -34,7 +34,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .bearer import bearer_token
 from .config import Settings
-from .server import build_server, transport_security
+from .server import build_server, http_app, transport_security
 from .upstream import Message as Words
 from .upstream import Upstream
 
@@ -189,7 +189,7 @@ class Guard:
 
 def create_app(settings: Settings, *, upstream: Upstream | None = None) -> Starlette:
     mcp, upstream = build_server(settings, upstream)
-    app = mcp.streamable_http_app()
+    app = http_app(mcp, settings)
     # Held so a test can look for what must not be here: a token kept after its call.
     app.state.mcp, app.state.upstream = mcp, upstream
     app.add_middleware(Guard, settings=settings)  # type: ignore[arg-type]

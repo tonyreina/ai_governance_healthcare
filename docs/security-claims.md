@@ -854,7 +854,12 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** The API's dependencies are installed from a hash-pinned lock, the base
   images and actions are pinned by digest or commit, Dependabot watches each
   ecosystem, and a scan fails on a fixable HIGH or CRITICAL finding in our images.
+  The API runtime image ships no pip, setuptools or ensurepip, neither in its venv
+  nor for the base image's own interpreter. (Until D-93 the base interpreter's pip
+  stayed in the API image, though R-43 said it did not: the only test looked in the
+  venv.)
 - **Asserted in:** `docs/deploy.md` — "What is running is what the repository says"
+- **Asserted in:** `server/Dockerfile` — "carries no compiler, no pip cache, no pip"
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_supply_chain.py::every locked requirement is pinned and hashed`
@@ -863,6 +868,9 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_supply_chain.py::dependabot covers pip, both Dockerfiles, compose and the actions`
   `tests/test_supply_chain.py::security.yml scans HIGH and CRITICAL, on a schedule`
   `tests/test_supply_chain.py::pip is not in the runtime image`
+  `tests/test_supply_chain.py::no pip, setuptools or ensurepip is anywhere in the API runtime image`
+  `tests/test_supply_chain.py::and the API image's system interpreter cannot import pip`
+  `tests/test_supply_chain.py::and removes the base image's own pip, setuptools and ensurepip (R-43, D-93)`
 
 ### C-66 The security policy promises no response times
 
@@ -2107,6 +2115,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_supply_chain.py::no shell and no apt or dpkg is in the MCP runtime image`
   `tests/test_compose_isolation.py::keeping the shells`
   `tests/test_supply_chain.py::no pip, setuptools or ensurepip is anywhere in the MCP runtime image`
+  `tests/test_supply_chain.py::and the MCP image removes the base image's own pip (R-43, D-93)`
   `tests/test_stack_mcp.py::mcp has a read-only root filesystem`
 
 ### C-135 Only an empty AGENT_ID_SECRET turns the agent API off for everyone

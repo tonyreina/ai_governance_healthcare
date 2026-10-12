@@ -1384,7 +1384,7 @@ def rig():
         "api",
         "-v",
         f"{workdir}/echo.py:/echo.py:ro",
-        "python:3.12-slim",
+        "python:3.14-slim",
         "python",
         "/echo.py",
     )

@@ -7,7 +7,7 @@
 # It holds NO credential and writes nothing: compose runs it read-only with every
 # capability dropped, and it is in a profile, so it does not start unless asked.
 
-FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f AS build
+FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS build
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
@@ -22,7 +22,7 @@ RUN python -m venv /opt/venv \
  && /opt/venv/bin/pip uninstall --yes pip setuptools
 
 
-FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f AS runtime
+FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -35,16 +35,18 @@ RUN useradd --system --no-create-home --shell /usr/sbin/nologin --uid 10002 chai
 # The base image ships pip, setuptools and ensurepip for its own interpreter; nothing
 # here installs anything at runtime, so they go (and with them the vendored copies of
 # libraries that vulnerability scanners flag in a place this service can never use).
+# The paths name no Python version (python3.*), so a new base image cannot keep its
+# pip by moving it to a directory this line does not name (D-93).
 RUN rm -rf /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.* \
            /usr/local/bin/wheel /usr/local/bin/easy_install* \
-           /usr/local/lib/python3.12/site-packages/pip \
-           /usr/local/lib/python3.12/site-packages/pip-* \
-           /usr/local/lib/python3.12/site-packages/setuptools* \
-           /usr/local/lib/python3.12/site-packages/pkg_resources \
-           /usr/local/lib/python3.12/site-packages/wheel* \
-           /usr/local/lib/python3.12/site-packages/_distutils_hack \
-           /usr/local/lib/python3.12/site-packages/distutils-precedence.pth \
-           /usr/local/lib/python3.12/ensurepip
+           /usr/local/lib/python3.*/site-packages/pip \
+           /usr/local/lib/python3.*/site-packages/pip-* \
+           /usr/local/lib/python3.*/site-packages/setuptools* \
+           /usr/local/lib/python3.*/site-packages/pkg_resources \
+           /usr/local/lib/python3.*/site-packages/wheel* \
+           /usr/local/lib/python3.*/site-packages/_distutils_hack \
+           /usr/local/lib/python3.*/site-packages/distutils-precedence.pth \
+           /usr/local/lib/python3.*/ensurepip
 
 WORKDIR /app
 COPY --from=build /opt/venv /opt/venv

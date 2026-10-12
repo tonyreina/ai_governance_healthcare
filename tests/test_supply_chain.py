@@ -35,6 +35,27 @@ DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
 failures: list[str] = []
 
 
+# The filesystem itself, not an import through the venv: the base image's pip is a
+# binary in /usr/local/bin and a package of its own interpreter, which
+# `python -m pip` through the venv cannot see (review L3). The globs name no Python
+# version, so a new base image cannot quietly bring pip back (D-93). Run in both
+# runtime images; the expected output is "[] None None None".
+NO_PIP_PROBE = (
+    "import glob, importlib.util as u\n"
+    "found = [p for pat in ("
+    "'/usr/local/bin/pip*', '/usr/local/bin/easy_install*', "
+    "'/usr/local/lib/python3*/site-packages/pip*', "
+    "'/usr/local/lib/python3*/site-packages/setuptools*', "
+    "'/usr/local/lib/python3*/site-packages/pkg_resources*', "
+    "'/usr/local/lib/python3*/ensurepip', "
+    "'/opt/venv/lib/python3*/site-packages/pip*', "
+    "'/opt/venv/lib/python3*/site-packages/setuptools*') "
+    "for p in glob.glob(pat)]\n"
+    "print(found, u.find_spec('pip'), u.find_spec('ensurepip'), "
+    "u.find_spec('setuptools'))\n"
+)
+
+
 def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"  {'PASS' if ok else 'FAIL'}  {name}{'' if ok else f'  <- {detail}'}")
     if not ok:
@@ -70,6 +91,61 @@ def lock_misses(lock: str, dependencies: list[str]) -> list[str]:
         for dep in dependencies
     }
     return sorted(wanted - pinned)
+
+
+def base_pip_kept(dockerfile: str) -> list[str]:
+    """The runtime stage must delete the base image's own pip, by a versionless path.
+
+    The venv's pip is uninstalled in the build stage, but the base image also ships
+    pip, setuptools and ensurepip for /usr/local's interpreter. A path naming one
+    Python version (python3.12) silently stops matching when the base image moves
+    (D-93), so the paths must say python3.* instead.
+    """
+    runtime = re.split(r"(?im)^FROM\s", dockerfile)[-1]
+    joined = re.sub(r"\\\n", " ", runtime)
+    removals = " ".join(
+        line for line in joined.splitlines() if re.match(r"\s*RUN rm -rf\s", line)
+    ).split()
+    problems = [
+        f"the runtime stage does not remove {path}"
+        for path in (
+            "/usr/local/bin/pip",
+            "/usr/local/lib/python3.*/site-packages/pip",
+            "/usr/local/lib/python3.*/site-packages/setuptools*",
+            "/usr/local/lib/python3.*/ensurepip",
+        )
+        if path not in removals
+    ]
+    problems += [
+        f"{path} names one Python version, so the next base image keeps its pip"
+        for path in removals
+        if re.search(r"/python3\.\d", path)
+    ]
+    return problems
+
+
+def python_version_drift(dockerfiles: list[str], makefile: str, ci: str) -> list[str]:
+    """One Python everywhere: both images, the lock targets, and the CI server tests.
+
+    D-45 resolves the lock in the image's own Python, so `make lock` must run the
+    image's version; the server tests in CI should run it too (D-93).
+    """
+    images = {
+        m for df in dockerfiles for m in re.findall(r"(?m)^FROM python:(3\.\d+)-", df)
+    }
+    if len(images) != 1:
+        return [f"the images do not agree on one Python: {sorted(images)}"]
+    (want,) = images
+    lockers = re.findall(r"python:(3\.\d+)-slim sh", makefile)
+    ci_versions = re.findall(r'python-version:\s*"?(3\.\d+)', ci)
+    problems = []
+    if not lockers or set(lockers) != {want}:
+        problems.append(f"make lock runs Python {lockers}, the images {want}")
+    if not ci_versions or set(ci_versions) != {want}:
+        problems.append(
+            f"CI's server tests run Python {ci_versions}, the images {want}"
+        )
+    return problems
 
 
 def floating_from_lines(dockerfile: str) -> list[str]:
@@ -241,6 +317,12 @@ def main() -> int:
         re.search(r"pip uninstall[^\n]*\bpip\b", server_df) is not None,
     )
 
+    check(
+        "and removes the base image's own pip, setuptools and ensurepip (R-43, D-93)",
+        not base_pip_kept(server_df),
+        str(base_pip_kept(server_df)),
+    )
+
     print("The MCP service's dependencies are locked, with hashes (#164)")
     mcp_lock = (ROOT / "mcp" / "requirements.txt").read_text(encoding="utf-8")
     mcp_deps = tomllib.loads((ROOT / "mcp" / "pyproject.toml").read_text())["project"][
@@ -265,6 +347,74 @@ def main() -> int:
         and "--upgrade pip" not in mcp_df,
     )
 
+    check(
+        "and the MCP image removes the base image's own pip (R-43, D-93)",
+        not base_pip_kept(mcp_df),
+        str(base_pip_kept(mcp_df)),
+    )
+    for label, mutate in (
+        (
+            "keeping the base image's pip",
+            lambda d: d.replace(
+                "RUN rm -rf /usr/local/bin/pip", "RUN echo /usr/local/bin/pip"
+            ),
+        ),
+        (
+            "keeping ensurepip",
+            lambda d: d.replace("/usr/local/lib/python3.*/ensurepip", "/tmp/x"),
+        ),
+        (
+            "a path that names one Python version",
+            lambda d: d.replace(
+                "/usr/local/lib/python3.*/", "/usr/local/lib/python3.12/"
+            ),
+        ),
+        (
+            "a later stage that does not remove it",
+            lambda d: d + '\nFROM python:3-slim AS final\nCMD ["python"]\n',
+        ),
+    ):
+        for name, df in (("API", server_df), ("MCP", mcp_df)):
+            check(
+                f"the {name} image: {label} is noticed",
+                bool(base_pip_kept(mutate(df))),
+            )
+
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    test_yml = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
+    check(
+        "the images, `make lock` and CI's server tests use one Python (D-45, D-93)",
+        not python_version_drift([server_df, mcp_df], makefile, test_yml),
+        str(python_version_drift([server_df, mcp_df], makefile, test_yml)),
+    )
+    for label, args in (
+        (
+            "an image on another Python",
+            (
+                [server_df, re.sub(r"FROM python:3\.\d+", "FROM python:3.9", mcp_df)],
+                makefile,
+                test_yml,
+            ),
+        ),
+        (
+            "a lock resolved in another Python",
+            (
+                [server_df, mcp_df],
+                re.sub(r"python:3\.\d+-slim sh", "python:3.9-slim sh", makefile),
+                test_yml,
+            ),
+        ),
+        (
+            "CI testing another Python",
+            (
+                [server_df, mcp_df],
+                makefile,
+                re.sub(r'python-version: "3\.\d+"', 'python-version: "3.9"', test_yml),
+            ),
+        ),
+    ):
+        check(f"{label} is noticed", bool(python_version_drift(*args)))
+
     print("Base images are pinned by digest")
     check(
         "the API image's bases are pinned",
@@ -288,11 +438,11 @@ def main() -> int:
     )
     check(
         "a floating FROM is noticed",
-        bool(floating_from_lines("FROM python:3.12-slim AS b")),
+        bool(floating_from_lines("FROM python:3.14-slim AS b")),
     )
     check(
         "a digest-pinned FROM passes",
-        not floating_from_lines("FROM python:3.12-slim@sha256:" + "a" * 64 + " AS b"),
+        not floating_from_lines("FROM python:3.14-slim@sha256:" + "a" * 64 + " AS b"),
     )
     check(
         "a floating compose image is noticed",
@@ -443,6 +593,45 @@ def main() -> int:
                 text=True,
             )
             check("pip is not in the runtime image", pip.returncode != 0, pip.stdout)
+            # R-43 says the runtime image ships no pip. The venv check above cannot
+            # see the base image's own pip, setuptools and ensurepip, which the
+            # server image used to keep (D-93): look at the filesystem.
+            gone = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--entrypoint",
+                    "/opt/venv/bin/python",
+                    tag,
+                    "-c",
+                    NO_PIP_PROBE,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            check(
+                "no pip, setuptools or ensurepip is anywhere in the API runtime image",
+                gone.stdout.strip() == "[] None None None",
+                gone.stdout + gone.stderr,
+            )
+            check(
+                "and the API image's system interpreter cannot import pip",
+                subprocess.run(
+                    [
+                        "docker",
+                        "run",
+                        "--rm",
+                        "--entrypoint",
+                        "/usr/local/bin/python",
+                        tag,
+                        "-c",
+                        "import pip",
+                    ],
+                    capture_output=True,
+                ).returncode
+                != 0,
+            )
             versions = subprocess.run(
                 [
                     "docker",
@@ -496,24 +685,7 @@ def main() -> int:
                 imp.stdout.strip() == "ok",
                 imp.stderr[-300:],
             )
-            # The filesystem itself, not an import through the venv: the base image's
-            # pip is a binary in /usr/local/bin and a package of its own interpreter,
-            # which `python -m pip` through the venv cannot see (review L3).
-            probe = (
-                "import glob, importlib.util as u\n"
-                "found = [p for pat in ("
-                "'/usr/local/bin/pip*', '/usr/local/bin/easy_install*', "
-                "'/usr/local/lib/python3*/site-packages/pip*', "
-                "'/usr/local/lib/python3*/site-packages/setuptools*', "
-                "'/usr/local/lib/python3*/site-packages/pkg_resources*', "
-                "'/usr/local/lib/python3*/ensurepip', "
-                "'/opt/venv/lib/python3*/site-packages/pip*', "
-                "'/opt/venv/lib/python3*/site-packages/setuptools*') "
-                "for p in glob.glob(pat)]\n"
-                "print(found, u.find_spec('pip'), u.find_spec('ensurepip'), "
-                "u.find_spec('setuptools'))\n"
-            )
-            gone = in_image("-c", probe)
+            gone = in_image("-c", NO_PIP_PROBE)
             check(
                 "no pip, setuptools or ensurepip is anywhere in the MCP runtime image",
                 gone.stdout.strip() == "[] None None None",

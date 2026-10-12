@@ -3082,9 +3082,10 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 
 ### D-90 The agent access page forgets its token whenever it is redrawn
 
-- Status: Accepted for the owner's decisions of 2026-10-10 on #164 (a user mints,
-  sees and revokes their own tokens); the choices below are Proposed, for the owner
-  to confirm
+- Status: Accepted, including the choices below (the owner, 2026-10-11, after
+  they were set out one by one). Before that: Accepted for the owner's decisions
+  of 2026-10-10 on #164 (a user mints, sees and revokes their own tokens); the
+  choices below are Proposed, for the owner to confirm
 - **The question.** PR 1 (D-89) built the token routes. PR 2 is the page that
   uses them. How much of the token's life may the browser hold?
 - **Built.**

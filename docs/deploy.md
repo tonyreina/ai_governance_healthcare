@@ -52,7 +52,8 @@ plain HTTP (TLS is terminated at the front door), and expects:
 | `EMERGENCY_ACCESS_IDS` | Optional. Identity ids with owner rights on every project, every use audited. See [Offboarding, and emergency access](#offboarding-and-emergency-access). |
 | `AGENT_ID_SECRET`, `AGENT_RATE_LIMIT_MAX_REQUESTS`, `AGENT_FAILURE_RATE_LIMIT_MAX_REQUESTS`, `AGENT_GLOBAL_FAILURE_RATE_LIMIT_MAX_REQUESTS`, `AGENT_USER_RATE_LIMIT_MAX_REQUESTS`, `AGENT_MAX_ACTIVE_TOKENS` | Optional. The read-only agent API is **off** until `AGENT_ID_SECRET` is set. See [The agent API](agent-api.md), which also says what to let through your front door. |
 | `RUN_MIGRATIONS` | `false` when the API serves as a restricted role, which cannot create tables. A migration job runs instead. |
-| `DATABASE_URL` | The **owner's** connection string, for the migration job only. A single-role deployment may put it here and omit the two above, which works and is reported as a weaker setup. |
+| `DATABASE_URL` | The **owner's** connection string, for the migration job only. The API refuses to start if its connection is the owner's or a superuser's. |
+| `ALLOW_OWNER_ROLE` | `true` lets the API serve as the owner anyway: for a laptop or a test, never a deployment. Off by default. See [Two database roles](#two-database-roles). |
 | `IDENTITY_MODE` | `iap`, `alb` or `easyauth` — which header to read. |
 | `IDENTITY_AUDIENCE` | Expected `aud` (GCP), **load balancer** ARN (AWS, not the listener's) or client ID (Azure). Read **only** when `IDENTITY_HEADER_FORMAT=jwt` — the API refuses to start otherwise. |
 
@@ -78,7 +79,9 @@ document is stored as a `jsonb` column; `PATCH` performs the recursive
 merge described in [Self-hosting](self-hosting.md), in which objects
 merge key by key at every level and arrays replace wholesale.
 
-Rotate the database credential with the provider and update `DATABASE_URL`;
+Rotate a database credential with the provider and update its secret (the owner's
+`DATABASE_URL` for the migrate job; the restricted role's `APP_POSTGRES_PASSWORD`
+and `APP_DATABASE_URL` together, then re-run the job);
 there is no `pgdata` volume here and no `db` service, so the
 [rotation trap in the compose stack](self-hosting.md#rotating-the-database-password)
 does not apply. Prefer the platform's identity-based connection — Cloud SQL IAM
@@ -278,9 +281,11 @@ If the platform's identity-based database login (Cloud SQL IAM, RDS IAM, Entra)
 creates the user for you, run `python -m app.migrate --print-grants` and apply
 what it prints to that user as the owner: it is exactly what the job grants.
 
-`GET /api/health` reports `"db_role":"restricted"` when this is in place and
-`"owner"` when the API owns the tables or is a superuser, and the API logs a
-warning at startup in that case. `make doctor` fails on it for the compose stack.
+`GET /api/health` reports `"db_role":"restricted"` when this is in place. An API
+whose connection owns the tables or is a superuser **refuses to start**, and the
+message says what to set. `ALLOW_OWNER_ROLE=true` overrides that for a laptop
+or a test: the API then serves as the owner, logs a warning at startup, reports
+`"owner"`, and `make doctor` fails on it for the compose stack.
 
 !!! warning "Not exercised against a real cloud database"
 
@@ -978,13 +983,30 @@ have this problem, because the API builds the URL and does the encoding.
 python3 -c 'import sys, urllib.parse as u
 print(u.quote(sys.argv[1], safe=""))' 'the-password'
 
+# The OWNER: read only by the migrate job's service account.
 printf '%s' "postgresql://chai:ENCODED@/chai?host=/cloudsql/${INSTANCE}" \
   | gcloud secrets create chai-database-url --data-file=-
 
-gcloud secrets add-iam-policy-binding chai-database-url \
+# The RESTRICTED role's password (a different value), which the job sets, and
+# the URL the service connects with.
+printf '%s' 'APP-PASSWORD' | gcloud secrets create chai-app-password --data-file=-
+APP_URL="postgresql://chai_app:APP-ENCODED@/chai?host=/cloudsql/${INSTANCE}"
+printf '%s' "$APP_URL" \
+  | gcloud secrets create chai-app-database-url --data-file=-
+
+MIGRATE_SA="chai-migrate@${PROJECT_ID}.iam.gserviceaccount.com"
+for secret in chai-database-url chai-app-password; do
+  gcloud secrets add-iam-policy-binding "$secret" \
+    --member="serviceAccount:${MIGRATE_SA}" \
+    --role=roles/secretmanager.secretAccessor
+done
+gcloud secrets add-iam-policy-binding chai-app-database-url \
   --member="serviceAccount:chai-run@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role=roles/secretmanager.secretAccessor
 ```
+
+The service's account can read the restricted role's URL and nothing else: if it
+could read `chai-database-url`, the split between the two roles would do nothing.
 
 ### Step by step
 
@@ -999,20 +1021,37 @@ AUD="/projects/${PROJECT_NUMBER}/locations/${REGION}/services/chai-api"
 gcloud services enable run.googleapis.com iap.googleapis.com \
   sqladmin.googleapis.com secretmanager.googleapis.com
 
-# 1. Runtime identity with least privilege.
+# 1. Runtime identities with least privilege: one for the service, one for the
+#    migrate job, which alone holds the owner's credential.
 gcloud iam service-accounts create chai-run \
   --display-name="CHAI governance API"
+gcloud iam service-accounts create chai-migrate \
+  --display-name="CHAI governance migrations"
 
 # 2. Build and push.
 gcloud builds submit --tag "${REGION}-docker.pkg.dev/${PROJECT_ID}/chai/api:v1"
 
-# 3. Deploy with IAP on and anonymous invocation off.
+# 2a. Migrate as the owner, and create the restricted role. Run it on every
+#     deploy. It also needs RETIREMENT_MANIFEST (see "Two database roles").
+OWNER_SECRETS="DATABASE_URL=chai-database-url:latest"
+OWNER_SECRETS+=",APP_POSTGRES_PASSWORD=chai-app-password:latest"
+gcloud run jobs create chai-migrate \
+  --region="$REGION" \
+  --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/chai/api:v1" \
+  --service-account="chai-migrate@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --set-cloudsql-instances="${PROJECT_ID}:${REGION}:chai-db" \
+  --set-secrets="$OWNER_SECRETS" \
+  --command=python --args=-m,app.migrate
+gcloud run jobs execute chai-migrate --region="$REGION" --wait
+
+# 3. Deploy with IAP on and anonymous invocation off, as the restricted role.
 gcloud run deploy chai-api \
   --region="$REGION" \
   --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/chai/api:v1" \
   --service-account="chai-run@${PROJECT_ID}.iam.gserviceaccount.com" \
   --add-cloudsql-instances="${PROJECT_ID}:${REGION}:chai-db" \
-  --set-secrets=DATABASE_URL=chai-database-url:latest \
+  --set-secrets=APP_DATABASE_URL=chai-app-database-url:latest \
+  --set-env-vars="RUN_MIGRATIONS=false" \
   --set-env-vars="IDENTITY_MODE=iap" \
   --set-env-vars="IDENTITY_HEADER=x-goog-iap-jwt-assertion" \
   --set-env-vars="IDENTITY_HEADER_FORMAT=jwt" \
@@ -1199,14 +1238,30 @@ Secrets Manager, injected by the ECS agent through the task definition's
 in `describe-task-definition` output, or in the container environment
 dump of a crash report:
 
+The service's task definition gets the **restricted** role's URL, and its task
+role may read that secret and no other:
+
 ```json
 "secrets": [
   {
-    "name": "DATABASE_URL",
+    "name": "APP_DATABASE_URL",
     "valueFrom":
-      "arn:aws:secretsmanager:<region>:1234:secret:chai/db-url"
+      "arn:aws:secretsmanager:<region>:1234:secret:chai/app-db-url"
   }
+],
+"environment": [
+  { "name": "RUN_MIGRATIONS", "value": "false" }
 ]
+```
+
+A second task definition, `chai-migrate`, runs the same image with the command
+`["python", "-m", "app.migrate"]`, the owner's URL as `DATABASE_URL`, the
+restricted role's password as `APP_POSTGRES_PASSWORD`, and `RETIREMENT_MANIFEST`
+(see [Two database roles](#two-database-roles)). Run it before each deploy:
+
+```bash
+aws ecs run-task --cluster chai --launch-type FARGATE \
+  --task-definition chai-migrate --network-configuration "$NETCFG"
 ```
 
 ### Identity on the task definition
@@ -1482,8 +1537,15 @@ resolved with a managed identity:
 ```bash
 az containerapp secret set \
   --name chai-api --resource-group chai-rg \
-  --secrets "db-url=keyvaultref:https://chai-kv.vault.azure.net/secrets/db-url,identityref:system"
+  --secrets "app-db-url=keyvaultref:https://chai-kv.vault.azure.net/secrets/app-db-url,identityref:system"
 ```
+
+`app-db-url` connects as the container app's managed identity, which must not own
+the tables. The schema is created by a Container Apps job that runs `python -m
+app.migrate` as the server's Entra administrator, with `RETIREMENT_MANIFEST` (see
+[Two database roles](#two-database-roles)); then apply what `python -m app.migrate
+--print-grants` prints to the managed identity's database user. The API refuses
+to start if its identity owns the tables.
 
 The Entra client secret for Easy Auth is stored the same way and
 referenced by name in the auth configuration.
@@ -1522,7 +1584,8 @@ az containerapp create \
              IDENTITY_HEADER=X-MS-TOKEN-AAD-ID-TOKEN \
              IDENTITY_HEADER_FORMAT=jwt \
              "IDENTITY_AUDIENCE=$APP_ID" \
-             "DATABASE_URL=secretref:db-url"
+             RUN_MIGRATIONS=false \
+             "APP_DATABASE_URL=secretref:app-db-url"
 
 az containerapp ingress update -n "$APP" -g "$RG" --allow-insecure false
 

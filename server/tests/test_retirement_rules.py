@@ -785,9 +785,16 @@ async def test_the_sql_reads_a_stamp_as_the_api_does(client: AsyncClient) -> Non
 
 
 def fallback_settings(**overrides: object) -> Settings:
-    """The single-role setup: the API holds the owner's credential and migrates."""
+    """The single-role setup: the API holds the owner's credential and migrates.
+
+    That setup now has to be allowed on purpose (R-74), so it says so.
+    """
     return make_settings(
-        database_url=DB_URL, app_database_url="", run_migrations=True, **overrides
+        database_url=DB_URL,
+        app_database_url="",
+        run_migrations=True,
+        allow_owner_role=True,
+        **overrides,
     )
 
 

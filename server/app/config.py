@@ -311,6 +311,9 @@ class Settings:
     db_pool_max: int = 10
     db_connect_timeout: float = 10.0
     run_migrations: bool = True
+    # Serving traffic as the table owner or a superuser, which can disable the
+    # append-only triggers, is refused unless this says so on purpose (R-74, D-92).
+    allow_owner_role: bool = False
     # Only when run_migrations: the build's manifest.json and the acknowledgment of
     # a change of retirement rules, as the migrate job reads them (D-76). With no
     # manifest the API migrates without syncing the rules, says so in its log, and
@@ -567,6 +570,7 @@ class Settings:
             db_pool_max=_int("DB_POOL_MAX", 10),
             db_connect_timeout=float(_int("DB_CONNECT_TIMEOUT", 10)),
             run_migrations=_bool("RUN_MIGRATIONS", True),
+            allow_owner_role=_bool("ALLOW_OWNER_ROLE", False),
             retirement_manifest=_str("RETIREMENT_MANIFEST"),
             retirement_rules_ack=_str("RETIREMENT_RULES_ACK"),
             identity_mode=mode,

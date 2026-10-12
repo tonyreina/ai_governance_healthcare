@@ -81,6 +81,9 @@ def make_settings(**overrides: object) -> Settings:
         "identity_header": "X-Forwarded-Email",
         "identity_name_header": "X-Forwarded-User",
         "run_migrations": True,
+        # Owner mode is refused unless allowed (R-74). The suite's owner run is the
+        # single-role setup on purpose; the TEST_APP_ROLE run below never needs it.
+        "allow_owner_role": not APP_ROLE_MODE,
         "sse_keepalive_seconds": 1.0,
         "version": "test",
     }

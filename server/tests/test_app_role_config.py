@@ -121,17 +121,56 @@ async def _started(settings: Settings, caplog: pytest.LogCaptureFixture):
     return body, warnings
 
 
+def test_serving_as_the_owner_is_not_allowed_by_default(monkeypatch) -> None:
+    """A forgotten APP_POSTGRES_PASSWORD must not quietly become owner mode (R-74)."""
+    monkeypatch.delenv("ALLOW_OWNER_ROLE", raising=False)
+    assert Settings().allow_owner_role is False
+    assert Settings.from_env().allow_owner_role is False
+    monkeypatch.setenv("ALLOW_OWNER_ROLE", "true")
+    assert Settings.from_env().allow_owner_role is True
+
+
 @requires_db
-async def test_serving_as_the_owner_is_reported_and_warned_about(
+async def test_serving_as_the_owner_is_refused_unless_allowed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The owner can disable the append-only triggers, so the API will not serve
+    traffic holding that credential unless an operator said so on purpose."""
+    from app.main import create_app
+
+    app = create_app(
+        make_settings(
+            database_url=DB_URL,
+            app_database_url="",
+            run_migrations=True,
+            allow_owner_role=False,
+        )
+    )
+    with pytest.raises(RuntimeError) as raised:
+        async with app.router.lifespan_context(app):
+            pass
+    message = str(raised.value)
+    assert "OWNER" in message
+    assert "APP_POSTGRES_PASSWORD" in message and "ALLOW_OWNER_ROLE" in message
+
+
+@requires_db
+async def test_serving_as_the_owner_when_allowed_is_reported_and_warned_about(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level("INFO")
     body, warnings = await _started(
-        make_settings(database_url=DB_URL, app_database_url="", run_migrations=True),
+        make_settings(
+            database_url=DB_URL,
+            app_database_url="",
+            run_migrations=True,
+            allow_owner_role=True,
+        ),
         caplog,
     )
     assert body["db_role"] == "owner"
     assert any("serving as the database OWNER" in w for w in warnings), warnings
+    assert any("ALLOW_OWNER_ROLE" in w for w in warnings), warnings
 
 
 @requires_db

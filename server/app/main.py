@@ -248,13 +248,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     await db.connect()
     db_role = await db.serving_role()
+    if db_role is DbRole.OWNER and not settings.allow_owner_role:
+        # A warning was not a guard: a deployment that forgot APP_POSTGRES_PASSWORD
+        # served as the owner, which can disable the append-only triggers, and said
+        # so only in a log nobody reads (R-74, D-92).
+        await db.close()
+        raise RuntimeError(
+            "Refusing to start: the database credential is the table OWNER's (or a "
+            "superuser's), which can disable the append-only triggers on the audit "
+            "log and version history. Set APP_POSTGRES_PASSWORD (or "
+            "APP_DATABASE_URL) and RUN_MIGRATIONS=false, and run `python -m "
+            "app.migrate` as the owner, so the API serves as a restricted role. On "
+            "a laptop or in a test, set ALLOW_OWNER_ROLE=true to serve as the owner "
+            "anyway. See docs/deploy.md, 'Two database roles' (#48)."
+        )
     if db_role is DbRole.OWNER:
         log.warning(
-            "serving as the database OWNER (or a superuser): the append-only "
-            "triggers on the audit log and version history constrain this "
-            "application's bugs, not the application, and not anything holding its "
-            "credential. Set APP_POSTGRES_PASSWORD and run `python -m app.migrate` "
-            "so the API serves as a restricted role (#48)."
+            "serving as the database OWNER (or a superuser) because "
+            "ALLOW_OWNER_ROLE=true: the append-only triggers on the audit log and "
+            "version history constrain this application's bugs, not the "
+            "application, and not anything holding its credential. Set "
+            "APP_POSTGRES_PASSWORD and run `python -m app.migrate` so the API serves "
+            "as a restricted role (#48)."
         )
     else:
         log.info("serving as a restricted database role (cannot disable triggers)")

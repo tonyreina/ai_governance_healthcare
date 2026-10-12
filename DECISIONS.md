@@ -3398,3 +3398,35 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   is an empty `AGENT_ID_SECRET`.
 - Source: #164 and the owner's decisions of 2026-10-09, 2026-10-10 and 2026-10-11;
   R-73; D-89; D-21 (the opt-in sidecar pattern).
+
+### D-92 Owner mode fails closed, with an explicit opt-in
+
+- Status: Accepted: the owner's choice of 2026-10-12.
+- **The question.** R-35 let an API holding the owner's credential serve traffic,
+  with a warning, a `db_role` on `/api/health` and a `make doctor` failure. A
+  warning is not a guard (the same reasoning that made `DEV_INSECURE_AUTH` refuse
+  to start off loopback): one missing variable, or a copied recipe, and the
+  process an attacker would compromise can disable the append-only triggers.
+- **Decided.** The API checks its connection's role at startup and refuses to start
+  as the owner or a superuser unless `ALLOW_OWNER_ROLE=true`. The default is
+  false. The check is the existing `Database.serving_role()`, a property of the
+  role and not of the configuration, so it also catches a restricted-looking URL
+  that is really the owner's.
+- **The cloud recipes in `docs/deploy.md` changed with it.** All three handed the
+  service the owner's `DATABASE_URL` and let it migrate at boot, contradicting the
+  guide's own "Two database roles" section. Under this decision they would not
+  start, so each now runs the migrate job with the owner's credential and gives
+  the service `APP_DATABASE_URL` and `RUN_MIGRATIONS=false`.
+- **The server suite's owner run sets the opt-in** in `make_settings`, because a
+  single-role setup is what it tests; the `TEST_APP_ROLE=1` run does not, so CI
+  shows the restricted deployment needs no opt-in.
+- Rejected: **refusing with no opt-in.** It removes the self-migrating
+  single-process setup that a laptop and the owner-mode suite rely on, for no gain
+  over a default-off switch that is logged and fails `make doctor`.
+- Rejected: **keeping R-35's warning.** That is the setup an adversarial review
+  flagged; the gap was documented (C-53) but nothing stopped it.
+- Rejected: **inferring "development" from the bind address,** as
+  `DEV_INSECURE_AUTH` does. A container binds `0.0.0.0` on a laptop too, so the
+  check would either refuse every dev container or trust a guess. An explicit
+  variable whose only purpose is this cannot be set by accident.
+- Source: the owner's instruction of 2026-10-12; R-74 (supersedes R-35); D-37; #48.

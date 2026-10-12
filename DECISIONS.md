@@ -3131,9 +3131,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Status: Accepted: the owner's decisions of 2026-10-09, 2026-10-10 and 2026-10-11
   on #164, and the defaults listed in this entry (the owner, 2026-10-11). Before
   that, the decisions were Accepted and the defaults Proposed, for the owner to
-  confirm. Defaults marked "added after the owner's acceptance; confirm" were
-  added or changed in fixing the review findings, and are for the owner to
-  confirm.
+  confirm. Defaults (d), (e) and (n) to (w), added or changed in fixing the review
+  findings, were confirmed by the owner on 2026-10-12.
 - **The question.** D-89 gave a program a per-user, read-only way into the
   register. #164 PR 3 asks for the chatbot's way in: an MCP server, so a person
   can ask "which projects have criteria marked Not met?" in an interactive client.
@@ -3310,20 +3309,17 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
       transport says).
     - (c) The extra `mcp-gate` service and the `agent` network, rather than putting
       `mcp` beside the proxy.
-    - (d) (Changed after the owner's acceptance; confirm: it was four words and
-      48
-      characters.) The second wall's shape (an id of at most 32 characters with
-      no space
-      or
-      five-digit run; a status or decision of one to three plain words of at most
-      32 characters). It is a heuristic stand-in for a list of words. A custom
-      framework whose ids, statuses or decisions are longer or have digits or
-      other punctuation would have its answers refused whole until the shape is
-      widened in `models.py`.
-    - (e) (Changed after the owner's acceptance; confirm: it was 16 in flight, no
-      per-source bound.) The limits: 64 KB, 10 seconds, 64 in flight and 4 a
-      source, a one-second
-      wait, a 10 second body deadline.
+    - (d) (Changed after the owner's acceptance, then confirmed by the owner on
+      2026-10-12: it was four words and 48 characters.) The second wall's shape
+      (an id of at most 32 characters with no space or five-digit run; a status
+      or decision of one to three plain words of at most 32 characters). It is a
+      heuristic stand-in for a list of words. A custom framework whose ids,
+      statuses or decisions are longer or have digits or other punctuation would
+      have its answers refused whole until the shape is widened in `models.py`.
+    - (e) (Changed after the owner's acceptance, then confirmed by the owner on
+      2026-10-12: it was 16 in flight, no per-source bound.) The limits: 64 KB,
+      10 seconds, 64 in flight and 4 a source, a one-second wait, a 10 second
+      body deadline.
     - (f) `MCP_ALLOWED_HOSTS` is required to start; the loopback names are always
       allowed (for the container's health check).
     - (g) The SDK is pinned to the 1.x line (1.30.0). A 2.x exists and was not
@@ -3348,40 +3344,46 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
     - (m) The service cannot tell a person's own call from a model's, and
       neither can
       the API: both are agent access in the read trail.
-    - (n) Added after the owner's acceptance; confirm. The in-flight bounds: 64
-      in
-      all, 4 from one source, a call waits at most 1 second (`MCP_MAX_IN_FLIGHT`,
-      `MCP_MAX_IN_FLIGHT_PER_SOURCE`, `MCP_QUEUE_WAIT_SECONDS`), and a credential
-      not shaped like a token never takes a slot.
-    - (o) Added after the owner's acceptance; confirm. Time limits: headers 10
-      seconds at the proxy and the gate, a body 10 seconds at the service
-      (`MCP_BODY_TIMEOUT_SECONDS`, `408`) and the gate, a compressed body `415`,
-      uvicorn `503` past 256 connections, and no body deadline at the proxy (it
-      would end `/api/events`).
-    - (p) Added after the owner's acceptance; confirm. The gate is inside the
-      trust boundary and the documentation and compose.yaml say so; the profile
-      is to be left off by anyone who cannot accept that.
-    - (q) Added after the owner's acceptance; confirm. The log rules: only
-      `chai.mcp` loggers carry text, one bounded JSON line, no traceback, a burst
-      limit, a path logged only if it is `/mcp` or `/healthz`.
-    - (r) Added after the owner's acceptance; confirm. The source address is the
-      peer the proxy observed (`X-Client-Address`), never a forwarding header, and
-      the gate has no `trusted_proxies`.
-    - (s) Added after the owner's acceptance; confirm. `mcp-gate` has a health
-      route and a Docker health check, and the image has no pip of its own.
-    - (t) Added after the owner's acceptance; confirm. At the service, 8 requests
-      in progress per source, counted from when the headers arrive so a body still
-      arriving counts (`MCP_MAX_REQUESTS_PER_SOURCE`, then `429` at once), and 256
-      connections in all (`MCP_MAX_CONNECTIONS`, then `503`).
-    - (u) Added after the owner's acceptance; confirm. Caddy's own logs (proxy and
-      gate, through `log default`) delete `X-Proxy-Secret`, `Authorization`,
-      `Cookie` and the token-like headers.
-    - (v) Added after the owner's acceptance; confirm. The MCP image's final stage
-      has no shell (`sh`, `dash`, `bash`) and no `apt` or `dpkg`; its `CMD` and
-      `HEALTHCHECK` are exec form.
-    - (w) Added after the owner's acceptance; confirm. A tool's own error text sent
-      back to a caller is cut to 300 characters with control and line-separator
-      characters removed.
+    - (n) Added after the owner's acceptance, then confirmed by the owner on
+      2026-10-12. The in-flight bounds: 64 in all, 4 from one source, a call
+      waits at most 1 second (`MCP_MAX_IN_FLIGHT`,
+      `MCP_MAX_IN_FLIGHT_PER_SOURCE`, `MCP_QUEUE_WAIT_SECONDS`), and a
+      credential not shaped like a token never takes a slot.
+    - (o) Added after the owner's acceptance, then confirmed by the owner on
+      2026-10-12. Time limits: headers 10 seconds at the proxy and the gate, a
+      body 10 seconds at the service (`MCP_BODY_TIMEOUT_SECONDS`, `408`) and the
+      gate, a compressed body `415`, uvicorn `503` past 256 connections, and no
+      body deadline at the proxy (it would end `/api/events`).
+    - (p) Added after the owner's acceptance, then confirmed by the owner on
+      2026-10-12. The gate is inside the trust boundary and the documentation
+      and compose.yaml say so; the profile is to be left off by anyone who
+      cannot accept that.
+    - (q) Added after the owner's acceptance, then confirmed by the owner on
+      2026-10-12. The log rules: only `chai.mcp` loggers carry text, one bounded
+      JSON line, no traceback, a burst limit, a path logged only if it is `/mcp`
+      or `/healthz`.
+    - (r) Added after the owner's acceptance, then confirmed by the owner on
+      2026-10-12. The source address is the peer the proxy observed
+      (`X-Client-Address`), never a forwarding header, and the gate has no
+      `trusted_proxies`.
+    - (s) Added after the owner's acceptance, then confirmed by the owner on
+      2026-10-12. `mcp-gate` has a health route and a Docker health check, and
+      the image has no pip of its own.
+    - (t) Added after the owner's acceptance, then confirmed by the owner on
+      2026-10-12. At the service, 8 requests in progress per source, counted
+      from when the headers arrive so a body still arriving counts
+      (`MCP_MAX_REQUESTS_PER_SOURCE`, then `429` at once), and 256 connections
+      in all (`MCP_MAX_CONNECTIONS`, then `503`).
+    - (u) Added after the owner's acceptance, then confirmed by the owner on
+      2026-10-12. Caddy's own logs (proxy and gate, through `log default`)
+      delete `X-Proxy-Secret`, `Authorization`, `Cookie` and the token-like
+      headers.
+    - (v) Added after the owner's acceptance, then confirmed by the owner on
+      2026-10-12. The MCP image's final stage has no shell (`sh`, `dash`,
+      `bash`) and no `apt` or `dpkg`; its `CMD` and `HEALTHCHECK` are exec form.
+    - (w) Added after the owner's acceptance, then confirmed by the owner on
+      2026-10-12. A tool's own error text sent back to a caller is cut to 300
+      characters with control and line-separator characters removed.
 - **Cost, stated.** `/mcp` is a second path reachable without single sign-on, so
   the
   token is the only thing between a caller and the data on it, and a front door

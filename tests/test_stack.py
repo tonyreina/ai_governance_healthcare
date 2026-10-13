@@ -42,7 +42,9 @@ def http(path: str, method: str = "GET", body: dict | None = None) -> tuple[int,
         BASE + path,
         data=data,
         method=method,
-        headers={"Content-Type": "application/json"},
+        # Origin is what the dashboard's browser sends; the API refuses a write
+        # with neither Sec-Fetch-Site nor a same-site Origin (D-102).
+        headers={"Content-Type": "application/json", "Origin": BASE},
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
@@ -817,6 +819,8 @@ def main() -> int:
                 "POST",
                 "-H",
                 "Content-Type: application/json",
+                "-H",
+                f"Origin: {BASE}",
                 "-d",
                 '{"meta":{"solution":"pushed externally"}}',
                 f"{BASE}/api/projects/{other}",

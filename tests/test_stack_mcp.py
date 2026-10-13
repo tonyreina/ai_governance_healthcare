@@ -59,6 +59,11 @@ def http(
         else (json.dumps(body).encode() if body is not None else None)
     )
     sent = {"Content-Type": "application/json", **(headers or {})}
+    if path.startswith("/api/") and method != "GET":
+        # What the dashboard's browser sends. The API refuses a write with neither
+        # Sec-Fetch-Site nor a same-site Origin (D-102). Not on /mcp: that service
+        # refuses a browser Origin it was not told about.
+        sent.setdefault("Origin", BASE)
     req = urllib.request.Request(BASE + path, data=data, method=method, headers=sent)
     try:
         with urllib.request.urlopen(req, timeout=30) as r:

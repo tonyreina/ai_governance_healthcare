@@ -194,14 +194,24 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-14 Cross-site writes are refused
 
-- **Claim:** A state-changing request a different site initiated is rejected by
-  `Sec-Fetch-Site`, so a signed-in user's browser cannot be driven
-  from another page.
+- **Claim:** A state-changing request that a browser marks with
+  `Sec-Fetch-Site` as coming from a different site is rejected. A write that
+  carries no `Sec-Fetch-Site` is rejected too, unless it shows an `Origin` that
+  is this site (or one listed in `CORS_ORIGINS`) or is an agent-API request with
+  a bearer token. So a signed-in user's browser cannot be driven from another
+  page, whether or not it sends the header.
 - **Asserted in:** `server/app/main.py` — "Cross-site writes are refused."
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_csrf.py::TestCrossSiteWrites::test_a_cross_site_delete_is_refused`
   `server/tests/test_csrf.py::TestCrossSiteWrites::test_every_write_method_is_covered`
+  `server/tests/test_csrf.py::TestWritesWithoutSecFetchSite::test_a_write_with_no_header_and_no_origin_is_refused`
+  `server/tests/test_csrf.py::TestWritesWithoutSecFetchSite::test_any_other_origin_is_refused`
+  `server/tests/test_csrf.py::TestWritesWithoutSecFetchSite::test_a_bearer_token_on_a_session_route_is_not_a_pass`
+- **Gap:** a client that is not a browser can send any `Origin`, so
+  this stops a browser being driven, not a caller who already holds the
+  identity header. `CSRF_TRUSTED_SITES` can relax the `Sec-Fetch-Site` check
+  (`test_same_site_is_refused_by_default` pins the default).
 
 ### C-15 Security headers are on every response
 

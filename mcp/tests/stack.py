@@ -92,7 +92,12 @@ def session_client(served: Served, email: str) -> httpx.Client:
     """A signed-in person: the identity header the front door would have set."""
     return httpx.Client(
         base_url=served.url,
-        headers={"X-Forwarded-Email": email, "X-Forwarded-User": email.split("@")[0]},
+        headers={
+            "X-Forwarded-Email": email,
+            "X-Forwarded-User": email.split("@")[0],
+            # A browser sends this; a write without it is refused (D-102).
+            "Origin": served.url,
+        },
     )
 
 

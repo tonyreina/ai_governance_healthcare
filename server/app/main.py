@@ -14,7 +14,8 @@ which with credentials is both insecure and rejected by browsers anyway.
 
 **Cross-site writes are refused.** Identity comes from a proxy that decides
 based on its own session, which a browser attaches to cross-site requests too.
-``Sec-Fetch-Site`` is checked on every non-GET; see the middleware below.
+``Sec-Fetch-Site`` is checked on every non-GET, and a write that lacks it must show
+a same-site ``Origin`` or an agent bearer token (D-102); see the middleware below.
 
 **No ``--proxy-headers``.** uvicorn's proxy-header handling rewrites the peer
 address from ``X-Forwarded-For``, which the client controls. ``TRUSTED_PROXY_CIDR``
@@ -39,13 +40,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.requests import ClientDisconnect
 
-from .agent import agent_router, is_agent_path, token_router
+from .agent import agent_router, is_agent_path, presents_bearer, token_router
 from .agent_limits import AgentGuard
 from .auth import log_auth_posture
 from .config import Settings
 from .db import Database
 from .emergency import EmergencyAudit
 from .events import EventBroker
+from .origin import origin_is_own
 from .principals import PrincipalRecorder
 from .ratelimit import SlidingWindowRateLimiter
 from .retirement import (
@@ -64,6 +66,8 @@ log = logging.getLogger("chai")
 
 # Methods that cannot change state, and so need no cross-site check.
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+# What the csrf.rejected event records when the browser sent no Sec-Fetch-Site.
+SITE_ABSENT = "absent"
 BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
 API_CSP = (
     "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
@@ -439,12 +443,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         read to have happened.
 
         ``Sec-Fetch-Site`` is the check. It is set by the browser, cannot be
-        altered by script, and says where the request came from. Requests
-        without it are allowed through: every browser that has shipped it
-        since 2023 sends it on every request, so an absent header means a
-        non-browser client -- curl, a health probe, an integration -- which is
-        not what a cross-site attack looks like. Blocking those would break
-        real callers to defend against nothing.
+        altered by script, and says where the request came from. When it is
+        present it decides.
+
+        When it is ABSENT the request is not waved through (D-102): an old
+        browser, or something between the browser and here that strips it, is
+        exactly the client this check exists for. Such a write must instead
+        show an ``Origin`` that is this site (``app/origin.py``), or be an
+        agent-API request carrying a bearer token, which a page cannot attach
+        and which is not a cookie. A client that is neither a browser nor a
+        token holder (curl, a script) adds ``-H 'Origin: https://<host>'``.
+        Reads are never checked, so health probes are unaffected.
 
         ``CSRF_TRUSTED_SITES=cross-site`` relaxes this for a deployment that
         genuinely serves the app from a different origin than the API. That is
@@ -453,21 +462,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """
         if request.method not in SAFE_METHODS:
             site = request.headers.get("sec-fetch-site")
-            if site is not None and site not in settings.csrf_trusted_sites:
+            origin = request.headers.get("origin")
+            if site is not None:
+                refused = site not in settings.csrf_trusted_sites
+            elif presents_bearer(request):
+                refused = False
+            else:
+                refused = origin is None or not origin_is_own(
+                    origin, request.headers.get("host", ""), settings.cors_origins
+                )
+            if refused:
                 emit(
                     SecurityEvent.CSRF_REJECTED,
                     f"rejected cross-site {request.method} {request.url.path} "
-                    f"(Sec-Fetch-Site: {site})",
+                    f"(Sec-Fetch-Site: {site or SITE_ABSENT})",
                     method=request.method,
                     path=request.url.path,
-                    site=site,
+                    site=site or SITE_ABSENT,
+                    origin=None if origin is None else origin[:100],
                 )
                 return JSONResponse(
                     status_code=403,
                     content={
                         "detail": (
                             "Cross-site write rejected. This API only accepts "
-                            "state-changing requests from its own origin."
+                            "state-changing requests from its own origin: send "
+                            "Sec-Fetch-Site, or an Origin that is this site."
                         )
                     },
                 )

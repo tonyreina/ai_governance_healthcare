@@ -175,6 +175,8 @@ test-agent-tokens = "python tests/test_agent_tokens.py"
 test-proxy-agent = "python tests/test_proxy_agent_mutations.py"
 # The MCP service's route in proxy/Caddyfile and its gate (proxy/Caddyfile.mcp-gate), each guard broken in a copy and noticed, on a real Caddy (#164). Needs Docker.
 test-proxy-mcp = "python tests/test_proxy_mcp_mutations.py"
+# The shards CI splits test-proxy-mcp into (MUTANT_SHARD=i/n) run every mutant exactly once, with mutation tests (D-97). No Docker.
+test-mutant-shards = "python tests/test_proxy_mcp_mutations.py --check-shards"
 # The optional MCP service in the real Compose stack: off by default, then on with the profile, speaking the protocol through the real proxy to the real API (#164). Needs Docker and a running stack.
 test-stack-mcp = "python tests/test_stack_mcp.py"
 # The litigation hold on the setup page: an owner places and lifts it, with a reason (#57).

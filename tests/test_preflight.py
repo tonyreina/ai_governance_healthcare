@@ -55,6 +55,21 @@ SAFE = {
     "IDENTITY_ID_SOURCE": PLACEHOLDER_IDENTITY,
 }
 
+# Every variable preflight judges, as a shell could export it (D-106).
+SHELL_KEYS = (
+    "POSTGRES_PASSWORD",
+    "APP_POSTGRES_PASSWORD",
+    "DATABASE_URL",
+    "APP_DATABASE_URL",
+    "IDENTITY_ID_SOURCE",
+    "IDENTITY_NAME_SOURCE",
+    "IDENTITY_EMAIL_SOURCE",
+    "IDENTITY_STRIP_PREFIX",
+    "HTTP_BIND",
+    "SITE_ADDRESS",
+    "STORAGE_ENCRYPTION_CONFIRMED",
+)
+
 failures: list[str] = []
 
 
@@ -89,6 +104,8 @@ def run_main(env_text: str | None, **environ: str) -> tuple[int, str]:
             if env_text is not None:
                 Path(".env").write_text(env_text, encoding="utf-8")
             os.environ.pop("FORCE", None)
+            for name in SHELL_KEYS:  # a developer's own exports must not leak in
+                os.environ.pop(name, None)
             os.environ.update(environ)
             with contextlib.redirect_stdout(out):
                 code = pf.main()
@@ -345,6 +362,117 @@ def main() -> int:
     )
     code, _ = run_main(None)
     check("no .env at all is refused, not waved through", code == 1, str(code))
+
+    print("The process environment beats .env, as it does in compose (D-106)")
+    SAFE_ENV = (
+        f"POSTGRES_PASSWORD={GOOD_PASSWORD}\nAPP_POSTGRES_PASSWORD={GOOD_APP_PASSWORD}\n"
+        f"IDENTITY_ID_SOURCE={PLACEHOLDER_IDENTITY}\n"
+    )
+    code, out = run_main(SAFE_ENV, POSTGRES_PASSWORD="short")
+    check("a short password only in the environment is refused", code == 1, out)
+    check("and the message names the password", "POSTGRES_PASSWORD is 5" in out, out)
+    code, out = run_main(SAFE_ENV, POSTGRES_PASSWORD="changeme")
+    check(
+        "a placeholder only in the environment is refused",
+        code == 1 and "placeholder" in out,
+        out,
+    )
+    code, out = run_main(SAFE_ENV, POSTGRES_PASSWORD="")
+    check("an EMPTY exported password beats a good .env value", code == 1, out)
+    code, out = run_main(SAFE_ENV, APP_POSTGRES_PASSWORD="short")
+    check("a short APP password only in the environment is refused", code == 1, out)
+    code, out = run_main(SAFE_ENV, IDENTITY_ID_SOURCE="dev@localhost")
+    check(
+        "a literal identity only in the environment is refused",
+        code == 1 and "is a literal" in out,
+        out,
+    )
+    code, out = run_main(SAFE_ENV, IDENTITY_EMAIL_SOURCE="dev@localhost")
+    check("a literal email source only in the environment is refused", code == 1, out)
+    code, out = run_main(SAFE_ENV, HTTP_BIND="0.0.0.0", SITE_ADDRESS="http://:80")
+    check(
+        "a non-loopback bind over plain HTTP only in the environment is refused",
+        code == 1 and "plain HTTP" in out,
+        out,
+    )
+    code, out = run_main(
+        SAFE_ENV.replace(GOOD_PASSWORD, "short"), POSTGRES_PASSWORD=GOOD_PASSWORD
+    )
+    check(
+        "an unsafe .env value overridden by a safe exported one is fine",
+        code == 0,
+        out,
+    )
+    code, out = run_main(
+        SAFE_ENV.replace(PLACEHOLDER_IDENTITY, "dev@localhost"),
+        IDENTITY_ID_SOURCE=PLACEHOLDER_IDENTITY,
+    )
+    check(
+        "an unsafe .env literal overridden by an exported placeholder is fine",
+        code == 0,
+        out,
+    )
+    code, out = run_main(SAFE_ENV, POSTGRES_PASSWORD="short", FORCE="1")
+    check("FORCE=1 still skips, environment or not", code == 0, out)
+    code, out = run_main(SAFE_ENV, UNRELATED_SHELL_VARIABLE="x")
+    check("an unrelated exported variable changes nothing", code == 0, out)
+
+    print("Mutations: the environment must be what is judged (D-106)")
+
+    def env_gate_holds() -> bool:
+        refused = all(
+            run_main(SAFE_ENV, **{k: v})[0] == 1
+            for k, v in (
+                ("POSTGRES_PASSWORD", "short"),
+                ("IDENTITY_ID_SOURCE", "dev@localhost"),
+            )
+        )
+        winning = (
+            run_main(
+                SAFE_ENV.replace(GOOD_PASSWORD, "short"),
+                POSTGRES_PASSWORD=GOOD_PASSWORD,
+            )[0]
+            == 0
+        )
+        return refused and winning
+
+    check("unmutated, the environment gate holds", env_gate_holds())
+    real_effective = pf.effective_env
+    try:
+        pf.effective_env = lambda file_env, environ: dict(file_env)  # .env alone
+        check(
+            "mutation: .env alone -> an exported unsafe value slips through",
+            not env_gate_holds(),
+        )
+        pf.effective_env = lambda file_env, environ: {**environ, **file_env}
+        check(
+            "mutation: .env over the environment -> a safe export no longer wins",
+            not env_gate_holds(),
+        )
+    finally:
+        pf.effective_env = real_effective
+    check("the environment gate holds again", env_gate_holds())
+
+    print("What the gate does not judge, pinned (D-106)")
+    check(
+        "an external DATABASE_URL skips the OWNER password checks only",
+        problems(POSTGRES_PASSWORD="short", DATABASE_URL="postgresql://u@h/db") == [],
+    )
+    check(
+        "and still demands the API's own role password",
+        mentions(
+            problems(DATABASE_URL="postgresql://u@h/db", APP_POSTGRES_PASSWORD="short"),
+            "APP_POSTGRES_PASSWORD is 5",
+        ),
+    )
+    check(
+        "a literal IDENTITY_NAME_SOURCE is a display name, not refused",
+        problems(IDENTITY_NAME_SOURCE="Some Person") == [],
+    )
+    check(
+        "but the identity that decides access (id) is still refused when literal",
+        mentions(problems(IDENTITY_ID_SOURCE="Some Person"), "is a literal"),
+    )
 
     print("The first-run path the README documents")
     shipped = pf.read_env(ROOT / ".env.example")

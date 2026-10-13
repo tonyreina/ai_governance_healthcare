@@ -33,6 +33,7 @@ SCANNED = ("tests", "server/tests", "mcp/tests")
 ALLOWED = {
     "tests/test_check_claims.py": "synthetic test sources the claims checker reads",
     "tests/test_require_tests.py": "this scan's own examples",
+    "tests/test_fingerprint_skip.py": "'skip' is the fingerprint's CANON_SKIP list",
     "server/tests/test_require_behavior.py": "a broken marker it runs on purpose",
     "mcp/tests/test_require_behavior.py": "a broken marker it runs on purpose",
 }
@@ -40,7 +41,9 @@ ALLOWED = {
 CONSTRUCT = re.compile(
     r"skipif\(|pytest\.skip\(|\.mark\.skip\b|importorskip\(|unittest\.skip|SkipTest"
 )
-PRINTED = re.compile(r"^\s*print\(.*skipping", re.I)
+PRINTED = re.compile(r"^\s*print\(.*\bskip(?:ping)?\b", re.I)
+# What reads the variable: the variable itself, or the helper that does.
+HONORS = ("REQUIRE_TESTS", "cannot_run(", "skip_allowed(")
 BEFORE, AFTER = 3, 7  # lines around a skip in which REQUIRE_TESTS must be read
 KNOWN_SITES = (  # the scan must still find these, or it has stopped working
     "server/tests/conftest.py",
@@ -51,6 +54,15 @@ KNOWN_SITES = (  # the scan must still find these, or it has stopped working
     "tests/test_backup_crypto.py",
     "tests/test_proxy_agent_mutations.py",
 )
+
+# The three guards that sit after a running stack has answered cannot be reached by a
+# test that starts no stack, so each asks tests/require.py, which is tested directly
+# (tests/test_require_behavior.py). What matters at the call site is the FORM: a
+# `return` (a dropped result falls through and runs on), and the skip condition.
+HELPER_SITES = {
+    "tests/test_stack.py": ("return cannot_run(", "and skip_allowed()"),
+    "tests/test_stack_mcp.py": ("return cannot_run(",),
+}
 
 failures: list[str] = []
 
@@ -82,9 +94,21 @@ def ignoring_the_variable(text: str) -> list[int]:
     bad = []
     for number in skip_sites(text):
         window = lines[max(0, number - 1 - BEFORE) : number + AFTER]
-        if not any("REQUIRE_TESTS" in line for line in window):
+        if not any(word in line for line in window for word in HONORS):
             bad.append(number)
     return bad
+
+
+def helper_call_problems(text: str, forms: tuple[str, ...]) -> list[str]:
+    """The call forms a stack-only guard must keep, and the import they need."""
+    problems = [f"no `{form}`" for form in forms if form not in text]
+    if not re.search(
+        r"^from require import .*\b(?:cannot_run|skip_allowed)\b",
+        text,
+        re.M,
+    ):
+        problems.append("it does not import the helper from require")
+    return problems
 
 
 def scanned_files() -> list[Path]:
@@ -113,6 +137,28 @@ def main() -> int:
                 not bad,
                 f"a skip at line(s) {bad} never reads it within {BEFORE}/{AFTER} lines",
             )
+    print("The stack-only guards still ask the helper")
+    for rel, forms in HELPER_SITES.items():
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        check(
+            f"{rel} calls the helper the way a guard must",
+            not helper_call_problems(text, forms),
+            "; ".join(helper_call_problems(text, forms)),
+        )
+        for form in forms:
+            broken = text.replace(form, "# " + form.replace("(", "["), 1)
+            check(
+                f"{rel} without `{form}` is noticed",
+                bool(helper_call_problems(broken, forms)),
+            )
+        check(
+            f"{rel} that stops importing the helper is noticed",
+            bool(
+                helper_call_problems(
+                    text.replace("from require import", "from os import"), forms
+                )
+            ),
+        )
     check(
         "the scan still finds every known skip site",
         all(site in sites for site in KNOWN_SITES),
@@ -135,6 +181,24 @@ def main() -> int:
         "    if not stack_up():\n"
         '        print("stack not running - skipping")\n'
         "        return 1 if REQUIRE_TESTS else 0\n"
+    )
+    check(
+        "a skip that asks the helper passes",
+        not ignoring_the_variable(
+            "def main() -> int:\n"
+            "    if status == 404 and skip_allowed():\n"
+            '        print("  skip  the agent API is off")\n'
+        ),
+    )
+    check(
+        "a printed skip with no REQUIRE_TESTS and no helper is noticed",
+        bool(
+            ignoring_the_variable(
+                "def main() -> int:\n"
+                "    if status == 404:\n"
+                '        print("  skip  the agent API is off")\n'
+            )
+        ),
     )
     check(
         "a decorator that reads REQUIRE_TESTS passes",

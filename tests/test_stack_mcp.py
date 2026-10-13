@@ -31,6 +31,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from require import cannot_run
+
 ROOT = Path(__file__).resolve().parent.parent
 BASE = os.environ.get("STACK_URL", "http://localhost:8080")
 REQUIRE_TESTS = bool(os.environ.get("REQUIRE_TESTS"))
@@ -138,8 +140,9 @@ def main() -> int:
 
     status, body, _ = http("/api/agent-tokens", "POST", {"label": "mcp stack test"})
     if status == 404:
-        print("  the agent API is off in this stack (no AGENT_ID_SECRET)")
-        return 1 if REQUIRE_TESTS else 0
+        return cannot_run(
+            "the agent API is off in this stack (no AGENT_ID_SECRET) - skipping"
+        )
     check("a signed-in user mints a token through the proxy", status == 201, body)
     minted = json.loads(body)
     token = minted["token"]

@@ -293,4 +293,4 @@ The language picker in the header switches between English, Spanish, French,
 German, Hindi, Russian, Simplified Chinese and Hebrew. The choice is per browser,
 so two people can read the same project in different languages. Where a
 deployment sets it, the workspace locks after a period of inactivity and shows a
-sign-out link.
+sign-out link too.

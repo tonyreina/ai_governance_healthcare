@@ -27,8 +27,12 @@ PHI
 ``rai:dataCollection`` carries cohort size, dates, sites and demographics by
 design. A small-cell cohort description attributed to a named organization can be
 re-identifying, and Croissant files exist to be published and indexed. Cohort
-detail is therefore **withheld by default**; pass ``--include-cohort-detail`` to
-emit it, and read the warning that produces.
+detail, including the collection period (``rai:dataCollectionTimeframe``), is
+therefore **withheld by default**; pass ``--include-cohort-detail`` to emit it,
+and read the warning that produces. The free-text fields ``rai:dataBiases``,
+``rai:dataSocialImpact``, ``rai:dataLimitations`` and
+``rai:dataCollectionRawData`` are always emitted as written (D-103): read them
+before publishing.
 
 PEOPLE
 ------
@@ -262,15 +266,17 @@ def build(
     if dev_data:
         if include_cohort:
             doc["rai:dataCollection"] = dev_data
+            match = DATE_RANGE.search(dev_data)
+            if match:
+                doc["rai:dataCollectionTimeframe"] = (
+                    f"{match.group(1)}/{match.group(2)}"
+                )
         else:
             doc["rai:dataCollection"] = (
                 "Withheld. Cohort size, dates, sites and demographics are "
                 "recorded in the linked governance record. Re-export with "
                 "--include-cohort-detail to publish them."
             )
-        match = DATE_RANGE.search(dev_data)
-        if match:
-            doc["rai:dataCollectionTimeframe"] = f"{match.group(1)}/{match.group(2)}"
 
     if card.get("inputSource"):
         doc["rai:dataCollectionRawData"] = card["inputSource"]

@@ -266,7 +266,15 @@ governance body's decision to expose patients to a model.
     design, and Croissant files exist to be published and indexed. A small-cell
     cohort description attributed to a named organization can be re-identifying.
 
+    The collection period (`rai:dataCollectionTimeframe`) is cohort detail too,
+    and is withheld by default.
+
     Pass `--include-cohort-detail` to emit it. Check for small cells first.
+
+    The free-text fields `rai:dataBiases`, `rai:dataSocialImpact`,
+    `rai:dataLimitations` and `rai:dataCollectionRawData` are always included,
+    exactly as written. They may name demographics or sites, so read them before
+    you share the file.
 
 !!! warning "People are not named by default"
 

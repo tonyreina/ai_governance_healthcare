@@ -13,8 +13,11 @@ This project is an independent implementation. It is not affiliated with,
 endorsed by, or certified by the Coalition for Health AI (CHAI).
 
 - The six-stage lifecycle (define, design, engineer, assess, pilot, deploy and
-  monitor), the four checkpoints, and the five principles follow the structure
-  described in CHAI's Assurance Standards Guide.
+  monitor) and the five principles are modeled on CHAI's published lifecycle
+  approach; we could not retrieve CHAI's Assurance Standards Guide to check
+  them against it. The four checkpoints, their placement (after stages 1, 4, 5
+  and 6) and their questions are this project's rendering of CHAI's go/no-go
+  decision points, not a structure taken from CHAI.
 - The checklist criteria in this tool are original, paraphrased summaries
   written for this project. They are **not** the text of CHAI's Responsible AI
   Checklist.
@@ -24,26 +27,31 @@ endorsed by, or certified by the Coalition for Health AI (CHAI).
   [CHAI metrics](frameworks/chai-metrics.md), attributed to CHAI.
 - The dashboard shows CHAI-derived wording, and the names of CHAI's suggested
   metrics, in languages other than English. Those are machine-drafted,
-  unofficial translations of this project's English text (Simplified Chinese has
-  been reviewed and approved by a fluent reader), and each screen that shows one
-  says so. A record always stores the English. The metric names are CHAI's, so
-  the translated screens also say that the names were translated, which is the
-  indication of changes CC BY 4.0 asks for.
+  unofficial translations of this project's English text (a fluent reader
+  reviewed and approved Simplified Chinese for 9 of its 20 safety-bearing
+  strings, and the rest of its catalog is machine-drafted), and each screen that
+  shows one says so. A record always stores the English. The metric names are
+  CHAI's, so the translated screens also say that the names were translated,
+  which is the indication of changes CC BY 4.0 asks for.
 - The model card uses the section and field names of the CHAI Applied Model Card
-  template (Draft Nov 2024, v0.1). CHAI distributes that template under
-  **CC BY-ND 4.0** (Attribution, No Derivatives).
+  template (Draft Nov 2024, v0.1).
 
-!!! danger "No Derivatives is the constraint, not commercial use"
+!!! danger "CHAI's own files do not state one license for the model card"
 
-    CC BY-ND 4.0 permits redistribution "for any purpose, even commercially", so
-    using this tool commercially is not restricted by CHAI's license. What the
-    license forbids is distributing a **modified version** of CHAI's material.
+    As checked on 2026-10-12: the v0.1 documentation PDF
+    (mc.chai.org/v0.1/documentation.pdf) links CC BY-ND 4.0 (Attribution, No
+    Derivatives). CHAI's `mc-schema` repository carries a different, permissive
+    license that allows modification and derivative works. CHAI's registry page
+    for the card says "All rights reserved". A standalone template PDF was
+    reported to carry CC BY-NC-ND 4.0, but that file is no longer at its old
+    address and we could not confirm it. We have not resolved which governs.
 
     This tool uses the template's section and field names to structure output it
-    generates itself. If you intend to publish something closer to CHAI's
-    template, read [the license](https://creativecommons.org/licenses/by-nd/4.0/)
-    first. The Apache 2.0 license on this repository covers this project's own
-    code and prose — it cannot and does not relicense CHAI's material.
+    generates itself, and does not redistribute CHAI's document. Before you
+    distribute a modified model card or something closer to CHAI's template,
+    confirm the terms with CHAI or your counsel. The Apache 2.0 license on this
+    repository covers this project's own code and prose. It cannot and does not
+    relicense CHAI's material.
 
 ## What reports are, and are not
 

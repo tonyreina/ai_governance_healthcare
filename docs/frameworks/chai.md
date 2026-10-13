@@ -6,8 +6,11 @@ published material is the basis of the lifecycle this tool tracks.
 
 !!! info "What is CHAI's, and what is ours"
 
-    The six-stage lifecycle, the four checkpoints, and the five principles follow
-    the structure of CHAI's **Assurance Standards Guide**. The 41 checklist
+    The six-stage lifecycle and the five principles are modeled on CHAI's
+    published lifecycle approach; we could not retrieve CHAI's **Assurance
+    Standards Guide** to check them against it. The checkpoint placement (after
+    stages 1, 4, 5 and 6) and the A-to-D questions are this project's rendering
+    of CHAI's go/no-go decision points. The 41 checklist
     criteria in this tool are **original summaries written for this project** —
     they are not the text of CHAI's Responsible AI Checklist.
 
@@ -77,19 +80,20 @@ of a solution covering basic information, uses and directions, warnings, "trust
 ingredients", and resources. This tool reproduces its *section and field names*
 and fills them from checklist evidence.
 
-!!! warning "The model card template has a different license"
+!!! warning "CHAI's files do not state one license for the model card"
 
-    CHAI distributes the Applied Model Card template under **CC BY-ND 4.0**
-    (Attribution, No Derivatives) — not the CC BY 4.0 that covers the content
-    repository.
+    As checked on 2026-10-12, the v0.1 documentation PDF links **CC BY-ND 4.0**
+    (Attribution, No Derivatives), CHAI's `mc-schema` repository carries a
+    different, permissive license that allows modification, and CHAI's registry
+    page says "All rights reserved". A standalone template PDF was reported to
+    carry CC BY-NC-ND 4.0, but it is no longer online and we could not confirm
+    it. We have not resolved which governs, so this page makes no statement
+    about commercial use.
 
-    That license explicitly permits redistribution "for any purpose, even
-    commercially", so commercial use is *not* the constraint. **No Derivatives**
-    is: you may not distribute a modified version of CHAI's material. This tool
-    uses the template's section and field names to structure its own output; it
-    does not redistribute CHAI's document. If you plan to publish something
-    closer to the template itself, read
-    [the license](https://creativecommons.org/licenses/by-nd/4.0/) first.
+    This tool uses the template's section and field names to structure its own
+    output; it does not redistribute CHAI's document. Before you distribute a
+    modified model card or something closer to the template, confirm the terms
+    with CHAI or your counsel.
 
 ## Testing & Evaluation Frameworks
 

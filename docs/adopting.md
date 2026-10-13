@@ -59,9 +59,10 @@ control, and can live with running it yourselves, it fits.
 
 ### Time
 
-The tool does not make the review shorter; it makes it findable. For scale, the
-OPTICA authors report several hours per stakeholder for each solution, with the
-overall duration set by how quickly people become available. The CHAI checklist's
+The tool does not make the review shorter; it makes it findable. The
+OPTICA paper reports applying it to 18 solutions at Clalit, with each chapter
+completed by a designated stakeholder in dependency order. This project has not
+confirmed a completion time, so measure your own. The CHAI checklist's
 41 criteria are filled in as the work happens, and nobody has measured how long
 that takes in practice.
 
@@ -129,10 +130,13 @@ This is a suggestion, not a measured plan, and no durations are claimed.
 - **The cloud guides are untested against real managed databases.** Their
   provider settings come from the providers' documentation and are marked as such
   where they appear.
-- **Most translations are machine-drafted and unreviewed.** Simplified Chinese
-  has been reviewed and approved by a fluent reader. In the others, the
-  patient-data notice and the storage-mode banners stay in English until someone
-  fluent reviews them.
+- **Most translations are machine-drafted and unreviewed.** A fluent reader
+  reviewed and approved Simplified Chinese for the safety-bearing strings
+  recorded in its catalog (9 of the 20, including the patient-data notice and
+  the storage-mode banners). The 11 newer ones, such as the report disclaimer,
+  show in English until a reviewer approves them, and the rest of that catalog is
+  machine-drafted. In the other languages, the patient-data notice and the
+  storage-mode banners stay in English until someone fluent reviews them.
 - **There is no evidence yet that governance frameworks improve patient
   outcomes.** See [the evidence](frameworks/evidence.md). The tool's claim is the
   narrower one: decisions made legible, attributable and reviewable.

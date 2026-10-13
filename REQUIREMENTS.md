@@ -409,12 +409,13 @@ honest answer and is a gap worth closing; see R-19.
 ### R-43 What runs is what was reviewed, and something watches it
 
 - Status: Active
-- The API's dependencies are installed only from `server/requirements.txt`, a
-  hash-pinned lock (`pip install --require-hashes`), regenerated with `make
-  lock`. Every base image (both Dockerfiles, the database and proxy in
-  `compose.yaml`) is pinned by digest. Every GitHub Action is pinned by commit
-  SHA. The runtime image ships no `pip`.
-- Dependabot watches pip, both Dockerfiles, compose and the actions, in the
+- The API's dependencies are installed only from `server/requirements.txt` (and
+  the MCP wrapper's from `mcp/requirements.txt`), each a hash-pinned lock (`pip
+  install --require-hashes`), regenerated with `make lock`. Every base image
+  (all three Dockerfiles, the database and proxy in `compose.yaml`) is pinned by
+  digest. Every GitHub Action is pinned by commit SHA. The runtime image ships
+  no `pip`.
+- Dependabot watches pip, all three Dockerfiles, compose and the actions, in the
   directories that hold them. Updates arrive as pull requests that pass the same
   `tests passed` check as any change.
 - `.github/workflows/security.yml` builds our images and scans them and the lock
@@ -635,7 +636,8 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-55 The dashboard's languages, and what may be shown untranslated
 
-- Status: Active
+- Status: Active. Superseded by R-77 for one point only: the claim that the
+  Simplified Chinese review is recorded for every safety-bearing string.
 - The owner chose, 2026-10-08: English, Spanish, French, German, Hindi, Russian
   and Mandarin, written as Simplified Chinese (`zh-Hans`), and later the same
   day Hebrew (`he`), the first language written right to left. The choice is
@@ -644,9 +646,9 @@ honest answer and is a gap worth closing; see R-19.
   properties), and user-typed text and English fallbacks keep their own
   direction (D-63). `check-i18n` fails on a physical left or right.
 - Every string a reader sees comes from `app/i18n/<tag>.json`, embedded in the
-  single file (R-01); English is the source. `check-i18n` fails on a missing or
-  extra key, a changed placeholder, a missing plural form, markup in a value, or
-  an unused key.
+  single file (R-60, formerly R-01); English is the source. `check-i18n` fails
+  on a missing or extra key, a changed placeholder, a missing plural form,
+  markup in a value, or an unused key.
 - Translations are machine-drafted. A safety-bearing string (`"@meta".safety`)
   shows in English in a language until a reviewer is recorded for it in that
   catalog.
@@ -741,7 +743,7 @@ honest answer and is a gap worth closing; see R-19.
 - The owner's instruction, 2026-10-08: scan for injection attacks and guard
   against them (#155). A governance record is written by many people and read by
   a board and a regulator, and the dashboard's page policy has to allow inline
-  script (R-01), so escaping is the barrier and has to hold everywhere.
+  script (R-60, formerly R-01), so escaping is the barrier and has to hold everywhere.
 - Every string in a project, every key's value, the change log, people's names,
   the search box, saved interface state, the legacy record and an imported file
   reach the screen, the exports and the database as text: nothing runs, nothing
@@ -825,7 +827,7 @@ honest answer and is a gap worth closing; see R-19.
   server-side.
 - Source: `server/migrations/001_init.sql`, `003_version_access.sql`.
 - Enforced by: database triggers; `server/tests/test_versions.py`. The triggers
-  bind a role only if it cannot disable them, which is R-35.
+  bind a role only if it cannot disable them, which is R-74 (formerly R-35).
 
 ### R-11 History outlives the record it describes
 
@@ -1062,9 +1064,9 @@ honest answer and is a gap worth closing; see R-19.
   has said they expect a name detector to flag the investigator and approver
   names and dates a governance record is made of; that is input, not a decision.
 - Proposed, not decided: an opt-in sidecar behind `POST /api/phi-check`, plus an
-  offline `make phi-scan`. The model cannot live in the browser (R-01).
-  Whatever is built must not say "no PHI detected"; it states what was scanned
-  and that a clean result is not a guarantee.
+  offline `make phi-scan`. The model cannot live in the browser (R-60, formerly
+  R-01). Whatever is built must not say "no PHI detected"; it states what was
+  scanned and that a clean result is not a guarantee.
 
 ### R-47 How long is each kind of record kept?
 
@@ -1553,3 +1555,31 @@ honest answer and is a gap worth closing; see R-19.
   without the setting; and everything that enforced R-35 (`server/tests/test_roles.py`,
   `tests/test_compose_isolation.py`, `tests/test_stack.py`, `tests/test_preflight.py`,
   `tests/test_doctor.py`).
+
+### R-77 Simplified Chinese is reviewed only for the strings its catalog records
+
+- Status: Active
+- Supersedes R-55 on one point. R-55 said Simplified Chinese's review is
+  "recorded for every safety-bearing string in `zh-Hans.json`". That is not true
+  of the catalog: `app/i18n/zh-Hans.json` records a reviewer (Cody Chen,
+  2026-10-08) for 9 of the 20 safety-bearing strings listed under `"@meta".safety`
+  in `en.json`, including the patient-data notice and the storage-mode banners.
+  The other 11 were added later and have no reviewer, so they show in English:
+  `agent.shownOnce`, `agent.storeWarning`, `engine.md.footer`,
+  `engine.report.disclaimer`, `rules.blocked`, `rules.hash`, `rules.othersSave`,
+  `rules.primary`, `rules.title`, `rules.titleUnsynced` and `rules.unsynced`.
+  The rest of the catalog is machine-drafted, and `@meta.machineDrafted` stays
+  true.
+- Public wording says what was reviewed, never that Simplified Chinese as a
+  whole was. The docs name the 9 and the 11, and say a string shows in English
+  until a reviewer approves it. Everything else in R-55 stands, including the
+  rule that a safety-bearing string shows in English until a reviewer is
+  recorded.
+- Rejected: commissioning the review of the 11 now (a person's attestation, not
+  ours to assume), and editing R-55 in place (CLAUDE.md forbids rewriting
+  history).
+- Source: the owner's ruling of 2026-10-12 on the docs audit (D12); the check of
+  `en.json` against `zh-Hans.json` the same day.
+- Enforced by: `tests/test_i18n.py` and `check-i18n`, which hold every safety key
+  to "English unless a reviewer is recorded". Nothing yet asserts that the docs
+  wording matches the count of 9 and 11; this entry is the record of it.

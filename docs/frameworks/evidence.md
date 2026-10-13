@@ -11,25 +11,24 @@ practice — implementation insights on artificial intelligence in health care*,
 the report of Working Group 1 of the Strategic Partners' Initiative for Data and
 Digital Health (WHO/EURO:2026-13225-52999-82657).
 
-Reviewing more than a dozen reporting and evaluation frameworks, it presents
-**four complementary approaches** — and two of them are the two frameworks this
-tool implements:
+Press coverage reports that it presents OPTICA as one of four complementary
+approaches. OPTICA is described there as a practical evaluation tool for
+assessing AI solutions toward adoption: 77 items in 13 chapters and four
+domains, requiring input from five designated stakeholders.
 
-- **OPTICA**, described as a practical evaluation tool for assessing AI solutions
-  toward adoption, 77 items in 13 chapters and four domains, requiring input
-  from five designated stakeholders.
-- **CHAI**, described as a tool for AI solution transparency, whose applied model
-  card acts as a standardized "nutrition label" for an AI solution.
+!!! warning "What this project could not confirm"
 
-The report notes that OPTICA "embeds requirements for organizational AI
-governance, which include continuing monitoring and impact assessment."
+    We could not read the report's PDF. We have not confirmed that it names CHAI
+    among the four approaches, what its other approaches are, how many
+    frameworks it reviewed, or any wording of its own, so none of that is
+    claimed here.
 
-!!! note "Why this matters for this project"
+!!! note "Why the two are on this site"
 
-    WHO placed these two side by side as complementary, not competing. That is
-    the premise of the [crosswalk](../crosswalk.md): OPTICA supplies the
-    adoption-time depth, CHAI supplies the lifecycle and the transparency
-    artifact. Neither subsumes the other.
+    This project's own premise, not WHO's, is that OPTICA and CHAI complement
+    each other. That is the premise of the [crosswalk](../crosswalk.md): OPTICA
+    supplies the adoption-time depth, CHAI supplies the lifecycle and the
+    transparency artifact. Neither subsumes the other.
 
 ## What the evidence actually shows
 
@@ -47,7 +46,8 @@ The headline numbers are sobering:
 
 Of those 16, the review found three ways frameworks get used: establishing
 governance structures (4), pre-implementation ethical review (8), and
-post-deployment audit (8).
+post-deployment audit (8). The categories overlap, so the counts add up to more
+than 16.
 
 OPTICA appears among them. Applied to 18 AI solutions at Clalit, it was reported
 to produce "improved oversight and accountability for AI use" and "more informed

@@ -1047,8 +1047,10 @@ def check(
             sorted({items[n].stage for n in citing(c)}),
         )
     if m := r.find(
-        r"CHAI places retraining cadence and change control at Stage (\d) \((s\d-\d)\);"
-        r" OPTICA asks the developer for it at stage (\w)\.",
+        r"CHAI places the audit schedule and change control at Stage (\d)"
+        r" \((s\d-\d)\), and the plan to retrain or retire in that stage's"
+        r" description; OPTICA asks the developer for the refresh cadence at stage"
+        r" (\w)\.",
         text,
         "where OPTICA asks the developer for change control",
     ):

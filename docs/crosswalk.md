@@ -163,12 +163,12 @@ the chapter's items with no CHAI anchor at all.
 
 Four patterns are worth a governance officer's attention.
 
-**Chapter 11 (monitoring) is the only chapter where CHAI sometimes asks more
-than OPTICA.** Its six items land almost entirely in CHAI Stage 6, and s6-2
+**Chapter 11 (monitoring) is a clear case where CHAI asks for more than
+OPTICA.** Its six items land almost entirely in CHAI Stage 6, and s6-2
 (ongoing subgroup performance monitoring) has no OPTICA counterpart: OPTICA
 11.6 plans ongoing accuracy measurement without ever requiring it to be
-stratified. If you are working from an OPTICA dossier, this is the one chapter
-where CHAI will add requirements rather than absorb yours.
+stratified. If you are working from an OPTICA dossier, CHAI will also add
+requirements at other chapters (10.3, 12.3, 9.2, 1.5 and others); see section 3.
 
 **Chapters 2, 6, 8 and 13 are where OPTICA is effectively alone.** Nine of
 OPTICA's 18 unanchored items sit in these four chapters: how you chose between
@@ -352,20 +352,23 @@ reuse is most expensive to administer.
 ## 5. The three structural conflicts
 
 **The gating conflict: CHAI checkpoints against an OPTICA stakeholder relay.**
-CHAI's six stages are a lifecycle. Each is a checkpoint over the whole
-program, and the question at each gate is whether that stage's criteria are
-met. OPTICA's seven completion stages are not a lifecycle at all; they are a
-relay that orders *who answers next* - clinical expert (9 items), developer
-(29), clinical review (12), organizational data lead (7), MLOps expert (5),
-clinical expert again (12), organizational AI lead (3). The two orderings do
-not commute. CHAI places success measures and a baseline at Stage 1, before a
-solution exists; OPTICA's deployment success criteria (12.1) are written at
-stage F, after the developer pass, the clinical review, the data-lead pass and
-the MLOps pass. CHAI places monitoring ownership at Stage 3 (s3-7); OPTICA
-produces it at stages E and F. CHAI places retraining cadence and change
-control at Stage 6 (s6-3); OPTICA asks the developer for it at stage B. The
-most-cited criterion of all, s1-3, is anchored by seven OPTICA items spread
-across stages A, C, D and F.
+CHAI's six stages are a lifecycle punctuated by four checkpoints (A after stage
+1, B after stage 4, C after stage 5, D after stage 6); stages 2 and 3 have no
+gate of their own. At each checkpoint the question is a go/no-go decision on the
+next step (approve design, approve a pilot, approve deployment at scale,
+continue or retire), made on the stages completed so far. OPTICA's seven
+completion stages are not a lifecycle at all; they are a relay that orders *who
+answers next* - clinical expert (9 items), developer (29), clinical review (12),
+organizational data lead (7), MLOps expert (5), clinical expert again (12),
+organizational AI lead (3). The two orderings do not commute. CHAI places
+success measures and a baseline at Stage 1, before a solution exists; OPTICA's
+deployment success criteria (12.1) are written at stage F, after the developer
+pass, the clinical review, the data-lead pass and the MLOps pass. CHAI places
+monitoring ownership at Stage 3 (s3-7); OPTICA produces it at stages E and F.
+CHAI places the audit schedule and change control at Stage 6 (s6-3), and the
+plan to retrain or retire in that stage's description; OPTICA asks the developer
+for the refresh cadence at stage B. The most-cited criterion of all, s1-3, is
+anchored by seven OPTICA items spread across stages A, C, D and F.
 
 The practical consequence is that no single completion percentage can be
 computed from the other framework's file. An OPTICA dossier can be 100%
@@ -601,8 +604,7 @@ The crosswalk was built by mapping each of the 77 OPTICA items onto canonical
 CHAI criterion ids, then auditing every mapping through three adversarial
 passes: one hunting over-claimed equivalences, one hunting missed coverage, and
 one checking that cited ids say what the mapping claims they say. The audit
-produced 34 corrections and 8 hard errors — cases where a mapping cited a CHAI
-criterion that does not say what was attributed to it.
+led to 26 applied corrections and 3 rejected ones, all listed in section 1.
 
 An earlier pass of this analysis ran on a corrupted input, in which CHAI stages
 4 and 5 had been merged by a parsing bug. Its figures (8 equivalences, 27

@@ -37,8 +37,10 @@ Range: one of `Low`, `Moderate`, `High`.
 
 ### `chai:nextReviewDue`
 
-The date the next periodic review falls due, set by the most recent Checkpoint D
-decision.
+The date the next periodic review falls due: the Checkpoint D decision date plus
+the review cadence, or the Checkpoint C (deployment) date plus the cadence when
+no Checkpoint D decision has been recorded. Omitted when the solution is not
+live.
 
 Range: `xsd:date`.
 

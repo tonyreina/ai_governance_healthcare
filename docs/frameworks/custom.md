@@ -70,7 +70,7 @@ and the definition disagree.
 | `gates` | Checkpoints after a section. Each option has a class: `go`, `conditional`, `revise`, `stop` or `retire` |
 | `phases` | Where a project is in its life, each reached by a `go` at a gate |
 | `review` | Which gate recurs, and how often (by the project's risk tier) |
-| `flags` | Which of the engine's warnings apply: past due, open items once live, an approval with no rationale, a project left idle |
+| `flags` | Which of the engine's warnings apply: past due, open items once live, a periodic review due or overdue, a review that asked for revision, an approval with no rationale, a project left idle |
 | `samples` | Worked examples for **Add sample projects** |
 | `keys`, `nouns` | What your sections, categories and items are called ("step", "theme", "check") |
 | `ui` | Optional. Your own wording for a sentence on a screen, by catalog key; any you leave out uses the engine's neutral wording |

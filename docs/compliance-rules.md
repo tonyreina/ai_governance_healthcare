@@ -4,10 +4,15 @@ Every project on the dashboard has a **status**, and the status comes from rules
 applied to what the record says. Nobody types it in. This page lists every rule,
 so a committee can see why a tool is red and what to do about it.
 
-The rules live in one function, `flags()`, in
-[`app/js/10-frameworks/10-chai/10-rules.js`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/app/js/10-frameworks/10-chai/10-rules.js),
-beside `phase()`, `nextReview()` and `statusOf()`. They run in the browser, on
-the project as the browser holds it, with today's date.
+The rules are the framework engine's, run on CHAI's definition. The engine is
+[`app/js/10-frameworks/01-engine/00-engine.js`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/app/js/10-frameworks/01-engine/00-engine.js)
+(`fw.flags()`, beside `fw.phase()`, `fw.nextReview()` and `fw.status()`), and the
+`review` and `flags` entries of `app/frameworks/chai/framework.json` say which
+rules run and with what thresholds (30 days, 90 days, 6 or 12 months). The model
+card and key-metrics rules are plug-ins in
+[`app/js/10-frameworks/10-chai/10-rules.js`](https://github.com/tonyreina/ai_governance_healthcare/blob/main/app/js/10-frameworks/10-chai/10-rules.js).
+They run in the browser, on the project as the browser holds it, with today's
+date.
 
 ## From flags to status
 
@@ -108,9 +113,12 @@ and a tool at 40% can be on track if it is still early in its lifecycle.
 
 The rules are your organization's to change, since you run the software.
 
-1. Edit `flags()` for a rule, or `CORE_CARD` in
-   `app/js/10-frameworks/10-chai/00-definition.js` for the core model card
-   fields.
+1. For a generic rule, edit `fw.flags()` in
+   `app/js/10-frameworks/01-engine/00-engine.js`, add the rule to `FlagRule`,
+   and list it under `flags` in `app/frameworks/chai/framework.json`. For the
+   model card or key-metrics rules, edit
+   `app/js/10-frameworks/10-chai/10-rules.js`. For the core model card fields,
+   edit `CORE_CARD` in `app/js/10-frameworks/10-chai/00-definition.js`.
 2. If you add a flag, add its message to `app/i18n/en.json` and to every other
    catalog (`pixi run check-i18n` tells you what is missing).
 3. Rebuild the dashboard with `pixi run build-app`, and run the suites in

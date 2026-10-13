@@ -219,9 +219,9 @@ entry per ten minutes, writes are never throttled. Off by default. See
 
 ## Denied access is logged
 
-A request from an authenticated user that is refused on a project they have no
-right to produces one `access.denied` security event, with a stable name so an
-alert can match it without parsing prose:
+A request on the session API from an authenticated user that is refused on a
+project they have no right to produces one `access.denied` security event, with
+a stable name so an alert can match it without parsing prose:
 
 ```text
 (one line; wrapped here)
@@ -236,6 +236,10 @@ not confirmed to them) and **403** when they could read it but not do this. The
 line carries the project id and never the document. A request for a project that
 does not exist is not a denial and is not logged. A burst of these from one actor
 is worth an alert; the per-cloud alert policy is where that lives.
+
+This covers the session API. A refused call on the agent API (bearer token) is
+recorded as an `agent.refused` event instead, with its own per-token and overall
+bounds; see [the agent API](../docs/agent-api.md), "What a call leaves behind".
 
 ## Retention and litigation holds
 

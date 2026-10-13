@@ -181,7 +181,9 @@ no machine-readable version feed, so they are **not** watched. Check them by
 hand when this fires:
 
 - <https://chai.org>
-- The model card's license was last verified as CC BY-ND 4.0.
+- The model card's license is not consistent across CHAI's files (verified
+  2026-10-12: CC BY-ND 4.0 in the documentation PDF, permissive in mc-schema,
+  "All rights reserved" in the registry).
 
 ---
 

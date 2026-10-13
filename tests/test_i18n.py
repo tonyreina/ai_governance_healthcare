@@ -46,6 +46,46 @@ def check(name: str, ok: bool, detail: str = "") -> None:
         failures.append(name)
 
 
+I18N_DIR = ROOT / "app" / "i18n"
+
+# For every (safety key, language) the page's own t() is asked, in a real browser,
+# in the state the repository ships and in a state where a translation exists with
+# no reviewer and then with one. Returns the pairs that showed the wrong text.
+SAFETY_MATRIX = """(arg) => {
+  const bad = [];
+  const en = I18N_CATALOGS.en;
+  const keep = LOCALE;
+  const isolate = (loc, s) => (loc === 'he' ? '\\u2066' + s + '\\u2069' : s);
+  for (const loc of arg.locales) {
+    LOCALE = loc;
+    const meta = I18N_CATALOGS[loc]['@meta'];
+    meta.reviewers = meta.reviewers || {};
+    for (const key of arg.keys) {
+      // 1. The catalog as shipped.
+      const own = I18N_CATALOGS[loc][key];
+      const reviewed = Boolean(meta.reviewers[key]);
+      const shipped = reviewed && own !== undefined ? own : isolate(loc, en[key]);
+      if (t(key) !== shipped) bad.push([loc, key, 'as shipped']);
+      // 2. A translation with no reviewer shows English.
+      const had = Object.prototype.hasOwnProperty.call(I18N_CATALOGS[loc], key);
+      const old = I18N_CATALOGS[loc][key], oldRev = meta.reviewers[key];
+      const mark = 'TRANSLATED ' + loc + ' ' + key;
+      I18N_CATALOGS[loc][key] = mark;
+      delete meta.reviewers[key];
+      if (t(key) !== isolate(loc, en[key])) bad.push([loc, key, 'unreviewed']);
+      // 3. Once a reviewer is recorded, the translation shows.
+      meta.reviewers[key] = 'Test reviewer, 2026-10-13';
+      if (t(key) !== mark) bad.push([loc, key, 'reviewed']);
+      if (had) I18N_CATALOGS[loc][key] = old; else delete I18N_CATALOGS[loc][key];
+      if (oldRev === undefined) delete meta.reviewers[key];
+      else meta.reviewers[key] = oldRev;
+    }
+  }
+  LOCALE = keep;
+  return bad;
+}"""
+
+
 def own_name(locale: str) -> str:
     """The language's name in itself, from its catalog."""
     path = ROOT / "app" / "i18n" / f"{locale}.json"
@@ -152,6 +192,53 @@ def main() -> int:
             and len(options) == 8,
             str(options),
         )  # fmt: skip
+
+        print("Every safety key, in every language (C-76)")
+        keys = json.loads((I18N_DIR / "en.json").read_text(encoding="utf-8"))["@meta"][
+            "safety"
+        ]
+        locales = sorted(f.stem for f in I18N_DIR.glob("*.json") if f.stem != "en")
+        check(
+            "the safety list is the twenty keys this test is sized for, or more",
+            len(keys) >= 20 and len(locales) >= 7,
+            f"{len(keys)} keys, {len(locales)} locales",
+        )
+        arg = {"keys": keys, "locales": locales}
+        mctx, mpage = open_app(browser, "en-US")
+        wrong = mpage.evaluate(SAFETY_MATRIX, arg)
+        check(
+            "every safety key, every language: English until reviewed, then translated",
+            wrong == [],
+            str(wrong[:5]),
+        )
+        mctx.close()
+        # Mutation: a lookup that ignores the reviewers must be noticed, for every
+        # language, and a lookup that exempts one key must be noticed for that key.
+        mctx, mpage = open_app(browser, "en-US")
+        mpage.evaluate("reviewedFor = () => true")
+        wrong = mpage.evaluate(SAFETY_MATRIX, arg)
+        check(
+            "mutation: a lookup that skips the reviewer check fails every pair",
+            {(loc, key) for loc, key, _ in wrong}
+            == {(loc, key) for loc in locales for key in keys},
+            f"{len(wrong)} wrong",
+        )
+        mctx.close()
+        for key in keys:
+            mctx, mpage = open_app(browser, "en-US")
+            mpage.evaluate(
+                "(k) => { const orig = reviewedFor;"
+                " reviewedFor = (l, key) => key === k || orig(l, key); }",
+                key,
+            )
+            wrong = mpage.evaluate(SAFETY_MATRIX, arg)
+            check(
+                f"mutation: exempting {key} from review is noticed in every language",
+                {k for _, k, _ in wrong} == {key}
+                and {loc for loc, _, _ in wrong} == set(locales),
+                str(wrong[:3]),
+            )
+            mctx.close()
 
         print("A reviewed language shows its warnings translated")
         ctx_zh, zh = open_app(browser, "zh-CN")

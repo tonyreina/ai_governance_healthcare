@@ -408,17 +408,15 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   mode with the standing banner (C-26).
 - **Asserted in:** `README.md` — "never silently falls back"
 - **Asserted in:** `docs/running.md` — "The app never silently falls back from one to another."
-- **Status:** partial
-- **Gap:** The 'no store was created' and 'nothing written to localStorage' checks run for
-  401 and 403 only; the unreachable-server case checks the error text and not
-  that no store was created. A network error, a 404 or a non-JSON answer on a
-  fresh browser with no remembered origin is browser-only mode with the banner,
-  by design, not a stop. #231
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_boot_storage.py::no store was created`
   `tests/test_boot_storage.py::nothing written to localStorage`
-  `tests/test_boot_storage.py::503 -> blocking error`
-  `tests/test_boot_storage.py::network failure on a known-API origin -> blocking error`
+  `tests/test_boot_storage.py::blocking error, not a workspace`
+  `tests/test_boot_storage.py::a fallback to browser storage is noticed`
+  `tests/test_boot_storage.py::mutation: the stop branches are found in the built app`
+  `tests/test_boot_storage.py::fresh browser, non-JSON answer`
+  `tests/test_boot_storage.py::the standing banner is shown`
 
 ### C-28 After a save, the app says where the save went
 
@@ -1104,18 +1102,19 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-76 A translated warning is shown only once someone has reviewed it
 
-- **Claim:** The patient-data notice and the storage-mode banners stay in English
-  in a language until a reviewer is recorded for them in that catalog.
-- **Asserted in:** `docs/developing.md` — "are shown in English until someone fluent in the"
-- **Status:** partial
-- **Gap:** The evidence is one banner (`safety.local.title` and `.detail`) in one
-  language. The patient-data notice, the shared-server banner and the other keys
-  under `@meta.safety` in `en.json` (about twenty: report disclaimers, the rules
-  banner, agent-token warnings) are not asserted in either state, and the claim
-  names only the notice and banners. #231
+- **Claim:** The safety-bearing text listed under `@meta.safety` in `en.json`
+  stays in English in a language until a reviewer is recorded for that key in
+  that catalog. The list is the patient-data notice (`safety.scope`), the
+  storage-mode banners (`safety.local.title`, `safety.local.detail`,
+  `safety.server.detail`), the report disclaimers and footers, the provenance
+  notes, the rules banner and the agent-token warnings.
+- **Asserted in:** `docs/developing.md` — "are shown in English until someone"
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_i18n.py::the unreviewed safety warning stays in English`
   `tests/test_i18n.py::once a reviewer is recorded, it shows in Spanish`
+  `tests/test_i18n.py::every safety key, every language: English until reviewed, then translated`
+  `tests/test_i18n.py::mutation: a lookup that skips the reviewer check fails every pair`
 
 ### C-77 Only the database owner can dispose, and not of a recent read
 

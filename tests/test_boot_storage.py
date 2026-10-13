@@ -17,11 +17,15 @@ Each case is driven by intercepting /api/health in a real browser.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import functools
+import hashlib
 import http.server
+import re
 import socketserver
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -81,6 +85,39 @@ def check(name: str, condition: bool, detail: str = "") -> None:
     else:
         print(f"  FAIL  {name}{(' -- ' + detail) if detail else ''}")
         failures.append(name)
+
+
+STOP_CASES = (
+    ("401", 401, False, "do not have access"),
+    ("403", 403, False, "do not have access"),
+    ("503", 503, False, "cannot reach"),
+    ("network failure on a known-API origin", 0, True, "cannot reach"),
+)
+
+API_SEEN_KEY = "chai-api-origin-seen"
+
+
+def probe_storage(page) -> dict:
+    """Is there a store, and what has this page written to browser storage?"""
+    return page.evaluate(
+        """async () => ({
+            store: !(typeof STORE === 'undefined' || STORE === null),
+            local: Object.keys(localStorage),
+            session: Object.keys(sessionStorage),
+            idb: indexedDB.databases
+                ? (await indexedDB.databases()).map(d => d.name) : [],
+        })"""
+    )
+
+
+def stray_writes(probe: dict, seeded: bool) -> list[str]:
+    """Anything written besides the origin marker the test itself seeded."""
+    allowed = {API_SEEN_KEY} if seeded else set()
+    return (
+        [k for k in probe["local"] if k not in allowed]
+        + probe["session"]
+        + probe["idb"]
+    )
 
 
 def boot(page, base, health, *, me=None, seen_origin=None):
@@ -184,56 +221,75 @@ def main() -> int:
         )
         page.close()
 
-        # 2. The API says NO. This must never become a usable workspace.
-        for status in (401, 403):
+        # 2-4. Every case where the app must STOP (C-27): the API says no (401,
+        # 403), is erroring (503), or this origin has served an API before and
+        # cannot be reached now. In each, no store exists and nothing but the
+        # origin marker was written to localStorage, sessionStorage or IndexedDB.
+        for label, health, seen, words in STOP_CASES:
             page = browser.new_page()
-            boot(page, base, status)
+            boot(page, base, health, seen_origin=base if seen else None)
             body = page.locator("#main").inner_text()
             check(
-                f"{status} -> blocking error, not a workspace",
-                "do not have access" in body.lower(),
+                f"{label} -> blocking error, not a workspace",
+                words in body.lower(),
                 body[:120],
             )
+            probe = probe_storage(page)
             check(
-                f"{status} -> no store was created",
-                page.evaluate("typeof STORE === 'undefined' || STORE === null"),
+                f"{label} -> no store was created",
+                not probe["store"],
+                str(probe),
             )
             check(
-                f"{status} -> nothing written to localStorage",
-                page.evaluate(
-                    "localStorage.getItem('chai-portfolio-local-v1') === null"
-                ),
+                f"{label} -> nothing written to localStorage",
+                not stray_writes(probe, seen),
+                str(probe),
             )
             page.close()
 
-        # 3. The API is erroring. Same: stop, do not fall back.
-        page = browser.new_page()
-        boot(page, base, 503)
-        check(
-            "503 -> blocking error",
-            "cannot reach" in page.locator("#main").inner_text().lower(),
-        )
-        check(
-            "503 -> no local store",
-            page.evaluate("localStorage.getItem('chai-portfolio-local-v1') === null"),
-        )
-        page.close()
-
-        # 4. Network failure, but this origin has served an API before.
-        page = browser.new_page()
-        boot(page, base, 0, seen_origin=base)
-        origin = page.evaluate("location.origin")
-        if origin == "null":
-            # file:// origins serialize as "null"; seed it correctly and retry.
-            page.close()
-            page = browser.new_page()
-            boot(page, 0, seen_origin="null")
-        check(
-            "network failure on a known-API origin -> blocking error",
-            "cannot reach" in page.locator("#main").inner_text().lower(),
-            page.locator("#main").inner_text()[:120],
-        )
-        page.close()
+        # Mutation: the same probes against a copy of the app whose stop branches
+        # fall back to a browser store. If they do not notice, the checks above
+        # prove nothing.
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp)
+            (copy / "app").mkdir()
+            html = (DOCS / "app" / "index.html").read_text()
+            marker = 'fatalError(t("fatal.'
+            check(
+                "mutation: the stop branches are found in the built app",
+                html.count(marker) == 2,
+                str(html.count(marker)),
+            )
+            mutated = html.replace(
+                marker,
+                "STORE=new LocalStore(); MODE=Mode.LOCAL; STORE.create('leak',{});"
+                + marker,
+            )
+            # The page's policy allows one script by its hash, so a changed script
+            # must carry its own new hash or the browser would refuse to run it.
+            old_hash = re.search(r"script-src 'sha256-([^']+)'", html).group(1)
+            # Found by position, not by a pattern over HTML: this is our own built page,
+            # which has exactly one inline script, and a pattern would only pretend to
+            # parse markup (and miss `<SCRIPT>`).
+            start = mutated.index("<script>") + len("<script>")
+            script = mutated[start : mutated.index("</script>", start)]
+            new_hash = base64.b64encode(
+                hashlib.sha256(script.encode()).digest()
+            ).decode()
+            (copy / "app" / "index.html").write_text(
+                mutated.replace(old_hash, new_hash)
+            )
+            with serve(copy) as mbase:
+                for label, health, seen, _words in STOP_CASES:
+                    page = browser.new_page()
+                    boot(page, mbase, health, seen_origin=mbase if seen else None)
+                    probe = probe_storage(page)
+                    check(
+                        f"mutation: {label}, a fallback to browser storage is noticed",
+                        probe["store"] and bool(stray_writes(probe, seen)),
+                        str(probe),
+                    )
+                    page.close()
 
         # 5. A genuinely static host, never seen an API: localStorage IS right,
         #    and it must say so in the layout.
@@ -275,6 +331,27 @@ def main() -> int:
             page.locator("[data-act='new']").count() > 0,
         )
         page.close()
+
+        # 5b. The other direction of C-27: a fresh browser that has never seen an
+        # API is browser-only WITH the standing banner whichever way "no API"
+        # shows up (network error, 404, a 200 that is not our health payload).
+        for label, health in (
+            ("fresh browser, network error", 0),
+            ("fresh browser, 404", 404),
+            ("fresh browser, non-JSON answer", (200, "<html>not an api</html>")),
+        ):
+            page = browser.new_page()
+            boot(page, base, health)
+            check(
+                f"{label} -> browser-only mode",
+                page.locator("#mode").inner_text().strip() == "This browser only",
+                page.locator("#mode").inner_text(),
+            )
+            check(
+                f"{label} -> the standing banner is shown",
+                page.locator("#storageWarning").count() == 1,
+            )
+            page.close()
 
         # 6. After a save, what the user is TOLD about where it went must match
         #    where it went. The server-backed mode used to say "Saved in this

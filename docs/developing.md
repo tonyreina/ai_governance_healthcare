@@ -259,11 +259,12 @@ approved the Simplified Chinese one for the safety-bearing strings recorded in
 its `@meta.reviewers` (9 of the 20; the 11 newer ones, such as the report
 disclaimer, show in English until a reviewer approves them); the rest of it and
 the other catalogs are unreviewed. Safety-bearing
-warnings (the patient-data notice and the storage-mode banners, listed under
-`"@meta".safety` in `en.json`) are shown in English until someone fluent in the
-language reviews them. A wrong translation of a warning is worse than an English
-one. To record a review, add the key and who reviewed it, with the date, to
-that catalog's `"@meta".reviewers`, for example
+warnings (the patient-data notice, the storage-mode banners, the report
+disclaimers and footers, the rules banner and the agent-token warnings, all
+listed under `"@meta".safety` in `en.json`) are shown in English until someone
+fluent in the language reviews them. A wrong translation of a warning is worse
+than an English one. To record a review, add the key and who reviewed it, with
+the date, to that catalog's `"@meta".reviewers`, for example
 `"safety.scope": "A. Reviewer, 2026-10-08"`.
 
 Reports follow the reader: the HTML, PDF and Markdown exports are written in the

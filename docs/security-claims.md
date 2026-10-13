@@ -748,9 +748,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** Every security-relevant event has a stable name and fields, written as
   one JSON object tagged `"stream": "security"`, and the table in the deployment
-  guide is the complete list.
-- **Asserted in:** `docs/deploy.md` — "a test fails if this table and the code ever
-  disagree"
+  guide is the complete list of names. Levels and fields are documented but not
+  machine-checked, and the guide says so.
+- **Asserted in:** `docs/deploy.md` — "a test fails if
+  a name here and in the code ever disagree"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_security_events.py::test_the_documented_events_are_exactly_the_ones_the_code_can_emit`

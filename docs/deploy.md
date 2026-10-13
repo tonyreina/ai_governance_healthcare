@@ -39,13 +39,17 @@ hospital already uses. It also has exactly one hard requirement.
 
 ### The container
 
-One image serving both the static dashboard and the API described in
-[Self-hosting](self-hosting.md). It listens on a single port, speaks
-plain HTTP (TLS is terminated at the front door), and expects:
+Two images. The API image (`server/Dockerfile`) serves only `/api`, as
+described in [Self-hosting](self-hosting.md). The dashboard is static and is
+served by the proxy image (`proxy/Dockerfile`, built from the repository root
+after `pixi run build-app`; D-15). The cloud recipes below deploy the API only,
+so each one says what has to stand in front of it for the dashboard to be
+served. The API listens on a single port, speaks plain HTTP (TLS is terminated
+at the front door), and expects:
 
 | Variable | Purpose |
 |---|---|
-| `PORT` | Port to bind. Set by the platform on all three clouds. |
+| `PORT` | Port to bind (default 8000, or `API_PORT` if set). Cloud Run sets it. On ECS and Azure Container Apps you choose the container port or ingress target port yourself, so set `PORT` (or `API_PORT`) to match it. |
 | `APP_DATABASE_URL` | PostgreSQL connection string for the **restricted** role the API serves as. See [Two database roles](#two-database-roles). |
 | `SSE_MAX_LIFETIME_SECONDS`, `IDLE_LOCK_MINUTES`, `SIGN_OUT_URL` | Optional session controls. See [Session lifetime and automatic logoff](#session-lifetime-and-automatic-logoff). |
 | `LOG_FORMAT` | `json` (default) or `text`. See [Security events](#security-events-collecting-retaining-and-alerting). |
@@ -54,10 +58,12 @@ plain HTTP (TLS is terminated at the front door), and expects:
 | `RUN_MIGRATIONS` | `false` when the API serves as a restricted role, which cannot create tables. A migration job runs instead. |
 | `DATABASE_URL` | The **owner's** connection string, for the migration job only. The API refuses to start if its connection is the owner's or a superuser's. |
 | `ALLOW_OWNER_ROLE` | `true` lets the API serve as the owner anyway: for a laptop or a test, never a deployment. Off by default. See [Two database roles](#two-database-roles). |
-| `IDENTITY_MODE` | `iap`, `alb` or `easyauth` — which header to read. |
+| `IDENTITY_MODE` | `iap`, `alb`, `easyauth` or `proxy` (the default: `X-Forwarded-Email`, for oauth2-proxy and similar) — which header to read. Set it explicitly on a cloud; left unset, the API reads the wrong header and answers 401. |
 | `IDENTITY_AUDIENCE` | Expected `aud` (GCP), **load balancer** ARN (AWS, not the listener's) or client ID (Azure). Read **only** when `IDENTITY_HEADER_FORMAT=jwt` — the API refuses to start otherwise. |
 
-`GET /api/health` returns `{"status":"ok","version":"..."}` and must not
+`GET /api/health` returns `status` (`ok`, or `unavailable` with a 503 when the
+database is down), `version`, `events`, `database`, `db_role`, `auth_mode`,
+`retirement_rules`, `idle_lock_minutes` and `sign_out_url`, and must not
 require authentication — every platform below health-checks it from
 inside the load balancer, where no identity header exists. When the database
 cannot be reached it answers **503** with `"status":"unavailable"`, so a probe
@@ -119,7 +125,7 @@ leave room to act:
 
 | | Disk alert | Let the disk grow |
 |---|---|---|
-| Cloud SQL | an alert on `cloudsql.googleapis.com/database/disk/utilization` | `--storage-auto-increase` (and a limit) |
+| Cloud SQL | an alert on `cloudsql.googleapis.com/database/disk/utilization` | storage auto-increase (on by default; cap it with `--storage-auto-increase-limit`) |
 | RDS | a CloudWatch alarm on `FreeStorageSpace` | `--max-allocated-storage` enables storage autoscaling |
 | Azure Database | a metric alert on `storage_percent` | storage auto-grow |
 | Compose stack | an alert on the Docker volume's filesystem | extend the volume |
@@ -147,7 +153,7 @@ is the usual answer, and what to confirm differs:
 |---|---|---|
 | Cloud SQL | on by default, with Google-managed keys | optional, chosen when the instance is created |
 | RDS | **off unless you pass `--storage-encrypted` when you create the instance**, and it cannot be turned on for an existing one (restore from an encrypted copy of a snapshot); the command below sets it | optional, with `--kms-key-id` |
-| Azure Database for PostgreSQL | on by default, with service-managed keys | optional |
+| Azure Database for PostgreSQL | on by default, with service-managed keys | optional, chosen only when the server is created, with a key vault in the same region, and it cannot be reverted |
 
 !!! warning "Not exercised against any real managed database"
 
@@ -197,16 +203,18 @@ optional extras. Set them when you create the instance:
 
 | | Point-in-time recovery and backup retention | Deletion protection | Copy outside the account |
 |---|---|---|---|
-| Cloud SQL | `--backup-start-time=03:00 --enable-point-in-time-recovery --retained-backups-count=14 --retained-transaction-log-days=7` | `--deletion-protection` | `gcloud sql export sql` to a bucket in **another project** |
+| Cloud SQL | `--backup-start-time=03:00 --enable-point-in-time-recovery --retained-backups-count=35 --retained-transaction-log-days=7` | `--deletion-protection` | `gcloud sql export sql` to a bucket in **another project** |
 | RDS | `--backup-retention-period 35` (the maximum; it also enables point-in-time recovery) | `--deletion-protection` | snapshots copied to **another account** (AWS Backup, or a shared, re-encrypted snapshot) |
-| Azure Database | `--backup-retention 35` | a resource lock on the server | `--geo-redundant-backup Enabled`, which can only be set when the server is created |
+| Azure Database | `--backup-retention 35` | a resource lock on the server | `pg_dump` to a storage account in **another subscription**. `--geo-redundant-backup Enabled` (settable only at server creation) adds a copy in the paired region, but it stays inside the same server and is deleted with it, so it is not a copy outside the account |
 
 !!! warning "Not exercised against any real managed database"
 
     The flags above are from the providers' documentation. None has been run
-    here: check each against the current documentation before you rely on it,
-    and do not read the retention numbers as recommendations. They are what the
-    mechanism allows.
+    here: check each against the current documentation before you rely on it.
+    The retention numbers are examples to check against the 35-day backup policy
+    ([Privacy and retention](privacy.md), R-54), not recommendations. The Cloud
+    SQL transaction-log setting stays at 7 days because that is the maximum
+    its documentation gives for the Enterprise edition.
 
 Decide, and write down, two numbers this repository cannot choose for you:
 
@@ -239,7 +247,10 @@ go-live:
    and how often disposal runs (monthly is typical). Record who approved it and
    when, with your other records-management approvals.
 2. **Set the periods if they differ**, as the database owner, in the
-   `retention_policy` table. The change is stamped with who made it and when.
+   `retention_policy` table. The change is stamped with the database role that
+   made it and when. If several
+   people share the owner role, the stamp names the role, not the person, so
+   record who made the change with your other records-management approvals.
 3. **Schedule `make dispose`** (or the same `psql` call against your managed
    database) at the approved interval, and have someone read the report before
    each `APPLY=1` run.
@@ -341,9 +352,12 @@ things break it on managed platforms:
   `X-Accel-Buffering: no`, and flush after every event.
 - **Timeouts.** Covered per cloud below. Send a comment heartbeat
   (`: ping\n\n`) every 15–30 seconds so idle timers never fire.
-- **More than one replica.** An event written on replica A must reach a
-  browser subscribed on replica B. Use PostgreSQL `LISTEN`/`NOTIFY` as
-  the fan-out bus, or pin the service to a single replica until you do.
+- **More than one replica.** The API fans events out between replicas with
+  PostgreSQL `LISTEN`/`NOTIFY`, so a change written on replica A reaches a
+  browser on replica B. Check that `/api/health` reports `"events":"live"` on
+  every replica. If it stays `"local-only"` (behind a transaction-pooling proxy
+  such as PgBouncer, for example), connect the API to the database directly or
+  run a single replica.
 
 ### The read trail
 
@@ -354,7 +368,7 @@ Rule's audit controls standard (45 CFR 164.312(b)).
 
 `access_event` holds one row per access, **in the same transaction as the read
 it describes**: a list, a project's revision list, one revision, a project's
-audit log, an event-stream attach, and an export. A read that cannot be recorded
+audit log, and an event-stream attach. A read that cannot be recorded
 is not served. It is append-only: a trigger refuses any `UPDATE`, and refuses a
 `DELETE` of a row younger than the read-trail period or belonging to a project
 under a litigation hold, so old rows go only when an operator disposes of them
@@ -389,7 +403,8 @@ does not contain it.
 
 **What this does not cover.** Exports are built in the browser from data it
 already fetched, so the server never sees one happen. The export beacon records
-ordinary use; it is **not** a control, because a client can omit it. What bounds
+ordinary use; it is **not** a control, because a client can omit it, so the
+absence of an export row is not proof that none happened. What bounds
 what any export could contain is the reads that fetched the data, and those are
 recorded. `source_ip` is what the proxy reported, for correlation, and is not
 authentication. It is kept for six years, or your audit-log
@@ -399,7 +414,8 @@ policy if shorter (see [Privacy and retention](privacy.md)).
 
 What is running is what the repository says: the API's dependencies are locked
 with hashes (`server/requirements.txt`), and the base images, the database and
-the proxy are pinned by digest (`compose.yaml`, both Dockerfiles). A rebuild
+the proxy are pinned by digest (`compose.yaml` and the three Dockerfiles:
+`server/`, `proxy/`, `mcp/`). A rebuild
 produces the same thing from the same source, and a new base image arrives as a
 reviewed pull request from Dependabot, not as whatever a tag points at that day.
 
@@ -416,8 +432,14 @@ docker compose up -d                      # recreate only what changed
 
 `make lock` regenerates `server/requirements.txt` inside the same Python the
 image uses; review its diff, because a changed hash is a changed dependency. For
-the cloud image, rebuild and push the proxy image from `proxy/Dockerfile` and
-deploy the new tag; the base image inside it is pinned by digest the same way.
+the cloud, rebuild and push the API image from `server/Dockerfile` and, wherever
+you run the dashboard, the proxy image from `proxy/Dockerfile` (run
+`pixi run build-app` first, because the dashboard is copied into it), and deploy
+the new tags; the base images inside them are pinned by digest the same way.
+
+If you run the optional MCP service (`--profile agent-mcp`), also run
+`docker compose --profile agent-mcp build --pull mcp`; `make lock-mcp`
+regenerates `mcp/requirements.txt`.
 
 A scheduled scan (`.github/workflows/security.yml`) builds our images weekly and
 on every pull request, fails on a HIGH or CRITICAL finding that has a fix, and
@@ -451,7 +473,7 @@ recording that a project was deleted.
 | `auth.audience_rejected` | warning | `aud`, `signer`, `expected` | A token minted for another service reached this one. |
 | `csrf.rejected` | warning | `method`, `path`, `site` | A cross-site write was refused. |
 | `access.denied` | warning | `actor`, `project`, `need`, `held`, `status` | An authenticated user reached for a project they have no right to. A burst from one `actor` is worth a page. |
-| `access.breakglass` | warning | `actor`, `project`, `action` | Emergency access was used. **Alert on any**, then check the project's own audit log. |
+| `access.breakglass` | warning | `actor`, `project`, `action` (a list that included projects only emergency access could see has `actor`, `action` and `count`, and no `project`) | Emergency access was used. **Alert on any**, then check the project's own audit log. |
 | `project.created` | info | `actor`, `project` | A project was created. |
 | `project.deleted` | info | `actor`, `project` | A project was deleted (its history is kept; see the deletion tombstone). |
 | `versions.purged` | warning | `actor`, `project`, `revisions`, `log_entries`, `incarnation`, `purged_at`, `through_rev`, `through_seq` | A version history and its audit log were destroyed. Review every one. Keep these: they re-apply the purge after a restore. |
@@ -461,16 +483,17 @@ recording that a project was deleted.
 | `retirement.rules_refused` | warning | `framework`, `active_primary`, `added`, `removed`, `projects`, `rule_set_hash`, `active_rule_set_hash` | The migrate job refused a manifest that adds or removes a retirement rule, or changes the primary, without the `RETIREMENT_RULES_ACK` for exactly that change, and changed nothing. The new build does not start; over a running stack the old API keeps running ([Self-hosting](self-hosting.md#which-build-it-serves-and-the-retirement-rules)). Either an old build was deployed over a newer one, or the change needs an operator's acknowledgment. |
 | `ratelimit.tripped` | warning | `key`, `limit`, `window_seconds` | A client hit the rate limit. Once per client per window. |
 | `stream.refused` | warning | `actor` | Too many open event streams for one user. |
-| `stream.attached` | info | `actor`, `action`, `source_ip` | An event stream was opened. The read trail records it too. |
-| `record.read` | info | `actor`, `action`, `project`, `revision`, `source_ip` | A list or a read of versions or a log. One per row of the read trail. |
-| `record.exported` | info | `actor`, `action`, `project`, `format`, `source_ip` | The dashboard reported an export. |
+| `stream.attached` | info | `actor`, `action`, `source_ip`, `via`, `token_id` (agent calls only) | An event stream was opened. The read trail records it too. |
+| `record.read` | info | `actor`, `action`, `project`, `revision`, `source_ip`, `via`, `token_id` (agent calls only) | A list or a read of versions or a log. One per row of the read trail. |
+| `record.exported` | info | `actor`, `action`, `project`, `format`, `source_ip`, `via` | The dashboard reported an export. |
 | `agent_token.minted` | info | `actor`, `token_id`, `expires_at` | A person minted an agent token ([Agent API](agent-api.md)). The token's public id, never its secret. |
 | `agent_token.revoked` | info | `actor`, `token_id`, `by` | A person revoked one of their own agent tokens. An operator's revocation is a row in `agent_token`, not an event: the script's output is the record. |
-| `agent.refused` | warning | `actor`, `action`, `project`, `source_ip`, `via`, `token_id`, `reason`, `route` | An agent call was refused and is a read-trail row: a token that exists but is expired, revoked or given the wrong secret (`reason` says which; the caller is only told it is invalid), or a project the token's user cannot see. Rows are bounded per token id across all sources and overall, by kind: at most 10 wrong-secret rows per token id a window and 5 for a right secret or a project not visible, and 100 of each kind overall. |
-| `agent.failures` | warning | `failures`, `limited_sources`, `global_limited`, `evicted_sources`, `top`, `rows_not_written`, `window_seconds` | One line a window, written by a background task every half window (and at shutdown), summarizing the failed agent calls (bad, unknown, expired or revoked tokens) and the trail rows the budgets turned away: how many failures, how many sources went over their limit, how many were answered by the global budget, how many sources were dropped to stay within the table's cap, and the top sources with their counts. No row is written for the failures themselves. A large `failures` is a guesser. |
+| `agent.refused` | info | `actor`, `action`, `project`, `source_ip`, `via`, `token_id`, `reason`, `route` | An agent call was refused and is a read-trail row: a token that exists but is expired, revoked or given the wrong secret (`reason` says which; the caller is only told it is invalid), or a project the token's user cannot see. Rows are bounded per token id across all sources and overall, by kind: at most 10 wrong-secret rows per token id a window and 5 for a right secret or a project not visible, and 100 of each kind overall. |
+| `agent.failures` | warning | `failures`, `limited_sources`, `global_limited`, `evicted_sources`, `top`, `rows_not_written`, `window_seconds`, `source_limit`, `global_limit` | One line a window, written by a background task every half window (and at shutdown), summarizing the failed agent calls (bad, unknown, expired or revoked tokens) and the trail rows the budgets turned away: how many failures, how many sources went over their limit, how many were answered by the global budget, how many sources were dropped to stay within the table's cap, and the top sources with their counts; `source_limit` and `global_limit` are the per-source and global failure limits in force that window. No row is written for the failures themselves. A large `failures` is a guesser. |
 
 The names are an interface: an alert is written against them, so a test fails if
-this table and the code ever disagree.
+a name here and in the code ever disagree. Levels and fields are documented from
+the code but not machine-checked.
 
 Fields are ids and facts, never a document, a token or a secret, and every value
 is JSON-encoded, so an identity containing a quote or a newline stays inside its
@@ -511,8 +534,8 @@ workstations.
 
 | Front door | Where the session lifetime is set | Sign-out |
 |---|---|---|
-| Google IAP | the IAP reauthentication policy on the protected resource (session duration) | `https://YOUR_APP/?gcp-iap-mode=CLEAR_LOGIN_COOKIE` |
-| AWS ALB (`authenticate-oidc`) | the action's `SessionTimeout` (seconds; the default is seven days) | the ALB has no logout endpoint: use your IdP's end-session URL, and keep `SessionTimeout` short |
+| Google IAP | the IAP reauthentication policy on the protected resource (session duration) | `https://YOUR_APP/?gcp-iap-mode=CLEAR_LOGIN_COOKIE` (clears IAP's cookies; while the browser still has a valid Google session it can sign the user straight back in, so on shared workstations also sign out of the Google account) |
+| AWS ALB (`authenticate-oidc`) | the action's `SessionTimeout` (seconds; the default is seven days) | the ALB has no logout endpoint. AWS says the application must expire the ALB's authentication session cookies (`AWSELBAuthSessionCookie`) and then redirect to the IdP's logout endpoint. This application does not set those cookies, so a `SIGN_OUT_URL` that points only at the IdP's end-session URL does **not** end the ALB session. `SessionTimeout` is the real control: keep it short, and the IdP's access-token lifetime too |
 | Azure Easy Auth | the authentication settings' cookie expiration (`login.cookieExpiration`) | `/.auth/logout` |
 | oauth2-proxy | `--cookie-expire` and `--cookie-refresh` | `/oauth2/sign_out` |
 
@@ -660,11 +683,15 @@ the problem this tool exists to solve.
 What delegating to the identity provider buys is more specific than
 "less code":
 
-**Offboarding actually works.** A clinician who leaves is disabled once,
-in the directory, and loses access here at the same moment they lose
-access to everything else. With local accounts, this tool becomes one
-more place somebody has to remember to revoke — and the one nobody
-remembers, because it is used by a committee that meets monthly.
+**Offboarding mostly works.** A clinician who leaves is disabled once, in the
+directory, and can no longer sign in here. Sessions already open end when the
+front door's session does (you set that lifetime, see [Session lifetime and
+automatic logoff](#session-lifetime-and-automatic-logoff)), an open event stream
+within `SSE_MAX_LIFETIME_SECONDS`, and an agent token within 8 hours unless an
+operator revokes it (`make agent-tokens REVOKE=1 WHO=<id>`). With local
+accounts, this tool becomes one more place somebody has to remember to revoke,
+and the one nobody remembers, because it is used by a committee that meets
+monthly.
 
 **MFA is whatever the hospital already requires**, enforced at the front
 door, with no second enrollment for users to abandon halfway.
@@ -783,9 +810,12 @@ equally direct: "you must verify the signature of `x-amzn-oidc-data`."
     environment, because the rest of this page assumes you have.
 
     `server/app/auth.py` **decodes** a signed assertion to read its claims. It
-    does **not** verify the signature, the issuer or the expiry, and it cannot:
-    no public key is ever fetched. A forged assertion presented to the
-    container directly is accepted.
+    does **not** verify the signature or the issuer, and it cannot: no public
+    key is ever fetched. It does reject a JWT assertion whose numeric `exp`
+    claim is already in the past, but that is a staleness check, not security:
+    with no signature check a forger simply sets a future `exp` (or omits it,
+    which is accepted). A forged assertion presented to the container directly
+    is accepted.
 
     That is the auth model this project chose — trust a header set by a front
     door, and make the front door the only way in. It is a legitimate choice,
@@ -806,7 +836,7 @@ The upgrade path, should you want real verification:
 2. Verify the signature against the provider's public key.
 3. Verify the audience/signer matches THIS service, not merely that
    the token is valid somewhere in the cloud provider's fleet.
-4. Verify issuer and expiry.
+4. Verify the issuer, and require exp (an unsigned exp proves nothing).
 5. Return {id, name, email} from the verified claims.
 ```
 
@@ -836,6 +866,25 @@ Cloud Run service (--no-allow-unauthenticated, --iap)
   v
 Cloud SQL for PostgreSQL (no public IP)
 ```
+
+!!! warning "The egress and database steps are not in this recipe"
+
+    Google's guide says that to reach a private-IP Cloud SQL instance, Cloud Run
+    must route egress through Direct VPC egress or a Serverless VPC Access
+    connector, "to the same VPC network as your Cloud SQL instance", and that it
+    then connects over TCP to the private IP address on port 5432. The
+    commands below do not set the network flags or create the private services
+    access range, and they use the `/cloudsql` socket path, which the guide
+    describes for public IP. Follow [Connect from Cloud
+    Run](https://docs.cloud.google.com/sql/docs/postgres/connect-run) for those
+    steps before you rely on the diagram.
+
+!!! note "This recipe deploys the API only"
+
+    The service in this section runs the API image, which serves only `/api`.
+    The dashboard is served by the proxy image (`proxy/Dockerfile`), so it needs
+    that image as the front service, or its static files hosted behind the same
+    sign-in. This page does not give a recipe for either.
 
 IAP can now be enabled directly on a Cloud Run service. This is the
 current recommended shape: it protects the `run.app` endpoint itself,

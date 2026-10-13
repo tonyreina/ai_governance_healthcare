@@ -7,13 +7,22 @@ name: Test
 # finding closed, ran only when somebody remembered to run them locally, and
 # pull requests merged on a green check that had executed none of them.
 #
-# Three suites need three environments, so there are three jobs, plus a unit
-# test of this configuration:
+# Three suites need three environments, so there are three kinds of job, plus a
+# unit test of this configuration:
 #
-#   workflows  the CI config itself: it must run every test that exists
-#   server     the API against a real PostgreSQL (what it tests IS the database)
-#   browser    the dashboard in a real browser
-#   stack      the proxy and the whole Compose stack, end to end
+#   workflows   the CI config itself: it must run every test that exists
+#   server      the API against a real PostgreSQL (what it tests IS the database)
+#   browser-*   the dashboard in a real browser
+#   engines     the page policy and the injection suites in Firefox and WebKit
+#   stack       the proxy and the whole Compose stack, end to end
+#   proxy-mcp   the MCP route and its gate, each guard broken, on a real Caddy
+#
+# Every job starts at once, so the run takes as long as its slowest job. The slow
+# ones are split to run side by side on separate runners (D-97): server is a matrix
+# of its three pytest runs, each with its own PostgreSQL; the Chromium suites are
+# dealt into three jobs of about the same length; and proxy-mcp is a matrix of
+# shards that partition its mutants. Nothing is dropped or skipped to save time:
+# test_workflows.py checks that every suite still runs, and runs once.
 #
 # REQUIRE_TESTS makes a suite that cannot run FAIL instead of skipping. A skip
 # exits 0 and reads as a pass: without this, the 106 database tests would skip
@@ -49,6 +58,10 @@ jobs:
 
       # Does CI run every test that exists, and does it fail when one cannot run?
       - run: pixi run test-workflows
+
+      # The proxy-mcp shards run every mutant exactly once, and a selector that drops
+      # or repeats one is noticed (D-97).
+      - run: pixi run test-mutant-shards
 
       # The build embeds exactly the configured frameworks, and refuses any other (#168).
       - run: pixi run test-build-config
@@ -102,11 +115,19 @@ jobs:
       - name: actionlint
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
 
+  # The three pytest runs, one per leg, each against its own PostgreSQL (D-97). They
+  # used to run one after another in one job, about 6 minutes each. Each step runs
+  # only in its own leg; test_workflows.py checks that every leg runs its suite, so a
+  # leg that runs nothing cannot pass for one that ran.
   server:
-    name: server (unit + integration, PostgreSQL 18)
+    name: server (${{ matrix.suite }}, PostgreSQL 18)
     runs-on: ubuntu-latest
     # The agent API's mutation tests run a copy of the server once per broken guard.
-    timeout-minutes: 25
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [owner, app-role, mcp]
     services:
       postgres:
         # The major version compose.yaml pins. test_workflows.py fails if the two
@@ -139,6 +160,7 @@ jobs:
       - run: node --version
 
       - name: pytest, connected as the table owner
+        if: ${{ matrix.suite == 'owner' }}
         working-directory: server
         run: pytest -q -rs
 
@@ -146,6 +168,7 @@ jobs:
       # in a real deployment (#48). "The role can do its job" is only shown by
       # doing it: this is every API test passing without the owner's privileges.
       - name: pytest, connected as the restricted role
+        if: ${{ matrix.suite == 'app-role' }}
         working-directory: server
         env:
           TEST_APP_ROLE: "1"
@@ -154,15 +177,22 @@ jobs:
       # The optional MCP service (#164, R-73, D-91): the SDK's own client against the
       # real service in front of the real API on this PostgreSQL, and every guard broken
       # in a copy and noticed. No network is used: the service is called on loopback.
-      - run: pip install -e "mcp[dev]"
+      - if: ${{ matrix.suite == 'mcp' }}
+        run: pip install -e "mcp[dev]"
       - name: pytest, the MCP service
+        if: ${{ matrix.suite == 'mcp' }}
         working-directory: mcp
         run: pytest -q -rs
 
-  browser:
-    name: browser (integration, Chromium)
+  # The Chromium suites, dealt into three jobs that run side by side (D-97). They
+  # are balanced by measured time (run 38307463666, about 400 seconds of suites
+  # each): one long suite, test-rules-banner, sets the floor. One step per suite so
+  # the run shows which failed, and `!cancelled()` so one failure does not hide the
+  # rest; test_workflows.py checks both, and that every suite still runs.
+  browser-1:
+    name: browser (integration, Chromium, 1 of 3)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -177,8 +207,6 @@ jobs:
 
       - run: pixi run playwright install --with-deps chromium
 
-      # One step per suite so the run shows which failed, and `!cancelled()` so
-      # one failure does not hide the rest.
       - name: the CHAI and OPTICA dashboard
         run: pixi run test-app
       # check-app is shown failing on broken, rebuilt copies of app/, and every
@@ -192,6 +220,34 @@ jobs:
       - name: access control in the UI
         if: ${{ !cancelled() }}
         run: pixi run test-access
+      - name: the page says when its server retires records by other rules
+        if: ${{ !cancelled() }}
+        run: pixi run test-rules-banner
+
+  browser-2:
+    name: browser (integration, Chromium, 2 of 3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
+        with:
+          locked: true
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
+
+      - run: pixi run playwright install --with-deps chromium
+
+      # The Markdown report rendered by CommonMark renderers, the HTML audited (#167).
+      - name: the Markdown report, rendered, is still only text
+        run: pixi run test-markdown-render
+      - name: a refused save is sent once, kept, and explained
+        if: ${{ !cancelled() }}
+        run: pixi run test-save-refused
       - name: changelog
         if: ${{ !cancelled() }}
         run: pixi run test-changelog
@@ -202,6 +258,7 @@ jobs:
       # The litigation hold on the setup page: owner only, needs a reason, and sends
       # what the owner chose (#57).
       - name: hold UI
+        if: ${{ !cancelled() }}
         run: pixi run test-holds-ui
       - name: exports
         if: ${{ !cancelled() }}
@@ -221,8 +278,26 @@ jobs:
       - name: audit log writes
         if: ${{ !cancelled() }}
         run: pixi run test-audit
+
+  browser-3:
+    name: browser (integration, Chromium, 3 of 3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
+        with:
+          locked: true
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
+
+      - run: pixi run playwright install --with-deps chromium
+
       - name: exports are reported to the read trail
-        if: ${{ !cancelled() }}
         run: pixi run test-export-beacon
 
       # Each export states which storage mode produced it (#93).
@@ -244,10 +319,6 @@ jobs:
       - name: injection
         if: ${{ !cancelled() }}
         run: pixi run test-injection
-      # The Markdown report rendered by CommonMark renderers, the HTML audited (#167).
-      - name: the Markdown report, rendered, is still only text
-        if: ${{ !cancelled() }}
-        run: pixi run test-markdown-render
 
       # Governance metadata only, never patient data, in any mode, stated where a
       # deployer reads first (#34). The in-app notice is in test-boot.
@@ -257,12 +328,6 @@ jobs:
       - name: session controls (idle lock, sign-out, lost stream)
         if: ${{ !cancelled() }}
         run: pixi run test-session-ui
-      - name: the page says when its server retires records by other rules
-        if: ${{ !cancelled() }}
-        run: pixi run test-rules-banner
-      - name: a refused save is sent once, kept, and explained
-        if: ${{ !cancelled() }}
-        run: pixi run test-save-refused
       - name: the agent access page mints, lists and revokes, and never keeps the token
         if: ${{ !cancelled() }}
         run: pixi run test-agent-access
@@ -441,19 +506,25 @@ jobs:
         if: ${{ always() }}
         run: docker compose --profile agent-mcp down -v
 
-  # The page's own policy is enforced by each browser's own implementation, so the
-  # two suites that depend on it run in Firefox and WebKit as well (#160). The
-  # matrix value reaches the tests as TEST_BROWSER, and an unknown value is an
-  # error there, not a fallback to Chromium.
   # The optional MCP service's route in the Caddyfile and its gate: only the
   # transport's methods on /mcp, every identity header stripped and none set, a 502
   # with nothing behind it, each guard broken in a copy and noticed (#164). Its own
-  # job: it restarts a real Caddy for every broken copy and takes about 35 minutes,
-  # which timed out the stack job it first ran in.
+  # job: it restarts a real Caddy for every broken copy and took about 26 minutes in
+  # one piece, which timed out the stack job it first ran in. It is split into
+  # shards that partition the mutants (D-97): MUTANT_SHARD=i/n runs every n-th one,
+  # and `test-mutant-shards` shows the shards run each mutant exactly once.
   proxy-mcp:
-    name: proxy, the MCP route and the gate (each guard broken)
+    name: proxy, the MCP route and the gate (each guard broken, ${{ matrix.shard }} of ${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    env:
+      MUTANT_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+      # Print each mutant, and how long it took, as it runs.
+      PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -463,6 +534,10 @@ jobs:
 
       - run: pixi run test-proxy-mcp
 
+  # The page's own policy is enforced by each browser's own implementation, so the
+  # two suites that depend on it run in Firefox and WebKit as well (#160). The
+  # matrix value reaches the tests as TEST_BROWSER, and an unknown value is an
+  # error there, not a fallback to Chromium.
   engines:
     name: browser engines (${{ matrix.engine }})
     runs-on: ubuntu-latest
@@ -508,7 +583,7 @@ jobs:
   tests-passed:
     name: tests passed
     if: ${{ always() }}
-    needs: [workflows, server, browser, engines, stack, proxy-mcp]
+    needs: [workflows, server, browser-1, browser-2, browser-3, engines, stack, proxy-mcp]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

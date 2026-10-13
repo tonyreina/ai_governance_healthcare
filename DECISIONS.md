@@ -3653,3 +3653,68 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   share a day; each shown failing by a mutation), run by `pixi run
   test-supply-chain` in CI. The file's validity against Dependabot's schema is
   checked by GitHub only once it is on `main`.
+
+### D-97 The slow test jobs run in pieces side by side, and nothing is dropped
+
+- Status: Accepted (the owner, 2026-10-12: "make the Test workflow finish faster,
+  without dropping or skipping any suite"). Changes the shape of
+  `.github/workflows/test.yml` that D-23 describes; D-23's rules (every test runs,
+  a skip fails, one aggregate check) are unchanged.
+- **Why.** Every job starts at once, so a run takes as long as its slowest job.
+  Measured on run 38307463666 (main, 26m12s): proxy-mcp 26.0m in one step,
+  browser (Chromium) 20.4m for about 38 suites one after another (test-rules-banner
+  6.0m, test-markdown-render 3.0m, test-save-refused 2.8m), server 16.3m for three
+  pytest runs one after another (owner 4.9m, restricted role 4.8m, MCP 6.1m), stack
+  10.9m, engines 6.0m and 6.6m, workflows 0.8m.
+- **What.**
+    - **proxy-mcp** is a matrix of five shards. `MUTANT_SHARD=i/n` makes
+      `tests/test_proxy_mcp_mutations.py` run the mutant at position k only when
+      k % n == i - 1; the list is ordered slow kinds first (timeouts, then gate,
+      then route), so dealing round-robin spreads each kind evenly. `n` is the
+      matrix's own `strategy.job-total`, not a number written by hand. Unset, every
+      mutant runs, as before. A value that is not `i/n` with 1 <= i <= n is an
+      error, never a fallback. Each shard first runs, against the unbroken files,
+      every check its mutants use: a mutant only counts as noticed when the same
+      check passes the real files on the same runner. `PYTHONUNBUFFERED=1`, so a
+      log shows each mutant and its time as it runs.
+    - **server** is a matrix of its three pytest runs (`owner`, `app-role`, `mcp`),
+      each with its own PostgreSQL service on the same pinned image. Each pytest
+      step runs only in its leg; `TEST_APP_ROLE=1` only in `app-role`.
+    - **browser** is three jobs, `browser-1` to `browser-3`, the Chromium suites
+      dealt by measured time into about 400 seconds each; test-rules-banner alone
+      sets the floor. Every suite after the first in a job runs even when one
+      before it failed (the hold UI step had lost that condition; it has it now).
+    - Unchanged: the `tests passed` job, its `always()` and its skipped-is-failure
+      step; the triggers; `REQUIRE_TESTS` at workflow level; the engines matrix;
+      stack's order (test-stack-mcp before test-stack); the pinned action SHAs.
+- **Guarded by.** `tests/test_workflows.py`: each server leg runs exactly one
+  pytest step, from the right directory, and only `app-role` sets
+  `TEST_APP_ROLE`; the proxy-mcp shards are exactly 1..n and each is told
+  `${{ matrix.shard }}/${{ strategy.job-total }}`; no Chromium suite runs in two
+  browser jobs, each installs Chromium first, and each later suite runs after
+  an earlier failure; with a mutation test for each (a leg dropped or
+  misspelled, a shard missing, a count written by hand, a suite duplicated, and
+  more). The
+  existing rules still hold over the new jobs: every `test-*` task is run, every
+  job has a timeout, and `tests passed` needs every job. `pixi run
+  test-mutant-shards` (in the workflows job) shows the shards partition the
+  mutant list for every shard count from 1 to one past its length, and that a
+  selector that drops, repeats or misnumbers a mutant is noticed.
+- **Rejected.**
+    - *pytest-xdist for the server suites*: the tests share one database and
+      assert on its state (row locks, triggers, the roles), so parallel workers
+      would need a database each; a matrix gives each leg its own for free.
+    - *Fewer suites, fewer mutants, or a nightly-only run of the slow ones*: the
+      owner's instruction forbids dropping or skipping any suite, and a check that
+      runs only sometimes is how #32 happened.
+    - *One browser job looping over a list of tasks*: it would lose the one step
+      per suite that shows which failed.
+    - *YAML anchors for the three browser jobs' shared setup*: the pinned
+      actionlint (1.7.7) predates GitHub's support for them.
+    - *Splitting the mutants by kind into named jobs*: the gate's 24 mutants alone
+      take longer than the target; round-robin shards scale by changing one list.
+- Cost: more runners per run (5 proxy-mcp, 3 server, 3 browser, against 1 each),
+  each repeating its setup (about a minute), and each proxy-mcp shard repeats the
+  unbroken-file checks it needs (about three minutes for a shard with a timeout
+  mutant).
+- Source: the owner's instruction of 2026-10-12; run 38307463666; D-23; #32.

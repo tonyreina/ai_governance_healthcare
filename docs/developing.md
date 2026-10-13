@@ -347,6 +347,13 @@ service container, the dashboard suites in Chromium, the proxy against a real
 Caddy, and the whole Compose stack end to end. One job, **tests passed**, fails
 if any of them failed, was canceled, or was skipped.
 
+The slow suites run in pieces side by side: the three server pytest runs are
+three matrix legs, each with its own PostgreSQL; the Chromium suites are dealt
+into three jobs; and the MCP route's mutation test is split into five shards.
+`MUTANT_SHARD=i/n pixi run test-proxy-mcp` runs one shard locally (unset, it runs
+every mutant), and `pixi run test-mutant-shards` checks that the shards run every
+mutant exactly once.
+
 `main` requires that job: a pull request cannot be merged while it is pending or
 red, and there is no administrator bypass.
 

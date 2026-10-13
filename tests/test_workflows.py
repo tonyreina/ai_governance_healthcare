@@ -17,7 +17,12 @@ What is asserted, and why each one earns its place:
 * nothing may `continue-on-error`, and every job has a timeout;
 * the Postgres in CI is the major version compose.yaml pins;
 * one aggregate job depends on all the others, so branch protection can require a
-  single name and a new job cannot be forgotten.
+  single name and a new job cannot be forgotten;
+* the slow jobs split to run side by side (D-97) still run everything, once: each
+  leg of the server matrix runs its own pytest (and only the restricted-role leg
+  sets TEST_APP_ROLE), the proxy-mcp matrix holds every shard 1..n and tells each
+  which it is, and the Chromium suites dealt into browser-* jobs run once each,
+  after Chromium is installed, and even after an earlier suite failed.
 
 Each rule has a mutation test: break a copy of the real workflow and demand the
 rule notice. A check that is never shown to fail is a claim, not a control.
@@ -290,6 +295,147 @@ def engine_problems(workflow: dict) -> list[str]:
     return problems
 
 
+# --- the split jobs (D-97) ---------------------------------------------------
+# The slow jobs run in pieces side by side. A piece that quietly runs nothing is
+# green, so each split is checked for running everything, once.
+
+# Each leg of the server matrix and the directory its pytest runs from.
+SERVER_LEGS = {"owner": "server", "app-role": "server", "mcp": "mcp"}
+APP_ROLE_LEG = "app-role"
+APP_ROLE_VAR = "TEST_APP_ROLE"
+LEG_CONDITION = re.compile(r"^\$\{\{\s*matrix\.suite == '([^']*)'\s*\}\}$")
+
+
+def server_matrix_problems(workflow: dict) -> list[str]:
+    """The server job is a matrix of its three pytest runs. Each leg runs its own
+    suite exactly once, from the right directory, and only the restricted-role leg
+    connects as the restricted role."""
+    job = jobs(workflow).get(SERVER_JOB, {})
+    strategy = job.get("strategy") or {}
+    legs = list((strategy.get("matrix") or {}).get("suite") or [])
+    problems = []
+    if sorted(legs) != sorted(SERVER_LEGS):
+        problems.append(f"the server matrix is {legs}, not {sorted(SERVER_LEGS)}")
+    if strategy.get("fail-fast", True) is not False:
+        problems.append("the server matrix cancels the other legs when one fails")
+    if APP_ROLE_VAR in (job.get("env") or {}):
+        problems.append(f"{APP_ROLE_VAR} is set for every leg of the server job")
+
+    by_leg: dict[str, list[dict]] = {leg: [] for leg in SERVER_LEGS}
+    for step in job.get("steps", []):
+        run = step.get("run", "")
+        found = LEG_CONDITION.match(str(step.get("if", "")))
+        leg = found[1] if found else None
+        if "pytest" in run:
+            if leg is None:
+                problems.append(
+                    f"a pytest step is not tied to one leg: {step.get('if')!r}"
+                )
+            elif leg not in legs:
+                problems.append(
+                    f"a pytest step runs in leg {leg!r}, which does not exist"
+                )
+            else:
+                by_leg[leg].append(step)
+        elif "mcp[dev]" in run and leg not in (None, "mcp"):
+            problems.append("the MCP service's package is not installed in the mcp leg")
+        if APP_ROLE_VAR in (step.get("env") or {}) and leg != APP_ROLE_LEG:
+            problems.append(
+                f"{APP_ROLE_VAR} is set on a step outside the {APP_ROLE_LEG} leg"
+            )
+
+    for leg, directory in SERVER_LEGS.items():
+        steps = by_leg[leg]
+        if len(steps) != 1:
+            problems.append(f"the {leg} leg runs {len(steps)} pytest steps, not 1")
+            continue
+        if steps[0].get("working-directory") != directory:
+            problems.append(f"the {leg} leg does not run pytest from {directory}/")
+        role = str((steps[0].get("env") or {}).get(APP_ROLE_VAR, ""))
+        if (leg == APP_ROLE_LEG) != (role == "1"):
+            problems.append(
+                f"the {leg} leg {'sets' if role == '1' else 'lacks'} {APP_ROLE_VAR}=1"
+            )
+    return problems
+
+
+PROXY_MCP_JOB = "proxy-mcp"
+SHARD_VAR = "MUTANT_SHARD"
+SHARD_VALUE = "${{ matrix.shard }}/${{ strategy.job-total }}"
+
+
+def proxy_mcp_shard_problems(workflow: dict) -> list[str]:
+    """proxy-mcp is a matrix of shards 1..n, each told it is shard i of n. The test
+    deals mutant k to shard k % n + 1 (test-mutant-shards proves that partitions the
+    list), so the matrix must hold every shard from 1 to n: one missing is a fifth of
+    the mutants never run."""
+    job = jobs(workflow).get(PROXY_MCP_JOB)
+    if job is None:
+        return [f"there is no {PROXY_MCP_JOB!r} job"]
+    strategy = job.get("strategy") or {}
+    shards = list((strategy.get("matrix") or {}).get("shard") or [])
+    env = job.get("env") or {}
+    problems = []
+    if not shards or shards != list(range(1, len(shards) + 1)):
+        problems.append(f"the {PROXY_MCP_JOB} shards are {shards}, not 1..n")
+    if str(env.get(SHARD_VAR, "")) != SHARD_VALUE:
+        problems.append(
+            f"{PROXY_MCP_JOB} has {SHARD_VAR}={env.get(SHARD_VAR)!r}, not {SHARD_VALUE}"
+        )
+    if strategy.get("fail-fast", True) is not False:
+        problems.append(f"a failing {PROXY_MCP_JOB} shard cancels the others")
+    if str(env.get("PYTHONUNBUFFERED", "")) != "1":
+        problems.append(
+            f"{PROXY_MCP_JOB} buffers its output, so a log shows no timings"
+        )
+    if not any(
+        s.get("run", "").strip() == "pixi run test-proxy-mcp"
+        for s in job.get("steps", [])
+    ):
+        problems.append(f"{PROXY_MCP_JOB} does not run test-proxy-mcp")
+    return problems
+
+
+BROWSER_PREFIX = "browser-"
+CHROMIUM_INSTALL = "playwright install --with-deps chromium"
+NOT_CANCELED = "!cancelled()"  # spelling-ok: GitHub Actions spells its function so
+SUITE = re.compile(r"pixi run (test-[\w-]+)")
+
+
+def browser_job_problems(workflow: dict) -> list[str]:
+    """The Chromium suites are dealt into browser-* jobs. Each job installs Chromium
+    before its first suite; each suite after the first runs even when one before it
+    failed (one failure must not hide the rest); and no suite runs in two of them."""
+    browser = {n: j for n, j in jobs(workflow).items() if n.startswith(BROWSER_PREFIX)}
+    if not browser:
+        return [f"there is no {BROWSER_PREFIX}* job, so no suite runs in Chromium"]
+    problems = []
+    seen: dict[str, str] = {}
+    for name, job in browser.items():
+        steps = job.get("steps", [])
+        installed = next(
+            (i for i, s in enumerate(steps) if CHROMIUM_INSTALL in s.get("run", "")),
+            None,
+        )
+        suites = [(i, s) for i, s in enumerate(steps) if SUITE.search(s.get("run", ""))]
+        if not suites:
+            problems.append(f"{name} runs no suite")
+            continue
+        if installed is None or installed > suites[0][0]:
+            problems.append(f"{name} runs a suite before it installs Chromium")
+        for _, step in suites[1:]:
+            if NOT_CANCELED not in str(step.get("if", "")):
+                problems.append(
+                    f"in {name}, {step['run']!r} does not run after an earlier failure"
+                )
+        for _, step in suites:
+            suite = SUITE.search(step["run"])[1]
+            if suite in seen:
+                problems.append(f"{suite} runs in both {seen[suite]} and {name}")
+            seen[suite] = name
+    return problems
+
+
 def every_rule(
     workflow: dict, tasks: dict, files: list[str], compose: dict
 ) -> list[str]:
@@ -298,6 +444,9 @@ def every_rule(
         *orphan_tests(tasks, files),
         *no_server_pytest(workflow),
         *no_mcp_pytest(workflow),
+        *server_matrix_problems(workflow),
+        *proxy_mcp_shard_problems(workflow),
+        *browser_job_problems(workflow),
         *stack_suite_order(workflow),
         *skips_allowed(workflow),
         *swallowed_failures(workflow),
@@ -397,7 +546,7 @@ def main() -> int:
     )
 
     broken = copy.deepcopy(workflow)
-    jobs(broken)["browser"]["steps"][-1]["continue-on-error"] = True
+    jobs(broken)["browser-3"]["steps"][-1]["continue-on-error"] = True
     check("continue-on-error on a step is noticed", bool(swallowed_failures(broken)))
     broken = copy.deepcopy(workflow)
     jobs(broken)["stack"]["continue-on-error"] = True
@@ -479,6 +628,159 @@ def main() -> int:
     }
     check(
         "a new job the aggregate ignores is noticed", bool(aggregate_problems(broken))
+    )
+
+    print("Mutation tests: the split jobs (D-97)")
+
+    def server_steps(wf: dict) -> list[dict]:
+        return jobs(wf)[SERVER_JOB]["steps"]
+
+    def leg_step(wf: dict, leg: str) -> dict:
+        return next(
+            s
+            for s in server_steps(wf)
+            if "pytest" in s.get("run", "") and f"'{leg}'" in str(s.get("if", ""))
+        )
+
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[SERVER_JOB]["strategy"]["matrix"]["suite"].remove("mcp")
+    check(
+        "a leg dropped from the server matrix is noticed",
+        bool(server_matrix_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    leg_step(broken, "app-role")["if"] = "${{ matrix.suite == 'app_role' }}"
+    check(
+        "a server step tied to a leg that does not exist (so runs in none) is noticed",
+        bool(server_matrix_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    del leg_step(broken, "owner")["if"]
+    check(
+        "a server pytest step run in every leg is noticed",
+        bool(server_matrix_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    del leg_step(broken, "app-role")["env"]
+    check(
+        "the restricted-role leg not connecting as the restricted role is noticed",
+        bool(server_matrix_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    leg_step(broken, "owner")["env"] = {APP_ROLE_VAR: "1"}
+    check(
+        "the owner leg connecting as the restricted role is noticed",
+        bool(server_matrix_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[SERVER_JOB]["env"][APP_ROLE_VAR] = "1"
+    check(
+        "TEST_APP_ROLE set for the whole server job is noticed",
+        bool(server_matrix_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    leg_step(broken, "mcp")["working-directory"] = "server"
+    check(
+        "the mcp leg running pytest from server/ is noticed",
+        bool(server_matrix_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)[SERVER_JOB]["strategy"]["fail-fast"]
+    check(
+        "a server matrix that cancels its other legs is noticed",
+        bool(server_matrix_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[SERVER_JOB]["services"][POSTGRES_SERVICE]["image"] = "postgres:17"
+    check(
+        "every server leg's Postgres drifting from compose.yaml is noticed",
+        bool(postgres_drift(broken, compose)),
+    )
+
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[PROXY_MCP_JOB]["strategy"]["matrix"]["shard"].remove(3)
+    check(
+        "a proxy-mcp shard missing from the matrix is noticed",
+        bool(proxy_mcp_shard_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[PROXY_MCP_JOB]["strategy"]["matrix"]["shard"] = [0, 1, 2, 3, 4]
+    check(
+        "proxy-mcp shards numbered from 0 are noticed",
+        bool(proxy_mcp_shard_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[PROXY_MCP_JOB]["env"][SHARD_VAR] = "${{ matrix.shard }}/4"
+    check(
+        "a shard count written by hand, not taken from the matrix, is noticed",
+        bool(proxy_mcp_shard_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)[PROXY_MCP_JOB]["env"][SHARD_VAR]
+    check(
+        "proxy-mcp shards never told which they are is noticed",
+        bool(proxy_mcp_shard_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)[PROXY_MCP_JOB]["env"]["PYTHONUNBUFFERED"]
+    check(
+        "proxy-mcp buffering its output is noticed",
+        bool(proxy_mcp_shard_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[PROXY_MCP_JOB]["strategy"]["fail-fast"] = True
+    check(
+        "a proxy-mcp shard canceling the others is noticed",
+        bool(proxy_mcp_shard_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)[PROXY_MCP_JOB]
+    check("no proxy-mcp job is noticed", bool(proxy_mcp_shard_problems(broken)))
+
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)["browser-2"]["steps"][-1]["if"]
+    check(
+        "a Chromium suite that does not run after an earlier failure is noticed",
+        bool(browser_job_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    steps = jobs(broken)["browser-1"]["steps"]
+    at = next(i for i, s in enumerate(steps) if CHROMIUM_INSTALL in s.get("run", ""))
+    steps.append(steps.pop(at))
+    check(
+        "a browser job running suites before installing Chromium is noticed",
+        bool(browser_job_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    jobs(broken)["browser-3"]["steps"].append(
+        {"if": f"${{{{ {NOT_CANCELED} }}}}", "run": "pixi run test-rules-banner"}
+    )
+    check(
+        "a Chromium suite run in two browser jobs is noticed",
+        bool(browser_job_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    for name in [n for n in jobs(broken) if n.startswith(BROWSER_PREFIX)]:
+        del jobs(broken)[name]
+    check("no browser job is noticed", bool(browser_job_problems(broken)))
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[AGGREGATE_JOB]["needs"].remove("browser-2")
+    check(
+        "an aggregate that forgets one browser job is noticed",
+        bool(aggregate_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)["browser-2"]["timeout-minutes"]
+    check("a browser job with no timeout is noticed", bool(missing_timeouts(broken)))
+    broken = copy.deepcopy(workflow)
+    jobs(broken)["browser-1"]["steps"] = [
+        s
+        for s in jobs(broken)["browser-1"]["steps"]
+        if "test-rules-banner" not in s.get("run", "")
+    ]
+    check(
+        "a suite dropped while dealing them into browser jobs is noticed",
+        any("test-rules-banner" in p for p in untested_tasks(broken, tasks)),
     )
 
     broken = copy.deepcopy(workflow)

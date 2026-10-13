@@ -29,10 +29,10 @@ predictive AI built into their electronic health record, up from 66% a year
 earlier ([federal data brief][astp]).
 
 **Most hospitals check it. Showing the checks is the hard part.** Of the
-hospitals using predictive AI, 82% said they evaluated it for accuracy and 74%
-for bias. Those answers are self-reported. They do not say whether a check was
-written down, repeated, or owned by a named person, and that is what a board,
-an insurer or a regulator asks to see.
+hospitals using predictive AI, [82% said they evaluated it for accuracy and 74%
+for bias][astp-eval]. Those answers are self-reported. They do not say whether
+a check was written down, repeated, or owned by a named person, and that is what
+a board, an insurer or a regulator asks to see.
 
 **Expectations are rising, mostly as guidance.** As of October 2026:
 
@@ -47,9 +47,13 @@ an insurer or a regulator asks to see.
   reasonable efforts to find the patient care decision tools that use race,
   color, national origin, sex, age or disability as inputs, and to reduce the
   risk of discrimination from them.
-- States add their own. Texas, for example, has required health care providers
-  to tell patients when AI is used in their care since January 1, 2026
-  ([HB 149][tx]).
+- States are adding their own. In October 2026 California approved two laws that
+  reach hospitals using AI clinical decision tools. From January 1, 2027, AB 1979
+  requires health facilities to take reasonable steps so that a licensed
+  provider uses independent judgment when AI informs care. SB 503 requires
+  facilities that deploy such tools to make reasonable efforts to identify
+  systems that could produce biased results, to monitor their effects, and to
+  act on problems ([California Health Care Foundation][chcf]).
 
 Laws change, and this is not legal advice. Ask your counsel which apply to you.
 
@@ -192,11 +196,12 @@ applied model card preview, the OPTICA adoption review, and creating a project.
 
 Checked October 12, 2026. Laws and guidance change.
 
-[astp]: https://www.healthit.gov/sites/default/files/2025-09/hospital-trends-use-evaluation-and-governance-predictive-ai-2023-2024.pdf
+[astp]: https://healthit.gov/wp-content/uploads/2025/09/Data-Brief-80-Hospital-Trends-in-the-Use-Evaluation-and-Governance-of-Predictive-AI-2023-2024_508.pdf
+[astp-eval]: https://healthit.gov/wp-content/uploads/2025/09/Data-Brief-80-Hospital-Trends-in-the-Use-Evaluation-and-Governance-of-Predictive-AI-2023-2024_508.pdf#page=6
 [jc-guidance]: https://www.chai.org/news/joint-commission-and-coalition-for-health-ai-chai-release-initial-guidance
 [jc-cert]: https://www.jointcommission.org/en-us/certification/responsible-use-of-ai-in-healthcare
 [cfr]: https://www.ecfr.gov/current/title-45/section-92.210
-[tx]: https://capitol.texas.gov/tlodocs/89R/billtext/html/HB00149F.htm
+[chcf]: https://www.chcf.org/blog/2026/10/08/newsom-approves-3-health-care-ai-bills-vetoes-2/
 [wong]: https://jamanetwork.com/journals/jamainternalmedicine/fullarticle/2781307
 [finlayson]: https://pmc.ncbi.nlm.nih.gov/articles/PMC8665481/
 [obermeyer]: https://pubmed.ncbi.nlm.nih.gov/31649194/

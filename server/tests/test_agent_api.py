@@ -2309,3 +2309,48 @@ async def test_a_document_key_that_is_the_primary_framework_is_not_a_supplement(
     async with as_agent(client, token) as agent:
         body = (await agent.get(f"/api/agent/projects/{R('p')}")).json()
     assert [s["framework"] for s in body["supplements"]] == ["optica"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/api/agent/me", "/api/agent/portfolio", f"/api/agent/projects/{R('p')}"],
+)
+async def test_an_agent_call_that_cannot_be_recorded_is_not_answered(
+    client, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    """C-109: the audit row is written in the answer's transaction, so an answer whose
+    row cannot be written is a 500 and leaves no row, on each agent route."""
+    import app.agent as agent_module
+
+    await put_project("p", await _stored_doc())
+    token = (await mint(client))["token"]
+
+    async def explode(*args, **kwargs):
+        raise RuntimeError("the audit write failed")
+
+    monkeypatch.setattr(agent_module, "record_access", explode)
+    transport = ASGITransport(app=client.app, raise_app_exceptions=False)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://api.test",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as agent:
+        response = await agent.get(path)
+    assert response.status_code == 500, "an answer that cannot be recorded is not given"
+    assert [e for e in await trail() if e["via"] == "agent"] == []
+
+
+async def test_a_token_the_operator_revoked_is_refused_on_its_next_call(client) -> None:
+    """C-108: `make agent-tokens revoke` sets revoked_at/revoked_source in the
+    database; the API must read the same column on the very next call."""
+    minted = await mint(client)
+    async with as_agent(client, minted["token"]) as agent:
+        assert (await agent.get("/api/agent/me")).status_code == 200
+    async with owner_connection() as conn:
+        await conn.execute(
+            "UPDATE agent_token SET revoked_at = now(), revoked_source = 'operator' "
+            "WHERE token_id = $1",
+            minted["id"],
+        )
+    async with as_agent(client, minted["token"]) as agent:
+        assert (await agent.get("/api/agent/me")).status_code == 401

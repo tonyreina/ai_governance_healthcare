@@ -91,8 +91,9 @@ psql:  ## Interactive psql inside the database container
 
 # Encrypted, because the dump is every governance record, every audit entry
 # and every retained version in one file. BACKUP_PASSPHRASE is required: a
-# plaintext dump sitting in the working directory is 164.310(d)(2)(i) waiting
-# to happen, and making encryption opt-in means it is off.
+# plaintext dump sitting in the working directory is the exposure 45 CFR
+# 164.312(a)(2)(iv) asks you to decide on, and making encryption opt-in means it
+# is off.
 #
 # Uses gpg --symmetric, which is present on far more machines than age. Set
 # BACKUP_RETAIN to prune older dumps (default: keep everything).

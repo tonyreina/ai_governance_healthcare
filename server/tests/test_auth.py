@@ -79,6 +79,28 @@ async def test_identity_comes_from_the_configured_header() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    ("params", "cookies"),
+    [
+        ({"email": "mallory@evil.example"}, {}),
+        ({"X-Forwarded-Email": "mallory@evil.example"}, {}),
+        ({}, {"X-Forwarded-Email": "mallory@evil.example"}),
+        ({}, {"email": "mallory@evil.example", "user": "mallory"}),
+    ],
+)
+async def test_identity_in_a_query_parameter_or_cookie_is_ignored(
+    params: dict[str, str], cookies: dict[str, str]
+) -> None:
+    """C-04: only the configured header names a person. The same value in a query
+    string or a cookie, even under the header's own name, is no identity at all."""
+    transport = ASGITransport(app=auth_app(make_settings()))
+    async with AsyncClient(
+        transport=transport, base_url="http://api.test", cookies=cookies
+    ) as http:
+        response = await http.get("/api/me", params=params)
+    assert response.status_code == 401
+
+
 async def test_missing_header_is_401_not_an_anonymous_user() -> None:
     """The failure mode that matters: no identity must never mean "someone"."""
     response = await call(make_settings())

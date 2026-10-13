@@ -108,7 +108,7 @@ def untested_tasks(workflow: dict, tasks: dict[str, str]) -> list[str]:
     return [
         f"pixi task {t!r} is never run by CI"
         for t in wanted
-        if not re.search(rf"pixi run {re.escape(t)}\b", commands)
+        if not re.search(rf"pixi run {re.escape(t)}(?![\w-])", commands)
     ]
 
 
@@ -515,6 +515,23 @@ def main() -> int:
         any("test-pdf" in p for p in untested_tasks(broken, tasks)),
     )
 
+    # `\b` matched before "-", so test-proxy was satisfied by test-proxy-agent.
+    sibling_tasks = {**tasks, "test-zz": "python a.py", "test-zz-extra": "python b.py"}
+    only_sibling = copy.deepcopy(workflow)
+    jobs(only_sibling)[next(iter(jobs(only_sibling)))]["steps"].append(
+        {"run": "pixi run test-zz-extra"}
+    )
+    check(
+        "a task whose longer-named sibling is run is still noticed as dropped",
+        any("'test-zz'" in p for p in untested_tasks(only_sibling, sibling_tasks)),
+    )
+    check(
+        "a task run alone, or before a flag, is not flagged",
+        not untested_tasks(
+            {"jobs": {"j": {"steps": [{"run": "pixi run test-zz --flag"}]}}},
+            {"test-zz": "x"},
+        ),
+    )
     check(
         "a new pixi test task nobody wired into CI is noticed",
         any(

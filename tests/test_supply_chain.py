@@ -328,6 +328,32 @@ def image_scan_problems(workflow: dict) -> list[str]:
         workflow.get(True, workflow.get("on", {}))
     ) and "schedule" not in str(workflow.get(True) or workflow.get("on")):
         problems.append("no weekly schedule")
+    # Each image we build must be scanned by a step that FAILS on a fixable finding.
+    steps = [
+        step
+        for job in (workflow.get("jobs") or {}).values()
+        for step in job.get("steps", [])
+        if "trivy-action" in str(step.get("uses", ""))
+    ]
+    for image in ("chai-api", "chai-proxy", "chai-mcp"):
+        step = next(
+            (
+                s
+                for s in steps
+                if str(s.get("with", {}).get("image-ref", "")).startswith(image)
+            ),
+            None,
+        )
+        if step is None:
+            problems.append(f"{image} is not scanned")
+            continue
+        args = step["with"]
+        if args.get("severity") != "HIGH,CRITICAL":
+            problems.append(f"{image} scan is not HIGH,CRITICAL")
+        if str(args.get("exit-code")) != "1":
+            problems.append(f"{image} scan does not fail the job (exit-code)")
+        if str(args.get("ignore-unfixed")).lower() != "true":
+            problems.append(f"{image} scan does not ignore-unfixed")
     return problems
 
 
@@ -605,6 +631,18 @@ def main() -> int:
         not image_scan_problems(scan),
         str(image_scan_problems(scan)),
     )
+    for dropped in ("exit-code", "ignore-unfixed", "image-ref"):
+        weakened = yaml.safe_load(yaml.safe_dump(scan))
+        hit = False
+        for job in weakened["jobs"].values():
+            for step in job.get("steps", []):
+                if "chai-mcp" in str(step.get("with", {}).get("image-ref", "")):
+                    step["with"].pop(dropped)
+                    hit = True
+        check(
+            f"a scan step that drops {dropped} is noticed (mutation)",
+            hit and bool(image_scan_problems(weakened)),
+        )
     chai = (ROOT / ".github" / "workflows" / "chai-updates.yml").read_text(
         encoding="utf-8"
     )

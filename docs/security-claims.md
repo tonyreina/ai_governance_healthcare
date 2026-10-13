@@ -826,16 +826,25 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-63 A production-shaped stack is not brought up without an encryption decision
 
-- **Claim:** `make up` refuses a stack reachable beyond this machine, using its own
-  database volume, until the operator confirms the disk is encrypted, and does not
-  claim to be able to check it.
-- **Asserted in:** `docs/self-hosting.md` — "`make up` refuses a stack that is
-  reachable beyond this machine"
+- **Claim:** `make up` refuses a stack using its own database volume, until the
+  operator confirms the disk is encrypted, when `HTTP_BIND` is not loopback or
+  `SITE_ADDRESS` is a real hostname (anything other than `localhost`,
+  `127.0.0.0/8`, `::1` or a bare port), and does not claim to be able to check it.
+- **Asserted in:** `docs/self-hosting.md` — "`make up` refuses a stack that uses
+  its own database volume until you do, when `HTTP_BIND` is not loopback or
+  `SITE_ADDRESS` is a real hostname"
 - **Status:** enforced
+- **Gap:** A loopback bind with a bare-port `SITE_ADDRESS` (`http://:80`) behind a
+  reverse proxy the operator runs is reachable from the network and is not asked
+  for an encryption decision: `.env` alone cannot show it. The test
+  "loopback needs no confirmation" pins that case as exempt, and the docs tell
+  the operator to set the confirmation anyway.
 - **Enforced by:**
   `tests/test_preflight.py::a non-loopback bind with no confirmation is refused`
   `tests/test_preflight.py::STORAGE_ENCRYPTION_CONFIRMED=1 accepts it`
   `tests/test_preflight.py::loopback needs no confirmation: that is a laptop`
+  `tests/test_preflight.py::loopback bind + a real hostname still needs the decision`
+  `tests/test_preflight.py::mutation: every site local -> a hostname slips through`
   `tests/test_doctor.py::when the host cannot be inspected it says it cannot tell, not that it is fine`
 
 ### C-64 The managed databases' encryption settings are described correctly

@@ -41,12 +41,14 @@ missing and why it matters. Set at least:
 | `APP_POSTGRES_PASSWORD` | The restricted role's password: a **different** value, generated the same way |
 | `IDENTITY_ID_SOURCE` | Which header your sign-in sets: Google IAP, an AWS load balancer or Azure Easy Auth. See [Identity comes from the proxy](#identity-comes-from-the-proxy) |
 | `HTTP_BIND` | `127.0.0.1` unless something in front of the proxy needs to reach it |
-| `STORAGE_ENCRYPTION_CONFIRMED` | `1`, once you have encrypted the disk under the data volume (see [Encryption at rest](#encryption-at-rest)). Required when the stack is reachable beyond this machine |
+| `STORAGE_ENCRYPTION_CONFIRMED` | `1`, once you have encrypted the disk under the data volume (see [Encryption at rest](#encryption-at-rest)). Required when `HTTP_BIND` is not loopback, or when `SITE_ADDRESS` is a real hostname (anything other than `localhost`, `127.0.0.0/8`, `::1` or a bare port) |
 
 The stack binds to loopback by default, because it speaks plain HTTP and expects
 TLS to be terminated in front of it. `make up` refuses to start on unsafe
 settings: an empty or placeholder password, a literal identity such as
-`dev@localhost`, plain HTTP on a network, or an encryption decision nobody made.
+`dev@localhost`, plain HTTP on a network, or an encryption decision nobody made
+(when the bind or `SITE_ADDRESS` says the stack is reachable beyond this
+machine).
 
 ## The commands you will use
 
@@ -437,10 +439,14 @@ holds `pgdata`) on an encrypted volume:
 
 Then set `STORAGE_ENCRYPTION_CONFIRMED=1` in `.env`. **That is you telling the
 stack it is done: nothing inside a container can check.** `make up` refuses a
-stack that is reachable beyond this machine (a non-loopback `HTTP_BIND`) that
-uses its own database volume until you do, so the decision is made by someone,
-once, on the record. `make doctor` reports what the host shows under the volume
-(a dm-crypt layer, or none, or that it cannot tell); treat "none" as "ask",
+stack that uses its own database volume until you do, when `HTTP_BIND` is not
+loopback or `SITE_ADDRESS` is a real hostname (anything other than `localhost`,
+`127.0.0.0/8`, `::1` or a bare port such as `http://:80`), so the decision is made
+by someone, once, on the record. A loopback bind with a bare-port `SITE_ADDRESS`
+behind a reverse proxy you run yourself is still reachable from the network, and
+`make up` cannot see that: set the confirmation anyway. `make doctor` reports
+what the host shows under the volume (a dm-crypt layer, or none, or that it
+cannot tell); treat "none" as "ask",
 because a cloud provider may encrypt below what the host can see.
 
 `make backup` already encrypts every dump with a passphrase of its own (see

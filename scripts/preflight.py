@@ -14,7 +14,10 @@ So this runs before ``make up`` and checks the things compose cannot:
   which is a loud, safe failure) or Caddy placeholders -- never literals, which
   would stamp every visitor as the same person;
 * the stack is not published to a non-loopback address while speaking plain
-  HTTP.
+  HTTP;
+* a stack reachable beyond this machine (a non-loopback bind, or a real hostname
+  in SITE_ADDRESS) on its own database volume has had an encryption decision
+  recorded (STORAGE_ENCRYPTION_CONFIRMED=1).
 
 Exits non-zero with an explanation. ``make up FORCE=1`` overrides, for the
 genuine case of a reverse proxy terminating TLS somewhere this cannot see.
@@ -22,6 +25,7 @@ genuine case of a reverse proxy terminating TLS somewhere this cannot see.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 import sys
@@ -41,6 +45,47 @@ GOOGLE_PREFIX = "accounts.google.com:"
 # the operator wrote.
 GOOGLE_HEADER = re.compile(r"x-goog-authenticated-user", re.IGNORECASE)
 DEFAULT_SITE = "http://:80"
+
+_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+
+
+def _site_host(address: str) -> str:
+    """The host of one Caddy site address: `[scheme://]host[:port][/path]`.
+
+    A bare port (`:8080`, `http://:80`) has no host and returns "". An IPv6 literal
+    is bracketed when it carries a port (`[::1]:8080`) and bare otherwise (`::1`).
+    """
+    rest = _SCHEME.sub("", address, count=1).split("/", 1)[0]
+    if rest.startswith("["):
+        host = rest[1:].split("]", 1)[0]
+    elif rest.count(":") > 1:
+        host = rest
+    else:
+        host = rest.partition(":")[0]
+    return host.casefold().rstrip(".")
+
+
+def _is_local_host(host: str) -> bool:
+    if not host or host in LOOPBACK_HOSTS:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def is_local_site(site: str) -> bool:
+    """True when every address in SITE_ADDRESS means "this machine only".
+
+    Local: `localhost`, anything in 127.0.0.0/8, `::1`, and a bare port (`:8080`,
+    `http://:80`, the shipped default). Anything else is a real hostname or a
+    routable IP, so the stack is meant to be reached by name from elsewhere. Caddy
+    takes several addresses separated by commas or spaces; one real one is enough.
+    An address this cannot parse is not local: it fails toward asking.
+    """
+    addresses = [a for a in re.split(r"[,\s]+", site) if a]
+    return all(_is_local_host(_site_host(a)) for a in addresses)
+
 
 # Values that look set but mean "I have not done this yet". Compared casefolded.
 PLACEHOLDERS = {
@@ -220,14 +265,21 @@ def check(env: dict[str, str]) -> list[str]:
     # said, on the record, that they dealt with it. The practice followed is the HIPAA
     # Security Rule's (45 CFR 164.312(a)(2)(iv)): implement it or document why an
     # equivalent is reasonable; either way a decision, not a silent default (#47).
+    #
+    # "Reachable beyond this machine" is a loopback bind failing OR a real hostname in
+    # SITE_ADDRESS. The supported topology is a loopback bind with TLS terminated by a
+    # host reverse proxy in front, which a bind check alone calls a laptop (D-101).
     uses_own_volume = not env.get("DATABASE_URL")
-    if (
-        uses_own_volume
-        and bind not in LOOPBACK_HOSTS
-        and env.get("STORAGE_ENCRYPTION_CONFIRMED") != "1"
-    ):
+    reachable = bind not in LOOPBACK_HOSTS or not is_local_site(site)
+    if uses_own_volume and reachable and env.get("STORAGE_ENCRYPTION_CONFIRMED") != "1":
+        why = (
+            f"HTTP_BIND={bind} publishes it to the network"
+            if bind not in LOOPBACK_HOSTS
+            else f"SITE_ADDRESS={site} names a host other than this machine"
+        )
         problems.append(
-            "The database lives in the Docker volume `pgdata`, which is an\n"
+            f"This stack is reachable beyond this machine ({why}).\n    "
+            + "The database lives in the Docker volume `pgdata`, which is an\n"
             "    unencrypted directory on this host's disk unless the disk is\n"
             "    encrypted. A stolen or improperly disposed disk is then readable:\n"
             "    every review record, and the personal data of the staff named in\n"

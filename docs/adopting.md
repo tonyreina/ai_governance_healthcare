@@ -16,7 +16,7 @@ do, and how to find out for yourself before committing to anything.
 | **Where the data lives** | On your servers or in your cloud account. The dashboard and its exports contact no outside service. |
 | **What IT provides** | A container host or service, PostgreSQL, and your single sign-on in front of it. |
 | **What you provide** | A sponsor, a committee with the authority to say stop, and a named owner for each AI tool. |
-| **Patient data** | None, in any mode. It is a record of governance, not of care. |
+| **Patient data** | Designed to hold none, in any mode. Nothing technical stops someone typing it into a free-text field. It is a record of governance, not of care. |
 | **Getting out** | Every project exports as JSON, every report as PDF, HTML or Markdown, and the portfolio as CSV. |
 
 ## Why not a spreadsheet, or the platform we already own
@@ -145,8 +145,12 @@ This is a suggestion, not a measured plan, and no durations are claimed.
 Every requirement the project holds itself to is written down with the reason it
 exists and what enforces it ([REQUIREMENTS.md](https://github.com/tonyreina/ai_governance_healthcare/blob/main/REQUIREMENTS.md)
 and [DECISIONS.md](https://github.com/tonyreina/ai_governance_healthcare/blob/main/DECISIONS.md)).
-A change cannot merge unless the whole test suite passes, including the real
-database, a real browser and the whole Docker stack end to end. The dashboard
+The repository is configured so a change cannot merge unless the whole test
+suite passes, including the real database, a real browser and the whole Docker
+stack end to end. That gate is a GitHub repository setting, which no test in the
+repository can detect being switched off; it was verified by hand, and
+[the security claims inventory](security-claims.md) (C-48) says how to re-check
+it. The dashboard
 is a single file you can read. The project is
 open about what it does not yet do, because a governance tool that overstates
 itself is worse than none.

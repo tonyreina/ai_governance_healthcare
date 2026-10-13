@@ -3718,3 +3718,58 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   unbroken-file checks it needs (about three minutes for a shard with a timeout
   mutant).
 - Source: the owner's instruction of 2026-10-12; run 38307463666; D-23; #32.
+
+### D-98 The front page is written for a non-technical hospital executive
+
+- Status: Accepted: the owner's instruction of 2026-10-12.
+- **The question.** The front page (`docs/index.md`) led with a feature list and
+  a mix of audiences. The owner asked for a page a non-technical hospital CEO can
+  read, that makes the business case for the software, with the detail on later
+  pages.
+- **Decided.**
+    1. **`docs/index.md` speaks to a hospital CEO or board member.** Plain
+       words, about a sixth-grade reading level, headings that are the questions
+       an executive asks, and a short "where to go next" table for other readers.
+    2. **The detail moved to `docs/what-it-does.md`**, which is in the
+       navigation after "Adopting it". Every security sentence that
+       `docs/security-claims.md` quotes from the old front page (C-12, C-18,
+       C-53, C-60, C-80) now lives there, and the rows point to it. C-34 (the
+       video note) stays on the front page with the video.
+    3. **Every statistic, law or study on the front page is sourced** in its
+       Sources list and was fetched from its primary source on 2026-10-12. A
+       figure that could not be sourced is left out and said so ("We found no
+       published figure for what that costs, so we will not invent one"). No
+       dollar figure, ROI or percentage is estimated. Law is described with the
+       date it was checked, who it binds, and "ask your counsel".
+    4. **The front page asserts no new security property.** It says what the
+       software does not do (no support, no testing of models, no
+       certification, not shown to make patients safer, not built to hold
+       patient data) before it says what it does.
+    5. **Process stays out of the text.** A statement we could not verify is
+       removed, not hedged with "we could not confirm". The first draft hedged
+       three times, and each was a claim that should have been dropped.
+- **What found the errors.** An adversarial pass over the README and every page
+  of `docs/`, with each finding checked by independent skeptics, and two
+  separate fact-checks of the new pages (external claims against primary
+  sources, claims about the software against the code). They corrected: a
+  review date that does not "turn amber" (the tool gets a flag and shows as
+  *Needs update*); "always stays" for the history, which is not true of a
+  deleted project's audit log; "every read, every refusal" for the security
+  events; a CHAI description CHAI's own pages do not support; and the `173`
+  frameworks figure, which the 2025 review cites from earlier work.
+- Rejected: **keeping the technical front page and adding a CEO page beside it.**
+  Two front doors drift apart, and the one a CEO sees first would still be the
+  wrong one.
+- Rejected: **a business case with a return on investment.** There is no
+  published figure for the cost of governing AI without a register, and an
+  invented one is exactly what this project's claims discipline exists to stop.
+- Rejected: **leaving the detail only in `docs/adopting.md`.** It is a decision
+  guide, not a description of what the software does, and the quoted claim
+  sentences need one stable place.
+- Source: the owner's instruction of 2026-10-12; R-49 (the data scope leads the
+  front page); `docs/security-claims.md`.
+- Enforced by: `tests/test_data_scope.py` (the data-scope statement leads the
+  page), `tests/test_docs_media.py` (the video and its note),
+  `pixi run check-claims` (every quoted sentence is where its row says), and the
+  strict docs build (every link). Not enforced: that a statistic is sourced or
+  current. That rests on this entry and on review.

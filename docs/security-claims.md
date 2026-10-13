@@ -168,7 +168,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Asserted in:** `docs/deploy.md` — "**A checkpoint sign-off means
   something.**"
 - **Asserted in:** `docs/running.md` — "| Checkpoint sign-off means something | **No, self-asserted** | Yes |"
-- **Asserted in:** `docs/index.md` — "On the shared server a sign-off carries the name of the person signed in through your hospital's own single sign-on"
+- **Asserted in:** `docs/what-it-does.md` — "On the shared server a sign-off carries the name of the person signed in through your hospital's own single sign-on"
 - **Asserted in:** `docs/guide.md` — "On the shared server that identity comes from your hospital's single sign-on and cannot be set from the browser."
 - **Status:** enforced
 - **Enforced by:**
@@ -229,7 +229,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   by comparing the result with a function. Deleting a project removes
   its live log, and records that it did (C-45).
 - **Asserted in:** `README.md` — "Audit log | Yes, append-only"
-- **Asserted in:** `docs/index.md` — "The database itself refuses to alter the audit log or the revision history"
+- **Asserted in:** `docs/what-it-does.md` — "The database itself refuses to alter the audit log or the revision history"
 - **Asserted in:** `docs/adopting.md` — "The audit trail is enforced by the database, not only by the application."
 - **Status:** enforced
 - **Enforced by:**
@@ -594,7 +594,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** `main` requires the `tests passed` check, pinned to GitHub Actions,
   with no administrator bypass, so a pending or red run blocks the merge.
 - **Asserted in:** `docs/developing.md` — "a pull request cannot be merged while it is pending or red"
-- **Asserted in:** `docs/adopting.md` — "A change cannot merge unless the whole test suite passes"
+- **Asserted in:** `docs/adopting.md` — "so a change cannot merge unless the whole test suite passes"
 - **Status:** unenforced
 - **Gap:** A repository setting, not a file, so no test in the repository can
   detect it being switched off. It was verified by hand, by trying to merge a
@@ -664,7 +664,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   against its bugs.
 - **Asserted in:** `docs/self-hosting.md` — "it **cannot** disable or drop a
   trigger, truncate, alter a table or create one"
-- **Asserted in:** `docs/index.md` — "the shipped stack runs the service as a database role that cannot switch that protection off"
+- **Asserted in:** `docs/what-it-does.md` — "the shipped stack runs the service as a database role that cannot switch that protection off"
 - **Asserted in:** `docs/deploy.md` — "An API whose connection owns the tables or is a superuser **refuses to start**"
 - **Asserted in:** `server/README.md` — "The API **refuses to start** when its connection is the table owner or a superuser"
 - **Status:** partial
@@ -776,7 +776,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   in the transaction of the read, in an append-only table that outlives the project,
   so a read that cannot be recorded is not served.
 - **Asserted in:** `docs/deploy.md` — "A read that cannot be recorded is not served."
-- **Asserted in:** `docs/index.md` — "Who *read* a record is recorded too."
+- **Asserted in:** `docs/what-it-does.md` — "Who *read* a record is recorded too."
 - **Asserted in:** `docs/running.md` — "| Who read what is recorded | No | **Yes** |"
 - **Status:** partial
 - **Gap:** Exports are built in the browser and reported by a beacon a client can
@@ -1043,7 +1043,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   request to another host, none of its exports carries a resource a viewer would
   fetch on its own, and opening a saved report announces nothing to a third party
   (R-05). A link the reader chooses to follow is not such a request.
-- **Asserted in:** `docs/index.md` — "The dashboard and its exports contact no
+- **Asserted in:** `docs/what-it-does.md` — "The dashboard and its exports contact no
   outside service."
 - **Asserted in:** `docs/adopting.md` — "The dashboard and its exports contact no
   outside service."

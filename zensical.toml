@@ -13,6 +13,7 @@ nav = [
   { "Home" = "index.md" },
   { "Open the dashboard" = "app/index.html" },
   { "Adopting it" = "adopting.md" },
+  { "What it does, in detail" = "what-it-does.md" },
   { "A review, start to finish" = "guide.md" },
   { "How statuses are decided" = "compliance-rules.md" },
   { "The frameworks" = [

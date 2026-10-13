@@ -106,6 +106,8 @@ test-workflows = "python tests/test_workflows.py"
 # The classifier, and the scan that keeps its list of heavy-read pages exact.
 test-ci-changes = "python tests/test_ci_changes.py"
 test-require-tests = "python tests/test_require_tests.py"
+# Each guarded suite, run with its tool missing, fails under REQUIRE_TESTS=1 (C-33).
+test-require-behavior = "python tests/test_require_behavior.py"
 test-build-hook = "python tests/test_build_hook.py"
 # The showcase video: present, bounded, first-party, streamable, honest about the mode.
 test-docs-media = "python tests/test_docs_media.py"

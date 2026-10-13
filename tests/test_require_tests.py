@@ -33,6 +33,8 @@ SCANNED = ("tests", "server/tests", "mcp/tests")
 ALLOWED = {
     "tests/test_check_claims.py": "synthetic test sources the claims checker reads",
     "tests/test_require_tests.py": "this scan's own examples",
+    "server/tests/test_require_behavior.py": "a broken marker it runs on purpose",
+    "mcp/tests/test_require_behavior.py": "a broken marker it runs on purpose",
 }
 # The constructs that skip. A comment is never a skip.
 CONSTRUCT = re.compile(

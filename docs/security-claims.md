@@ -1008,10 +1008,14 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-77 Only the database owner can dispose, and not of a recent read
 
 - **Claim:** The API's role cannot run disposal or delete the read trail, and the
-  database refuses to delete a read-trail row younger than the period, even for
-  the owner.
+  database refuses an ordinary DELETE of a read-trail row younger than the
+  period, even from the owner, unless the period itself is changed.
 - **Asserted in:** `docs/privacy.md` — "Only the database owner can dispose. The API cannot: its database role has no"
-- **Status:** enforced
+- **Asserted in:** `docs/privacy.md` — "database refuses an ordinary DELETE of a read-trail row younger than the period,"
+- **Status:** partial
+- **Gap:** A database owner or superuser can still disable the trigger with one
+  statement (see C-60); the text says so and asks the operator to treat the owner
+  role as trusted. #33
 - **Enforced by:**
   `server/tests/test_retention.py::test_the_api_role_cannot_dispose_or_delete_the_read_trail`
   `server/tests/test_retention.py::test_the_trigger_refuses_what_the_policy_does_not_allow`
@@ -1021,7 +1025,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** A project under a litigation hold, and its read trail, are not
   disposed of until the hold is lifted.
 - **Asserted in:** `docs/privacy.md` — "A project under a hold is listed in the"
-- **Asserted in:** `docs/privacy.md` — "A project's owner can place a litigation hold, with a reason, and the project and its read trail are kept until it is lifted."
+- **Asserted in:** `docs/privacy.md` — "A project's owner can place a litigation hold, with a reason, and the scheduled disposal (`make dispose`) keeps the project and its read trail until it is lifted. A hold does not stop an owner from purging or deleting the project in the dashboard."
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_retention.py::test_a_held_project_is_reported_and_kept_until_the_hold_is_lifted`
@@ -1045,6 +1049,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   (R-05). A link the reader chooses to follow is not such a request.
 - **Asserted in:** `docs/what-it-does.md` — "The dashboard and its exports contact no
   outside service."
+- **Asserted in:** `docs/privacy.md` — "the dashboard itself sends nothing to"
 - **Asserted in:** `docs/adopting.md` — "The dashboard and its exports contact no
   outside service."
 - **Status:** enforced

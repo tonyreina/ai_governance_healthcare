@@ -18,7 +18,8 @@ The portfolio CSV is on the home page.
 A copy that has left the tool is easy to mistake for the record. So each export
 says which storage mode produced it, in the header's own words: *This browser
 only* or *Shared workspace*, with a sentence on what that mode does and does
-not guarantee. In the report it is a note at the end. In the JSON
+not guarantee. In the HTML report and the PDF it is a note at the end; in the
+Markdown report it is a **Stored in** line in the header. In the JSON
 it is a `storage` object with the mode, the label and the note. In the CSV it is
 a **Stored in** column.
 
@@ -27,7 +28,9 @@ reviewed, it stays in English in the report (see
 [Developing it](developing.md#languages)).
 
 A report is also tied to the record it came from by the **record
-fingerprint**, which every export carries: a SHA-256 and an MD5 of the project.
+fingerprint**, which every per-project export (the JSON, HTML, PDF and Markdown)
+carries: a SHA-256 and an MD5 of the project. The portfolio CSV has no
+fingerprint.
 The JSON has them in a `fingerprint` object, with the project's id beside it; the
 HTML report, the PDF it prints and the Markdown report print them at the end. The
 MD5 is the one the project's setup page and change log show, so a fingerprint
@@ -188,7 +191,10 @@ and where it is stored.
 
 ## Reading an export in Python
 
-Four scripts in `examples/` work on exports. Run them from the repository root.
+Four scripts in `examples/` work on exports. Run `load_export.py` and
+`croissant_export.py` from the repository root. `fairlearn_to_metrics.py` and
+`error_cohorts_to_metrics.py` are libraries you import, so put `examples/` on the
+path first (for example `PYTHONPATH=examples python your_script.py`).
 
 ```bash
 python examples/load_export.py my-project-chai-review.json
@@ -235,6 +241,9 @@ Re-import the resulting file from the dashboard with **Import project JSON**.
 [Croissant](https://docs.mlcommons.org/croissant/) 1.0 metadata with the
 [Responsible AI extension](https://github.com/mlcommons/croissant/blob/main/docs/croissant-rai-spec.md),
 so a governance record can be published as machine-readable dataset metadata.
+It is written for the published build's export (`chai-review/2`). For another
+framework's export it prints a warning that field names may not line up, and it
+still names the record a CHAI governance review.
 
 ```bash
 python examples/croissant_export.py my-project-chai-review.json -o dataset.jsonld

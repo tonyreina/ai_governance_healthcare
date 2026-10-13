@@ -26,7 +26,7 @@ function field(path,label,hint,long,opts,kind,optLabel,md){
   // depending on where the reader is -- not a good property for the date a
   // governance decision was taken.
   else if(kind==="date") input=`<input type="date" id="${id}" data-bind="${path}" value="${v}">`;
-  else input=`<input type="text" id="${id}" data-bind="${path}" value="${v}">`;
+  else input=`<input type="text" id="${id}" data-bind="${path}" value="${v}" ${NO_BROWSER_ASSIST}>`;
   return `<div class="field${long?" wide":""}"><label for="${id}">${esc(label)}</label>${hint?`<span class="hint">${esc(hint)}</span>`:""}${input}</div>`;
 }
 function pager(){

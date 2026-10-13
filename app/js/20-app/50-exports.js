@@ -215,7 +215,7 @@ function openDeleteDialog(){
       ${consequence}
       <p>${esc(t("del.archiveInstead"))}</p>${purgeChoice}
       <label for="delName">${tHtml("del.typeName",{},{name:`<b>${esc(name)}</b>`})}</label>
-      <input type="text" id="delName" autocomplete="off" spellcheck="false"
+      <input type="text" id="delName" ${NO_BROWSER_ASSIST}
              aria-describedby="delHint">
       <p id="delHint" class="small" style="color:var(--muted)">${esc(t("del.mustMatch"))}</p>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">

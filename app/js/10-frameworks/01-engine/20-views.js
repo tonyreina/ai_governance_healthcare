@@ -52,7 +52,7 @@ function itemHTML(F, it) {
     </div>
     <div class="ci-detail">
       <div><label for="${esc(p)}ev_${esc(it.id)}">${esc(t("ci.evidence"))}</label><textarea id="${esc(p)}ev_${esc(it.id)}" rows="2" data-bind="${esc(path)}.evidence" data-md="1" ${NO_BROWSER_ASSIST}>${esc(d.evidence || "")}</textarea>${mdPreviewHTML(d.evidence)}</div>
-      <div><label for="${esc(p)}ow_${esc(it.id)}">${esc(t("ci.owner"))}</label><input type="text" id="${esc(p)}ow_${esc(it.id)}" data-bind="${esc(path)}.owner" value="${esc(d.owner || "")}"></div>
+      <div><label for="${esc(p)}ow_${esc(it.id)}">${esc(t("ci.owner"))}</label><input type="text" id="${esc(p)}ow_${esc(it.id)}" data-bind="${esc(path)}.owner" value="${esc(d.owner || "")}" ${NO_BROWSER_ASSIST}></div>
       <div><label for="${esc(p)}du_${esc(it.id)}">${esc(t("ci.due"))}</label><input type="date" id="${esc(p)}du_${esc(it.id)}" data-bind="${esc(path)}.due" value="${esc(d.due || "")}"></div>
       ${refsHTML(path, d)}${reasonHTML}
     </div>

@@ -2,4 +2,4 @@
 # script-src is the SHA-256 of the page's one inline script, so it changes
 # with every build. proxy/Caddyfile imports this file inside its `header`
 # block (#154).
-Content-Security-Policy "default-src 'none'; script-src 'sha256-cBBWV7Mmta3eajy6jVOfmRzs9fyS81gmS4KpFw8tKr0='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+Content-Security-Policy "default-src 'none'; script-src 'sha256-JDFP9+Bcqail4OMR2ut7+/OCTZejHXguQz0gwePPeuc='; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"

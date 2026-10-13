@@ -657,20 +657,21 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   throwaway PR with the check pending and then red; both were refused. Re-check it
   with `gh api repos/OWNER/REPO/rules/branches/main`.
 
-### C-49 The dashboard's multi-line fields do not feed the browser's spellchecker
+### C-49 The dashboard's free-text fields do not feed the browser's spellchecker
 
-- **Claim:** The free-text fields turn spellcheck and form history off, so what is
-  typed into them is not sent to a cloud spellchecker by the dashboard's own
-  markup.
+- **Claim:** Every field that can hold free text, multi-line or single-line, turns
+  spellcheck and form history off, so what is typed into it is not sent to a cloud
+  spellchecker by the dashboard's own markup. (R-76.)
 - **Asserted in:** `docs/deploy.md` — "The dashboard turns spellcheck and form
-  history off on its multi-line fields"
+  history off on every field that can hold free text"
 - **Status:** partial
-- **Gap:** Single-line inputs (owners, metric names, dates) keep the browser's
-  default, on purpose, and a browser or extension may ignore the attribute. The
+- **Gap:** Number, date, select and checkbox controls keep the browser's default,
+  because they hold no free text. A browser or extension may ignore the attribute. The
   deployment guide therefore also tells operators to disable cloud-backed
   spellcheck by policy, which nothing here can enforce. #59
 - **Enforced by:**
-  `tests/test_text_fields.py::every editable textarea opts out of spellcheck and form history`
+  `tests/test_text_fields.py::every editable free-text field opts out of spellcheck and form history`
+  `tests/test_text_fields.py::every free-text <input> in the source uses NO_BROWSER_ASSIST`
   `tests/test_text_fields.py::a field with the browser defaults is noticed`
 
 ### C-50 `make up` refuses a Google identity source without its prefix

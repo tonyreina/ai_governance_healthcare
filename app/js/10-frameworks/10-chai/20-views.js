@@ -11,10 +11,10 @@ function metricsHTML(){
   <div class="mwrap"><table class="mtable"><thead><tr><th style="width:24%">${esc(t("metrics.col.category"))}</th><th>${esc(t("metrics.col.metric"))}</th><th style="width:13%">${esc(t("metrics.col.value"))}</th><th style="width:15%">${esc(t("metrics.col.ci"))}</th><th style="width:22%">${esc(t("metrics.col.pop"))}</th><th><span class="vh">${esc(t("metrics.remove"))}</span></th></tr></thead><tbody>
   ${S.metrics.map((m,i)=>`<tr>
     <td><select aria-label="${esc(t("metrics.col.category"))}" data-bind="metrics.${i}.cat">${METRIC_CATS.map(c=>`<option value="${esc(c)}"${m.cat===c?" selected":""}>${esc(metricCatName(c))}</option>`).join("")}</select></td>
-    <td><input type="text" aria-label="${esc(t("metrics.col.metric"))}" data-bind="metrics.${i}.name" value="${esc(m.name)}" placeholder="${esc(t("metrics.placeholder"))}"></td>
-    <td><input type="text" aria-label="${esc(t("metrics.col.value"))}" data-bind="metrics.${i}.value" value="${esc(m.value)}"></td>
-    <td><input type="text" aria-label="${esc(t("metrics.col.ci"))}" data-bind="metrics.${i}.ci" value="${esc(m.ci)}"></td>
-    <td><input type="text" aria-label="${esc(t("metrics.col.pop"))}" data-bind="metrics.${i}.pop" value="${esc(m.pop)}"></td>
+    <td><input type="text" aria-label="${esc(t("metrics.col.metric"))}" data-bind="metrics.${i}.name" value="${esc(m.name)}" placeholder="${esc(t("metrics.placeholder"))}" ${NO_BROWSER_ASSIST}></td>
+    <td><input type="text" aria-label="${esc(t("metrics.col.value"))}" data-bind="metrics.${i}.value" value="${esc(m.value)}" ${NO_BROWSER_ASSIST}></td>
+    <td><input type="text" aria-label="${esc(t("metrics.col.ci"))}" data-bind="metrics.${i}.ci" value="${esc(m.ci)}" ${NO_BROWSER_ASSIST}></td>
+    <td><input type="text" aria-label="${esc(t("metrics.col.pop"))}" data-bind="metrics.${i}.pop" value="${esc(m.pop)}" ${NO_BROWSER_ASSIST}></td>
     <td><button class="icon-btn ro-hide" data-delmetric="${i}" aria-label="${esc(t("metrics.removeLabel"))}">${esc(t("metrics.remove"))}</button></td></tr>`).join("")}
   </tbody></table></div>
   ${S.metrics.length?"":`<p style="font-size:14px;color:var(--muted)">${esc(t("metrics.none"))}</p>`}

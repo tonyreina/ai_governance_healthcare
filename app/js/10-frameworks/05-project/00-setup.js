@@ -123,7 +123,7 @@ function openHoldDialog(action){
       <h2 id="holdTitle" style="margin-top:0">${esc(t(placing ? "hold.dialogPlace" : "hold.dialogLift"))}</h2>
       <p>${esc(t(placing ? "hold.explainPlace" : "hold.explainLift"))}</p>
       <label for="holdReason">${esc(t("hold.reason"))}</label>
-      <input type="text" id="holdReason" maxlength="1000" autocomplete="off" aria-describedby="holdHint">
+      <input type="text" id="holdReason" maxlength="1000" ${NO_BROWSER_ASSIST} aria-describedby="holdHint">
       <p id="holdHint" class="small" style="color:var(--muted)">${esc(t("hold.reasonHint"))}</p>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
         <button class="btn" data-hold-cancel>${esc(t("dash.cancel"))}</button>
@@ -191,7 +191,7 @@ function accessHTML(){
   ${list}
   ${owner?`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:10px">
     <div class="field" style="margin:0"><label for="grantWho">${esc(t("access.add"))}</label>
-      <input type="text" id="grantWho" placeholder="${esc(t("access.idPlaceholder"))}" data-grant-id></div>
+      <input type="text" id="grantWho" placeholder="${esc(t("access.idPlaceholder"))}" data-grant-id ${NO_BROWSER_ASSIST}></div>
     <div class="field" style="margin:0"><label for="grantRole">${esc(t("access.role"))}</label>
       <select id="grantRole" data-grant-role>${ROLES.map(x=>`<option value="${x}">${esc(roleLabel(x))}</option>`).join("")}</select></div>
     <button class="btn" data-act="grant">${esc(t("access.grant"))}</button>

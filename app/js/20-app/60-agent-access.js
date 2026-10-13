@@ -180,8 +180,7 @@ function renderAgentPage(focusTop){
         <div class="field">
           <label for="agentLabel">${esc(t("agent.label"))}</label>
           <span class="hint" id="agentLabelHint">${esc(t("agent.labelHint", {max: AGENT_LABEL_MAX}))}</span>
-          <input type="text" id="agentLabel" autocomplete="off"
-                 spellcheck="false" aria-describedby="agentLabelHint">
+          <input type="text" id="agentLabel" ${NO_BROWSER_ASSIST} aria-describedby="agentLabelHint">
         </div>
         <button class="btn primary" type="submit" id="agentCreate">${esc(t("agent.create"))}</button>
       </form>

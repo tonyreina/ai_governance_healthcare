@@ -88,7 +88,10 @@ ECHO_NAME = os.environ.get("PROXY_TEST_ECHO", "chai-test-echo")
 REQUIRE_TESTS = bool(os.environ.get("REQUIRE_TESTS"))
 
 # What each front door actually puts on the request, and how .env.example says
-# to read it. Keep in step with the identity blocks in .env.example.
+# to read it. tests/test_front_doors.py DERIVES the documented settings from
+# .env.example and docs/self-hosting.md and fails when this copy differs (C-02).
+# IDENTITY_STRIP_PREFIX is the API's, not Caddy's (Caddy ignores it), but the guide
+# requires it for IAP, so the IAP case carries it as documented.
 FRONT_DOORS = [
     (
         "Google Cloud IAP",
@@ -100,6 +103,7 @@ FRONT_DOORS = [
             "IDENTITY_EMAIL_SOURCE": (
                 "{http.request.header.X-Goog-Authenticated-User-Email}"
             ),
+            "IDENTITY_STRIP_PREFIX": "accounts.google.com:",
         },
         {
             "X-Goog-Authenticated-User-Id": "accounts.google.com:1234",
@@ -195,7 +199,15 @@ class H(BaseHTTPRequestHandler):
                 self.wfile.flush()
                 self.close_connection = True
                 return
-            body = json.dumps(dict(self.headers)).encode()
+            seen = dict(self.headers)
+            # dict() keeps only the last of a repeated header; the identity
+            # checks need every value the API would be handed.
+            seen["X-Echo-Auth-Request-Values"] = {
+                n: self.headers.get_all(n) or []
+                for n in ("X-Auth-Request-User", "X-Auth-Request-Name",
+                          "X-Auth-Request-Email")
+            }
+            body = json.dumps(seen).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -1355,6 +1367,77 @@ def check_mcp_gate(workdir: Path) -> None:
     )
 
 
+CANONICAL = {
+    "X-Auth-Request-User": "IDENTITY_ID_SOURCE",
+    "X-Auth-Request-Name": "IDENTITY_NAME_SOURCE",
+    "X-Auth-Request-Email": "IDENTITY_EMAIL_SOURCE",
+}
+FORGED_CANONICAL = {
+    "X-Auth-Request-User": "forged-id@evil.example",
+    "X-Auth-Request-Name": "Forged Name",
+    "X-Auth-Request-Email": "forged-email@evil.example",
+}
+_PLACEHOLDER = re.compile(r"\{http\.request\.header\.([^}]+)\}")
+
+
+def resolved(source: str, sent: dict[str, str]) -> str:
+    """What Caddy makes of one IDENTITY_*_SOURCE for a request carrying `sent`."""
+    lowered = {k.lower(): v for k, v in sent.items()}
+    return _PLACEHOLDER.sub(lambda m: lowered.get(m.group(1).lower(), ""), source)
+
+
+def check_identity_replaced(workdir: Path) -> None:
+    """A forged identity header BESIDE a valid one is replaced, never forwarded (C-01).
+
+    The older forged-header checks send the forgery with no front-door identity, so
+    all they can show is a 401. Here the request carries what the front door would
+    set AND a forged X-Auth-Request-User, -Name and -Email, and the upstream reports
+    what the API would receive. Each door is run with every canonical header
+    forged, and once more with the name header absent so that -Name resolves to
+    nothing and only the strip stands between the forgery and the API.
+    """
+    failed_before = len(failures)
+    for name, env, sent, _ in FRONT_DOORS:
+        start_caddy(workdir, env)
+        status, body = get("/api/me", {**sent, **FORGED_CANONICAL})
+        label = f"{name}: a forged identity beside a valid one"
+        if status != 200:
+            check(f"{label} is replaced", False, f"HTTP {status}")
+            continue
+        values = json.loads(body)["X-Echo-Auth-Request-Values"]
+        for header, source in CANONICAL.items():
+            want = resolved(env[source], sent)
+            got = values[header]
+            check(
+                f"{label}: {header} is the proxy's value",
+                FORGED_CANONICAL[header] not in got
+                and (got == [want] if want else all(v == "" for v in got)),
+                f"got {got!r}, want {want!r}",
+            )
+
+    # -Name resolves to nothing: the set writes an empty value, so a forged -Name
+    # must not survive beside it.
+    oauth2_name, oauth2_env, oauth2_sent, _ = FRONT_DOORS[3]
+    start_caddy(workdir, oauth2_env)
+    nameless = {
+        k: v for k, v in oauth2_sent.items() if k != "X-Forwarded-Preferred-Username"
+    }
+    status, body = get("/api/me", {**nameless, **FORGED_CANONICAL})
+    got = json.loads(body)["X-Echo-Auth-Request-Values"] if status == 200 else None
+    check(
+        f"{oauth2_name}: a forged -Name is not forwarded when the door sends none",
+        got is not None
+        and FORGED_CANONICAL["X-Auth-Request-Name"] not in got["X-Auth-Request-Name"],
+        f"HTTP {status}, got {got!r}",
+    )
+    # One literal label for the claims inventory (docs/security-claims.md, C-01).
+    check(
+        "a forged identity beside a valid one is replaced",
+        len(failures) == failed_before,
+        f"{len(failures) - failed_before} check(s) above failed",
+    )
+
+
 def docker_usable() -> bool:
     return bool(shutil.which("docker")) and docker("info").returncode == 0
 
@@ -1447,6 +1530,9 @@ def run_checks(workdir: Path) -> None:
         {"X-Auth-Request-User": "evil@x", "X-Auth-Request-Email": "evil@x"},
     )
     check("a forged X-Auth-Request-* is refused", status == 401, f"HTTP {status}")
+
+    check_identity_replaced(workdir)
+    start_caddy(workdir, FRONT_DOORS[0][1])
 
     status, _ = get("/api/me", {})
     check("a request with no identity is refused", status == 401, f"HTTP {status}")

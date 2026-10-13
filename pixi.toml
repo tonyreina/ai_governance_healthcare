@@ -178,6 +178,10 @@ test-dispose = "python tests/test_dispose.py"
 test-agent-tokens = "python tests/test_agent_tokens.py"
 # The agent API's route in proxy/Caddyfile, each guard broken in a copy and noticed, on a real Caddy (#164). Needs Docker.
 test-proxy-agent = "python tests/test_proxy_agent_mutations.py"
+# The identity handoff (strip, then set) broken in a copy, one way at a time, and noticed (C-01). Needs Docker.
+test-proxy-identity = "python tests/test_proxy_identity_mutations.py"
+# The identity settings .env.example and the self-hosting guide document, against the doors the proxy test runs (C-02). No Docker.
+test-front-doors = "python tests/test_front_doors.py"
 # The MCP service's route in proxy/Caddyfile and its gate (proxy/Caddyfile.mcp-gate), each guard broken in a copy and noticed, on a real Caddy (#164). Needs Docker.
 test-proxy-mcp = "python tests/test_proxy_mcp_mutations.py"
 # The shards CI splits test-proxy-mcp into (MUTANT_SHARD=i/n) run every mutant exactly once, with mutation tests (D-97). No Docker.

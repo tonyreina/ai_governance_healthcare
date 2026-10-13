@@ -8,7 +8,10 @@ and it does not say that any use of it complies with GDPR, HIPAA or any other la
 Whether it does is for your organization and counsel.
 
 It applies only to the server-backed deployment. The static dashboard keeps
-everything in the visitor's browser and sends nothing anywhere.
+everything in the visitor's browser, and the dashboard itself sends nothing to
+any service. The browser is outside its control: a cloud-backed spellchecker can
+send typed text out of the workstation (see "Browser spellcheck on
+workstations" in [Cloud deployment](deploy.md#browser-spellcheck-on-workstations)).
 
 ## In short
 
@@ -18,8 +21,8 @@ everything in the visitor's browser and sends nothing anywhere.
 | What is recorded about them? | Their identifier, name and email as the proxy asserted them, when they acted and what they did, and what they read. |
 | How long is it kept? | A project's record for the life of the AI solution plus 6 years after it is retired, and the read trail for 6 years, by default. Your records schedule takes precedence. |
 | Who disposes of it, and when? | An operator, with `make dispose`, on a schedule your records officer approves. It reports first and changes nothing until told to. |
-| Can it be stopped? | Yes. A project's owner can place a litigation hold, with a reason, and the project and its read trail are kept until it is lifted. |
-| Can one person's data be found? | Yes: `make subject-access`, and **Search all text** in the dashboard for the projects you can open. |
+| Can it be stopped? | Yes, for the retention schedule. A project's owner can place a litigation hold, with a reason, and the scheduled disposal (`make dispose`) keeps the project and its read trail until it is lifted. A hold does not stop an owner from purging or deleting the project in the dashboard. |
+| Can one person's data be found? | Yes, in the database: `make subject-access`, and **Search all text** in the dashboard for the projects you can open. The security event log, the proxy logs and backups also hold identifiers and neither search covers them; use your log and backup tooling for those. |
 | Can it be erased? | The *content* can be destroyed. The *fact* that someone acted cannot, because that is what an audit trail is. The details are below. |
 
 ## What personal data the server holds
@@ -37,6 +40,10 @@ them, when they acted, and what they did.
 | `access_event` | who read what, and the source address |
 | `principals` | the name and email the proxy asserted for each identifier |
 | `agent_token` | the owner's identifier, a label they typed, when a token was made, used and revoked, and a hash of its secret ([The agent API](agent-api.md)) |
+| `retention_hold` | who placed or lifted a litigation hold, and the reason they typed |
+| `disposal_run` | who ran each disposal |
+| `retention_policy`, `retirement_rule_change` | who changed the retention periods or the retirement rules |
+| `purged_by` on `project_log` and `project_version` | who purged an entry or a revision |
 
 ## What an agent call discloses
 
@@ -94,17 +101,24 @@ its other committee and compliance records, and which takes precedence.
 
 | Record | Kept for |
 |---|---|
-| A project, its revisions and its audit log | The life of the AI solution, plus 6 years after it is retired |
+| A project and its revisions (its live audit log goes with the project when it is deleted or disposed of) | The life of the AI solution, plus 6 years after it is retired |
 | The read trail (who opened what) | 6 years, or your audit-log policy if shorter |
 | The security event log, in your log system | Your security-log policy (often 1 year readily searchable) |
 | Staff names and emails (`principals`) | While the person is active, then as long as a retained record refers to them |
 | Backups | 35 days rolling, plus any archive your backup policy keeps |
 
+The 35 days is the owner's target (R-54). The software does not enforce it.
+`make backup` keeps every dump unless you set `BACKUP_RETAIN=<number of dumps>`,
+which counts files, not days. With a nightly dump, `BACKUP_RETAIN=35`
+approximates it. Managed-database retention is set on the platform (see [Cloud
+deployment](deploy.md)).
+
 Why: the record exists to show who reviewed a clinical AI tool and on what
 evidence, for as long as anyone could ask, so the clock starts at retirement,
 not at creation. Six years follows the practice hospitals already use for
 compliance documentation (the HIPAA Security Rule's documentation period, 45 CFR
-164.316(b)(2)(i)), and covers most malpractice limitation periods. A litigation
+164.316(b)(2)(i)). It is a common starting point, not a guarantee: malpractice
+limitation periods vary by state, so confirm yours with counsel. A litigation
 hold suspends any period. If a tool was used on children, ask counsel whether
 the limitation periods for minors in your state call for longer. Backups bound
 how long an erasure takes to be complete, because a purged value survives in
@@ -121,16 +135,18 @@ every older backup until it expires.
   decisions, which the database loads from that build
   ([Self-hosting](self-hosting.md#which-build-it-serves-and-the-retirement-rules));
   a record written before records carried their framework is read as CHAI's;
-- the history of a deleted project, counted from its deletion;
+- the history of a deleted project, counted from its deletion (a deleted
+  project's live audit log is already gone: it is removed with the project);
 - the read-trail rows older than the read-trail period;
 - the name and email (`principals`) of anyone who has not signed in for the
   read-trail period and whom no retained record names. Whoever changed a
   retained record stays listed as long as that record is kept.
 
 `make dispose APPLY=1 BY=<your name>` disposes of them, in one transaction.
-Disposal is a purge, not a disappearance: the live record is deleted and a
-deletion record (who, when, the last hash) is kept, the revisions are emptied and
-keep their number, time and hash, and the read-trail rows are deleted. Each run
+Disposal is a purge, not a disappearance: the live record is deleted, and its
+audit log with it, and a deletion record (who, when, the last hash) is kept, the
+revisions are emptied and keep their number, time and hash, and the read-trail
+rows are deleted. Each run
 is recorded with who ran it and what it disposed of. Run it on a schedule your
 records officer approves (monthly is typical), and read the report first.
 
@@ -144,8 +160,9 @@ framework out (which would make it CHAI's), and it refuses any change that would
 move an existing record to another framework's rules.
 The report counts the records whose framework has no retirement rules, which
 never come due. The
-database refuses to delete a read-trail row younger than the period, even for
-the owner, unless the period itself is changed.
+database refuses an ordinary DELETE of a read-trail row younger than the period,
+even from the owner, unless the period itself is changed. An owner or superuser
+can still disable the trigger, so treat the owner role as trusted.
 
 The periods are in the `retention_policy` table (6 and 6 years by default). If
 your schedule differs, change them as the owner (`make psql`, then
@@ -173,18 +190,22 @@ A restore can bring back records disposed of after the dump was taken, so
   An audit entry can be redacted the same way: its text and the value that changed
   are replaced, and the entry keeps who, when and which field. Both record who
   purged and when.
-- **The fact of an action cannot.** Who made a revision, who wrote an entry, who
-  deleted a project and who read what are rows the database refuses to update or
-  delete, and the purge never touches them. That is the point of an audit trail,
-  and it is the reason erasure and the trail are in tension.
-- **Deleting a project is not erasure.** The history is kept after a delete so
-  that the decision can still be reviewed; only a purge destroys content.
+- **The fact of an action cannot.** Who made a revision, who deleted a project
+  and who read what are rows the database refuses to update or delete, and the
+  purge never touches them. An audit-log entry cannot be edited while its project
+  exists, but it can be redacted, and the whole audit log is removed with the live
+  project when the project is deleted or disposed of. After a delete, what
+  remains is the deletion record and the revisions. That is the point of an audit
+  trail, and it is the reason erasure and the trail are in tension.
+- **Deleting a project is not erasure.** The revisions and the deletion record
+  are kept after a delete, but the live audit log is not; only a purge destroys
+  revision content.
 
 A request to erase a person is therefore, in this software, a request to purge
 the content that names them and to decide, as a matter of policy, whether the record
 of their having acted is kept. GDPR Art. 17(3)(b) allows refusing erasure where
-processing is necessary to comply with a legal obligation. Whether a medical-device
-governance record qualifies is an argument for your DPO to make with counsel; this
+processing is necessary to comply with a legal obligation. Whether an AI-governance
+record qualifies is an argument for your DPO to make with counsel; this
 page records only that the software cannot remove the fact of an action without
 changing the database by hand, which is a privileged path it exists to avoid.
 

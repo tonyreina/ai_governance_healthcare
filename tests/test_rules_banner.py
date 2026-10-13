@@ -122,7 +122,14 @@ def boot(
     meta: dict = {"solution": "Rules banner project"}
     if stamp:
         meta["framework"] = stamp
-    listed: list[dict] = [{"id": "p1", "meta": meta}]
+    # A project always has an owner (R-75): by default the signed-in person owns it.
+    listed: list[dict] = [
+        {
+            "id": "p1",
+            "meta": meta,
+            "access": {"owners": ["a@b"], "writers": [], "readers": []},
+        }
+    ]
     if reader:
         listed[0]["access"] = {"owners": ["o@b"], "writers": [], "readers": ["a@b"]}
     writes: list[tuple[str, str]] = []

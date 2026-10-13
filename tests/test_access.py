@@ -69,7 +69,13 @@ def main() -> int:
         check(
             "unlisted user has no access", page.evaluate(f"canRead({none}) === false")
         )
-        check("legacy project stays open", page.evaluate(f"canOwn({legacy})"))
+        check(
+            "a project with no owner is open to no one (R-75)",
+            page.evaluate(
+                f"canRead({legacy}) === false && canWrite({legacy}) === false "
+                f"&& canOwn({legacy}) === false"
+            ),
+        )
         check(
             "most powerful role wins",
             page.evaluate(
@@ -204,8 +210,33 @@ def main() -> int:
             "only owner" not in access_html("['bob@x']"),
         )
         check(
-            "an unclaimed project has its own message, not this one",
+            "an ownerless project has its own message, not this one",
             "only owner" not in access_html("[]"),
+        )
+
+        print("A project with no owner is refused to everyone (R-75)")
+        ownerless = access_html("[]")
+        check(
+            "the setup page says it has no owner and who can fix it",
+            "no owner" in ownerless and "emergency access" in ownerless,
+            ownerless[:200],
+        )
+        check(
+            "it no longer offers to let anyone claim it",
+            'data-act="claim"' not in ownerless and "Claim" not in ownerless,
+        )
+        for me in ("ann@hospital.example", "stranger@x"):
+            page.evaluate(f"ME.id = {me!r}")
+            check(
+                f"{me} can neither read, write nor own it",
+                page.evaluate(
+                    "[canRead(S), canWrite(S), canOwn(S)].every(v => v === false)"
+                ),
+            )
+        page.evaluate("ME.id = ''")
+        check(
+            "with no identity nothing is enforced, as before",
+            page.evaluate("[canRead(S), canWrite(S), canOwn(S)].every(v => v)"),
         )
 
         check("no page errors", not errors, "; ".join(errors[:2]))

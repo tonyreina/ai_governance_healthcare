@@ -302,8 +302,9 @@ ignored. A request with only an identity header is a `401`.
 
 The projects the token's owner's own dashboard lists, with archived ones taken
 out. That is the same list, from the same code, as `GET /api/projects` gives
-that person: a project they own, write or read, and a project with no owner yet
-(which every signed-in person can open, as the dashboard shows it). A project
+that person: a project they own, write or read. A project with no owner is not
+listed, as the dashboard does not list it (only emergency access reaches one,
+and an agent never has it). A project
 whose record follows another framework than the server's build knows is returned
 with a null `framework` and no items or checkpoints (its supplements, if the build knows them, are still listed); one of a framework of the
 build carries its `framework` id, and can be filtered by it. An agent never has emergency access,

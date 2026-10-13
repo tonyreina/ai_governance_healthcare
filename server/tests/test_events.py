@@ -18,7 +18,6 @@ import json
 import socket
 from collections.abc import AsyncIterator
 
-import asyncpg
 import pytest
 import uvicorn
 from app.config import Settings
@@ -286,41 +285,20 @@ class TestStreamsAreFiltered:
             payload.get("id") == "pef2" for name, payload in seen if name != "hello"
         )
 
-    async def test_an_unclaimed_project_is_visible_to_everyone(
-        self, base_url: str, settings: Settings
-    ) -> None:
-        """Unclaimed means unrestricted, exactly as access.py has it.
+    def test_an_ownerless_project_is_told_to_no_one(self, settings: Settings) -> None:
+        """R-75: ownerless is refused to everyone, so its changes reach no one.
 
-        The row is inserted directly rather than created and then stripped of
-        its owner: guard_access_change correctly refuses to remove the last
-        owner, so there is no way to reach this state through the API. It is
-        the state of every project created before access control existed.
+        An empty audience means "everyone" (Event.visible_to), so ownerless must
+        not map to an empty set. It cannot be reached through the API; this is the
+        function that would otherwise fail open.
         """
-        conn = await asyncpg.connect(settings.serving_database_url)
-        try:
-            await conn.set_type_codec(
-                "jsonb",
-                encoder=json.dumps,
-                decoder=json.loads,
-                schema="pg_catalog",
-            )
-            await conn.execute(
-                "INSERT INTO projects (id, doc) VALUES ('pef3', $1) "
-                "ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc",
-                {"meta": {"solution": "Legacy"}},
-            )
-        finally:
-            await conn.close()
+        from app.routes import _audience
 
-        async with AsyncClient(base_url=base_url, headers=TEST_HEADERS) as http:
-            watcher = asyncio.create_task(watch_events(base_url, "anyone@elsewhere"))
-            await asyncio.sleep(0.5)
-            assert (
-                await http.patch("/api/projects/pef3", json={"meta": {"org": "X"}})
-            ).status_code == 200
-            seen = await watcher
-
-        assert "project.updated" in [name for name, _ in seen]
+        audience = _audience({"meta": {}, "access": {"writers": ["w@x"]}}, settings)
+        assert audience, "an empty audience would tell everyone"
+        event = Event("project.updated", "p1", audience=audience)
+        for who in (None, "w@x", TEST_EMAIL, "anyone@elsewhere"):
+            assert not event.visible_to(who), who
 
 
 class TestAudienceNeverLeaves:

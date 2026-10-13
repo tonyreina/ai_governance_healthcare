@@ -11,17 +11,21 @@ The model, in one line each:
 * **writer** -- fill in the review
 * **reader** -- see it, change nothing
 
-Two deliberate holes, both load-bearing:
+One deliberate hole, load-bearing:
 
-1. **A project with no owners is unrestricted.** Records created before access
-   control existed have no owner list. Treating that as "nobody may touch it"
-   would lock a team out of its own governance history, so it reads as "not yet
-   claimed". The first person to claim it becomes its owner.
+**With identity disabled, everything is permitted.** If the deployment is not
+behind an identity-providing proxy there is nobody to check a list against, and
+pretending otherwise would be security theater. The API says so at /api/health
+rather than quietly allowing everything.
 
-2. **With identity disabled, everything is permitted.** If the deployment is
-   not behind an identity-providing proxy there is nobody to check a list
-   against, and pretending otherwise would be security theater. The API says so
-   at /api/health rather than quietly allowing everything.
+And one rule that used to be a second hole and is not (R-75, D-100): **a project
+with no owner is refused to everyone**, whatever its writer and reader lists
+say. It used to read as "not yet claimed" and was open to every signed-in user,
+which made a project's protection depend on nobody having emptied one list. Now
+only a configured break-glass identity (``emergency``) can reach it, and the one
+thing it can do is assign an owner. No write path may create or leave a project
+ownerless (``require_an_owner``). Nothing migrates an existing one: it is
+refused until an emergency identity assigns an owner.
 """
 
 from __future__ import annotations
@@ -80,7 +84,9 @@ ROLES = ("owner", "writer", "reader")
 
 def _listed(access: dict[str, Any], key: str) -> list[str]:
     value = access.get(key)
-    return [str(v) for v in value] if isinstance(value, list) else []
+    if not isinstance(value, list):
+        return []
+    return [str(v) for v in value if str(v).strip()]
 
 
 def access_of(doc: dict[str, Any]) -> dict[str, list[str]]:
@@ -94,15 +100,17 @@ def access_of(doc: dict[str, Any]) -> dict[str, list[str]]:
 
 
 def unclaimed(doc: dict[str, Any]) -> bool:
-    """No owner recorded: open, and claimable. See hole 1 in the module docs."""
+    """No owner recorded. Such a project is refused to everyone (R-75)."""
     return not access_of(doc)["owners"]
 
 
 def role_of(doc: dict[str, Any], user_id: str | None) -> str:
     """The user's role, or "" for none. The strongest role held wins."""
     if not user_id:
-        return "owner" if unclaimed(doc) else ""
+        return ""
     access = access_of(doc)
+    if not access["owners"]:
+        return ""  # R-75: writer and reader lists mean nothing without an owner
     if user_id in access["owners"]:
         return "owner"
     if user_id in access["writers"]:
@@ -119,7 +127,7 @@ def can_read(
     enforced: bool = True,
     emergency: bool = False,
 ) -> bool:
-    if not enforced or unclaimed(doc) or emergency:
+    if not enforced or emergency:
         return True
     return bool(role_of(doc, user_id))
 
@@ -131,7 +139,7 @@ def can_write(
     enforced: bool = True,
     emergency: bool = False,
 ) -> bool:
-    if not enforced or unclaimed(doc) or emergency:
+    if not enforced or emergency:
         return True
     return role_of(doc, user_id) in ("owner", "writer")
 
@@ -143,7 +151,7 @@ def can_own(
     enforced: bool = True,
     emergency: bool = False,
 ) -> bool:
-    if not enforced or unclaimed(doc) or emergency:
+    if not enforced or emergency:
         return True
     return role_of(doc, user_id) == "owner"
 
@@ -276,9 +284,8 @@ def guard_access_change(
 
     Two rules. Only an owner may change who has access -- otherwise a writer
     could promote themselves, and the roles would be decoration. And a project
-    may not be left with no owners, because an empty owner list reads as
-    "unclaimed", which would turn a locked-down record back into an open one.
-    Privilege escalation disguised as a tidy-up.
+    may not be left with no owners (R-75): it would be refused to everyone,
+    its own team included.
     """
     if "access" not in patch:
         return
@@ -311,9 +318,22 @@ def guard_access_change(
         if "owners" in proposed
         else access_of(before)["owners"]
     )
-    if not owners and not unclaimed(before):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "A project must keep at least one owner. Removing the last one "
-            "would make it unrestricted.",
-        )
+    if not owners:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, NO_OWNER)
+
+
+NO_OWNER = (
+    "A project must have at least one owner. One with none is refused to "
+    "everyone except emergency access."
+)
+
+
+def require_an_owner(doc: dict[str, Any], *, enforced: bool = True) -> None:
+    """Refuse to store a document with no owner (R-75).
+
+    Called on what is about to be written, whichever write it is, so a path that
+    forgets to think about ownership still cannot leave a project ownerless. With
+    identity disabled nobody is checked against a list, so nothing is required.
+    """
+    if enforced and unclaimed(doc):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, NO_OWNER)

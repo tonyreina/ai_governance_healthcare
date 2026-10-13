@@ -174,7 +174,7 @@ function accessHTML(){
          <td>${owner?`<select data-role-for="${esc(r.id)}">${ROLES.map(x=>`<option value="${x}"${x===r.role?" selected":""}>${esc(roleLabel(x))}</option>`).join("")}</select>`:esc(roleLabel(r.role))}</td>
          ${owner?`<td><button class="icon-btn" data-revoke="${esc(r.id)}" aria-label="${esc(t("access.removeLabel"))}">${esc(t("access.remove"))}</button></td>`:""}
        </tr>`).join("")}</tbody></table>`
-    : `<p style="font-size:13px;color:var(--muted)">${esc(t("access.open"))}</p>`;
+    : `<p style="font-size:13px;color:var(--muted)">${esc(t("access.ownerless"))}</p>`;
 
   /* The commonest way a record becomes unreachable: whoever created it is its
      only owner, and their account is later disabled. Nobody left can read, export,
@@ -195,8 +195,7 @@ function accessHTML(){
     <div class="field" style="margin:0"><label for="grantRole">${esc(t("access.role"))}</label>
       <select id="grantRole" data-grant-role>${ROLES.map(x=>`<option value="${x}">${esc(roleLabel(x))}</option>`).join("")}</select></div>
     <button class="btn" data-act="grant">${esc(t("access.grant"))}</button>
-  </div>`:""}
-  ${unclaimed(S)&&identityKnown()?`<button class="btn primary" data-act="claim" style="margin-top:10px">${esc(t("access.claim"))}</button>`:""}`;
+  </div>`:""}`;
 }
 
 const roleNote = () => {

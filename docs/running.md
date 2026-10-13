@@ -117,7 +117,9 @@ These work only in the shared workspace:
 
 - **Access control.** Open a project, go to *Project setup*, and find *Access*.
   You are the owner because you created it. Grant someone else write or read
-  access and watch the controls change for them.
+  access and watch the controls change for them. A project always has at least
+  one owner: the last one cannot be removed, and a project with none is refused
+  to everyone except emergency-access identities.
 - **Version history.** Make a few edits, then read the project's revisions
   through the API:
 

@@ -22,11 +22,13 @@
    recorded but not enforced, and the tool says so rather than
    implying a protection it cannot provide.
 
-   LEGACY PROJECTS STAY OPEN. A project created before this existed
-   has no access list. Treating that as "nobody has access" would
-   lock a team out of its own governance records, so an empty owner
-   list means unrestricted, exactly as before, until somebody claims
-   ownership.
+   NO OWNER MEANS NO ACCESS (R-75). A project whose owner list is
+   empty is refused to everyone, whatever its writer and reader
+   lists say; only a break-glass identity the server is configured
+   with can reach it, and all it can do is assign an owner. The
+   browser never sees such a record, because the server will not send
+   it. This file refuses it too rather than showing it open, so a
+   change of rule on one side cannot quietly reopen it on the other.
    ============================================================ */
 const ROLES = ["owner", "writer", "reader"];
 const ROLE_LABEL = { owner: "Owner", writer: "Write access", reader: "Read-only" };
@@ -47,8 +49,7 @@ function accessOf(p) {
   };
 }
 
-/* A project nobody has claimed. Open to all, and the state every
-   project created before this feature is in. */
+/* A project with no owner. Refused to everyone, not open to everyone. */
 const unclaimed = p => accessOf(p).owners.length === 0;
 
 /* Whether roles can mean anything here at all. Without an identity
@@ -60,7 +61,7 @@ const identityKnown = () => !!ME.id;
 function roleOf(p, who) {
   const id = who || ME.id;
   const a = accessOf(p);
-  if (!id) return unclaimed(p) ? "owner" : "";
+  if (!id) return "owner";  // no identity: nothing is enforced, see identityKnown()
   if (a.owners.includes(id)) return "owner";
   if (a.writers.includes(id)) return "writer";
   if (a.readers.includes(id)) return "reader";
@@ -68,19 +69,18 @@ function roleOf(p, who) {
 }
 
 /* Permission predicates. Each takes the project, defaulting to the
-   open one. An unclaimed project grants everyone owner rights, which
-   is what keeps existing records usable and lets someone claim them. */
+   open one. A project with no owner grants nobody anything. */
 function canRead(p) {
   const proj = p || S;
   if (!proj) return false;
-  if (!identityKnown() || unclaimed(proj)) return true;
+  if (!identityKnown()) return true;
   return !!roleOf(proj);
 }
 
 function canWrite(p) {
   const proj = p || S;
   if (!proj) return false;
-  if (!identityKnown() || unclaimed(proj)) return true;
+  if (!identityKnown()) return true;
   return ["owner", "writer"].includes(roleOf(proj));
 }
 
@@ -89,7 +89,7 @@ function canWrite(p) {
 function canOwn(p) {
   const proj = p || S;
   if (!proj) return false;
-  if (!identityKnown() || unclaimed(proj)) return true;
+  if (!identityKnown()) return true;
   return roleOf(proj) === "owner";
 }
 
@@ -109,9 +109,8 @@ function accessPatch(p, id, role) {
   return next;
 }
 
-/* Refuse to remove the last owner. A project with no owner reverts to
-   unrestricted, which would silently turn a locked-down record into an
-   open one -- a privilege escalation dressed up as a tidy-up. */
+/* Refuse to remove the last owner. A project with no owner is refused
+   to everyone, its own team included (R-75). */
 function wouldOrphan(p, id, role) {
   const a = accessOf(p);
   return a.owners.length === 1 && a.owners[0] === id && role !== "owner";

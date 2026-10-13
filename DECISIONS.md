@@ -3775,6 +3775,46 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   strict docs build (every link). Not enforced: that a statistic is sourced or
   current. That rests on this entry and on review.
 
+### D-100 A project with no owner is refused to everyone, with no migration
+
+- Status: Accepted: the owner's ruling of 2026-10-12 on the docs audit (D8).
+- **The question.** `server/app/access.py` and `app/js/00-core/15-access.js`
+  treated an empty owner list as "unclaimed": open to every signed-in user, who
+  could then claim it. It was meant for records from before access control. In
+  practice it was a hole any code path could reopen: emptying one list turned a
+  locked-down record into a public one, and nothing said so in the docs.
+- **Decided.**
+    1. **No owner means no access, not open access.** `can_read`, `can_write` and
+       `can_own` return false for an ownerless project to every identity except
+       a break-glass one (`emergency`). The browser mirror does the same.
+    2. **Break-glass assigns an owner, and nothing else.** An emergency edit to
+       an ownerless record that does not leave it with an owner is a 400
+       (`access.require_an_owner`, run on the merged document in the PATCH route
+       and on the new document in create).
+    3. **No write path creates or leaves one.** Create (the creator is always
+       listed), the access change (the last owner cannot be removed; blank ids are
+       not owners), and the post-merge check catch every API write. The agent API
+       and MCP are read-only and read the same list. `Event` audiences for an
+       ownerless project are `routes.NOBODY`, never the empty set, which means
+       "everyone".
+    4. **No migration.** An existing ownerless record is refused until an
+       emergency identity assigns an owner; `docs/deploy.md` has the query that
+       finds them.
+    5. **Hole 2 is unchanged.** With identity disabled nothing is enforced.
+    6. **The browser's "Claim ownership" button, its handler and its messages are
+       gone**; the setup page says the project has no owner and who can fix it.
+- Rejected: **claim on first read.** It leaves the rule that any signed-in user
+  can take over a record nobody owns, which is the hole.
+- Rejected: **a migration assigning the creator (`created_by`) as owner.** The
+  owner chose to have none run: a guessed owner is an access grant nobody made,
+  and `created_by` can be a deprovisioned account.
+- Rejected: **keeping it open and documenting it.** The finding was that the
+  docs claimed enforcement the code did not give; closing the rule is simpler
+  than a caveat on every page.
+- Source: the owner's ruling of 2026-10-12 on the docs audit; R-75; C-10. It
+  changes D-89 (d) ("unclaimed projects included"): an agent no longer sees one.
+- Enforced by: the tests listed under R-75, and `pixi run check-claims` (C-10).
+
 ### D-101 Preflight asks for the encryption decision for a real SITE_ADDRESS host
 
 - Status: Accepted: the owner's ruling of 2026-10-12 on the docs audit (D10).

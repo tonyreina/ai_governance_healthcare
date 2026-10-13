@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# throwaway comment: proves a code change runs every job
 """Diagnose a stack that is up but not working.
 
 ``preflight.py`` runs before ``make up`` and inspects ``.env`` alone. It cannot

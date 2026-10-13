@@ -138,7 +138,16 @@ def boot(browser, url: str, replies: list):
         "**/api/projects",
         lambda r: r.fulfill(
             status=200,
-            body=json.dumps([{"id": "p1", "meta": {"solution": "Original"}}]),
+            body=json.dumps(
+                [
+                    {
+                        "id": "p1",
+                        "meta": {"solution": "Original"},
+                        # A project always has an owner (R-75): the signed-in person.
+                        "access": {"owners": ["a@b"], "writers": [], "readers": []},
+                    }
+                ]
+            ),
             content_type=json_ct,
         ),
     )

@@ -525,7 +525,7 @@
   "who.localYou": "you (this browser)",
   "who.someone": "someone",
   "hold.title": "Litigation hold",
-  "hold.lede": "A hold stops this record from being disposed of at the end of its retention period until it is lifted. Only owners see this.",
+  "hold.lede": "A hold stops this record from being disposed of at the end of its retention period until it is lifted. Owners, and audited emergency access, see this.",
   "hold.on": "On hold: this record will not be disposed of.",
   "hold.off": "Not on hold.",
   "hold.loading": "Checking for a hold…",

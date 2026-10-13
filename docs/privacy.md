@@ -174,8 +174,10 @@ edit, so it can only ever run longer than the date suggests.
 report and kept, with its read trail, until the hold is lifted. An owner of the
 project places or lifts one on its setup page, under **Litigation hold**, and
 gives a reason (a matter name or reference). Holds are append-only, each with
-who, when and why. The reason is shown only to the project's owners; the
-project's history records only that a hold was placed or lifted.
+who, when and why. The reason is shown only to the project's owners and to
+audited emergency access (see
+[Offboarding, and emergency access](deploy.md#offboarding-and-emergency-access));
+the project's history records only that a hold was placed or lifted.
 
 A hold does not stop an owner's manual purge or delete in the dashboard; it
 stops the schedule.

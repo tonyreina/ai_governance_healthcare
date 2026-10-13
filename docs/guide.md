@@ -226,7 +226,7 @@ litigation hold is on it. See [Privacy and retention](privacy.md).
 
 | Role | Can |
 |---|---|
-| **Owner** | Everything a writer can, plus change who has access, archive, delete, destroy history, and place or lift a litigation hold |
+| **Owner** | Everything a writer can, plus change who has access, archive, delete, destroy history, and place or lift a litigation hold (audited emergency access can too) |
 | **Writer** | Fill in the review: checklists, evidence, metrics, model card, checkpoints |
 | **Reader** | See it, and change nothing |
 

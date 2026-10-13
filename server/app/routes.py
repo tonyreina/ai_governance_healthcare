@@ -1109,8 +1109,9 @@ async def _hold_gate(
     purpose: str,
     use: Use,
 ) -> None:
-    """Owner only, on the live project or, once deleted, its history (as for a
-    purge: a deleted project's history is what disposal would destroy)."""
+    """Owner, or audited emergency access, on the live project or, once deleted,
+    its history (as for a purge: a deleted project's history is what disposal
+    would destroy). Emergency access is recorded by ``emergency.record``."""
     gate = await _version_gate(conn, project_id)
     if gate is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such project")
@@ -1157,8 +1158,8 @@ async def get_hold(
 ) -> HoldOut:
     """Whether a litigation hold stops this project's disposal, and its history.
 
-    Owner only: a hold's reason is often a matter's name, which readers of the
-    record have no need to see.
+    Owners, and audited emergency access: a hold's reason is often a matter's
+    name, which readers of the record have no need to see.
     """
     async with db.acquire() as conn, conn.transaction():
         await _hold_gate(
@@ -1177,7 +1178,7 @@ async def set_hold(
     identity: Identity = Depends(get_identity),
     emergency: EmergencyAudit = Depends(get_emergency),
 ) -> HoldOut:
-    """Place or lift a litigation hold (#57, R-56). Owner only.
+    """Place or lift a litigation hold (#57, R-56). Owners, and audited break-glass.
 
     A held project is reported by ``make dispose`` and kept, with its read trail,
     until the hold is lifted. Placing a hold that is in place, or lifting one that

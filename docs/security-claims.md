@@ -1032,14 +1032,17 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_retention.py::test_a_held_project_is_reported_and_kept_until_the_hold_is_lifted`
   `server/tests/test_retention.py::test_the_read_trail_loses_only_rows_past_the_period_and_not_held`
 
-### C-79 Only a project's owners see or change its litigation hold
+### C-79 Only a project's owners, and audited emergency access, see or change its litigation hold
 
 - **Claim:** A hold, and the reason given for it, can be seen, placed and lifted
-  only by an owner of the project.
-- **Asserted in:** `app/i18n/en.json` — "until it is lifted. Only owners see this."
+  only by an owner of the project, or by an identity with emergency access
+  (C-55), whose every use is recorded in the project's own log. The owner chose
+  to allow that, audited, on 2026-10-12.
+- **Asserted in:** `app/i18n/en.json` — "until it is lifted. Owners, and audited emergency access, see this."
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_holds.py::test_only_an_owner_may_see_or_change_a_hold`
+  `server/tests/test_breakglass.py::test_it_can_read_place_and_lift_a_hold_and_each_use_is_recorded`
   `tests/test_holds_ui.py::sees no hold section`
 
 ### C-80 The dashboard and its exports contact no outside service

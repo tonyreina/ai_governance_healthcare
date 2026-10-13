@@ -70,6 +70,13 @@ async def test_only_an_owner_may_see_or_change_a_hold(client: AsyncClient) -> No
     async with owner_connection() as conn:
         assert await conn.fetchval("SELECT count(*) FROM retention_hold") == 0
 
+    # Lifting is refused the same way: place one as the owner, then try to lift it.
+    assert (await hold(client, "place")).status_code == 200
+    for email, status in [("w@x.org", 403), ("r@x.org", 403), ("nobody@x.org", 404)]:
+        async with acting_as(client, email) as other:
+            assert (await hold(other, "lift", "Settled")).status_code == status
+    assert (await client.get(f"/api/projects/{PID}/hold")).json()["held"] is True
+
 
 async def test_placing_twice_or_lifting_nothing_is_a_conflict(
     client: AsyncClient,

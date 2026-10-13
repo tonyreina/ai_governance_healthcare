@@ -55,14 +55,15 @@ attributable and reviewable.
   either, never mixed into the CHAI status.
 - **An audit trail enforced by the database**: append-only history, a record of
   who read what, retention periods, litigation holds and subject-access tools.
-- **Exports**: standalone HTML report, PDF, Markdown, JSON (per project) and CSV
-  (portfolio), in the reader's language.
+- **Exports**: standalone HTML report, PDF and Markdown, in the reader's
+  language; and JSON (per project) and CSV (portfolio), which stay in English so
+  scripts can read them.
 - **Eight languages**: English, Spanish, French, German, Hindi, Russian,
   Simplified Chinese and Hebrew (right to left).
 
-It does not find AI tools, test models, or hold patient data, and it is not a
-certification. [Adopting it](docs/adopting.md) sets out what it takes and what to
-ask your own organization first.
+It does not find AI tools or test models, it is designed to hold no patient
+data, and it is not a certification. [Adopting it](docs/adopting.md) sets out
+what it takes and what to ask your own organization first.
 
 **Walkthrough:** a [90-second video](https://tonyreina.github.io/ai_governance_healthcare/#see-it-in-action)
 of the dashboard on the Docker stack, using sample data. It shows the server-backed

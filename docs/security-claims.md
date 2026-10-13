@@ -43,13 +43,11 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Asserted in:** `docs/self-hosting.md` — "The proxy deletes any
   `X-Auth-Request-User`, `-Name` or `-Email` the browser sent"
 - **Asserted in:** `docs/running.md` — "**Identity cannot be forged.**"
-- **Status:** partial
-- **Gap:** The forged-header tests send `X-Auth-Request-User` and `-Email` with no valid
-  identity alongside, so they show a 401, not that the proxy replaces them. `-Name`
-  is never forged in the proxy suites, and `scripts/check_isolation.py`, which does
-  send it, passes on any 401. Stripping `-Name` beside a valid identity is untested. #231
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_proxy_identity.py::a forged X-Auth-Request-* is refused`
+  `tests/test_proxy_identity.py::a forged identity beside a valid one is replaced`
+  `tests/test_proxy_identity_mutations.py::Each guard, broken`
   `tests/test_stack.py::forged identity headers are stripped`
 
 ### C-02 Every documented cloud identity configuration resolves an identity
@@ -58,15 +56,12 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   canonical identity headers. (This was broken for months, #23.)
 - **Asserted in:** `docs/self-hosting.md` — "behind an SSO front door: the
   header it sets"
-- **Status:** partial
-- **Gap:** The test keeps its own copy of the settings (`FRONT_DOORS`), in step with
-  `.env.example` and the self-hosting guide by a comment only; nothing compares
-  them, and the IAP case omits `IDENTITY_STRIP_PREFIX`, which the guide requires
-  for IAP (the proxy ignores it). A documented setting that drifts from the
-  test's copy goes unnoticed. #231
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_proxy_identity.py::request is forwarded`
   `tests/test_proxy_identity.py::no provider header reaches the API`
+  `tests/test_front_doors.py::every documented front door setting matches the test's copy`
+  `tests/test_front_doors.py::Each side, drifted in a copy`
 
 ### C-03 A request with no identity is refused, and an unset source fails closed
 

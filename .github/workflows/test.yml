@@ -158,6 +158,8 @@ jobs:
       # Every skip in the test code reads REQUIRE_TESTS, so a suite that cannot run
       # fails in CI instead of passing silently (C-33).
       - run: pixi run test-require-tests
+      # The identity settings the docs give per front door match what the proxy test runs (C-02).
+      - run: pixi run test-front-doors
 
       # A stale or hand-edited generated dashboard is something the build-app hook
       # fails on, and the hook's pattern covers the generated file (C-31).
@@ -511,6 +513,11 @@ jobs:
       # every identity header stripped, none set) broken in a copy, and noticed (#164).
       - name: proxy, the agent route's guards
         run: pixi run test-proxy-agent
+
+      # The identity handoff in the Caddyfile (strip, then set), each step broken in a
+      # copy and noticed: a forged header beside a valid identity must be replaced (C-01).
+      - name: proxy, the identity handoff's guards
+        run: pixi run test-proxy-identity
 
       # Locked and hashed dependencies, digest-pinned images and actions, a watch for
       # updates, a security policy, and the real image built from the lock (#37).

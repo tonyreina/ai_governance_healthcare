@@ -180,7 +180,6 @@ process.stdout.write(JSON.stringify(cases.map(([t, s]) => deepMerge(t, s))));
     shutil.which("node") is None and not os.getenv("REQUIRE_TESTS"),
     reason="node is not installed",
 )
-@pytest.mark.skipif(not UTIL_JS.exists(), reason=f"{UTIL_JS} not found")
 def test_parity_with_the_browsers_deepmerge(tmp_path: Path) -> None:
     """Run the app's own ``deepMerge`` and demand identical output.
 

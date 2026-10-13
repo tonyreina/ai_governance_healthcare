@@ -273,16 +273,23 @@ def main() -> int:
             "(" * 100000,
             "*" * 100000,
         ]
+        times = []
         for text in nasty:
             t0 = time.time()
             html = page.evaluate("s => mdHTML(s) + mdInlineMarkdown(s)", text)
             took = time.time() - t0
+            times.append(took)
             check(
                 f"{text[:6]!r} x{len(text) // max(1, len(text[:6]))} in under 2 s",
                 took < 2.0,
                 f"{took:.1f}s",
             )
             check("  and it still escapes", "<script" not in html)
+        check(
+            "every crawl input is bounded",
+            len(times) == len(nasty) and max(times) < 5.0,
+            f"slowest {max(times):.1f}s",
+        )
         long_text = "word " * 20000
         html = page.evaluate("s => mdHTML(s)", long_text)
         check("text past the limit is kept, as plain text", html.count("word") == 20000)

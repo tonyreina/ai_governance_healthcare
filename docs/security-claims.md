@@ -8,8 +8,11 @@ backs it. The inventory exists because the same bug kept appearing: a sentence i
 the docs or the UI claiming something no test checked, which turned out to be
 false (#31, #55, #56, #61, #62).
 
-`pixi run check-claims` reads this page and fails if any row is not true to
-its own description. It runs in every commit and in CI.
+`pixi run check-claims` reads this page and fails if a quoted sentence is no
+longer in the file it cites, if the evidence named for a row does not exist or
+is not something CI runs, or if a row's status lacks what it requires (evidence,
+a gap, an issue number). It cannot tell whether a test really asserts the claim
+as worded; that is a review question. It runs in every commit and in CI.
 
 - **Asserted in** is the file and the sentence, quoted. The quote must still be
   in that file, so when a doc changes, its row has to change with it.
@@ -40,7 +43,11 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Asserted in:** `docs/self-hosting.md` — "The proxy deletes any
   `X-Auth-Request-User`, `-Name` or `-Email` the browser sent"
 - **Asserted in:** `docs/running.md` — "**Identity cannot be forged.**"
-- **Status:** enforced
+- **Status:** partial
+- **Gap:** The forged-header tests send `X-Auth-Request-User` and `-Email` with no valid
+  identity alongside, so they show a 401, not that the proxy replaces them. `-Name`
+  is never forged in the proxy suites, and `scripts/check_isolation.py`, which does
+  send it, passes on any 401. Stripping `-Name` beside a valid identity is untested. #231
 - **Enforced by:**
   `tests/test_proxy_identity.py::a forged X-Auth-Request-* is refused`
   `tests/test_stack.py::forged identity headers are stripped`
@@ -51,7 +58,12 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   canonical identity headers. (This was broken for months, #23.)
 - **Asserted in:** `docs/self-hosting.md` — "behind an SSO front door: the
   header it sets"
-- **Status:** enforced
+- **Status:** partial
+- **Gap:** The test keeps its own copy of the settings (`FRONT_DOORS`), in step with
+  `.env.example` and the self-hosting guide by a comment only; nothing compares
+  them, and the IAP case omits `IDENTITY_STRIP_PREFIX`, which the guide requires
+  for IAP (the proxy ignores it). A documented setting that drifts from the
+  test's copy goes unnoticed. #231
 - **Enforced by:**
   `tests/test_proxy_identity.py::request is forwarded`
   `tests/test_proxy_identity.py::no provider header reaches the API`
@@ -70,7 +82,9 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-04 The API reads identity from the proxy header and nowhere else
 
 - **Claim:** Not from a body, a query parameter or a cookie. The audit log's
-  author is overwritten with the proxy identity.
+  author is overwritten with the proxy identity. This is about the people-facing
+  API: the optional read-only agent API (off unless `AGENT_ID_SECRET` is set)
+  identifies a person by a per-user bearer token instead (C-99, C-105).
 - **Asserted in:** `README.md` — "the API reads identity from the proxy and
   nowhere else"
 - **Asserted in:** `docs/adopting.md` — "the application reads identity from the proxy in front of it and nowhere else"
@@ -78,6 +92,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Enforced by:**
   `server/tests/test_auth.py::test_identity_comes_from_the_configured_header`
   `server/tests/test_api.py::test_log_author_is_the_proxy_identity_not_the_body`
+  `server/tests/test_auth.py::test_identity_in_a_query_parameter_or_cookie_is_ignored`
 
 ### C-05 The API is reachable only through the proxy
 
@@ -225,10 +240,11 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-18 The audit log is append-only
 
-- **Claim:** No route changes or removes a log entry, and the database refuses
-  any UPDATE except the redaction a purge performs, which it verifies
-  by comparing the result with a function. Deleting a project removes
-  its live log, and records that it did (C-45).
+- **Claim:** No route under a project's `/log` changes or removes an entry, and
+  the database refuses any UPDATE except the redaction a purge performs, which
+  it verifies by comparing the result with a function. The database does not
+  refuse a DELETE: the only route that removes entries is deleting the whole
+  project, which takes its live log with it and records that it did (C-45).
 - **Asserted in:** `README.md` — "Audit log | Yes, append-only"
 - **Asserted in:** `docs/what-it-does.md` — "The database itself refuses to alter the audit log or the revision history"
 - **Asserted in:** `docs/adopting.md` — "The audit trail is enforced by the database, not only by the application."
@@ -288,10 +304,11 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_versions.py::TestVersions::test_history_survives_deletion`
   `server/tests/test_disposal.py::TestDeletionLeavesATombstone::test_the_log_still_goes_with_the_project`
 
-### C-23 Backups are encrypted, and a plaintext dump is refused
+### C-23 Backups are encrypted by default, and a plaintext dump needs an explicit flag
 
 - **Claim:** `make backup` requires a passphrase and writes only an encrypted
-  dump.
+  dump. `make backup-plaintext PLAINTEXT=1` writes an unencrypted one and is
+  refused without the flag.
 - **Asserted in:** `Makefile` — "BACKUP_PASSPHRASE is required"
 - **Status:** enforced
 - **Enforced by:**
@@ -304,13 +321,19 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-24 `make up` refuses to start on unsafe settings
 
 - **Claim:** A placeholder or short database password, a literal identity source,
-  and a non-loopback bind over plain HTTP are all refused, and `.env` is read the
-  way compose reads it, so a blank value or a trailing comment cannot get past
-  the gate.
+  and a non-loopback bind over plain HTTP are all refused when they are in `.env`,
+  and `.env` is read the way compose reads it, so a blank value or a trailing
+  comment cannot get past the gate.
 - **Asserted in:** `README.md` — "refuses to start on unsafe settings"
 - **Asserted in:** `docs/adopting.md` — "`make up` refuses to start on unsafe settings and says why."
 - **Asserted in:** `docs/self-hosting.md` — "`make up` refuses to start on unsafe settings: an empty or placeholder password"
-- **Status:** enforced
+- **Status:** partial
+- **Gap:** Preflight reads `.env` alone (the process environment is used only for
+  `FORCE`). Compose gives a variable exported in the shell precedence over
+  `.env`, so `POSTGRES_PASSWORD=short make up` or an exported literal identity
+  is not seen by the gate. The password checks are skipped when `DATABASE_URL`
+  points at an external database, and the literal check covers
+  `IDENTITY_ID_SOURCE` and `IDENTITY_EMAIL_SOURCE`, not the name. #231
 - **Enforced by:**
   `tests/test_preflight.py::an empty password is refused`
   `tests/test_preflight.py::15 characters is refused`
@@ -347,17 +370,27 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Enforced by:**
   `tests/test_boot_storage.py::static host -> standing warning is shown`
   `tests/test_boot_storage.py::static host -> warning names the risk`
+  `tests/test_boot_storage.py::static host -> warning: this browser, no audit log, no access control`
 
 ### C-27 The app never silently falls back to browser storage
 
-- **Claim:** If a server was expected and cannot be reached, or refuses the
-  user, the app stops and says so.
+- **Claim:** If the API answers 401, 403 or 503, or this browser has seen an
+  API at this origin before and it cannot be reached, the app stops and says
+  so. A browser that has never seen an API at the origin starts in browser-only
+  mode with the standing banner (C-26).
 - **Asserted in:** `README.md` — "never silently falls back"
 - **Asserted in:** `docs/running.md` — "The app never silently falls back from one to another."
-- **Status:** enforced
+- **Status:** partial
+- **Gap:** The 'no store was created' and 'nothing written to localStorage' checks run for
+  401 and 403 only; the unreachable-server case checks the error text and not
+  that no store was created. A network error, a 404 or a non-JSON answer on a
+  fresh browser with no remembered origin is browser-only mode with the banner,
+  by design, not a stop. #231
 - **Enforced by:**
   `tests/test_boot_storage.py::no store was created`
   `tests/test_boot_storage.py::nothing written to localStorage`
+  `tests/test_boot_storage.py::503 -> blocking error`
+  `tests/test_boot_storage.py::network failure on a known-API origin -> blocking error`
 
 ### C-28 After a save, the app says where the save went
 
@@ -400,13 +433,19 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   fails the run if the file differs.
 - **Asserted in:** `docs/developing.md` — "so the generated file can never go
   stale"
-- **Status:** enforced
+- **Status:** partial
+- **Gap:** Only the hook's existence is evidence: no test edits `docs/app/index.html` or
+  `app/` and watches the hook fail. The hook's `files` pattern omits
+  `docs/app/index.html`, so a hand edit of the generated file is caught by CI's
+  `prek run --all-files`, not by the local hook. #231
 - **Enforced by:**
   `.pre-commit-config.yaml::build-app`
 
 ### C-32 A test cannot be added and quietly left out of CI
 
-- **Claim:** CI fails if a `test-*` task is not run, or a test file has no task.
+- **Claim:** CI fails if a `test-*` task is not run by name, or a test file is
+  named by no pixi task. It does not check that the task naming a file is a
+  `test-*` task that CI runs.
 - **Asserted in:** `docs/developing.md` — "so a test cannot be added and quietly
   left out."
 - **Status:** enforced
@@ -420,7 +459,11 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   0 and reads as a pass.
 - **Asserted in:** `docs/developing.md` — "to turn every skip into a failure; CI
   always does."
-- **Status:** enforced
+- **Status:** partial
+- **Gap:** The cited tests show that the workflow sets `REQUIRE_TESTS=1`, not that every
+  suite honors it. No test checks each `skip`, `skipif` or `requires_db` (in
+  `server/tests/conftest.py` and `mcp/tests/conftest.py`) against the variable.
+  A second `skipif` in `test_merge.py` that ignored it was removed. #231
 - **Enforced by:**
   `tests/test_workflows.py::REQUIRE_TESTS removed is noticed`
   `tests/test_workflows.py::REQUIRE_TESTS set to 0 is noticed`
@@ -455,7 +498,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** The identity example the self-hosting guide shows uncommented is a
   placeholder, never a literal, and local development is sent to `make dev`.
 - **Asserted in:** `docs/self-hosting.md` — "Never put a literal such as
-  `dev@localhost` here."
+  `dev@localhost` in `IDENTITY_ID_SOURCE`."
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_preflight.py::passes preflight`
@@ -713,6 +756,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   leave a log entry because the log goes with the project; it is recorded by the
   warning and the tombstone. Nothing here tests that a deployment alerts on the
   warning. #42
+  Listing projects that only emergency access could see is recorded as an
+  `access.breakglass` security event with a count, not in any project's own log.
 - **Enforced by:**
   `server/tests/test_breakglass.py::test_every_use_on_a_project_is_recorded_in_its_own_log`
   `server/tests/test_breakglass.py::test_the_entry_survives_a_purge`
@@ -749,10 +794,13 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-58 Security events are named and the docs list exactly them
 
-- **Claim:** Every security-relevant event has a stable name and fields, written as
-  one JSON object tagged `"stream": "security"`, and the table in the deployment
-  guide is the complete list of names. Levels and fields are documented but not
-  machine-checked, and the guide says so.
+- **Claim:** The security events the code names (`SecurityEvent`) are each
+  written as one JSON object tagged `"stream": "security"` with a stable name and
+  fields, and the table in the deployment guide lists exactly those names. Levels
+  and fields are documented but not machine-checked, and the guide says so. Not
+  every security-relevant action has a named event: an access-list change, an
+  archive and a `make dispose` run are recorded in the project log or a table,
+  and no test would notice a new action that has no event.
 - **Asserted in:** `docs/deploy.md` — "a test fails if
   a name here and in the code ever disagree"
 - **Status:** enforced
@@ -902,9 +950,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Asserted in:** `docs/deploy.md` — "Alert on the disk instead"
 - **Status:** partial
 - **Gap:** The report is tested; the per-platform alert metrics and flags are from the
-  providers' documentation and nothing here creates a database or an alert. Nothing
-  trims the tables: the retention periods are decided (R-54) but nothing applies
-  them yet. #54
+  providers' documentation and nothing here creates a database or an alert. The
+  tables do not shrink by themselves. `make dispose` (R-56) applies the
+  retention periods when an operator runs it, and nothing here runs it on a
+  schedule, so the disk alert stays the control. #54
 - **Enforced by:**
   `tests/test_doctor.py::the revision count and size are reported`
   `tests/test_doctor.py::the read trail's size is reported too, with why it grows`
@@ -933,7 +982,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Enforced by:**
   `tests/test_subject_access.py::a restore of a dump from before a purge brings the purged content back`
 
-### C-70 Subject access finds every place an identifier is stored
+### C-70 Subject access searches every database column that records who did something
 
 - **Claim:** `make subject-access` reports every table and column that records who
   did something, and changes nothing.
@@ -941,6 +990,9 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Status:** partial
 - **Gap:** Columns named `*_by`, `by_id` or `actor` are checked against the query;
   an identifier stored under another name, or only inside new jsonb, is not. #57
+  The security-event log, the proxy's logs, backups and the purge ledger
+  also hold identifiers and are not searched. The column check is a substring
+  test of the query text, so a column named only in a comment would count.
 - **Enforced by:**
   `tests/test_subject_access.py::every column that records who did something is searched`
   `tests/test_subject_access.py::it changed nothing`
@@ -962,9 +1014,11 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   never to enter patient-identifiable information, and the docs say so first.
 - **Asserted in:** `app/i18n/en.json` — "Governance metadata only: never enter patient-identifiable information."
 - **Status:** partial
-- **Gap:** A statement of policy. Nothing inspects what is typed into the
-  free-text fields, so the tests prove the instruction is shown, not that it is
-  followed. Detection is R-22, open. #34
+- **Gap:** A statement of policy. Nothing inspects text as it is typed, so the
+  tests prove the instruction is shown, not that it is followed. `make phi-scan`
+  (C-73, C-74, R-50) checks stored records on demand for a few identifier
+  patterns; it does not look for names or dates on their own, and a clean run
+  is not a guarantee. R-22 was answered by R-50. #34
 - **Enforced by:**
   `tests/test_boot_storage.py::healthy API -> the data scope is stated in the layout`
   `tests/test_boot_storage.py::static host -> the warning states the same data scope`
@@ -987,8 +1041,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   only the live record, so a value edited out of the record is still found.
 - **Asserted in:** `docs/self-hosting.md` — "every revision not yet purged"
 - **Status:** partial
-- **Gap:** It finds only the patterns it has. A name, a date or a free-form case
-  description is not checked, by design (R-50). Earlier backups are not scanned.
+- **Gap:** It finds only the patterns it has. A name or date that is not labeled as one,
+  and a free-form case description, is not checked, by design (R-50). Earlier backups are not scanned.
   #66
 - **Enforced by:**
   `tests/test_phi_scan.py::the history is scanned, and the revisions are named`
@@ -1003,6 +1057,9 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Gap:** When the live database cannot be read, the purges come back only if
   someone rebuilds the ledger from the security log; purge events from before
   this change lack the fields and must be re-applied by hand. #116
+  The warning when the live database cannot be read is checked as text in the
+  recipe (`make -n`), not by a run where the capture fails and the restore
+  proceeds.
 - **Enforced by:**
   `tests/test_purge_ledger.py::the mistaken content is gone again`
   `tests/test_purge_ledger.py::work written after the restore is untouched`
@@ -1013,16 +1070,23 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** The patient-data notice and the storage-mode banners stay in English
   in a language until a reviewer is recorded for them in that catalog.
 - **Asserted in:** `docs/developing.md` — "are shown in English until someone fluent in the"
-- **Status:** enforced
+- **Status:** partial
+- **Gap:** The evidence is one banner (`safety.local.title` and `.detail`) in one
+  language. The patient-data notice, the shared-server banner and the other keys
+  under `@meta.safety` in `en.json` (about twenty: report disclaimers, the rules
+  banner, agent-token warnings) are not asserted in either state, and the claim
+  names only the notice and banners. #231
 - **Enforced by:**
   `tests/test_i18n.py::the unreviewed safety warning stays in English`
   `tests/test_i18n.py::once a reviewer is recorded, it shows in Spanish`
 
 ### C-77 Only the database owner can dispose, and not of a recent read
 
-- **Claim:** The API's role cannot run disposal or delete the read trail, and the
-  database refuses an ordinary DELETE of a read-trail row younger than the
-  period, even from the owner, unless the period itself is changed.
+- **Claim:** By default the API's role cannot run disposal or delete the read
+  trail (with `ALLOW_OWNER_ROLE=true` the API serves as the owner and can; see
+  C-53, R-74). The database refuses an ordinary DELETE of a read-trail row
+  younger than the period, even from the owner, unless the period itself is first
+  shortened (R-54).
 - **Asserted in:** `docs/privacy.md` — "Only the database owner can dispose. The API cannot: its database role has no"
 - **Asserted in:** `docs/privacy.md` — "database refuses an ordinary DELETE of a read-trail row younger than the period,"
 - **Status:** partial
@@ -1035,11 +1099,18 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-78 A litigation hold stops disposal
 
-- **Claim:** A project under a litigation hold, and its read trail, are not
-  disposed of until the hold is lifted.
+- **Claim:** The scheduled disposal (`make dispose`) does not dispose of a
+  project under a litigation hold, or its read trail, until the hold is lifted.
+  A hold does not stop an owner from purging or deleting the project by hand
+  in the dashboard.
 - **Asserted in:** `docs/privacy.md` — "A project under a hold is listed in the"
 - **Asserted in:** `docs/privacy.md` — "A project's owner can place a litigation hold, with a reason, and the scheduled disposal (`make dispose`) keeps the project and its read trail until it is lifted. A hold does not stop an owner from purging or deleting the project in the dashboard."
 - **Status:** enforced
+- **Gap:** A hold stops the scheduled disposal only. An owner can still purge or delete a
+  held project by hand: `purge_versions` and delete do not consult the hold, and
+  the cited tests exercise `dispose_due()` only. docs/privacy.md says so (owner
+  ruling D4 of 2026-10-12). The quoted sentence in the quick-answer table must
+  move to the corrected wording when the privacy.md change merges.
 - **Enforced by:**
   `server/tests/test_retention.py::test_a_held_project_is_reported_and_kept_until_the_hold_is_lifted`
   `server/tests/test_retention.py::test_the_read_trail_loses_only_rows_past_the_period_and_not_held`
@@ -1068,7 +1139,12 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Asserted in:** `docs/privacy.md` — "the dashboard itself sends nothing to"
 - **Asserted in:** `docs/adopting.md` — "The dashboard and its exports contact no
   outside service."
-- **Status:** enforced
+- **Status:** partial
+- **Gap:** The walk runs the browser-only (`file://`) page with sample data. Screens that
+  exist only against a server (agent access, sign-in and session, litigation
+  hold, version history, purge dialogs) are not rendered, and what the page's
+  own CSP (`connect-src` and `img-src` `'self'`) blocks may not reach the
+  request listener. #231
 - **Enforced by:**
   `tests/test_no_third_party.py::loading the dashboard makes no external request`
   `tests/test_no_third_party.py::no screen, dialog, language or export makes a request to another host`
@@ -1129,13 +1205,15 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** Every SQL call passes a constant string with values as parameters, except
   the migration files and the role the API serves as, and hostile text in any field is
-  stored and returned as text.
+  stored and returned as text, except a NUL character, which the API refuses
+  with a 422 because PostgreSQL cannot hold it.
 - **Asserted in:** `docs/developing.md` — "the server passes values to SQL as parameters and never in the SQL text"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_sql_injection.py::test_every_sql_call_passes_a_constant_string`
   `server/tests/test_sql_injection.py::test_the_guard_notices_each_way_text_reaches_sql`
   `server/tests/test_sql_injection.py::test_hostile_text_is_stored_and_returned_as_text`
+  `server/tests/test_sql_injection.py::test_a_nul_character_is_refused_cleanly_not_with_a_server_error`
 
 ### C-84 The proxy's policy refuses script the page did not ship
 
@@ -1209,6 +1287,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_markdown.py::with esc weakened the structure check would catch the tag`
   `tests/test_markdown.py::with safeUrl weakened the structure check would catch the hole`
   `tests/test_injection.py::an app that does not escape is rejected`
+  `tests/test_markdown.py::every crawl input is bounded`
+  `tests/test_markdown.py::text past the limit is kept, as plain text`
 
 ### C-88 The server retires exactly what the build's definition marks ending
 
@@ -1306,7 +1386,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-89 The API's role cannot change which decisions retire a project
 
-- **Claim:** The API's database role can read the retirement rules and their
+- **Claim:** By default (not with `ALLOW_OWNER_ROLE=true`, C-53, R-74) the API's
+  database role can read the retirement rules and their
   history and cannot insert, update, delete or truncate either, and the history
   refuses an update or a delete even from the owner.
 - **Asserted in:** `docs/privacy.md` — "Nor can it change which decisions retire a project: its role may only read those rules."
@@ -1392,6 +1473,9 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_custom_build.py::opening an unstamped record is refused`
   `tests/test_custom_build.py::opening another primary's record is refused`
   `tests/test_custom_build.py::every record it makes is stamped with its primary`
+  `tests/test_custom_build.py::an import of a record`
+  `tests/test_custom_build.py::an unstamped earlier review is not offered`
+  `tests/test_custom_build.py::and pressing import anyway adds nothing`
 
 ### C-93 A custom build's saved work is kept apart from the published build's
 
@@ -1523,9 +1607,12 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** A token that is missing, malformed, unknown, wrong, expired, revoked
   or whose owner is gone gets the same status, the same body and the same header
   on every agent route, except that a source that has already used up its failures
-  for the window is answered 429 instead, whatever it sent. For a token whose
-  public id exists, which it was is in the read trail and as an agent.refused
-  event, within the row budgets, and nowhere in the response. Response timing is
+  for the window is answered 429 instead, whatever bad token it sent (a working
+  token is still served). For a token whose public id exists, the read trail
+  records which it was (revoked or expired; a wrong secret on an existing id is
+  recorded as unknown) and an agent.refused event is emitted, within the row
+  budgets; a missing, malformed or unknown token leaves no row. None of it is in
+  the response. Response timing is
   not claimed to be equal: whether a public token id exists can be told by timing.
 - **Asserted in:** `docs/agent-api.md` — "and removed are the same answer: the same status, the same body, the same header."
 - **Status:** enforced
@@ -1534,6 +1621,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_agent_api.py::test_a_token_works_until_the_eighth_hour_and_not_after`
   `server/tests/test_agent_api.py::test_only_a_token_that_exists_leaves_a_trail_row_when_refused`
   `tests/test_stack.py::a token that is wrong is the uniform 401`
+  `server/tests/test_agent_api.py::test_a_flood_of_bad_tokens_writes_nothing_and_never_blocks_a_real_token`
 
 ### C-100 The identity header means nothing on an agent route
 
@@ -1552,9 +1640,11 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-101 The proxy forwards only the three agent GET routes on that path
 
-- **Claim:** Without a single sign-on session, the proxy forwards exactly the
-  three agent GET routes and answers any other method or path under
-  `/api/agent/` with a 404 itself. Every other route is as it was: a request with
+- **Claim:** Without a single sign-on session, the proxy forwards only GET
+  `/api/agent/me`, `/api/agent/portfolio` and GET paths under
+  `/api/agent/projects/` (Caddy's `*` crosses slashes, so the API refuses a
+  deeper path), and answers any other method or path under `/api/agent/` with
+  a 404 itself. Every other route is as it was: a request with
   no signed-in identity is refused, whatever it carries.
 - **Asserted in:** `docs/agent-api.md` — "forwards exactly the three agent `GET` routes, deletes sixteen known identity header names on them as defense in depth and sets none"
 - **Asserted in:** `docs/self-hosting.md` — "deletes the identity header names it knows (a fixed list of sixteen) as defense in depth and sets none"
@@ -1635,10 +1725,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_agent_api.py::test_tokens_are_compared_in_constant_time_and_only_there`
   `server/tests/test_agent_mutations.py::test_each_guard_is_noticed_when_broken`
 
-### C-106 A person holds at most five live tokens
+### C-106 A person holds at most five live tokens by default
 
-- **Claim:** A sixth live token is refused with a 409, also when two mints arrive
-  at once. Expired and revoked tokens do not count.
+- **Claim:** By default a sixth live token is refused with a 409 (the limit is
+  `AGENT_MAX_ACTIVE_TOKENS`), also when two mints arrive at once. Expired and revoked tokens do not count.
 - **Asserted in:** `docs/agent-api.md` — "A sixth is refused with `409` until one expires or is revoked."
 - **Status:** enforced
 - **Enforced by:**
@@ -1651,7 +1741,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** Erasing a person's principal, which `make dispose` does when nothing
   retained names them, deletes their tokens with it, and a deleted token stops
   working. Removal from the identity provider is not seen by the app, so the
-  8 hours is the bound there (the page says so).
+  8 hours is the bound there (`docs/agent-api.md` says so, under "Removal from your identity
+  provider is not seen").
 - **Asserted in:** `docs/agent-api.md` — "Their tokens are deleted with it."
 - **Asserted in:** `docs/privacy.md` — "A token is deleted with the person's `principals` row"
 - **Status:** enforced
@@ -1676,6 +1767,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_agent_tokens.py::revoke --everyone ends every live token`
   `tests/test_stack.py::the owner can revoke it, and it stops working`
   `server/tests/test_agent_mutations.py::test_each_guard_is_noticed_when_broken`
+  `server/tests/test_agent_api.py::test_a_token_the_operator_revoked_is_refused_on_its_next_call`
 
 ### C-109 Every agent call is in the read trail, marked as agent access
 
@@ -1694,6 +1786,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `server/tests/test_access_audit.py::test_the_check_constraint_and_the_enum_agree`
   `tests/test_stack.py::each call is in the real read trail, marked as agent access`
   `server/tests/test_agent_mutations.py::test_each_guard_is_noticed_when_broken`
+  `server/tests/test_agent_api.py::test_an_agent_call_that_cannot_be_recorded_is_not_answered`
 
 ### C-110 An agent token has its own, lower rate limit
 
@@ -2251,11 +2344,15 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** `mcp-gate` shares the `edge` network with the API and holds
   `PROXY_SHARED_SECRET`, so a compromised gate can forge an identity to the API as a
-  compromised proxy can. compose.yaml and the page say so, say why that is judged
-  acceptable, and say to leave the profile off if it is not.
+  compromised proxy can. compose.yaml says so. compose.yaml and the page also say why that is judged
+  acceptable and to leave the profile off if it is not; only compose.yaml's
+  wording is tested.
 - **Asserted in:** `docs/mcp.md` — "**`mcp-gate` is inside the trust boundary, exactly as the proxy is.**"
 - **Asserted in:** `compose.yaml` — "THIS SERVICE IS INSIDE THE TRUST BOUNDARY."
-- **Status:** enforced
+- **Status:** partial
+- **Gap:** The checker reads `compose.yaml` only. Nothing asserts that `docs/mcp.md` says
+  the gate is inside the trust boundary, gives the reason it is acceptable, or
+  says to leave the profile off. #231
 - **Enforced by:**
   `tests/test_compose_isolation.py::mcp-gate holds the secret and sits on edge, and says so`
   `tests/test_compose_isolation.py::the gate without the shared secret`

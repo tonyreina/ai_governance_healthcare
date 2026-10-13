@@ -257,6 +257,14 @@ def main() -> int:
             "patient-identifiable" in warning.lower(),
             warning[:120],
         )
+        flat = " ".join(warning.lower().split())
+        check(
+            "static host -> warning: this browser, no audit log, no access control",
+            "this browser" in flat
+            and "no audit log" in flat
+            and "no access control" in flat,
+            warning[:160],
+        )
         check(
             "static host -> the warning states the same data scope",
             bool(scope) and scope in " ".join(warning.split()),

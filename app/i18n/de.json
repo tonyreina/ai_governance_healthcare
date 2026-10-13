@@ -505,7 +505,7 @@
   "who.localYou": "Sie (dieser Browser)",
   "who.someone": "jemand",
   "hold.title": "Aufbewahrungspflicht (Litigation Hold)",
-  "hold.lede": "Eine Aufbewahrungspflicht verhindert, dass dieser Datensatz am Ende seiner Aufbewahrungsfrist entsorgt wird, bis sie aufgehoben ist. Nur Eigentümer sehen dies.",
+  "hold.lede": "Eine Aufbewahrungspflicht verhindert, dass dieser Datensatz am Ende seiner Aufbewahrungsfrist entsorgt wird, bis sie aufgehoben ist. Eigentümer und der protokollierte Notfallzugang sehen dies.",
   "hold.on": "Aufbewahrungspflicht aktiv: Dieser Datensatz wird nicht entsorgt.",
   "hold.off": "Keine Aufbewahrungspflicht.",
   "hold.loading": "Prüfe auf Aufbewahrungspflicht…",

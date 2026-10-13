@@ -290,3 +290,44 @@ async def test_the_startup_log_names_who_holds_emergency_access(
         "emergency access" in r.getMessage().lower() and OFFICER in r.getMessage()
         for r in caplog.records
     ), [r.getMessage() for r in caplog.records]
+
+
+async def test_it_can_read_place_and_lift_a_hold_and_each_use_is_recorded(bg) -> None:
+    """Break-glass reaches a hold, audited (the owner's ruling of 2026-10-12).
+
+    A hold's reason is often a matter name, so reaching it is a use of emergency
+    access like any other: allowed, and written to the project's own log.
+    """
+    await orphan(bg)
+    base = "/api/projects/orphaned/hold"
+    async with bg.state.user(OFFICER) as officer:
+        r = await officer.get(base)
+        assert r.status_code == 200 and r.json()["held"] is False
+        r = await officer.post(base, json={"action": "place", "reason": "Smith v. H"})
+        assert r.status_code == 200 and r.json()["held"] is True
+        r = await officer.post(base, json={"action": "lift", "reason": "Settled"})
+        assert r.status_code == 200 and r.json()["held"] is False
+    entries = await breakglass_entries(bg, "orphaned")
+    # The read, the place and the lift: three uses, all by the officer.
+    assert len(entries) == 3, entries
+    assert {e["by_id"] for e in entries} == {OFFICER}
+    assert all(e["is_system"] is True for e in entries)
+    assert sum("read its hold" in e["text"] for e in entries) == 1
+    assert sum("change its litigation hold" in e["text"] for e in entries) == 2
+
+
+async def test_an_ordinary_owner_using_a_hold_leaves_no_emergency_record(bg) -> None:
+    async with bg.state.user(TEST_EMAIL) as owner:
+        r = await owner.post(
+            "/api/projects/own1",
+            json={
+                "meta": {"solution": "S"},
+                "access": {"owners": [TEST_EMAIL], "writers": [], "readers": []},
+            },
+        )
+        assert r.status_code == 201
+        base = "/api/projects/own1/hold"
+        assert (await owner.get(base)).status_code == 200
+        r = await owner.post(base, json={"action": "place", "reason": "m"})
+        assert r.status_code == 200
+    assert await breakglass_entries(bg, "own1") == []

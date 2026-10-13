@@ -514,7 +514,7 @@
   "who.localYou": "usted (este navegador)",
   "who.someone": "alguien",
   "hold.title": "Retención por litigio",
-  "hold.lede": "Una retención impide que este registro se elimine al final de su período de conservación hasta que se levante. Solo la ven los propietarios.",
+  "hold.lede": "Una retención impide que este registro se elimine al final de su período de conservación hasta que se levante. La ven los propietarios y el acceso de emergencia, que queda registrado.",
   "hold.on": "Retenido: este registro no se eliminará.",
   "hold.off": "Sin retención.",
   "hold.loading": "Comprobando si hay una retención…",

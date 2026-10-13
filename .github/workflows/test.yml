@@ -127,8 +127,8 @@ jobs:
         working-directory: server
         run: pytest -q -rs tests/test_auth.py -k test_every_arn_the_docs_show_for_the_audience_starts
 
-      # The site builds with no broken link or nav entry. Until now only the deploy
-      # to Pages after a merge found one.
+      # The site builds with no broken link or nav entry (lint's hook builds it too;
+      # a docs-only change must not depend on another workflow for this).
       - name: the site builds, strictly
         if: ${{ !cancelled() }}
         run: pixi run docs-build

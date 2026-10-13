@@ -3820,8 +3820,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
       run: `workflows (unit)`, and a new `docs` job: `check-claims`,
       `test-data-scope` and `test-deploy-residency` (both moved here; they need
       no browser or Docker), the one server test that checks every ARN the pages
-      show, and the strict `docs-build`, which until now ran only after a merge,
-      on Pages.
+      show, and the strict `docs-build` (the lint workflow's hook builds the site
+      too; the lane does not lean on it).
     - `tests passed` keeps its name and its `always()`, and needs `changes`, `docs`
       and every heavy job. It fails on any failure or cancellation; fails unless
       `changes`, `docs` and `workflows` succeeded; and fails on a skipped job unless

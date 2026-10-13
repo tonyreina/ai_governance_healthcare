@@ -1095,7 +1095,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 
 ### D-62 Disposal is a purge, run by an operator, stopped by a hold
 
-- Status: Accepted
+- Status: Accepted; "shown only to owners" is amended by R-80 (2026-10-12):
+  audited break-glass access can also see, place and lift a hold
 - The owner's choices, 2026-10-08, on #57, each the recommended option:
     - disposal reuses the purge, so a tombstone stays (R-12); only the read
       trail loses rows outright;
@@ -2874,7 +2875,9 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Status: Accepted: the owner's decisions 1 to 5 on #164 (2026-10-10), and the
   defaults listed below (the owner, 2026-10-11, on reviewing the open decisions).
   Before that, the defaults were Proposed. Decision 5's last sentence (the docs
-  name no client or model) is amended by D-91.
+  name no client or model) is amended by D-91. Default (d)'s clause "unclaimed
+  projects included" is superseded by D-100 (2026-10-12): a project with no owner
+  is refused to everyone but break-glass access.
 - **The question.** An agent has no browser session, so it cannot come through the
   front door's single sign-on, and R-06 says the API reads identity from the proxy
   header and nothing else. #164 asks for a way for a program to read the registered
@@ -3774,6 +3777,84 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   `pixi run check-claims` (every quoted sentence is where its row says), and the
   strict docs build (every link). Not enforced: that a statistic is sourced or
   current. That rests on this entry and on review.
+
+### D-99 The owner's rulings on the docs audit, and what each changed
+
+- Status: Accepted: the owner's rulings of 2026-10-12, given one at a time.
+- **The question.** An adversarial pass over `README.md` and every page of
+  `docs/` (25 reviewers, each finding checked by independent skeptics; D-98)
+  confirmed 189 problems. 22 of them were not text corrections but choices about
+  the product, security posture or legal posture. They reduce to 16 decisions,
+  below. The rest (about 160) had one honest fix and were made without asking.
+- **Decided, with the pull request that applied each.**
+    1. **CHAI model card license** (#234): state only what was verified. The
+       v0.1 documentation PDF links CC BY-ND 4.0; CHAI's own files are not
+       consistent (a standalone template PDF was reported CC BY-NC-ND, the
+       schema repository is permissive, the registry says all rights reserved).
+       The "commercial use is permitted" reassurance is dropped, and adopters
+       are told to confirm with CHAI or counsel. Rejected: keeping ND with a
+       caveat (keeps the reassurance the audit could not support); waiting for
+       CHAI (leaves an unsupported legal statement on the site).
+    2. **Azure database login** (#232, #244): document password login. The API
+       connects with the static `APP_DATABASE_URL` and fetches no IAM or Entra
+       token, so the Azure recipe enables password login for the restricted role.
+       Rejected for now: building token login (tokens expire in minutes to an
+       hour; a substantial feature). Not built.
+    3. **Dashboard in the cloud recipes** (#230, #232): say so plainly. The API
+       image serves only `/api`; the dashboard is the proxy image (D-15). Each
+       recipe says it deploys the API only. Rejected: new per-cloud proxy recipes
+       (untested), and baking the dashboard into the API image (reverses D-15).
+    4. **Litigation hold** (#227, #237): fix the text only. A hold stops the
+       scheduled disposal, not an owner's manual purge or delete. Rejected:
+       blocking delete, or delete and purge, while held. A purge is how patient
+       data pasted by mistake is removed, so a blanket block would trap it.
+    5. **AWS sign-out** (#230): document that the app does not expire the ALB
+       session cookies, so a sign-out link to the identity provider alone does
+       not end the ALB session; `SessionTimeout` is the control. Rejected: an
+       AWS-specific sign-out route.
+    6. **Cloud PostgreSQL** (#232): the recipes move to 18, checked against each
+       provider's documentation, matching what every test runs on (D-94).
+    7. **Croissant export dates** (#226, D-103): code. The collection timeframe
+       is withheld unless `--include-cohort-detail` is passed.
+    8. **Ownerless projects** (#240, R-75, D-100): code. No ownerless project
+       is allowed. One is refused to everyone but break-glass, who must assign an
+       owner, and no write path may create or leave one. No migration.
+    9. **Spellcheck on free text** (#233, R-76): code. Every free-text input,
+       not only text areas, turns spellcheck and autocomplete off, with a test
+       that walks the rendered pages. The pinned snapshot was regenerated.
+    10. **Encryption prompt** (#228, D-101, R-78): code. `make up` asks for any
+        real `SITE_ADDRESS` host.
+    11. **Break-glass and holds** (#239, R-80): allowed, audited, and now said.
+        Rejected: excluding break-glass.
+    12. **Simplified Chinese review** (#234, R-77): say what was reviewed. A
+        reviewer is recorded for 9 of the 20 safety-bearing strings.
+    13. **Cloud Run ingress sentence** (#232): removed. Google's documentation
+        does not say it, and it told operators to leave ingress open.
+    14. **AWS path** (#232): plain ECS with your own ALB. Express Mode manages its
+        own shared load balancer, so these steps do not apply to it.
+    15. **Cross-site writes** (#238, D-102, R-79): code. A write with no
+        `Sec-Fetch-Site` needs a same-site `Origin` or an agent bearer token.
+    16. **CHAI checkpoints** (#234): the placement after stages 1, 4, 5 and 6 and
+        the A-to-D questions are described as this project's rendering of CHAI's
+        go/no-go decision points, because the guide could not be retrieved to
+        check them.
+- **Superseded by these rulings.** R-14 by R-79, R-42 by R-78, R-55 by R-77, R-56
+  (one sentence) by R-80, D-62 (one clause) by R-80, and D-89's "unclaimed
+  projects included" by D-100.
+- **How it was checked afterward.** A coverage check ran every finding's quoted
+  text against `main`; 136 quotes were gone and 53 remained, which three
+  read-only verifiers judged (#244 closed the six still real). It also showed that
+  a verifier can be wrong: one recommended deleting a WHO quotation that is
+  verbatim in the report (printed page 8), and a fix pass removed the statement
+  that the report names CHAI and OPTICA, which the report does; both are
+  corrected.
+- Rejected: **fixing everything in one pull request.** Thirteen reviewable
+  pull requests, each owning its files, merged in an order that kept the
+  append-only records conflict-free.
+- Source: the owner's rulings of 2026-10-12; D-98.
+- Enforced by: the tests in each pull request named above. Not enforced: that
+  the docs stay accurate in general. That rests on `docs/security-claims.md`
+  (every security sentence has a row), the docs lane's checks (D-105) and review.
 
 ### D-100 A project with no owner is refused to everyone, with no migration
 

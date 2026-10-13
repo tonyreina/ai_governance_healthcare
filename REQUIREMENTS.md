@@ -383,7 +383,8 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-42 Encryption at rest is a decision on the record, not a default
 
-- Status: Active
+- Status: Superseded by R-78 (2026-10-12): the question is also asked for a stack
+  whose `SITE_ADDRESS` names a real host, not only for a non-loopback bind
 - The stack's own `pgdata` volume is not encrypted by this repository and the
   docs say so. `make up` refuses a stack that is reachable beyond this machine
   (a non-loopback `HTTP_BIND`) and uses its own database volume until
@@ -674,7 +675,8 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-56 Records past their retention period are disposed of, unless held
 
-- Status: Active; what "retired" means is amended by R-66 (2026-10-10)
+- Status: Active; what "retired" means is amended by R-66 (2026-10-10); who may
+  see, place or lift a hold is amended by R-80 (2026-10-12)
 - The owner's decision, 2026-10-08, on #57: the exception to the append-only
   rule (R-10, R-40) that applying R-54 needs is granted, on these terms.
 - **Disposal is a purge.** A retired project past its period loses its live
@@ -891,7 +893,8 @@ honest answer and is a gap worth closing; see R-19.
 
 ### R-14 Cross-site writes are refused
 
-- Status: Active
+- Status: Superseded by R-79 (2026-10-12): the rule also covers a write that
+  carries no `Sec-Fetch-Site` header
 - State-changing requests carrying `Sec-Fetch-Site` outside the trusted set are
   rejected. CORS is off unless explicitly configured, and never `*`.
 - Source: `server/app/main.py` docstring.
@@ -1630,3 +1633,65 @@ honest answer and is a gap worth closing; see R-19.
 - Enforced by: `tests/test_i18n.py` and `check-i18n`, which hold every safety key
   to "English unless a reviewer is recorded". Nothing yet asserts that the docs
   wording matches the count of 9 and 11; this entry is the record of it.
+
+### R-78 Encryption at rest is asked for any real host, not just a loopback bind
+
+- Status: Active
+- Everything R-42 requires still holds. What changed: `make up` also refuses a
+  stack that uses its own database volume until `STORAGE_ENCRYPTION_CONFIRMED=1`
+  is set when `SITE_ADDRESS` names a real host, that is, anything other than
+  `localhost`, `127.0.0.0/8`, `::1` or a bare port (`:8080`, `http://:80`, the
+  default). An address `preflight` cannot parse asks too: it fails closed. A
+  laptop and CI are unaffected: `make dev` runs no preflight and the CI stack job
+  writes its own `.env`.
+- History: R-42 tied the question to a non-loopback `HTTP_BIND`. The topology the
+  guide recommends, a loopback bind with TLS at a reverse proxy on the same host,
+  is reachable from the network yet passed with no question (an audit finding,
+  2026-10-12).
+- Not covered: a loopback bind with a bare port behind a host reverse proxy still
+  passes, because `preflight` cannot see the proxy. Claim C-63 says so. The
+  confirmation is still a declaration, not a check (R-42).
+- Source: the owner's ruling of 2026-10-12 on the docs audit (D10); DECISIONS
+  D-101, D-99.
+- Enforced by: `tests/test_preflight.py` (the hostname and address cases, and
+  mutation tests that break `is_local_site` in both directions).
+
+### R-79 A write with no Sec-Fetch-Site header needs a same-site Origin
+
+- Status: Active
+- Everything R-14 requires still holds. What changed: a state-changing request
+  with no `Sec-Fetch-Site` header is refused (403) unless it shows a same-site
+  `Origin` or is an agent-API bearer request. A same-site `Origin` matches the
+  request's `Host` (host and port, the default port filled in, the scheme not
+  compared) or is listed in `CORS_ORIGINS`. A missing, `null`, malformed or
+  path-bearing `Origin` fails. When `Sec-Fetch-Site` is present it is judged as
+  before and wins over `Origin`. `X-Forwarded-Host` is not read, because the
+  repository trusts no forwarded header for security (`server/app/auth.py`).
+- History: the middleware let through any write without `Sec-Fetch-Site`, which
+  left a browser that does not send it, or a client that strips it, unprotected.
+- Not covered: a non-browser client forging an `Origin`. That is not a browser
+  attack, which is what this rule defends against. Scripts that write with `curl`
+  must send an `Origin` (the agent API examples show it).
+- Source: the owner's ruling of 2026-10-12 on the docs audit (D15); DECISIONS
+  D-102, D-99.
+- Enforced by: `server/tests/test_csrf.py`, `server/tests/test_origin.py` and the
+  event test, written against the old pass-through and shown failing.
+
+### R-80 Audited break-glass access can also see, place and lift a hold
+
+- Status: Active
+- R-56 stands except for one sentence. "Only an owner of the project may place,
+  lift or see one" now reads: the project's owners and, audited, a break-glass
+  (emergency) identity. Each emergency use is written to the project's own log as
+  an `access.breakglass` system entry: reading a hold, placing one and lifting
+  one are each one entry.
+- History: the code always allowed it (`_hold_gate` lets an emergency identity
+  through, then records it), while the claim, the dashboard text and R-56 said
+  "only an owner". No test covered it (an audit finding, 2026-10-12).
+- Rejected: excluding break-glass from holds. If no owner is left to lift a hold,
+  nobody could, and break-glass exists for exactly that case.
+- Source: the owner's ruling of 2026-10-12 on the docs audit (D11); DECISIONS
+  D-62, D-99.
+- Enforced by: `server/tests/test_breakglass.py` (read, place and lift, each
+  audited, and an ordinary owner leaves no emergency record) and
+  `server/tests/test_holds.py` (a non-owner cannot lift one); claim C-79.

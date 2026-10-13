@@ -17,10 +17,18 @@ name: Security scan
 # every pull request so a finding is visible, on main, and weekly, because the code did not
 # change but the world did.
 
+# A pull request that changes only prose Markdown does not rebuild three images to
+# scan them (D-105). This is safe here and not in test.yml because this check is not
+# required: only `tests passed` is, and a required check must report on every pull
+# request. The filter is on the pull_request trigger alone: main and the weekly run
+# scan everything. A change that mixes prose with anything else still runs.
 on:
   push:
     branches: [main]
   pull_request:
+    paths-ignore:
+      - "*.md"
+      - "docs/**/*.md"
   schedule:
     - cron: "0 6 * * 3" # Wednesdays; weekly, since new CVEs arrive without a code change
   workflow_dispatch:

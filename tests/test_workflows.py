@@ -18,6 +18,11 @@ What is asserted, and why each one earns its place:
 * the Postgres in CI is the major version compose.yaml pins;
 * one aggregate job depends on all the others, so branch protection can require a
   single name and a new job cannot be forgotten;
+* a pull request that changes only prose skips the heavy jobs (D-105), safely: a
+  `changes` job decides, every heavy job needs it and skips only on its answer, the
+  `docs` job and the unit tests run regardless, `tests passed` accepts a skipped
+  job only when `changes` said docs-only, and no workflow-level path filter can keep
+  the required check from reporting;
 * the slow jobs split to run side by side (D-97) still run everything, once: each
   leg of the server matrix runs its own pytest (and only the restricted-role leg
   sets TEST_APP_ROLE), the proxy-mcp matrix holds every shard 1..n and tells each
@@ -41,9 +46,13 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+import ci_changes  # noqa: E402
+
 WORKFLOWS = ROOT / ".github" / "workflows"
 TEST_WORKFLOW = WORKFLOWS / "test.yml"
 LINT_WORKFLOW = WORKFLOWS / "lint.yml"
+SECURITY_WORKFLOW = WORKFLOWS / "security.yml"
 
 TEST_TASK_PREFIX = "test-"
 REQUIRE_VAR = "REQUIRE_TESTS"
@@ -217,6 +226,23 @@ def postgres_drift(workflow: dict, compose: dict) -> list[str]:
     return [f"CI tests against {ci!r} but compose.yaml pins {pinned!r}"]
 
 
+SKIP_CONDITION = "needs.changes.outputs.docs_only != 'true'"
+CHANGES_JOB = "changes"
+DOCS_JOB = "docs"
+# Tasks the docs job must run: the suites that read prose and need no database,
+# browser or Docker, which a docs-only pull request is tested by.
+DOCS_JOB_RUNS = (
+    "pixi run check-claims",
+    "pixi run test-data-scope",
+    "pixi run test-deploy-residency",
+    "pixi run docs-build",
+)
+
+
+def _as_list(value: object) -> list[str]:
+    return [value] if isinstance(value, str) else list(value or [])
+
+
 def aggregate_problems(workflow: dict) -> list[str]:
     job = jobs(workflow).get(AGGREGATE_JOB)
     if job is None:
@@ -233,6 +259,75 @@ def aggregate_problems(workflow: dict) -> list[str]:
     conditions = " ".join(str(s.get("if", "")) for s in job.get("steps", []))
     if "skipped" not in conditions:
         problems.append(f"{AGGREGATE_JOB} treats a skipped job as a pass")
+    elif "docs_only" not in conditions:
+        # A skip is fine only when `changes` said the change is prose only (D-105).
+        # Without that check, a skipped heavy job on a code change would pass.
+        problems.append(
+            f"{AGGREGATE_JOB} does not check docs_only, so a skipped heavy job "
+            "is judged without asking whether the change was docs only"
+        )
+    for lane_job in sorted(ci_changes.LANE_JOBS):
+        if not re.search(
+            rf"needs\.{re.escape(lane_job)}\.result\s*!=\s*'success'", conditions
+        ):
+            problems.append(
+                f"{AGGREGATE_JOB} does not require {lane_job!r} to have succeeded"
+            )
+    return problems
+
+
+def docs_lane_problems(workflow: dict) -> list[str]:
+    """The docs lane (D-105). A docs-only pull request skips the heavy jobs, so what
+    decides that, and what still runs, is checked here."""
+    all_jobs = jobs(workflow)
+    changes = all_jobs.get(CHANGES_JOB)
+    if changes is None:
+        return [f"there is no {CHANGES_JOB!r} job to decide if the change is docs only"]
+    problems = []
+    steps = changes.get("steps", [])
+    classify = next((s for s in steps if "ci_changes.py" in s.get("run", "")), None)
+    if classify is None:
+        problems.append(f"{CHANGES_JOB} does not run scripts/ci_changes.py")
+    else:
+        published = str((changes.get("outputs") or {}).get("docs_only", ""))
+        if classify.get(
+            "id"
+        ) != "classify" or "steps.classify.outputs.docs_only" not in (published):
+            problems.append(f"{CHANGES_JOB} does not publish docs_only from its step")
+        event = str((classify.get("env") or {}).get("EVENT_NAME", ""))
+        if "github.event_name" not in event:
+            problems.append(f"{CHANGES_JOB} does not tell the classifier the event")
+    if not any(
+        str((s.get("with") or {}).get("fetch-depth")) == "0"
+        for s in steps
+        if "checkout" in s.get("uses", "")
+    ):
+        problems.append(f"{CHANGES_JOB} does not fetch the history for the merge base")
+    for name in sorted(ci_changes.LANE_JOBS):
+        job = all_jobs.get(name)
+        if job is None:
+            problems.append(f"there is no {name!r} job")
+        elif "if" in job:
+            problems.append(f"{name!r} has an `if`, so it can be skipped")
+    docs_job = all_jobs.get(DOCS_JOB, {})
+    if docs_job.get("needs"):
+        problems.append(f"{DOCS_JOB!r} waits for another job, so a failed one hides it")
+    runs = "\n".join(str(s.get("run", "")) for s in docs_job.get("steps", []))
+    problems += [
+        f"the {DOCS_JOB!r} job does not run `{wanted}`"
+        for wanted in DOCS_JOB_RUNS
+        if not re.search(rf"{re.escape(wanted)}\b", runs)
+    ]
+    for name, job in all_jobs.items():
+        if name in ci_changes.LANE_JOBS or name == AGGREGATE_JOB:
+            continue
+        if CHANGES_JOB not in _as_list(job.get("needs")):
+            problems.append(f"heavy job {name!r} does not need {CHANGES_JOB!r}")
+        if SKIP_CONDITION not in str(job.get("if", "")):
+            problems.append(
+                f"heavy job {name!r} is not skipped on a docs-only change "
+                f"(no `if: {SKIP_CONDITION}`)"
+            )
     return problems
 
 
@@ -243,6 +338,16 @@ def trigger_problems(workflow: dict) -> list[str]:
         problems.append("tests do not run on pull_request")
     if "main" not in (on.get("push") or {}).get("branches", []):
         problems.append("tests do not run on push to main")
+    # A workflow-level path filter would stop the REQUIRED check from reporting on a
+    # docs-only pull request, which could then never merge (D-105).
+    for event in ("pull_request", "push"):
+        block = on.get(event) or {}
+        for key in ("paths", "paths-ignore"):
+            if key in block:
+                problems.append(
+                    f"the {event} trigger filters by {key}: the required check "
+                    "would not report on a change that matches (D-105)"
+                )
     return problems
 
 
@@ -436,6 +541,29 @@ def browser_job_problems(workflow: dict) -> list[str]:
     return problems
 
 
+def security_filter_problems(workflow: dict) -> list[str]:
+    """security.yml (the image scan) skips a pull request that changes only prose
+    Markdown (D-105). It is not a required check, so a filter is safe there; the
+    filter must name Markdown only, sit on pull_request alone, and leave main and
+    the weekly run scanning everything."""
+    on = triggers(workflow)
+    problems = []
+    ignored = list((on.get("pull_request") or {}).get("paths-ignore") or [])
+    if not ignored:
+        problems.append("the image scan rebuilds three images for a prose-only change")
+    for pattern in ignored:
+        if not str(pattern).endswith(".md") or str(pattern).startswith("docs/app"):
+            problems.append(f"the scan skips {pattern!r}, which is more than prose")
+    for event in ("push", "schedule", "workflow_dispatch"):
+        if event not in on:
+            problems.append(f"the image scan no longer runs on {event}")
+        elif isinstance(on[event], dict) and (
+            "paths-ignore" in on[event] or "paths" in on[event]
+        ):
+            problems.append(f"the {event} run of the image scan is filtered")
+    return problems
+
+
 def every_rule(
     workflow: dict, tasks: dict, files: list[str], compose: dict
 ) -> list[str]:
@@ -453,6 +581,7 @@ def every_rule(
         *missing_timeouts(workflow),
         *postgres_drift(workflow, compose),
         *aggregate_problems(workflow),
+        *docs_lane_problems(workflow),
         *engine_problems(workflow),
         *trigger_problems(workflow),
         *permission_problems(workflow),
@@ -802,6 +931,160 @@ def main() -> int:
     for job in jobs(broken).values():
         job["steps"] = [s for s in job["steps"] if "actionlint" not in s.get("run", "")]
     check("dropping actionlint is noticed", bool(actionlint_missing(broken)))
+
+    print("Mutation tests: the docs lane (D-105)")
+
+    heavy_names = [
+        n
+        for n in jobs(workflow)
+        if n not in ci_changes.LANE_JOBS and n != AGGREGATE_JOB
+    ]
+    check("there are heavy jobs to guard", len(heavy_names) >= 7, str(heavy_names))
+    for name in heavy_names:
+        broken = copy.deepcopy(workflow)
+        del jobs(broken)[name]["if"]
+        check(
+            f"heavy job {name} with no docs-only `if` is noticed",
+            bool(docs_lane_problems(broken)),
+        )
+        broken = copy.deepcopy(workflow)
+        jobs(broken)[name]["needs"] = []
+        check(
+            f"heavy job {name} that does not need `changes` is noticed",
+            bool(docs_lane_problems(broken)),
+        )
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)["stack"]["if"]
+    check(
+        "a heavy job with no docs-only skip condition is noticed",
+        bool(docs_lane_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    jobs(broken)["server"]["if"] = "${{ always() }}"
+    check(
+        "a heavy job whose `if` ignores docs_only is noticed",
+        bool(docs_lane_problems(broken)),
+    )
+    for name in sorted(ci_changes.LANE_JOBS):
+        broken = copy.deepcopy(workflow)
+        jobs(broken)[name]["if"] = "${{ needs.changes.outputs.docs_only != 'true' }}"
+        check(
+            f"{name}, which must always run, given a skip condition is noticed",
+            bool(docs_lane_problems(broken)),
+        )
+        broken = copy.deepcopy(workflow)
+        del jobs(broken)[name]
+        check(f"no {name} job is noticed", bool(docs_lane_problems(broken)))
+    for task in DOCS_JOB_RUNS:
+        broken = copy.deepcopy(workflow)
+        jobs(broken)[DOCS_JOB]["steps"] = [
+            s for s in jobs(broken)[DOCS_JOB]["steps"] if task not in s.get("run", "")
+        ]
+        check(
+            f"the docs job not running `{task}` is noticed",
+            bool(docs_lane_problems(broken)),
+        )
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)[CHANGES_JOB]["steps"][-1]["env"]["EVENT_NAME"]
+    check(
+        "a classifier never told the event (so a push might be docs only) is noticed",
+        bool(docs_lane_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)[CHANGES_JOB]["outputs"]
+    check(
+        "a `changes` job that publishes nothing is noticed",
+        bool(docs_lane_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    del jobs(broken)[CHANGES_JOB]["steps"][0]["with"]
+    check(
+        "a `changes` job with no history for the merge base is noticed",
+        bool(docs_lane_problems(broken)),
+    )
+
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[AGGREGATE_JOB]["needs"].remove(CHANGES_JOB)
+    check(
+        "an aggregate that does not need `changes` is noticed",
+        bool(aggregate_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[AGGREGATE_JOB]["needs"].remove(DOCS_JOB)
+    check(
+        "an aggregate that does not need `docs` is noticed",
+        bool(aggregate_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    for step in jobs(broken)[AGGREGATE_JOB]["steps"]:
+        step["if"] = str(step.get("if", "")).replace("docs_only", "something_else")
+    check(
+        "an aggregate that accepts a skipped heavy job without docs_only is noticed",
+        bool(aggregate_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[AGGREGATE_JOB]["steps"] = [
+        s
+        for s in jobs(broken)[AGGREGATE_JOB]["steps"]
+        if "skipped" not in str(s.get("if", ""))
+    ]
+    check(
+        "an aggregate with no skipped-is-failure rule is noticed",
+        bool(aggregate_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    for step in jobs(broken)[AGGREGATE_JOB]["steps"]:
+        step["if"] = str(step.get("if", "")).replace(
+            "needs.docs.result != 'success'", "false"
+        )
+    check(
+        "an aggregate that lets `docs` be skipped is noticed",
+        bool(aggregate_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    broken[True]["pull_request"] = {"paths-ignore": ["docs/**"]}
+    check(
+        "a workflow-level paths-ignore on pull_request is noticed",
+        bool(trigger_problems(broken)),
+    )
+    broken = copy.deepcopy(workflow)
+    broken[True]["pull_request"] = {"paths": ["server/**"]}
+    check("a workflow-level paths filter is noticed", bool(trigger_problems(broken)))
+
+    print("Mutation tests: the image scan's path filter (D-105)")
+    security = load(SECURITY_WORKFLOW)
+    check(
+        "the real image scan filters only prose on pull_request",
+        not security_filter_problems(security),
+        "; ".join(security_filter_problems(security)),
+    )
+    broken = copy.deepcopy(security)
+    del broken[True]["pull_request"]["paths-ignore"]
+    check("an unfiltered image scan is noticed", bool(security_filter_problems(broken)))
+    broken = copy.deepcopy(security)
+    broken[True]["pull_request"]["paths-ignore"].append("server/**")
+    check(
+        "an image scan that skips server code is noticed",
+        bool(security_filter_problems(broken)),
+    )
+    broken = copy.deepcopy(security)
+    broken[True]["pull_request"]["paths-ignore"].append("docs/app/**")
+    check(
+        "an image scan that skips the built dashboard is noticed",
+        bool(security_filter_problems(broken)),
+    )
+    broken = copy.deepcopy(security)
+    broken[True]["push"]["paths-ignore"] = ["*.md"]
+    check(
+        "a filter on the main run of the image scan is noticed",
+        bool(security_filter_problems(broken)),
+    )
+    broken = copy.deepcopy(security)
+    del broken[True]["schedule"]
+    check(
+        "the weekly image scan dropped is noticed",
+        bool(security_filter_problems(broken)),
+    )
 
     print()
     if failures:

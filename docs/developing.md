@@ -347,6 +347,20 @@ service container, the dashboard suites in Chromium, the proxy against a real
 Caddy, and the whole Compose stack end to end. One job, **tests passed**, fails
 if any of them failed, was canceled, or was skipped.
 
+A pull request that changes only prose skips the heavy jobs (the docs lane). A
+`changes` job runs `scripts/ci_changes.py`, which says the change is docs-only
+only when every changed file is a Markdown page at the root or under `docs/`
+(not `docs/app/`, which is the built dashboard) and none is a page that a heavy
+suite reads, such as `docs/deploy.md` or `docs/agent-api.md`. A push to `main`,
+and any doubt, runs everything. A docs-only pull request still runs the unit
+tests of the configuration and a `docs` job: the claims inventory, the data-scope
+and deployment-residency checks, the ARN examples in the pages, and the strict
+site build. **tests passed** still reports on every pull request, and accepts a
+skipped heavy job only when `changes` said docs-only. `pixi run test-ci-changes`
+classifies real file lists and scans the tests and scripts for the pages they
+read, so a page cannot become one a heavy suite reads without the classifier
+being told. The image scan (`security.yml`) skips prose-only pull requests too.
+
 The slow suites run in pieces side by side: the three server pytest runs are
 three matrix legs, each with its own PostgreSQL; the Chromium suites are dealt
 into three jobs; and the MCP route's mutation test is split into five shards.

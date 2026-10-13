@@ -2285,3 +2285,17 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_proxy_identity.py::gate: its own logs never carry the shared secret`
   `tests/test_proxy_agent_mutations.py`
   `tests/test_proxy_mcp_mutations.py`
+
+### C-144 A pull request cannot skip the tests by being called docs-only
+
+- **Claim:** `tests passed` reports on every pull request and accepts a skipped
+  heavy job only when the `changes` job found every changed file to be prose that
+  no heavy suite reads. A push to `main` and any doubt run everything.
+- **Asserted in:** `docs/developing.md` — "still reports on every pull request, and accepts a skipped heavy job only when `changes` said docs-only"
+- **Status:** enforced
+- **Enforced by:**
+  `tests/test_workflows.py::an aggregate that accepts a skipped heavy job without docs_only is noticed`
+  `tests/test_workflows.py::a heavy job with no docs-only skip condition is noticed`
+  `tests/test_workflows.py::a workflow-level paths-ignore on pull_request is noticed`
+  `tests/test_ci_changes.py::a push is never docs-only`
+  `tests/test_ci_changes.py::HEAVY_DOCS is exactly the documents a heavy suite reads`

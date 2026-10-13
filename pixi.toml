@@ -102,6 +102,9 @@ check-enums = "python scripts/check_enums.py"
 test-enums = "python tests/test_check_enums.py"
 # Unit tests of the CI configuration: does CI run every test, and fail on a skip?
 test-workflows = "python tests/test_workflows.py"
+# The docs lane (D-105): a pull request that changes only prose skips the heavy jobs.
+# The classifier, and the scan that keeps its list of heavy-read pages exact.
+test-ci-changes = "python tests/test_ci_changes.py"
 # The showcase video: present, bounded, first-party, streamable, honest about the mode.
 test-docs-media = "python tests/test_docs_media.py"
 # docs/security-claims.md: every claim quoted from where it is made and backed by a

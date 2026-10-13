@@ -190,13 +190,15 @@ repos:
       # Rebuilds the single-file dashboard from app/. prek fails the run if
       # this changes docs/app/index.html or docs/app/manifest.json (the
       # retirement rules the server loads, D-76), so neither generated file can
-      # be stale relative to its sources, and a hand edit is undone.
+      # be stale relative to its sources, and a hand edit is undone. The generated
+      # files are in `files`, so a hand edit alone triggers it on a local commit, not
+      # only in CI's `prek run --all-files` (tests/test_build_hook.py, C-31).
       - id: build-app
         name: rebuild the dashboard from app/
         entry: pixi run build-app
         language: system
         pass_filenames: false
-        files: '^(app/|scripts/(build_app|build_manifest|framework_enums)\.py$|docs/app/manifest\.json$)'
+        files: '^(app/|scripts/(build_app|build_manifest|framework_enums)\.py$|docs/app/(manifest\.json|index\.html)$)'
 
       # Syntax, undefined names, use before declaration and duplicate declarations,
       # on the published page and a build of each app/frameworks/*/build.json (#176).

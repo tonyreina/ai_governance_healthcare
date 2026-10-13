@@ -451,17 +451,20 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-31 The generated dashboard can never go stale
 
-- **Claim:** A hook rebuilds docs/app/index.html on any change under app/ and
-  fails the run if the file differs.
+- **Claim:** A hook rebuilds `docs/app/index.html`, `docs/app/manifest.json` and
+  `proxy/csp.caddy` on any change under `app/` or to a generated file, and a
+  rebuild that changes a file is what makes prek fail the run. That prek fails a
+  run in which a hook modified a file is prek's documented behavior, which this
+  repository does not test.
 - **Asserted in:** `docs/developing.md` — "so the generated file can never go
   stale"
-- **Status:** partial
-- **Gap:** Only the hook's existence is evidence: no test edits `docs/app/index.html` or
-  `app/` and watches the hook fail. The hook's `files` pattern omits
-  `docs/app/index.html`, so a hand edit of the generated file is caught by CI's
-  `prek run --all-files`, not by the local hook. #231
+- **Status:** enforced
 - **Enforced by:**
   `.pre-commit-config.yaml::build-app`
+  `tests/test_build_hook.py::the real build-app hook is right`
+  `tests/test_build_hook.py::equals a fresh build`
+  `tests/test_build_hook.py::a rebuild changes a hand-edited index.html (which is what fails prek)`
+  `tests/test_build_hook.py::an edited source makes a rebuild differ from the committed file`
 
 ### C-32 A test cannot be added and quietly left out of CI
 
@@ -478,17 +481,22 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-33 In CI, a test that cannot run is a failure
 
 - **Claim:** `REQUIRE_TESTS=1` turns a skip into a failure, because a skip exits
-  0 and reads as a pass.
+  0 and reads as a pass. Every skip construct the test code uses (`skipif`,
+  `pytest.skip`, `mark.skip`, `importorskip`, `SkipTest`, a script that prints
+  "skipping" and returns) reads the variable within a few lines, which a scan of
+  `tests/`, `server/tests/` and `mcp/tests/` checks.
 - **Asserted in:** `docs/developing.md` — "to turn every skip into a failure; CI
   always does."
 - **Status:** partial
-- **Gap:** The cited tests show that the workflow sets `REQUIRE_TESTS=1`, not that every
-  suite honors it. No test checks each `skip`, `skipif` or `requires_db` (in
-  `server/tests/conftest.py` and `mcp/tests/conftest.py`) against the variable.
-  A second `skipif` in `test_merge.py` that ignored it was removed. #231
+- **Gap:** The scan names the constructs above, so a skip written another way (a bare
+  `return 0` when a tool is missing, with none of those words) is not seen. A
+  suite is not run with its tool missing to watch it fail. #231
 - **Enforced by:**
   `tests/test_workflows.py::REQUIRE_TESTS removed is noticed`
   `tests/test_workflows.py::REQUIRE_TESTS set to 0 is noticed`
+  `tests/test_require_tests.py::the scan still finds every known skip site`
+  `tests/test_require_tests.py::a bare skipif`
+  `tests/test_require_tests.py::a script that prints skipping and exits 0`
 
 ### C-34 The walkthrough video says what it shows
 
@@ -2368,18 +2376,18 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** `mcp-gate` shares the `edge` network with the API and holds
   `PROXY_SHARED_SECRET`, so a compromised gate can forge an identity to the API as a
   compromised proxy can. compose.yaml says so. compose.yaml and the page also say why that is judged
-  acceptable and to leave the profile off if it is not; only compose.yaml's
-  wording is tested.
+  acceptable and to leave the profile off if it is not; the wording of each is
+  tested.
 - **Asserted in:** `docs/mcp.md` — "**`mcp-gate` is inside the trust boundary, exactly as the proxy is.**"
 - **Asserted in:** `compose.yaml` — "THIS SERVICE IS INSIDE THE TRUST BOUNDARY."
-- **Status:** partial
-- **Gap:** The checker reads `compose.yaml` only. Nothing asserts that `docs/mcp.md` says
-  the gate is inside the trust boundary, gives the reason it is acceptable, or
-  says to leave the profile off. #231
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_compose_isolation.py::mcp-gate holds the secret and sits on edge, and says so`
   `tests/test_compose_isolation.py::the gate without the shared secret`
   `tests/test_compose_isolation.py::mcp on the edge network`
+  `tests/test_compose_isolation.py::docs/mcp.md says the gate is trusted, why, and to leave it off`
+  `tests/test_compose_isolation.py::the reason it is acceptable`
+  `tests/test_compose_isolation.py::the way out`
 
 ### C-141 The service writes no request content to its log, and a flood is a bounded log
 

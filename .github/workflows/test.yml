@@ -155,6 +155,14 @@ jobs:
       # or repeats one is noticed (D-97).
       - run: pixi run test-mutant-shards
 
+      # Every skip in the test code reads REQUIRE_TESTS, so a suite that cannot run
+      # fails in CI instead of passing silently (C-33).
+      - run: pixi run test-require-tests
+
+      # A stale or hand-edited generated dashboard is something the build-app hook
+      # fails on, and the hook's pattern covers the generated file (C-31).
+      - run: pixi run test-build-hook
+
       # The build embeds exactly the configured frameworks, and refuses any other (#168).
       - run: pixi run test-build-config
 

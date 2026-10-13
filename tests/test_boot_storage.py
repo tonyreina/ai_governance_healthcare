@@ -268,7 +268,11 @@ def main() -> int:
             # The page's policy allows one script by its hash, so a changed script
             # must carry its own new hash or the browser would refuse to run it.
             old_hash = re.search(r"script-src 'sha256-([^']+)'", html).group(1)
-            script = re.search(r"<script>(.*?)</script>", mutated, re.S).group(1)
+            # Found by position, not by a pattern over HTML: this is our own built page,
+            # which has exactly one inline script, and a pattern would only pretend to
+            # parse markup (and miss `<SCRIPT>`).
+            start = mutated.index("<script>") + len("<script>")
+            script = mutated[start : mutated.index("</script>", start)]
             new_hash = base64.b64encode(
                 hashlib.sha256(script.encode()).digest()
             ).decode()

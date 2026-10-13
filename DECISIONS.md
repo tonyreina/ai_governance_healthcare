@@ -3613,3 +3613,43 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   and two new mutants in `test_mcp_mutations.py` (subscriptions offered; a crash
   keeping its cause); `tests/test_supply_chain.py` (the Dependabot ignores).
 - Source: the owner's decision of 2026-10-12; #213 (superseded); D-91; R-73.
+
+### D-96 Dependabot opens few pull requests at a time
+
+- Status: Accepted: the owner's instruction of 2026-10-12 to speed up CI.
+- **The question.** Some runs of the Test workflow took over an hour. With no
+  queueing a run takes about 26 minutes (the `proxy-mcp` job sets the floor). The
+  rest was waiting for a runner: about ten Dependabot pull requests opened in the
+  same minute, each starting Test (8 jobs), Security scan and Lint, about 100 jobs
+  against the account's concurrent-job limit. Measured from the job start times
+  of the slow runs.
+- **Decided.**
+    1. **Each entry groups its minor and patch updates** into one pull request.
+       A major version still arrives on its own, because each one so far needed
+       a decision (D-93, D-94, D-95).
+    2. **The `/server` and `/mcp` Dockerfiles are one entry, majors included,**
+       so the shared Python (D-93) moves in one pull request. It still needs the
+       Makefile's lock image and CI's `python-version` moved by hand; the parity
+       check in `tests/test_supply_chain.py` fails until they are.
+    3. **Each entry opens on its own weekday,** Monday to Saturday, so a week's
+       updates do not all queue at once.
+- **Corrected.** The `pydantic-core` comment in `.github/dependabot.yml` said the
+  core "moves when pydantic does." It does not: #214 arrived with the old core,
+  failed the image's import check, and needed `make lock` on its branch. The
+  ignore stays (a bump of the core alone fails to import, #112); the comment and
+  the check's message now say what to do.
+- Rejected: **one pull request for everything,** via a single group across
+  ecosystems. One failure would hold back every unrelated update, and a review
+  would mix a base image with a Python library.
+- Rejected: **a workflow that re-locks Dependabot's pull requests,** which would
+  need a token that can push to pull request branches from an automated job. That
+  is more attack surface than a manual `make lock` on an occasional pull request.
+- Rejected: **a lower `open-pull-requests-limit`** alone. It caps how many are
+  open, not how many open at once.
+- Source: the owner's instruction of 2026-10-12; the CI timing analysis of that
+  day; #214; D-45; D-93.
+- Enforced by: `tests/test_supply_chain.py` (`dependabot_load_problems`: every
+  entry groups minor and patch, the two images move together, no two entries
+  share a day; each shown failing by a mutation), run by `pixi run
+  test-supply-chain` in CI. The file's validity against Dependabot's schema is
+  checked by GitHub only once it is on `main`.

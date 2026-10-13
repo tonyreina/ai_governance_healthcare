@@ -90,8 +90,11 @@ Rotate a database credential with the provider and update its secret (the owner'
 and `APP_DATABASE_URL` together, then re-run the job);
 there is no `pgdata` volume here and no `db` service, so the
 [rotation trap in the compose stack](self-hosting.md#rotating-the-database-password)
-does not apply. Prefer the platform's identity-based connection — Cloud SQL IAM
-auth, RDS IAM auth, Entra ID — over a password you have to rotate at all.
+does not apply. Prefer the platform's identity-based connection (Cloud SQL IAM
+auth, RDS IAM auth, Entra ID) over a password you have to rotate, for the human
+administrator who runs the migrate job. The API itself does not fetch IAM or
+Entra tokens today: it connects with the password in `APP_DATABASE_URL`, so the
+restricted role needs password authentication enabled on every cloud.
 
 ### Disk and growth
 
@@ -415,9 +418,12 @@ policy if shorter (see [Privacy and retention](privacy.md)).
 What is running is what the repository says: the API's dependencies are locked
 with hashes (`server/requirements.txt`), and the base images, the database and
 the proxy are pinned by digest (`compose.yaml` and the three Dockerfiles:
-`server/`, `proxy/`, `mcp/`). A rebuild
-produces the same thing from the same source, and a new base image arrives as a
-reviewed pull request from Dependabot, not as whatever a tag points at that day.
+`server/`, `proxy/`, `mcp/`). The proxy image compiles Caddy at a pinned release
+with one raised dependency (`golang.org/x/net`); the rest of its Go module graph
+follows that release's `go.mod`, and no `go.sum` is committed, so a rebuild of the
+proxy can differ and you should scan each image you build. A new base image
+arrives as a reviewed pull request from Dependabot, not as whatever a tag points
+at that day.
 
 That has a consequence for the operator: **`docker compose up -d` does not pull
 a newer image.** It runs what is already on the host. So after you merge an
@@ -875,8 +881,12 @@ Cloud SQL for PostgreSQL (no public IP)
     must route egress through Direct VPC egress or a Serverless VPC Access
     connector, "to the same VPC network as your Cloud SQL instance", and that it
     then connects over TCP to the private IP address on port 5432. The
-    commands below do not set the network flags or create the private services
-    access range, and they use the `/cloudsql` socket path, which the guide
+    commands below set Direct VPC egress (`--network=default --subnet=default
+    --vpc-egress=private-ranges-only`) on the migrate job and the service;
+    replace `default` with your own network and subnet if they differ. They do
+    not create the private services access range that a private-IP Cloud SQL
+    instance needs (an allocated range plus `gcloud services vpc-peerings
+    connect`), and they use the `/cloudsql` socket path, which the guide
     describes for public IP. Follow [Connect from Cloud
     Run](https://docs.cloud.google.com/sql/docs/postgres/connect-run) for those
     steps before you rely on the diagram.

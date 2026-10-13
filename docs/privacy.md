@@ -197,7 +197,10 @@ A restore can bring back records disposed of after the dump was taken, so
   purge never touches them. An audit-log entry cannot be edited while its project
   exists, but it can be redacted, and the whole audit log is removed with the live
   project when the project is deleted or disposed of. After a delete, what
-  remains is the deletion record and the revisions. That is the point of an audit
+  remains is the deletion record and the revisions. Disposal at the end of the
+  retention period removes the read trail past its period and a deleted project's
+  history (see [Disposal at the end of the
+  period](#disposal-at-the-end-of-the-period)). That is the point of an audit
   trail, and it is the reason erasure and the trail are in tension.
 - **Deleting a project is not erasure.** The revisions and the deletion record
   are kept after a delete, but the live audit log is not; only a purge destroys

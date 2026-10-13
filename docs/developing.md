@@ -12,10 +12,12 @@ language, which tests prove what, and the rules a change has to meet.
 | `docs/app/index.html` | The dashboard, **generated** from `app/`. Never edited by hand |
 | `server/` | The API: FastAPI, asyncpg, the SQL migrations, and its tests (`server/README.md`) |
 | `proxy/` | The Caddy front door and its image |
+| `mcp/` | The optional read-only MCP service, its image and its tests ([MCP](mcp.md)) |
 | `compose.yaml`, `compose.dev.yaml` | The stack, and the opt-in development override |
 | `scripts/` | Build, check and operator tools: `make doctor`, `make dispose`, `make phi-scan` and the guardrails |
 | `tests/` | The browser, proxy, stack and documentation suites |
-| `schema/`, `examples/` | The project JSON schema, and the Python examples ([Exports](exports.md)) |
+| `schema/`, `examples/` | The project and framework JSON schemas, and the Python examples ([Exports](exports.md)) |
+| `data/` | The CHAI upstream snapshot and the T&E metrics data |
 | `docs/` | This site's pages. The checklists and metrics pages are generated |
 | `REQUIREMENTS.md`, `DECISIONS.md` | What must stay true, and why it is built the way it is |
 | `CLAUDE.md` | The working rules for this repository |
@@ -323,7 +325,7 @@ trigger refusing to rewrite history:
 
 ```bash
 docker run -d --name chai-test-db -p 55432:5432 \
-  -e POSTGRES_PASSWORD=test -e POSTGRES_DB=chai_test postgres:18-alpine
+  -e POSTGRES_PASSWORD=test -e POSTGRES_DB=chai_test postgres:18
 cd server
 pip install -e '.[dev]'
 TEST_DATABASE_URL=postgresql://postgres:test@localhost:55432/chai_test pytest
@@ -341,10 +343,13 @@ into a failure; CI always does.
 
 ### In CI
 
-Every pull request and every push to `main` runs all of the above in GitHub
-Actions (`.github/workflows/test.yml`): the server suite against a PostgreSQL 18
-service container, the dashboard suites in Chromium, the proxy against a real
-Caddy, and the whole Compose stack end to end. One job, **tests passed**, fails
+Every pull request and every push to `main` runs the test suites above in GitHub
+Actions (`.github/workflows/test.yml`): the CI-configuration and guardrail
+checks, the server suite against a PostgreSQL 18 service container, the dashboard
+suites in Chromium (a subset also in Firefox and WebKit), the proxy against a
+real Caddy, the MCP service's tests and proxy route, and the whole Compose stack
+end to end. `make doctor` is not run against a live stack in CI; only its checker
+is unit-tested (`test-doctor`). One job, **tests passed**, fails
 if any of them failed, was canceled, or was skipped.
 
 The slow suites run in pieces side by side: the three server pytest runs are
@@ -493,7 +498,11 @@ field names, and crosswalks both against OPTICA. None of that updates itself.
 [CHAI's content repository](https://github.com/coalition-for-health-ai/responsible-ai-content)
 against the snapshot in `data/chai-upstream.json`, and on any difference opens
 a single issue, updated in place and not reopened weekly, assigned to the
-repository owner, listing what moved and which files here derive from it.
+repository owner, listing what moved and which files here derive from it. It
+also opens a pull request from the `chai-snapshot` branch that records the new
+snapshot as the baseline, so the next run reports only later changes. Merging it
+does not update the files that derive from CHAI; that review is what the issue
+asks for.
 
 ```bash
 pixi run check-chai         # compare now; exits 1 if upstream moved

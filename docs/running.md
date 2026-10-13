@@ -5,7 +5,7 @@ what you need, not by what is easiest to open.
 
 ## Which mode does what
 
-| | Example page (GitHub Pages, or open a file) | Docker stack |
+| | Example page (GitHub Pages, or open a file) | Docker stack (with your SSO in front) |
 |---|---|---|
 | Storage | Browser `localStorage` | PostgreSQL |
 | Shared between people | **No** | Yes |
@@ -22,6 +22,10 @@ what you need, not by what is easiest to open.
 | All exports, including PDF | Yes | Yes |
 | Changelog | Yes, this browser | Yes |
 | Record fingerprint | Yes | Yes |
+
+With `make dev` the proxy supplies one fixed developer identity, so identity is
+not per person and a sign-off records that fixed name. Use it to try the system,
+not to keep a record.
 
 Whichever mode you are in, the header names it: *This browser only* or *Shared
 workspace*, and a warning under it says what that mode does and does not do. The
@@ -72,12 +76,15 @@ make dev          # leave it running; Ctrl-C stops it
 Then open <http://localhost:8080>. `make dev` creates `.env` from the template if
 there is none, and supplies a development password and a fixed developer
 identity, so there is nothing to fill in. The header should say
-**Shared workspace**. If it says *This browser only*, the API is not answering;
-run `make doctor` in another terminal, or look at `make logs`.
+**Shared workspace**. If it says *This browser only*, the page is not talking to
+the stack: check that you opened <http://localhost:8080> (or your `HTTP_PORT`)
+and not a file or another server. If it shows an error page instead, the API is
+not answering; run `make doctor` in another terminal, or look at `make logs`.
 
 When a save does not go through, the page says which kind of problem it is. If
 the server cannot be reached or is failing (a dropped connection, a 5xx, a 408 or
-a 429), it keeps your edit and retries six times, backing off, then tells you to
+a 429), it keeps your edit and tries up to six times in all (the first attempt and
+five retries), backing off, then tells you to
 check your connection. If the server is up and *refuses* the change (a 4xx other
 than those, such as a 422 for a value it will not accept), it does not retry,
 because the same change would be refused again. It keeps your edit in the field,

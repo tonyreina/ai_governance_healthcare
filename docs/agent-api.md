@@ -40,23 +40,29 @@ compliant, and an agent that reports it as one is wrong.
   person's signed-in session and nothing else).
 - **A token reaches one route family.** It is accepted under `/api/agent/` and
   on no other route. On every other route it is not read at all.
-- **The identity header means nothing on the agent routes.** The API does not
-  read any identity header there, whatever its name, so a client cannot choose
-  who it is by sending one. As defense in depth the proxy also deletes the
+- **The identity header means nothing on the agent routes.** The API never uses
+  an identity header there to decide who a caller is, whatever its name, so a
+  client cannot choose who it is by sending one. (A refusal row only notes
+  whether the configured identity header was present.) As defense in depth the proxy also deletes the
   sixteen header names it knows (the canonical `X-Auth-Request-*` set and what
   Google IAP, the AWS ALB, Azure Easy Auth and oauth2-proxy set). That list is
   fixed: a header with another name, or a custom `IDENTITY_HEADER`, reaches the
   API and is ignored there.
 - **A stolen token is bounded, not harmless.** It stops working at the eighth
   hour on its own. Its owner can revoke it now, and an operator can revoke it
-  without them. Every call it makes is in the read trail, marked as agent access,
-  with the token's id, and a call a rate limit turns away is counted in the
+  without them. Nearly every call it makes is in the read trail, marked as agent
+  access, with the token's id. A call a rate limit turns away, or one that fails
+  parameter validation, leaves no row, and a rate-limited one is counted in the
   security log instead ([what a call leaves behind](#what-a-call-leaves-behind)).
 - **A wrong token learns almost nothing.** Missing, malformed, unknown, expired,
   revoked and removed are the same answer: the same status, the same body, the
   same header. The one exception is a source that has already failed too often in
-  the window: it is answered `429` instead, whatever it sent. Which it was is in
-  the read trail, for the operator, and nowhere else. A token's public id is not a
+  the window: it is answered `429` instead, whatever it sent. For a token whose
+  public id exists, which it was (wrong secret, expired or revoked) is in the read
+  trail and as an `agent.refused` event, within the per-token and overall row
+  budgets below, and never in the response. A malformed token or an unknown id
+  leaves no row, and anything over budget is only counted in the `agent.failures`
+  summary. A token's public id is not a
   secret, and whether an id exists can be told apart by how long the answer takes
   (an existing id with a wrong secret is a little slower, because it may write a
   row). That is not claimed to be hidden: the secret is what protects a token.
@@ -99,16 +105,21 @@ only. The response holds the token once.
 **Shape.** `agt_`, 16 hex characters (the token's public id), a `.`, and 43
 characters of URL-safe base64 (256 random bits). The public id is not a secret: it
 is in the read trail and the logs, and it shows up in the answer time of a wrong
-secret. Only the public id is ever logged by this server, and only a SHA-256 hash
-of the whole token is stored, so the server cannot show a token again.
+secret. When a token is sent as designed, in the `Authorization` header, the server
+logs only the public id, and it stores only a SHA-256 hash of the whole token, so
+it cannot show a token again. A token sent anywhere else can reach logs: see
+"Where a token may be sent", below.
 
 **Where a token may be sent.** In the `Authorization` header and nowhere else: one in
 a query parameter, a cookie or another header is refused. Never send it in a URL, or
 in a header with any other name. This stack tries to keep it out of its logs if it is
 sent anyway, and cannot do so completely:
 
-- The API's access log drops the query string of a request whose decoded path is
-  under `/api/agent/`. The proxy's log drops the query string of any request whose
+- The API's access log drops the query string by the same rule as the proxy's,
+  decided on the target as written rather than the decoded path: it drops it when
+  the part before the `?` contains `agent` in any case, a percent-encoded
+  character, a doubled slash or an empty or dot path segment, or when the query
+  itself contains `agent`. The proxy's log drops the query string of any request whose
   target is, or might be, an agent route (it contains `agent` in any case, a
   percent-encoded character before the `?`, an absolute-form target, or an empty
   or dot path segment), and the values of `X-Api-Key`, `Api-Key`, `X-Auth-Token`,
@@ -294,7 +305,7 @@ out. That is the same list, from the same code, as `GET /api/projects` gives
 that person: a project they own, write or read, and a project with no owner yet
 (which every signed-in person can open, as the dashboard shows it). A project
 whose record follows another framework than the server's build knows is returned
-with a null `framework` and no items or checkpoints; one of a framework of the
+with a null `framework` and no items or checkpoints (its supplements, if the build knows them, are still listed); one of a framework of the
 build carries its `framework` id, and can be filtered by it. An agent never has emergency access,
 whoever minted its token, and a project the owner loses access to leaves what
 the token sees on the next call.
@@ -403,7 +414,7 @@ the order the dashboard uses.
 | `next_offset` | integer or null | The offset of the next page, or null on the last. |
 | `projects` | array | The projects on this page, each as below. |
 | `projects[].ref` | string | An opaque reference to the project (`pr_` and 32 hex characters). Its own id is never returned. |
-| `projects[].framework` | string or null | The framework the record follows: its stamp, or `chai` when it has none. Null if the stored value is not an id. |
+| `projects[].framework` | string or null | The framework the record follows: its stamp, or `chai` when it has none. Null if the stored value is not the id of a primary framework of this build (so null for every project when no manifest is loaded). |
 | `projects[].updated_at` | string | When the record last changed (UTC). |
 | `projects[].updated_by` | string or null | Who changed it last, as an opaque id. |
 | `projects[].people` | object | Who may open the project. |
@@ -610,6 +621,7 @@ caller must not be able to grow it:
 | A token that exists, expired or revoked, presented with its right secret (`401`) | One row (`agent_refused`), at most 5 per token id a window and 100 overall | `agent.refused`, for each row |
 | A token that exists, presented with a wrong secret (`401`) | One row (`agent_refused`), at most 10 per token id a window across all sources and 100 overall | `agent.refused`, for each row |
 | A token that is malformed, or names no token (`401`) | **No row** | Counted in the summary line |
+| A parameter that fails validation (`422`), after the token verified and spent allowance | **No row**, and `last_used_at` is not updated | Ordinary request logging only |
 | Over a failure limit, the global budget, or a token's or person's allowance (`429`) | **No row** | Counted in the summary line, or `ratelimit.tripped` once per window |
 
 The three kinds of refusal have budgets of their own, so a flood of wrong secrets (which
@@ -652,8 +664,10 @@ SELECT at, source_ip, token_id, detail ->> 'reason' AS reason, detail ->> 'route
 ```
 
 A refusal whose `detail` has `"identity_header_ignored": true` carried an identity
-header, which the agent routes ignore: a proxy that works strips it, so seeing one
-means the request did not come through the agent route of the proxy.
+the configured identity header, which the agent routes ignore. The proxy strips
+that header only when it is one of the sixteen names it knows, so seeing the flag
+means either the request did not come through the agent route of the proxy or
+`IDENTITY_HEADER` is a custom name the proxy does not strip.
 
 The security events are `agent_token.minted`, `agent_token.revoked`, `agent.refused`,
 `agent.failures` (the summary of a window, above) and, for a successful
@@ -672,7 +686,10 @@ call, `record.read` with `via` set to `agent`
    opaque ids and is not stored in the database; keep it like a password. Changing
    it changes every id an agent is shown, and loses nothing.
 2. Apply the migration. `013_agent_tokens.sql` runs with the others
-   (`python -m app.migrate`, compose's `migrate` service, or `RUN_MIGRATIONS=true`).
+   (`python -m app.migrate` as the owner, which compose's `migrate` service runs).
+   Do not use `RUN_MIGRATIONS=true`: an API that migrates itself must connect as
+   the table owner, and since R-74 it refuses to start as the owner unless
+   `ALLOW_OWNER_ROLE=true`, which is for a laptop or a test only.
    It creates `agent_token` and marks the read trail, and `014_agent_vocabulary.sql`
    creates `agent_vocabulary`, which the migrate job fills from the build's
    `manifest.json` (`RETIREMENT_MANIFEST`) on every run, replacing its rows. No
@@ -712,7 +729,7 @@ sits in front of it. The rest depends on what that is:
 | Azure Easy Auth (App Service or Container Apps) | List the path as excluded from authentication (`globalValidation.excludedPaths`), so that `/api/agent/*` is served without a sign-in. | Yes, where your platform version supports excluded paths. Not tested here. |
 | oauth2-proxy, or an nginx `auth_request` | Skip authentication for the path: oauth2-proxy's `skip_auth_routes` (`GET=^/api/agent/`), or `auth_request off;` in the nginx `location /api/agent/`. | Yes. Not tested here. |
 | Keycloak with a gatekeeper or an API gateway | Exempt the path from the gateway's authentication, as the gateway documents. | Depends on the gateway. Not tested here. |
-| Google Cloud IAP | IAP protects a whole backend service, with no path exemption inside it. Route `/api/agent/*`, in the load balancer's URL map, to a second backend for the same service with IAP off. | Only with that extra backend. Not tested here. |
+| Google Cloud IAP | IAP protects a whole service, with no path exemption inside it. IAP enabled directly on Cloud Run (the shape [deploy.md](deploy.md) recommends) offers no way to leave `/api/agent/*` unguarded, so for the agent API use the load-balancer route described there: send `/api/agent/*` in the load balancer's URL map to a second backend for the same service with IAP off. | Only with that extra backend. Not tested here. |
 | **Any front door that authenticates every path and cannot be told otherwise** | There is nothing to configure. Run the agent from inside the network, calling the proxy directly, or give the agent path its own hostname that the front door does not guard. | **No.** The agent API cannot be offered through such a door, and should stay off. |
 
 Two cautions apply to every row. First, the path is now reachable by anything
@@ -775,8 +792,8 @@ that holds only expired ones).
 
 ## Claims, and what backs them
 
-Each security sentence on this page is a row in [Security claims](security-claims.md),
-with the test that fails if it stops being true: what a token may reach, that it
+The security properties listed here are rows in [Security claims](security-claims.md),
+each with the test that fails if it stops being true: what a token may reach, that it
 cannot mint, list or revoke, that the identity header is ignored, that every bad
 token is one answer, that no name, email or free text is returned, that an agent
 sees what the owner's dashboard shows and never an archived project, that every

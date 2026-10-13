@@ -1502,8 +1502,9 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** A token that is missing, malformed, unknown, wrong, expired, revoked
   or whose owner is gone gets the same status, the same body and the same header
   on every agent route, except that a source that has already used up its failures
-  for the window is answered 429 instead, whatever it sent. Which it was is in the
-  read trail, for the operator, and nowhere in the response. Response timing is
+  for the window is answered 429 instead, whatever it sent. For a token whose
+  public id exists, which it was is in the read trail and as an agent.refused
+  event, within the row budgets, and nowhere in the response. Response timing is
   not claimed to be equal: whether a public token id exists can be told by timing.
 - **Asserted in:** `docs/agent-api.md` — "and removed are the same answer: the same status, the same body, the same header."
 - **Status:** enforced
@@ -1515,11 +1516,11 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-100 The identity header means nothing on an agent route
 
-- **Claim:** The API reads no identity header on the agent routes, whatever its
-  name, so a client cannot choose who it is by sending one. As defense in depth the
+- **Claim:** The API never uses an identity header on the agent routes to decide
+  who a caller is, whatever its name, so a client cannot choose who it is by sending one. As defense in depth the
   proxy deletes sixteen identity header names it knows and sets none; that list is
   fixed, and a header with another name reaches the API and is ignored there.
-- **Asserted in:** `docs/agent-api.md` — "The API does not read any identity header there, whatever its name, so a client cannot choose who it is by sending one."
+- **Asserted in:** `docs/agent-api.md` — "The API never uses an identity header there to decide who a caller is, whatever its name, so a client cannot choose who it is by sending one."
 - **Asserted in:** `proxy/Caddyfile` — "It is safe because of what this block does NOT do: it never sets an identity"
 - **Status:** enforced
 - **Enforced by:**
@@ -1602,7 +1603,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   refuses any other lifetime. It is shown once, in the mint response; the server
   keeps a SHA-256 hash of it, and its identity and expiry cannot be rewritten.
 - **Asserted in:** `docs/agent-api.md` — "Exactly 8 hours from the moment it is minted, and the database refuses any other lifetime."
-- **Asserted in:** `docs/agent-api.md` — "only a SHA-256 hash of the whole token is stored"
+- **Asserted in:** `docs/agent-api.md` — "it stores only a SHA-256 hash of the whole token"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_agent_api.py::test_a_minted_token_has_the_shape_and_the_fixed_lifetime`
@@ -1758,13 +1759,15 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** The token is read from the Authorization header and nowhere else: a
   token in a query parameter, a cookie or another header is refused. The API's
-  access log drops the query string of a request whose decoded path is under
-  `/api/agent/`; the proxy's log drops the query string of any request whose target
+  access log drops the query string by the same rule as the proxy's, decided on
+  the target as written: the word agent in any case, a percent-encoded character,
+  a doubled slash or an empty or dot path segment before the query, or the word
+  in the query itself; the proxy's log drops the query string of any request whose target
   is, or might be, an agent route (the word agent in any case, a percent-encoded
   character before the query, an absolute-form target, an empty or dot path
   segment) and the values of five token-like request headers.
 - **Asserted in:** `docs/agent-api.md` — "In the `Authorization` header and nowhere else: one in a query parameter, a cookie or another header is refused."
-- **Asserted in:** `docs/agent-api.md` — "The API's access log drops the query string of a request whose decoded path is under `/api/agent/`."
+- **Asserted in:** `docs/agent-api.md` — "The API's access log drops the query string by the same rule as the proxy's, decided on the target as written rather than the decoded path"
 - **Status:** partial
 - **Enforced by:**
   `server/tests/test_agent_api.py::test_the_token_comes_from_the_authorization_header_and_nowhere_else`
@@ -2007,11 +2010,13 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-129 A failure is a fixed message, never the token or the upstream's body
 
-- **Claim:** Every failure the service reports is one of a few fixed messages. The
+- **Claim:** Every failure from this service or the API is one of a few fixed
+  messages; a call the MCP SDK refuses itself (an argument that fails the schema,
+  an unknown tool) carries the SDK's text, cleaned and cut to 300 characters. The
   token and the upstream's response body are in none of them; a 422's message is cut
   to plain characters, and an unexpected failure inside the service says only that it
   could not complete.
-- **Asserted in:** `docs/mcp.md` — "A failure is a tool error (`isError` is `true`) with one of a few **fixed** messages."
+- **Asserted in:** `docs/mcp.md` — "A failure is a tool error (`isError` is `true`). Failures that come from this service or the API carry one of a few **fixed** messages (below)."
 - **Status:** enforced
 - **Enforced by:**
   `mcp/tests/test_mcp_service.py::test_a_failure_is_a_fixed_message_and_never_the_upstream_body`

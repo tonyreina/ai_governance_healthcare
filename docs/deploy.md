@@ -916,34 +916,28 @@ gcloud run services get-iam-policy chai-api --region="$REGION"
     and every identity header becomes a free-text field. The output
     above should contain exactly one invoker: the IAP service agent.
 
-!!! danger "Do not lock down ingress on this path"
-
-    Two commands get recommended constantly for Cloud Run, and **both break
-    this architecture**:
+!!! danger "Do not disable the default URL on this path"
 
     ```bash
-    # WRONG on the IAP-direct path -- do not run these here.
-    gcloud run services update chai-api --region="$REGION" \
-      --ingress=internal-and-cloud-load-balancing
+    # WRONG on the IAP-direct path -- do not run this here.
     gcloud run services update chai-api --region="$REGION" --no-default-url
     ```
 
-    With IAP enabled directly on the service, the default `run.app` URL **is**
-    the IAP front door. `--no-default-url` deletes it, and
-    `--ingress=internal-and-cloud-load-balancing` rejects the IAP-fronted
-    traffic that arrives over it. The service stops answering for everyone.
+    Google documents that IAP enabled on the service secures "all ingress
+    paths, including default `run.app` URLs and load balancers". On this path
+    the default `run.app` URL is therefore the IAP front door, and
+    `--no-default-url` disables it, so the service has no URL left for users to
+    reach.
 
-    On this path, ingress stays `all` and the default URL stays enabled. What
-    protects the service is the IAM policy above — the only invoker is the IAP
-    service agent — not an ingress setting.
-
-    Those two commands are correct on the load-balancer path below, where the
-    load balancer is the front door and the `run.app` URL is genuinely a
-    bypass.
+    What protects the service is the IAM policy above, where the only invoker
+    is the IAP service agent. Google's own Terraform example for IAP on Cloud
+    Run leaves ingress at `INGRESS_TRAFFIC_ALL`, and this guide has not tested
+    any other ingress value on this path.
 
 If you took the load-balancer route instead (Cloud Armor, custom
 certificate, path-based routing), then the `run.app` URL *is* a bypass and
-both locks apply:
+both locks apply. Google documents that `internal-and-cloud-load-balancing`
+disallows "direct requests to the `run.app` URL from the internet":
 
 ```bash
 # Only on the LOAD BALANCER path, where the LB is the front door.
@@ -955,12 +949,15 @@ gcloud run services update chai-api --region="$REGION" --no-default-url
 ### Managed PostgreSQL
 
 Cloud SQL for PostgreSQL with **no public IP**, reached over private
-services access. Attach it to the service and let Cloud Run manage the
-connector:
+services access. The tests and the Compose stack run PostgreSQL 18 (D-94), and
+Cloud SQL offers it, so use the same major version. Cloud Run needs both the
+Cloud SQL attachment and VPC egress on the same network to reach an instance
+that has only a private IP, and its service account needs the Cloud SQL Client
+role (step 1 below):
 
 ```bash
 gcloud sql instances create chai-db \
-  --database-version=POSTGRES_16 \
+  --database-version=POSTGRES_18 \
   --region="$REGION" \
   --tier=db-custom-2-7680 \
   --no-assign-ip \
@@ -1021,26 +1018,47 @@ AUD="/projects/${PROJECT_NUMBER}/locations/${REGION}/services/chai-api"
 gcloud services enable run.googleapis.com iap.googleapis.com \
   sqladmin.googleapis.com secretmanager.googleapis.com
 
-# 1. Runtime identities with least privilege: one for the service, one for the
-#    migrate job, which alone holds the owner's credential.
+# 1. Runtime identities: one for the service, one for the migrate job, which
+#    alone holds the owner's credential. Their secret access is granted under
+#    "Secrets" above, one secret at a time.
 gcloud iam service-accounts create chai-run \
   --display-name="CHAI governance API"
 gcloud iam service-accounts create chai-migrate \
   --display-name="CHAI governance migrations"
 
-# 2. Build and push.
-gcloud builds submit --tag "${REGION}-docker.pkg.dev/${PROJECT_ID}/chai/api:v1"
+# Both open the Cloud SQL connection, so both need the Cloud SQL Client role.
+# This grant is project-wide; it gives neither account any secret.
+for sa in chai-run chai-migrate; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${sa}@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --role=roles/cloudsql.client
+done
 
-# 2a. Migrate as the owner, and create the restricted role. Run it on every
-#     deploy. It also needs RETIREMENT_MANIFEST (see "Two database roles").
+# 2. Build and push. The Dockerfile is in server/.
+gcloud builds submit server --tag "${REGION}-docker.pkg.dev/${PROJECT_ID}/chai/api:v1"
+
+# 2a. The migrate job exits 1 without RETIREMENT_MANIFEST (see "Two database
+#     roles"), and the API image does not carry the manifest. Build a derived
+#     image that adds the one you deploy (here, the published build's).
+mkdir migrate-image
+cp docs/app/manifest.json migrate-image/manifest.json
+printf 'FROM %s\nCOPY manifest.json /manifest.json\n' \
+  "${REGION}-docker.pkg.dev/${PROJECT_ID}/chai/api:v1" > migrate-image/Dockerfile
+gcloud builds submit migrate-image \
+  --tag "${REGION}-docker.pkg.dev/${PROJECT_ID}/chai/migrate:v1"
+
+# 2b. Migrate as the owner, and create the restricted role. Run it on every
+#     deploy. Cloud Run needs VPC egress to reach a private-IP-only instance.
 OWNER_SECRETS="DATABASE_URL=chai-database-url:latest"
 OWNER_SECRETS+=",APP_POSTGRES_PASSWORD=chai-app-password:latest"
 gcloud run jobs create chai-migrate \
   --region="$REGION" \
-  --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/chai/api:v1" \
+  --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/chai/migrate:v1" \
   --service-account="chai-migrate@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --network=default --subnet=default --vpc-egress=private-ranges-only \
   --set-cloudsql-instances="${PROJECT_ID}:${REGION}:chai-db" \
   --set-secrets="$OWNER_SECRETS" \
+  --set-env-vars="RETIREMENT_MANIFEST=/manifest.json" \
   --command=python --args=-m,app.migrate
 gcloud run jobs execute chai-migrate --region="$REGION" --wait
 
@@ -1049,6 +1067,7 @@ gcloud run deploy chai-api \
   --region="$REGION" \
   --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/chai/api:v1" \
   --service-account="chai-run@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --network=default --subnet=default --vpc-egress=private-ranges-only \
   --add-cloudsql-instances="${PROJECT_ID}:${REGION}:chai-db" \
   --set-secrets=APP_DATABASE_URL=chai-app-database-url:latest \
   --set-env-vars="RUN_MIGRATIONS=false" \
@@ -1079,11 +1098,20 @@ gcloud iap web add-iam-policy-binding \
 
 !!! note "`--max-instances=1` is a placeholder, not a recommendation"
 
-    It is there because `/api/events` has no cross-replica fan-out until
-    you add `LISTEN`/`NOTIFY`. Raise it once you have. `--timeout=3600`
-    sets the hard request limit to the Cloud Run maximum of 60 minutes;
-    SSE clients must still reconnect when it expires, which the browser
-    `EventSource` does on its own.
+    It is a conservative starting value. The API fans changes out across
+    replicas with `LISTEN`/`NOTIFY`, so you can raise it once `/api/health`
+    reports `"events":"live"` on every instance. If it stays `"local-only"`
+    (for example behind a transaction-pooling proxy such as PgBouncer),
+    connect the API to the database directly or keep one instance.
+    `--timeout=3600` sets the hard request limit to the Cloud Run maximum of
+    60 minutes; SSE clients must still reconnect when it expires, which the
+    browser `EventSource` does on its own.
+
+!!! note "This recipe deploys the API only"
+
+    The service above is the API. The dashboard is a separate piece: serve it
+    from the proxy image or from static hosting that sits behind the same
+    sign-in, or users reach the API but have no page to use it from.
 
 ## AWS: ECS Fargate behind an Application Load Balancer
 
@@ -1091,13 +1119,26 @@ gcloud iap web add-iam-policy-binding \
 
     AWS has closed App Runner to new customers as of 30 April 2026.
     Existing customers may continue to use it, but no new features are
-    planned, and App Runner cannot be registered as an ALB target
-    anyway — which rules it out for header-trust auth. AWS points new
-    workloads at **ECS Express Mode**, which provisions an ECS service
-    on Fargate plus an Application Load Balancer from a single API call.
-    Express Mode's load balancer is an ordinary ALB in your account, so
-    everything below applies; you attach the authenticate rule to the
-    listener it created.
+    planned. App Runner provides its own front door, which leaves no way to put
+    your own ALB `authenticate-oidc` rule in front of it, so it does not fit
+    this recipe. AWS points new workloads at **ECS Express Mode**.
+
+!!! warning "ECS Express Mode is not covered by this recipe"
+
+    This recipe is plain ECS on Fargate behind an ALB that you create and own.
+    Express Mode manages its own load balancer: AWS documents that up to 25
+    Express Mode services in the same VPC can share one ALB, that it routes by
+    host-header listener rules, and that "load balancer configurations can not
+    be updated on Express Mode services". The steps below (an
+    `authenticate-oidc` action as the listener's default, tasks in private
+    subnets with no public IP, a task security group sourced from your ALB's)
+    assume you control those settings, so they do not apply to Express Mode.
+
+!!! note "This recipe deploys the API only"
+
+    The task definition below runs the API image. The dashboard is a separate
+    piece: serve it from the proxy image or from static hosting that sits behind
+    the same sign-in.
 
 ### Architecture
 
@@ -1217,7 +1258,7 @@ aws ec2 describe-security-groups --group-ids "$TASK_SG" \
 aws rds create-db-instance \
   --db-instance-identifier chai-db \
   --engine postgres \
-  --engine-version 16.4 \
+  --engine-version 18 \
   --db-instance-class db.t4g.medium \
   --allocated-storage 50 \
   --db-subnet-group-name chai-private \
@@ -1227,19 +1268,28 @@ aws rds create-db-instance \
   --manage-master-user-password
 ```
 
-`--manage-master-user-password` has RDS create and rotate the password
-in Secrets Manager, so no credential is ever typed on a command line.
-Open `$DB_SG` on 5432 to `$TASK_SG` and to nothing else.
+The tests and the Compose stack run PostgreSQL 18 (D-94); RDS offers it, so use
+the same major version. A major-only `--engine-version` leaves the minor to RDS:
+check which one you got with `aws rds describe-db-instances`.
+
+`--manage-master-user-password` has RDS create and rotate the master password
+in Secrets Manager, so that password is never typed on a command line. The
+restricted role's password and the two database URLs below are secrets you
+create yourself. Open `$DB_SG` on 5432 to `$TASK_SG` and to nothing else.
 
 ### Secrets
 
 Secrets Manager, injected by the ECS agent through the task definition's
-`secrets` block, so values never appear in the task definition JSON,
-in `describe-task-definition` output, or in the container environment
-dump of a crash report:
+`secrets` block, so values never appear in the task definition JSON or in
+`describe-task-definition` output. They are still environment variables inside
+the running container, which AWS says applications, container logs and debugging
+tools can read, so keep crash-report and debug tooling from dumping the
+environment.
 
-The service's task definition gets the **restricted** role's URL, and its task
-role may read that secret and no other:
+The service's task definition gets the **restricted** role's URL. ECS reads the
+secret with the task **execution** role (not the task role the application runs
+as), so that execution role may read this secret and no other, and the
+application's task role needs no Secrets Manager permission:
 
 ```json
 "secrets": [
@@ -1250,14 +1300,21 @@ role may read that secret and no other:
   }
 ],
 "environment": [
-  { "name": "RUN_MIGRATIONS", "value": "false" }
+  { "name": "RUN_MIGRATIONS", "value": "false" },
+  { "name": "PORT", "value": "8080" }
 ]
 ```
+
+The API image listens on 8000 unless `PORT` is set. The target group, the health
+check and the security group below use 8080, so set `PORT` (it is one
+`environment` list with the identity settings further down).
 
 A second task definition, `chai-migrate`, runs the same image with the command
 `["python", "-m", "app.migrate"]`, the owner's URL as `DATABASE_URL`, the
 restricted role's password as `APP_POSTGRES_PASSWORD`, and `RETIREMENT_MANIFEST`
-(see [Two database roles](#two-database-roles)). Run it before each deploy:
+(see [Two database roles](#two-database-roles)). Give it its own execution role
+that can read only the owner's secret and the restricted role's password, so
+the running service can never read them. Run it before each deploy:
 
 ```bash
 aws ecs run-task --cluster chai --launch-type FARGATE \
@@ -1295,9 +1352,12 @@ every request.
 Set `TRUSTED_PROXY_CIDR` to the VPC range the load balancer's ENIs sit in,
 so the task refuses identity headers arriving from anywhere else.
 
-The OIDC client secret used by the listener rule is a separate concern:
-it is stored in the listener configuration itself, so restrict
-`elasticloadbalancing:DescribeRules` in your IAM policies.
+The OIDC client secret used by the listener rule is a separate concern: you
+supply it in the `actions.json` you pass to `create-listener` or `create-rule`.
+Keep that file out of version control and shell history, and restrict who may
+call `elasticloadbalancing:CreateRule`, `ModifyRule`, `CreateListener` and
+`ModifyListener`. On later modifications set `UseExistingClientSecret` so the
+secret need not be typed again.
 
 ### Step by step
 
@@ -1390,10 +1450,18 @@ Azure Database for PostgreSQL flexible server (private access)
 
 Azure's model differs structurally from the other two. The front door is
 not a separate network hop: the authentication middleware runs as a
-sidecar container inside every replica, intercepting each request before
-it reaches the application container. There is consequently no ingress
-path that skips it — which is a real advantage, as long as you never
-weaken the sidecar's own configuration.
+sidecar container inside every replica, in front of the application container.
+Microsoft's documentation describes it that way, and this guide has not tested
+that no route skips it. Anything you exclude, a misconfigured action such as
+`AllowAnonymous`, or another container in the same app (which can reach the
+application port on `localhost`) bypasses it. Keep the sidecar configuration
+below strict, and keep other containers out of the app.
+
+!!! note "This recipe deploys the API only"
+
+    The container app below runs the API image. The dashboard is a separate
+    piece: serve it from the proxy image or from static hosting that sits behind
+    the same sign-in.
 
 App Service with Easy Auth behaves identically and uses the same
 headers; Container Apps is the better fit here because the workload is a
@@ -1408,7 +1476,7 @@ plain container with no App Service runtime underneath.
 | `X-MS-CLIENT-PRINCIPAL-NAME` | Human-readable name, usually the UPN | No |
 | `X-MS-CLIENT-PRINCIPAL-IDP` | Which provider authenticated the caller | No |
 | `X-MS-TOKEN-AAD-ID-TOKEN` | The Entra ID token — requires the token store | **Yes** |
-| `X-MS-TOKEN-AAD-ACCESS-TOKEN` | The Entra access token — requires the token store | Yes |
+| `X-MS-TOKEN-AAD-ACCESS-TOKEN` | The Entra access token — requires the token store | No, not for this service: it is issued for another API (by default Microsoft Graph), so its audience is not your client ID. Validate the ID token instead |
 
 `X-MS-CLIENT-PRINCIPAL` decodes to:
 
@@ -1423,9 +1491,10 @@ plain container with no App Service runtime underneath.
 ```
 
 Microsoft notes that "external requests aren't allowed to set these
-headers, so they're present only if set by App Service" — the platform
-strips inbound copies. That guarantee holds only for traffic that
-actually traverses the platform ingress.
+headers, so they're present only if set by Container Apps" (see
+[Authentication in Azure Container Apps](https://learn.microsoft.com/azure/container-apps/authentication)).
+That guarantee holds only for traffic that actually traverses the platform
+ingress.
 
 ### Verify the assertion
 
@@ -1440,11 +1509,11 @@ actually traverses the platform ingress.
     - **Audience**: your app registration's client ID — this is the
       check that pins the token to your service.
 
-    If the token header is absent for your flow, the server-side
-    fallback is to call the token-store endpoint `/.auth/me` on
-    `localhost`, forwarding the inbound request's cookies, and read the
-    claims from the JSON it returns. `/.auth/logout` ends the session,
-    and `/.auth/login/aad` starts one.
+    If the token header is absent for your flow, check your own deployment:
+    `/.auth/me` is documented for App Service, but Microsoft's Container Apps
+    pages do not document it. Do not depend on it until you have confirmed it
+    on your environment. `/.auth/logout` ends the session, and
+    `/.auth/login/aad` starts one.
 
 ### Close the back door
 
@@ -1480,7 +1549,9 @@ az containerapp auth update \
       `RedirectToLoginPage` if the same origin also serves the app
       shell. Never `AllowAnonymous`.
     - `--excluded-paths` removes authentication from the paths listed.
-      Keep it empty, or limited to `/api/health`.
+      Keep it empty, or limited to `/api/health` and to the paths a feature you
+      turned on needs (`/api/agent/*` for the agent API, `/mcp` for the MCP
+      service; see their pages). Never exclude anything else.
     - `--require-https false` allows the session cookie over plaintext.
       Keep ingress `allowInsecure` off:
       `az containerapp ingress update -n chai-api -g chai-rg
@@ -1517,22 +1588,28 @@ LOCATION=<your-location>   # the same one as above
 
 az postgres flexible-server create \
   --name chai-db --resource-group chai-rg --location "$LOCATION" \
-  --version 16 --tier GeneralPurpose --sku-name Standard_D2ds_v5 \
+  --version 18 --tier GeneralPurpose --sku-name Standard_D2ds_v5 \
   --vnet chai-vnet --subnet db-subnet \
   --public-access None \
-  --active-directory-auth Enabled --password-auth Disabled
+  --active-directory-auth Enabled --password-auth Enabled
 ```
 
-`--public-access None` with `--vnet` gives the server a private IP and
-no public endpoint. `--active-directory-auth Enabled` with
-`--password-auth Disabled` lets the container app authenticate to
-PostgreSQL with its managed identity, so there is no database password
-to store at all.
+The tests and the Compose stack run PostgreSQL 18 (D-94), and Azure lists it as
+supported, so use the same major version. `--public-access None` with `--vnet`
+gives the server a private IP and no public endpoint.
+
+The API connects with the password in `APP_DATABASE_URL`, stored in Key Vault. It
+does not fetch Entra tokens, so password authentication stays enabled for the
+restricted application role. `--active-directory-auth Enabled` is for the human
+administrator who runs the migrate job. Identity-based database login for the
+API itself (Entra, RDS IAM, Cloud SQL IAM) is not implemented.
 
 ### Secrets
 
 Key Vault, referenced by the container app's secret collection and
-resolved with a managed identity:
+resolved with the app's system-assigned managed identity. That identity exists
+only after the app is created, and it needs the **Key Vault Secrets User** role
+on the vault before the reference resolves (see Step by step):
 
 ```bash
 az containerapp secret set \
@@ -1540,15 +1617,17 @@ az containerapp secret set \
   --secrets "app-db-url=keyvaultref:https://chai-kv.vault.azure.net/secrets/app-db-url,identityref:system"
 ```
 
-`app-db-url` connects as the container app's managed identity, which must not own
-the tables. The schema is created by a Container Apps job that runs `python -m
-app.migrate` as the server's Entra administrator, with `RETIREMENT_MANIFEST` (see
-[Two database roles](#two-database-roles)); then apply what `python -m app.migrate
---print-grants` prints to the managed identity's database user. The API refuses
-to start if its identity owns the tables.
+`app-db-url` connects as the restricted application role (a password user, not
+the table owner). The schema is created by a Container Apps job that runs
+`python -m app.migrate` as the server's Entra administrator, with
+`RETIREMENT_MANIFEST` (see [Two database roles](#two-database-roles)) and
+`APP_POSTGRES_PASSWORD`, which creates the restricted role. The API refuses to
+start if its role owns the tables.
 
-The Entra client secret for Easy Auth is stored the same way and
-referenced by name in the auth configuration.
+Step 3 below passes the Entra client secret to the CLI, which stores it as a
+Container Apps secret (not a Key Vault reference). The value passes through a
+shell variable, so unset it afterward and do not run these steps with command
+tracing enabled.
 
 ### Step by step
 
@@ -1585,34 +1664,57 @@ az containerapp create \
              IDENTITY_HEADER_FORMAT=jwt \
              "IDENTITY_AUDIENCE=$APP_ID" \
              RUN_MIGRATIONS=false \
-             "APP_DATABASE_URL=secretref:app-db-url"
+             PORT=8080
 
 az containerapp ingress update -n "$APP" -g "$RG" --allow-insecure false
+
+# 2a. The system-assigned identity exists only now. Let it read the vault, then
+#     define the Key Vault secret and point the environment variable at it.
+PRINCIPAL_ID=$(az containerapp show -n "$APP" -g "$RG" \
+  --query identity.principalId -o tsv)
+KV_ID=$(az keyvault show --name chai-kv --query id -o tsv)
+az role assignment create --assignee-object-id "$PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Key Vault Secrets User" --scope "$KV_ID"
+
+az containerapp secret set -n "$APP" -g "$RG" \
+  --secrets "app-db-url=keyvaultref:https://chai-kv.vault.azure.net/secrets/app-db-url,identityref:system"
+az containerapp update -n "$APP" -g "$RG" \
+  --set-env-vars "APP_DATABASE_URL=secretref:app-db-url"
 
 # 3. Wire Entra ID into Easy Auth.
 az containerapp auth microsoft update \
   --name "$APP" --resource-group "$RG" \
   --client-id "$APP_ID" --client-secret "$SECRET" \
   --tenant-id "$TENANT" --yes
+unset SECRET
 
-# 4. Require authentication and turn on the token store.
+# 4. Require authentication and turn on the token store. The token store needs
+#    an Azure Blob Storage container: create a storage account with a private
+#    container, generate a SAS URL for it with read, write and delete
+#    permissions, and save that as a container app secret named token-store-sas
+#    (see Microsoft's "Enable an authentication token store in Azure Container
+#    Apps"). Keep track of the SAS expiry, or the store stops working.
 az containerapp auth update \
   --name "$APP" --resource-group "$RG" \
   --enabled true \
   --unauthenticated-client-action Return401 \
   --redirect-provider AzureActiveDirectory \
   --require-https true \
+  --sas-url-secret-name token-store-sas \
   --token-store true
 
 # 5. Raise the ingress idle timeout for /api/events (environment-wide,
 #    minimum 4 and maximum 30 minutes).
 # `update` only edits premium ingress that is already enabled, and `add` is
 # what enables it. `add` also requires a workload profile to run on, so
-# create one first. This is a chargeable dedicated profile.
+# create one first. This is a chargeable dedicated profile, billed
+# continuously for its nodes. Premium ingress needs at least two of them, and
+# the profile should be dedicated to ingress, not shared with apps or jobs.
 az containerapp env workload-profile add \
   --name chai-env --resource-group "$RG" \
   --workload-profile-name ingress-d4 --workload-profile-type D4 \
-  --min-nodes 1 --max-nodes 1
+  --min-nodes 2 --max-nodes 2
 
 az containerapp env premium-ingress add \
   --name chai-env --resource-group "$RG" \
@@ -1623,7 +1725,9 @@ az containerapp env premium-ingress add \
 By default any user in the tenant can obtain a token for the
 application. Restrict it to the governance group under **Enterprise
 applications → Properties → Assignment required**, then assign the
-group.
+group. Assigning a group requires Microsoft Entra ID P1 or P2 and does not
+cascade to nested groups, so nest nothing under the governance group. Without
+that license, assign individual users instead.
 
 ## Header reference
 
@@ -1636,7 +1740,7 @@ group.
 | Signing key source | `www.gstatic.com/iap/verify/public_key-jwk` | `public-keys.auth.elb.<region>.amazonaws.com/<kid>` | Entra JWKS for the tenant |
 | Pin-to-service check | `aud` = project/location/service | `signer` = ALB ARN | `aud` = client ID |
 | Bypass control | `--no-allow-unauthenticated` + invoker IAM | Task SG sourced from ALB SG | `Return401` + private endpoint |
-| Session endpoints | IAP-managed | `/oauth2/idpresponse` | `/.auth/login/aad`, `/.auth/me`, `/.auth/logout` |
+| Session endpoints | IAP-managed | `/oauth2/idpresponse` | `/.auth/login/aad`, `/.auth/logout` |
 
 ## Proving the back door is closed
 
@@ -1645,7 +1749,8 @@ a host that is *not* the front door — your laptop, or a VM in an
 unrelated subnet — forge the header and confirm you are refused:
 
 ```bash
-# Google Cloud: expect 403 from Cloud Run, not 200 from your app.
+# Google Cloud: expect a refusal or sign-in redirect from IAP (the run.app URL
+# is the IAP front door on this path), never a 200 from your app.
 curl -i https://chai-api-abc123-uc.a.run.app/api/me \
   -H 'X-Goog-Authenticated-User-Email: accounts.google.com:ceo@hospital.org'
 

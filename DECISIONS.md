@@ -3774,6 +3774,41 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   strict docs build (every link). Not enforced: that a statistic is sourced or
   current. That rests on this entry and on review.
 
+### D-101 Preflight asks for the encryption decision for a real SITE_ADDRESS host
+
+- Status: Accepted: the owner's ruling of 2026-10-12 on the docs audit (D10).
+- **The question.** `scripts/preflight.py` asked for the disk-encryption
+  confirmation (R-42, `STORAGE_ENCRYPTION_CONFIRMED=1`) only when `HTTP_BIND` was
+  not loopback. The supported topology is a loopback bind with TLS terminated in
+  front, so a stack reachable by name from the network passed with no decision,
+  and C-63 and the self-hosting table said "reachable beyond this machine" for
+  something narrower.
+- **Decided.**
+    1. **The confirmation is also required when `SITE_ADDRESS` is a real
+       hostname**, on top of a non-loopback bind, when the stack uses its own
+       database volume (no `DATABASE_URL`).
+    2. **Local means exactly:** `localhost`, anything in `127.0.0.0/8`, `::1`, or
+       an address with no host (a bare port such as `:8080` or `http://:80`, the
+       shipped default). Anything else, including a routable IP, a wildcard and
+       an address preflight cannot parse, needs the decision. Scheme, port, path
+       and bracketed IPv6 are stripped first, and a comma- or space-separated list
+       needs only one real host.
+    3. **Laptop and CI are unaffected.** `make dev` does not run preflight, and
+       CI's stack job writes its own `.env` and runs `docker compose` directly.
+    4. C-63 and `docs/self-hosting.md` say exactly this, and name the remaining
+       gap: a loopback bind with a bare-port address behind a reverse proxy.
+- Amends R-42, whose text still says "a non-loopback `HTTP_BIND`". R-42 needs a
+  superseding entry from the owner's pen; this entry records the behavior.
+- Rejected: **asking whenever the deployment "looks production-shaped".** Nothing
+  can see a reverse proxy in front, so the rule would be a guess; a hostname is
+  something `.env` states.
+- Rejected: **requiring it for every loopback bind.** It would nag every laptop
+  and every CI job for a stack that holds nothing.
+- Source: the owner's ruling of 2026-10-12 on the docs audit.
+- Enforced by: `tests/test_preflight.py` (the hostname and local tables, and
+  mutation tests that break `is_local_site` and demand the tests notice), C-63.
+  Not enforced: a reverse proxy that preflight cannot see.
+
 ### D-103 The Croissant collection period is withheld with the cohort detail
 
 - Status: Accepted: the owner's ruling of 2026-10-12 on the docs audit.

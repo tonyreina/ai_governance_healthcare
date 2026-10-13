@@ -404,6 +404,141 @@ def main() -> int:
         ),
     )
 
+    print("A real hostname in SITE_ADDRESS is reachable beyond this machine (D-101)")
+    # The supported topology is a loopback bind with TLS terminated in front, so
+    # HTTP_BIND alone cannot say whether the stack is reachable. A real SITE_ADDRESS
+    # hostname can, and it needs the same encryption decision.
+    named = (
+        "governance.example.org",
+        "https://governance.example.org",
+        "http://governance.example.org",
+        "governance.example.org:8443",
+        "*.example.org",
+        "https://gov.example.org/app",
+        "localhost, governance.example.org",
+        "10.0.0.5",
+        "[2001:db8::1]:8443",
+    )
+    for site in named:
+        check(
+            f"loopback bind + SITE_ADDRESS={site!r} still needs the decision",
+            mentions(
+                problems(HTTP_BIND="127.0.0.1", SITE_ADDRESS=site),
+                "STORAGE_ENCRYPTION_CONFIRMED",
+            ),
+        )
+        check(
+            f"... and STORAGE_ENCRYPTION_CONFIRMED=1 accepts {site!r}",
+            not mentions(
+                problems(
+                    HTTP_BIND="127.0.0.1",
+                    SITE_ADDRESS=site,
+                    STORAGE_ENCRYPTION_CONFIRMED="1",
+                ),
+                "STORAGE_ENCRYPTION_CONFIRMED",
+            ),
+        )
+    local = (
+        "",
+        "http://:80",
+        ":8080",
+        ":443",
+        "http://:8080",
+        "localhost",
+        "LOCALHOST",
+        "localhost:8443",
+        "https://localhost",
+        "http://localhost:80",
+        "127.0.0.1",
+        "127.1.2.3:8080",
+        "http://127.0.0.1:8080",
+        "::1",
+        "[::1]:8080",
+        "https://[::1]",
+        "localhost, 127.0.0.1",
+        "localhost.",
+    )
+    for site in local:
+        check(
+            f"SITE_ADDRESS={site!r} is local use: no decision asked",
+            not mentions(problems(SITE_ADDRESS=site), "STORAGE_ENCRYPTION_CONFIRMED"),
+        )
+    check(
+        "loopback bind + a real hostname still needs the decision",
+        mentions(
+            problems(HTTP_BIND="127.0.0.1", SITE_ADDRESS="governance.example.org"),
+            "STORAGE_ENCRYPTION_CONFIRMED",
+        ),
+    )
+    check(
+        "a hostname with its own managed database (DATABASE_URL) asks nothing",
+        not mentions(
+            problems(
+                SITE_ADDRESS="governance.example.org",
+                DATABASE_URL="postgresql://u@h/db?sslmode=verify-full",
+            ),
+            "STORAGE_ENCRYPTION_CONFIRMED",
+        ),
+    )
+    check(
+        "the refusal for a hostname names SITE_ADDRESS as the reason",
+        mentions(problems(SITE_ADDRESS="governance.example.org"), "SITE_ADDRESS"),
+    )
+    check(
+        "an unparseable address fails closed (asks for the decision)",
+        mentions(problems(SITE_ADDRESS="unix//run/caddy.sock"), "STORAGE_ENC"),
+    )
+    check(
+        "the shipped default and a dev-style env stay clean (laptop, CI)",
+        problems(SITE_ADDRESS="http://:80", HTTP_BIND="127.0.0.1") == []
+        and problems(SITE_ADDRESS="http://:8080") == [],
+    )
+    check(
+        "is_local_site agrees with the table",
+        all(pf.is_local_site(s) for s in local)
+        and not any(pf.is_local_site(s) for s in named),
+    )
+
+    print("Mutations: the hostname check must notice when it is broken (D-101)")
+
+    def gate_holds() -> bool:
+        asks = all(
+            mentions(
+                problems(HTTP_BIND="127.0.0.1", SITE_ADDRESS=s),
+                "STORAGE_ENCRYPTION_CONFIRMED",
+            )
+            for s in named
+        )
+        quiet = all(
+            not mentions(problems(SITE_ADDRESS=s), "STORAGE_ENCRYPTION_CONFIRMED")
+            for s in local
+        )
+        return asks and quiet
+
+    check("unmutated, the gate holds on both tables", gate_holds())
+    real_local = pf.is_local_site
+    try:
+        pf.is_local_site = lambda site: True  # "everything is a laptop"
+        check(
+            "mutation: every site local -> a hostname slips through", not gate_holds()
+        )
+        pf.is_local_site = lambda site: False  # "nothing is a laptop"
+        check("mutation: no site local -> a laptop is nagged", not gate_holds())
+    finally:
+        pf.is_local_site = real_local
+    real_hosts = pf.LOOPBACK_HOSTS
+    try:
+        pf.LOOPBACK_HOSTS = frozenset(real_hosts | {"0.0.0.0"})
+        check(
+            "mutation: the bind is no longer checked alone -> 0.0.0.0 slips through",
+            not mentions(
+                problems(HTTP_BIND="0.0.0.0", SITE_ADDRESS="http://:80"), "plain HTTP"
+            ),
+        )
+    finally:
+        pf.LOOPBACK_HOSTS = real_hosts
+    check("the gate holds again after the mutations", gate_holds())
+
     print("The API's restricted role needs its own password (#48)")
     check(
         "no APP_POSTGRES_PASSWORD is refused, and says what it is for",

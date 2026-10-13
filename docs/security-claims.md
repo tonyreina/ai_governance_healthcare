@@ -342,20 +342,17 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-24 `make up` refuses to start on unsafe settings
 
-- **Claim:** A placeholder or short database password, a literal identity source,
-  and a non-loopback bind over plain HTTP are all refused when they are in `.env`,
-  and `.env` is read the way compose reads it, so a blank value or a trailing
-  comment cannot get past the gate.
+- **Claim:** A placeholder or short database password, a literal identity id or
+  email source, and a non-loopback bind over plain HTTP are all refused, whether
+  they are in `.env` or exported in the shell (the environment wins over `.env`,
+  as in compose), and values are read the way compose reads them, so a blank
+  value or a trailing comment cannot get past the gate. Not judged, by design
+  (D-106): the owner's password when `DATABASE_URL` names an external database
+  (it has its own credential), and `IDENTITY_NAME_SOURCE` (a display name).
 - **Asserted in:** `README.md` — "refuses to start on unsafe settings"
 - **Asserted in:** `docs/adopting.md` — "`make up` refuses to start on unsafe settings and says why."
 - **Asserted in:** `docs/self-hosting.md` — "`make up` refuses to start on unsafe settings: an empty or placeholder password"
-- **Status:** partial
-- **Gap:** Preflight reads `.env` alone (the process environment is used only for
-  `FORCE`). Compose gives a variable exported in the shell precedence over
-  `.env`, so `POSTGRES_PASSWORD=short make up` or an exported literal identity
-  is not seen by the gate. The password checks are skipped when `DATABASE_URL`
-  points at an external database, and the literal check covers
-  `IDENTITY_ID_SOURCE` and `IDENTITY_EMAIL_SOURCE`, not the name. #231
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_preflight.py::an empty password is refused`
   `tests/test_preflight.py::15 characters is refused`
@@ -365,6 +362,15 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_preflight.py::so a weak one with a long note is still refused`
   `tests/test_preflight.py::an unsafe .env exits 1`
   `tests/test_preflight.py::FORCE=1 skips the check and exits 0`
+  `tests/test_preflight.py::a short password only in the environment is refused`
+  `tests/test_preflight.py::a placeholder only in the environment is refused`
+  `tests/test_preflight.py::an EMPTY exported password beats a good .env value`
+  `tests/test_preflight.py::a literal identity only in the environment is refused`
+  `tests/test_preflight.py::an unsafe .env value overridden by a safe exported one is fine`
+  `tests/test_preflight.py::mutation: .env alone -> an exported unsafe value slips through`
+  `tests/test_preflight.py::mutation: .env over the environment -> a safe export no longer wins`
+  `tests/test_preflight.py::an external DATABASE_URL skips the OWNER password checks only`
+  `tests/test_preflight.py::a literal IDENTITY_NAME_SOURCE is a display name, not refused`
 
 ### C-25 Any database password works
 

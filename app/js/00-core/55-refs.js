@@ -162,8 +162,8 @@ function refsHTML(path, holder){
     <span class="refs-h">${esc(t("refs.title"))}</span>
     ${list.length ? `<ul class="refs-list">${items}</ul>` : `<p class="refs-none">${esc(t("refs.none"))}</p>`}
     <div class="refs-add ro-hide">
-      <input type="text" data-refin="title" maxlength="${esc(REF_MAX_TITLE)}" placeholder="${esc(t("refs.titlePh"))}" aria-label="${esc(t("refs.titleLabel"))}">
-      <input type="url" data-refin="url" maxlength="${esc(REF_MAX_URL)}" placeholder="https://" aria-label="${esc(t("refs.urlLabel"))}">
+      <input type="text" data-refin="title" maxlength="${esc(REF_MAX_TITLE)}" placeholder="${esc(t("refs.titlePh"))}" aria-label="${esc(t("refs.titleLabel"))}" ${NO_BROWSER_ASSIST}>
+      <input type="url" data-refin="url" maxlength="${esc(REF_MAX_URL)}" placeholder="https://" aria-label="${esc(t("refs.urlLabel"))}" ${NO_BROWSER_ASSIST}>
       <input type="date" data-refin="date" aria-label="${esc(t("refs.dateLabel"))}">
       <input type="file" data-refin="file" aria-label="${esc(t("refs.fileLabel"))}">
       <button class="btn" data-addref="${esc(path)}"${full ? " disabled" : ""}>${esc(t("refs.add"))}</button>

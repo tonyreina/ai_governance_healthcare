@@ -967,8 +967,8 @@ MUTATIONS = {
         "    if(agentPageShown()) paintAgentPage();\n    return;",
     ),
     "the label field is remembered by the browser": (
-        'id="agentLabel" autocomplete="off"',
-        'id="agentLabel" autocomplete="on"',
+        'id="agentLabel" ${NO_BROWSER_ASSIST} aria-describedby="agentLabelHint"',
+        'id="agentLabel" autocomplete="on" aria-describedby="agentLabelHint"',
     ),
     "the page is offered without a server": (
         '${MODE===Mode.API?`<button class="btn" data-act="${esc(Act.AGENT_OPEN)}">',

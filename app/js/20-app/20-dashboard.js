@@ -46,14 +46,14 @@ function renderDashboardShell(){
     ${legacy?`<div class="banner ro-hide" id="legacyBanner"><span>${tHtml("dash.legacy",{},{name:`<b>${esc(legacy.meta.solution||t("dash.legacyUnnamed"))}</b>`})}</span><span style="display:flex;gap:8px"><button class="btn" data-act="legacy">${esc(t("dash.legacyAdd"))}</button><button class="btn ghost" data-act="legacy-dismiss">${esc(t("dash.legacyDismiss"))}</button></span></div>`:""}
     <form class="newform ro-hide" id="newform" hidden>
       <label for="newname" class="vh">${esc(t("dash.newName"))}</label>
-      <input type="text" id="newname" placeholder="${esc(t("dash.newNamePlaceholder"))}" autocomplete="off">
+      <input type="text" id="newname" placeholder="${esc(t("dash.newNamePlaceholder"))}" ${NO_BROWSER_ASSIST}>
       <button class="btn primary" type="submit">${esc(t("dash.create"))}</button>
       <button class="btn ghost" type="button" data-act="new-cancel">${esc(t("dash.cancel"))}</button>
     </form>
     <div class="tallies" id="tallies" role="group" aria-label="${esc(t("dash.filterLabel"))}"></div>
     <div class="toolbar">
       <label for="${SearchField.QUERY}" class="vh">${esc(t("dash.searchLabel"))}</label>
-      <input type="search" id="${SearchField.QUERY}" placeholder="${esc(t(UI.qAll?SEARCH_HINT.ALL_TEXT:SEARCH_HINT.NAMES))}" value="${esc(UI.q||"")}">
+      <input type="search" id="${SearchField.QUERY}" placeholder="${esc(t(UI.qAll?SEARCH_HINT.ALL_TEXT:SEARCH_HINT.NAMES))}" value="${esc(UI.q||"")}" ${NO_BROWSER_ASSIST}>
       <label class="qall"><input type="checkbox" id="${SearchField.ALL_TEXT}"${UI.qAll?" checked":""}> ${esc(t("dash.searchAllToggle"))}</label>
       <span class="spacer"></span>
       <button class="btn ghost" data-act="dl-csv">${esc(t("dash.exportCsv"))}</button>

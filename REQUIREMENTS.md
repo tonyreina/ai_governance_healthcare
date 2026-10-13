@@ -1556,6 +1556,26 @@ honest answer and is a gap worth closing; see R-19.
   `tests/test_compose_isolation.py`, `tests/test_stack.py`, `tests/test_preflight.py`,
   `tests/test_doctor.py`).
 
+### R-76 Every free-text field opts out of browser spellcheck and form history
+
+- Status: Active
+- Every textarea and every single-line input that can hold free text (text,
+  search, url and the like; not number, date, select, checkbox or file) carries
+  `spellcheck="false" autocomplete="off"`, through the one shared
+  `NO_BROWSER_ASSIST` in `app/js/00-core/50-dom.js`. This includes the
+  litigation-hold reason, reference titles, the agent token label, project and
+  owner names, the metrics cells and the dashboard search.
+- History: #59 covered textareas only and said so; an adversarial review of the
+  docs found the claim worded for all "free-text fields" while single-line
+  inputs kept the browser default. The owner ruled it a code fix, not a
+  narrowing of the sentence.
+- Not covered: a browser or extension may ignore the attribute, so operators are
+  also told to disable cloud-backed spellcheck by policy (`docs/deploy.md`).
+- Source: the owner's ruling of 2026-10-12 on the docs audit (D9); #59.
+- Enforced by: `tests/test_text_fields.py` (a real browser walks every view, the
+  dashboard, the dialogs and the agent page, and reads the source for every
+  `<input>`).
+
 ### R-77 Simplified Chinese is reviewed only for the strings its catalog records
 
 - Status: Active

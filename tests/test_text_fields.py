@@ -1,25 +1,29 @@
 #!/usr/bin/env python3
-"""Free-text governance fields must not hand their contents to the browser (#59).
+"""Free-text fields must not hand their contents to the browser (#59, R-76).
 
-Textareas default to `spellcheck="true"`, and with a cloud-backed spellchecker
-(Chrome's "Enhanced spell check", some Safari/macOS settings) what is typed is
-sent to a third party as it is typed. These fields hold evidence, rationale and
-risk notes, and the migration that adds the purge path cites "a patient
+Textareas and text inputs default to `spellcheck="true"`, and with a
+cloud-backed spellchecker (Chrome's "Enhanced spell check", some Safari/macOS
+settings) what is typed is sent to a third party as it is typed. Evidence,
+rationale and risk notes are multi-line, but a litigation-hold reason, a
+reference title, a metric cell, a project name or an agent token label is
+free text too, and the migration that adds the purge path cites "a patient
 identifier pasted into an evidence field" as the reason it exists. The text
 would leave the workstation before it is saved and before any server-side
-control, every one of which starts at a PATCH, could apply. The same fields
-should not persist into the browser's form history either.
+control, every one of which starts at a PATCH, could apply. None of these
+should persist into the browser's form history either.
 
 This sweeps every view of a project, with OPTICA switched on so its views exist
-too, and asserts that EVERY editable textarea opts out of both. Sweeping the
+too, plus the dashboard, the hold and delete dialogs and the agent page, and
+asserts that EVERY editable textarea and free-text input (text, search, url,
+and any other type but number, date, checkbox, radio, file, range, hidden or a
+button) opts out of both. A second check reads the source, so an input in a
+view the sweep cannot reach (the access grant box needs a signed-in server)
+cannot be added without the shared `NO_BROWSER_ASSIST` attributes. Sweeping the
 rendered DOM, rather than listing the fields, is the point: a field added next
 year is covered without anyone remembering this.
 
-Scope, on purpose: textareas, where evidence, rationale and pasted cases go. The
-single-line inputs (an owner, a metric's name, a date) keep the browser's
-spellcheck, because they hold short names and numbers rather than narrative, and
-turning it off everywhere is a real usability cost on a tool meant to be pleasant
-to fill in. The deployment guide also tells operators to disable cloud-backed
+Not covered, on purpose: number, date, select and checkbox controls, which hold
+no free text. The deployment guide also tells operators to disable cloud-backed
 spellcheck by policy, which is the control that can actually be enforced.
 
     pixi run test-text-fields
@@ -27,6 +31,7 @@ spellcheck by policy, which is the control that can actually be enforced.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -34,10 +39,38 @@ from playwright.sync_api import sync_playwright
 
 APP = Path(__file__).resolve().parent.parent / "docs" / "app" / "index.html"
 
-# Editable multi-line fields. Read-only export panes hold output the user does
-# not type.
-SWEEP = """
-() => [...document.querySelectorAll('textarea:not([readonly])')]
+# Editable free-text fields. Read-only export panes hold output the user does
+# not type; a number, date, checkbox or the like holds no free text.
+NOT_FREE_TEXT = ",".join(
+    f"[type={t}]"
+    for t in (
+        "number",
+        "date",
+        "checkbox",
+        "radio",
+        "file",
+        "range",
+        "hidden",
+        "button",
+        "submit",
+    )
+)
+NOT_FREE_TEXT_TYPES = {
+    "number",
+    "date",
+    "checkbox",
+    "radio",
+    "file",
+    "range",
+    "hidden",
+    "button",
+    "submit",
+}
+INPUT_TAG = re.compile(r"<input\b[^>]*>", re.S)
+SWEEP = (
+    "() => [...document.querySelectorAll("
+    f"'textarea:not([readonly]), input:not({NOT_FREE_TEXT}):not([readonly])')]"
+    + """
   .map(el => ({
     id: el.id || el.getAttribute('data-bind') || el.getAttribute('aria-label') || '?',
     tag: el.tagName.toLowerCase(),
@@ -45,6 +78,7 @@ SWEEP = """
     autocomplete: el.getAttribute('autocomplete'),
   }))
 """
+)
 
 failures: list[str] = []
 
@@ -78,21 +112,67 @@ def main() -> int:
 
         seen = 0
         bad: list[str] = []
-        for view in views:
-            page.evaluate(f"go({view!r})")
-            page.wait_for_timeout(60)
+
+        def sweep(where: str) -> None:
+            nonlocal seen
             for el in page.evaluate(SWEEP):
                 seen += 1
                 if el["spellcheck"] is not False or el["autocomplete"] != "off":
                     bad.append(
-                        f"{view}:{el['tag']}#{el['id']} spellcheck={el['spellcheck']}"
+                        f"{where}:{el['tag']}#{el['id']} spellcheck={el['spellcheck']}"
                         f" autocomplete={el['autocomplete']}"
                     )
-        check("the sweep found textareas to check", seen > 20, str(seen))
+
+        for view in views:
+            page.evaluate(f"go({view!r})")
+            page.wait_for_timeout(60)
+            sweep(view)
+
+        # Surfaces that are not a project view: the delete and hold dialogs, and
+        # the agent token page (offered only with a server, so say there is one).
+        page.evaluate("openDeleteDialog()")
+        sweep("delete-dialog")
+        page.evaluate("document.querySelector('.modal-backdrop').remove()")
+        page.evaluate("openHoldDialog(HoldAction.PLACE)")
+        sweep("hold-dialog")
+        page.evaluate("document.querySelector('.modal-backdrop').remove()")
+        page.evaluate("goHome()")
+        page.wait_for_timeout(200)
+        before = seen
+        sweep("dashboard")
         check(
-            "every editable textarea opts out of spellcheck and form history",
+            "the dashboard's name and search boxes were swept",
+            seen - before >= 2,
+            str(seen - before),
+        )
+        page.evaluate("MODE = Mode.API; openAgentPage()")
+        page.wait_for_timeout(200)
+        before = seen
+        sweep("agent-page")
+        check("the agent token label was swept", seen - before >= 1, str(seen - before))
+
+        check("the sweep found fields to check", seen > 20, str(seen))
+        check(
+            "every editable free-text field opts out of spellcheck and form history",
             not bad,
-            f"{len(bad)} of {seen}: " + "; ".join(bad[:4]),
+            f"{len(bad)} of {seen}: " + "; ".join(bad[:6]),
+        )
+
+        # Source guard: an input in a view the sweep cannot reach (the access
+        # grant box) still has to use the shared attributes.
+        missing: list[str] = []
+        for src in sorted((APP.parent.parent.parent / "app" / "js").rglob("*.js")):
+            for m in INPUT_TAG.finditer(src.read_text()):
+                tag = m.group(0)
+                kind = re.search(r'type="([a-z]+)"', tag)
+                if kind and kind.group(1) in NOT_FREE_TEXT_TYPES:
+                    continue
+                if "NO_BROWSER_ASSIST" not in tag:
+                    missing.append(f"{src.name}: {tag[:70]}")
+        check(
+            "every free-text <input> in the source uses NO_BROWSER_ASSIST",
+            not missing,
+            "; ".join(missing[:4]),
         )
 
         # The sweep must be able to fail: a field that opts out of neither is caught.

@@ -1170,24 +1170,33 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** No screen, dialog, language or export of the dashboard makes a
   request to another host, none of its exports carries a resource a viewer would
   fetch on its own, and opening a saved report announces nothing to a third party
-  (R-05). A link the reader chooses to follow is not such a request.
+  (R-05). A link the reader chooses to follow is not such a request. Checked on
+  the browser-only page with sample data, and on the server-backed page (served
+  from a local static server with a stand-in API, the signed-in person owning the
+  project): sign-out link, server scope notice, retirement-rules banner (each of
+  its states), access settings, litigation hold (section and both dialogs), the
+  audit log and its older entries, a read-only project, every export, agent
+  access (feature off, token list, mint, one-time reveal, revoke), the idle lock
+  and the delete dialog with its choice to destroy the history, in every
+  language. A request another host would receive, one the page's own policy
+  blocks, and a `securitypolicyviolation` all fail the walk.
 - **Asserted in:** `docs/what-it-does.md` — "The dashboard and its exports contact no
   outside service."
 - **Asserted in:** `docs/privacy.md` — "the dashboard itself sends nothing to"
 - **Asserted in:** `docs/adopting.md` — "The dashboard and its exports contact no
   outside service."
-- **Status:** partial
-- **Gap:** The walk runs the browser-only (`file://`) page with sample data. Screens that
-  exist only against a server (agent access, sign-in and session, litigation
-  hold, version history, purge dialogs) are not rendered, and what the page's
-  own CSP (`connect-src` and `img-src` `'self'`) blocks may not reach the
-  request listener. #231
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_no_third_party.py::loading the dashboard makes no external request`
   `tests/test_no_third_party.py::no screen, dialog, language or export makes a request to another host`
   `tests/test_no_third_party.py::the Markdown export has no image (an image is a request when it is read)`
   `tests/test_no_third_party.py::opening the saved report makes no request to another host`
   `tests/test_no_third_party.py::the HTML export has no http(s) resource URLs at all`
+  `tests/test_no_third_party.py::the server-backed page requests no other host (catch-all route)`
+  `tests/test_no_third_party.py::and its own policy refused nothing (no securitypolicyviolation)`
+  `tests/test_no_third_party.py::every server-only screen was reached`
+  `tests/test_no_third_party.py::an <img> to another host is noticed although the policy blocks it`
+  `tests/test_no_third_party.py::a fetch() to another host is noticed although the policy blocks it`
 
 ### C-81 A SHA-256 of the record travels in the JSON export
 

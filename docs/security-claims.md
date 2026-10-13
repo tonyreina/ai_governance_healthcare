@@ -490,14 +490,14 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   verify-backup and dockerignore suites and the node check in
   `scripts/check_app.py` (an empty `PATH` and a refused port), and the server and
   MCP `requires_db` markers and the node parity test (no database, no `node`).
+  The three guards that run only after a live stack has answered (`playwright` not
+  installed, and a 404 from the agent API in `test_stack.py` and
+  `test_stack_mcp.py`) ask `tests/require.py` instead, which is tested the same way
+  (it fails under the variable and skips without it), and the scan requires each
+  call in the form that matters (`return cannot_run(...)`, `and skip_allowed()`).
 - **Asserted in:** `docs/developing.md` — "to turn every skip into a failure; CI
   always does."
-- **Status:** partial
-- **Gap:** Three guards sit after a running stack has answered, so they cannot be
-  reached without starting one, which no unit test does: `tests/test_stack.py`
-  ("playwright not installed" and a 404 from the agent API) and
-  `tests/test_stack_mcp.py` (a 404 from the agent API). The static scan still
-  covers them by its wording only. #231
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_require_behavior.py::every guarded script suite fails under REQUIRE_TESTS=1, skips without`
   `tests/test_require_behavior.py::every guarded script suite with a guard that returns 0 is noticed`
@@ -509,6 +509,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `mcp/tests/test_require_behavior.py::test_requires_db_skips_without_the_variable_and_fails_with_it`
   `tests/test_workflows.py::REQUIRE_TESTS removed is noticed`
   `tests/test_workflows.py::REQUIRE_TESTS set to 0 is noticed`
+  `tests/test_require_behavior.py::tests/require.py fails under REQUIRE_TESTS=1 and skips without it`
+  `tests/test_require_behavior.py::a cannot_run that ignores the variable`
+  `tests/test_require_tests.py::calls the helper the way a guard must`
+  `tests/test_require_tests.py::a printed skip with no REQUIRE_TESTS and no helper is noticed`
   `tests/test_require_tests.py::the scan still finds every known skip site`
   `tests/test_require_tests.py::a bare skipif`
   `tests/test_require_tests.py::a script that prints skipping and exits 0`

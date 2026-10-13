@@ -27,6 +27,8 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from require import cannot_run, skip_allowed
+
 # STACK_URL lets two stacks on one machine (two worktrees) use different ports.
 BASE = os.environ.get("STACK_URL", "http://localhost:8080")
 
@@ -536,7 +538,7 @@ def main() -> int:
 
     print("Agent API (#164)")
     status, body = http("/api/agent-tokens", "POST", {"label": "stack test"})
-    if status == 404 and not REQUIRE_TESTS:
+    if status == 404 and skip_allowed():
         print("  skip  AGENT_ID_SECRET is not set in this stack: the agent API is off")
     else:
         check("a signed-in user mints a token through the proxy", status == 201, body)
@@ -774,8 +776,9 @@ def main() -> int:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print("  playwright not installed - skipping browser checks")
-        return 1 if failures or REQUIRE_TESTS else 0
+        return cannot_run(
+            "playwright not installed - skipping browser checks", failures
+        )
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch()

@@ -20,10 +20,12 @@ The pytest suites (server and mcp `requires_db`, the node parity test) are run t
 same way by server/tests/test_require_behavior.py and
 mcp/tests/test_require_behavior.py, because they need pytest.
 
-Not exercised here, and named in claim C-33's Gap: the guards that sit AFTER a
-stack answers (tests/test_stack.py: "playwright not installed" and the 404 on the
-agent API; tests/test_stack_mcp.py: the 404 on the agent API). They cannot be
-reached without a running stack, which this suite never starts.
+Three guards sit AFTER a stack answers (tests/test_stack.py: "playwright not
+installed" and the 404 on the agent API; tests/test_stack_mcp.py: the 404 on the
+agent API), so they cannot be reached without a running stack, which this suite never
+starts. They ask tests/require.py what to do, so this suite tests that module
+directly, and tests/test_require_tests.py checks that each of the three still calls
+it in the form that matters (`return cannot_run(...)`, `and skip_allowed()`).
 
 Mutation: a copy of each guard rewritten to return 0 whatever the variable says is
 run through the same check, and must be noticed.
@@ -110,6 +112,42 @@ def honest_guard(suite: Run, suite_with_variable: Run) -> tuple[bool, str]:
         return False, "with REQUIRE_TESTS=1 it still exited 0 (a silent pass)"
     if "skipping" not in suite_with_variable.text:
         return False, "with REQUIRE_TESTS=1 it failed, but not at its guard"
+    return True, ""
+
+
+HELPER = "tests/require.py"
+HELPER_PROBE = (
+    "import sys, json; sys.path.insert(0, 'tests'); import require; "
+    "print(json.dumps([require.required(), require.skip_allowed(), "
+    "require.cannot_run('x'), require.cannot_run('x', ['f'])]))"
+)
+
+
+def helper_answers(root: Path, require: bool, empty_dir: str) -> list | None:
+    """What tests/require.py says in `root`, with the variable set or not."""
+    done = subprocess.run(
+        [sys.executable, "-c", HELPER_PROBE],
+        capture_output=True,
+        text=True,
+        cwd=root,
+        env=child_env(empty_dir, require),
+        timeout=TIMEOUT,
+    )
+    try:
+        return json.loads(done.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        return None
+
+
+def helper_honest(root: Path, empty_dir: str) -> tuple[bool, str]:
+    """(ok, why not): required, skip allowed, cannot_run alone, cannot_run having
+    already failed something."""
+    loud = helper_answers(root, True, empty_dir)
+    quiet = helper_answers(root, False, empty_dir)
+    if loud != [True, False, 1, 1]:
+        return False, f"under REQUIRE_TESTS=1 it answers {loud}"
+    if quiet != [False, True, 0, 1]:
+        return False, f"without the variable it answers {quiet}"
     return True, ""
 
 
@@ -224,6 +262,41 @@ def main() -> int:
         )
         ok, _ = node_check_honest(tree, empty_dir)
         check("check_app.py with a node guard that never fails is noticed", not ok)
+
+        print("The helper the three stack-only guards ask (tests/require.py)")
+        ok, why = helper_honest(ROOT, empty_dir)
+        check(
+            "tests/require.py fails under REQUIRE_TESTS=1 and skips without it", ok, why
+        )
+        helper_source = (ROOT / HELPER).read_text(encoding="utf-8")
+        for label, old, new in (
+            (
+                "a cannot_run that ignores the variable",
+                "return 1 if failures or required() else 0",
+                "return 1 if failures else 0",
+            ),
+            (
+                "a skip_allowed that always allows it",
+                "return not required()",
+                "return True",
+            ),
+            (
+                "a required that never reads the environment",
+                'return bool(os.environ.get("REQUIRE_TESTS"))',
+                "return False",
+            ),
+            (
+                "a cannot_run that forgets a failure it already has",
+                "return 1 if failures or required() else 0",
+                "return 1 if required() else 0",
+            ),
+        ):
+            check(f"the helper has {label} to mutate", old in helper_source)
+            work = Path(scratch) / ("helper-" + str(abs(hash(label))))
+            work.mkdir()
+            tree = mutated_tree(HELPER, helper_source.replace(old, new, 1), work)
+            ok, _ = helper_honest(tree, empty_dir)
+            check(f"{label} is noticed", not ok)
 
         print("The harness itself (a crash and an always-failing suite are not honest)")
         crashed = Run(1, "Traceback (most recent call last):\n")

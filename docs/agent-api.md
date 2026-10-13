@@ -227,14 +227,14 @@ Mints a token for the signed-in person. Session identity only.
 |---|---|
 | `201` | Minted. The response is `Cache-Control: no-store`. |
 | `401` | No identity: the request did not come through the front door. |
-| `403` | Not a signed-in person (identity is not enforced), a cross-site request, or not through the proxy. |
+| `403` | Not a signed-in person (identity is not enforced), a cross-site request (a write must carry `Sec-Fetch-Site`, or an `Origin` that is this site, as the example below does), or not through the proxy. |
 | `404` | The agent API is not enabled on this server. |
 | `409` | You already hold the most live tokens allowed. |
 | `422` | The label is not valid, or the body has a field it should not. |
 | `429` | Too many requests. |
 
 ```bash
-curl -sS -X POST "$BASE/api/agent-tokens" -H "Content-Type: application/json" -d '{"label": "my assistant"}'
+curl -sS -X POST "$BASE/api/agent-tokens" -H "Origin: $BASE" -H "Content-Type: application/json" -d '{"label": "my assistant"}'
 ```
 
 ### `GET /api/agent-tokens`
@@ -277,13 +277,13 @@ Revokes one of your own tokens. Revoking one already revoked is not an error.
 |---|---|
 | `204` | Revoked. |
 | `401` | No identity. |
-| `403` | Cross-site, or not through the proxy. |
+| `403` | Cross-site (a write with no `Origin` of this site counts), or not through the proxy. |
 | `404` | You hold no such token (another person's counts as none), or the agent API is not enabled. |
 | `422` | The id is not 16 hex characters. |
 | `429` | Too many requests. |
 
 ```bash
-curl -sS -X DELETE "$BASE/api/agent-tokens/$TOKEN_ID"
+curl -sS -X DELETE "$BASE/api/agent-tokens/$TOKEN_ID" -H "Origin: $BASE"
 ```
 
 ## Calling the agent API

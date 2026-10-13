@@ -80,7 +80,8 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 
 ### D-06 CSRF defense is `Sec-Fetch-Site`, and CORS is off
 
-- Status: Accepted
+- Status: **Superseded by D-102** for the last sentence (an absent header is
+  no longer allowed); the rest stands
 - The proxy authenticates on its own session, which a browser attaches to
   cross-site requests too. CORS governs reading a response, not whether a delete
   happened. `Sec-Fetch-Site` is set by the browser and cannot be altered by
@@ -3808,6 +3809,55 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Enforced by: `tests/test_preflight.py` (the hostname and local tables, and
   mutation tests that break `is_local_site` and demand the tests notice), C-63.
   Not enforced: a reverse proxy that preflight cannot see.
+
+### D-102 A write with no `Sec-Fetch-Site` needs a same-site `Origin` or a token
+
+- Status: Accepted
+- Supersedes the last sentence of D-06 ("A request without it is a non-browser
+  client and is allowed"). The rest of D-06 stands: `Sec-Fetch-Site` decides when
+  the browser sends it, and CORS is off.
+- **Rule.** On a state-changing request (not GET, HEAD or OPTIONS):
+  1. `Sec-Fetch-Site` present: judged by `CSRF_TRUSTED_SITES`, as before. It wins
+     over `Origin`.
+  2. Absent, on `/api/agent/` with a well-formed `Authorization: Bearer` token:
+     allowed here; the route verifies the token. A page cannot attach one, and
+     it is not a cookie. Nowhere else: every other route ignores a token, so a
+     bearer header on `/api/projects` or `/api/agent-tokens` is no pass.
+  3. Absent, otherwise: allowed only with an `Origin` that is this site, or one
+     listed in `CORS_ORIGINS`. No `Origin`, `null`, an unparseable one, or one
+     with a path or userinfo is refused (403, `csrf.rejected` with
+     `site=absent`).
+- **"This site" is the `Host` header.** Scheme is not compared (TLS ends at the
+  proxy); host and port are, with the default port filled in. `X-Forwarded-Host`
+  is not read: a client chooses it, and the repository trusts no forwarded header
+  for a security decision (`auth.py`; `X-Forwarded-Proto` feeds only HSTS). A
+  deployment whose proxy rewrites `Host` lists its browser origin in
+  `CORS_ORIGINS`. (`app/origin.py`.)
+- **Why.** The pass-through protected nothing against the client the header
+  cannot cover: a browser that does not send it, or a layer that strips it,
+  carries the proxy's session cookie to a cross-site write. Every browser the
+  dashboard supports sends one of the two, so the dashboard is unaffected.
+- **Callers changed.** Scripts that write to the API without a browser (curl)
+  now add `-H "Origin: $BASE"`: the examples in `docs/agent-api.md`, the stack
+  suites' `http()` helpers, and `mcp/tests/stack.py`. The MCP service sends only
+  GET upstream (D-91), health probes are GET, and the Makefile and scripts talk
+  to PostgreSQL, not the API. The server tests' clients send an `Origin` equal to
+  their `base_url` unless built with `bare_client`, which is how a curl-like
+  client is tested.
+- Rejected: **a shared-secret or CSRF-token header for scripts.** A new
+  credential for a threat that `Origin` already answers.
+- Rejected: **trusting `X-Forwarded-Host`/`X-Forwarded-Proto` to rebuild the
+  public origin.** Client-controlled, and not trusted anywhere else.
+- Rejected: **leaving the pass-through and documenting it** (the audit's proposed
+  fix): the owner ruled for a code fix.
+- Limits: a non-browser client can set any `Origin`, so this protects against a
+  browser being driven, not against a caller who is already past the front door
+  (who has the identity header). `Origin` is forbidden-header-protected in
+  browsers, so a page cannot forge it.
+- Source: the owner's ruling of 2026-10-12 on the docs audit (D15); claim C-14.
+- Enforced by: `server/tests/test_csrf.py::TestWritesWithoutSecFetchSite`,
+  `server/tests/test_origin.py`,
+  `server/tests/test_security_events.py::test_a_write_with_no_origin_is_a_named_event`.
 
 ### D-103 The Croissant collection period is withheld with the cohort detail
 

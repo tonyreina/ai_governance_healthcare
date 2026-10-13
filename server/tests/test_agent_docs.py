@@ -444,6 +444,11 @@ async def test_every_documented_curl_command_works_as_documented(client) -> None
                 path = path.replace(f"${var}", value)
                 headers = {k: v.replace(f"${var}", value) for k, v in headers.items()}
             path = path.replace("$PROJECT_REF", R("p1"))
+            # $BASE is the address the client is built with (the Origin a token
+            # route needs, D-102).
+            headers = {
+                k: v.replace("$BASE", "http://api.test") for k, v in headers.items()
+            }
             if "$" in path or any("$" in v for v in headers.values()):
                 owner = (
                     await bare.get(
@@ -455,6 +460,11 @@ async def test_every_documented_curl_command_works_as_documented(client) -> None
                 path = path.replace("$OWNER_ID", owner)
             assert "$" not in path, command
             if path.startswith("/api/agent-tokens"):
+                if method != "GET":
+                    # A write needs the Origin a browser would send (D-102): the
+                    # documented command must carry it, since the test client adds
+                    # one of its own.
+                    assert headers.get("Origin") == "http://api.test", command
                 async with as_user(client, ALICE) as session:
                     response = await session.request(
                         method, path, headers=headers, content=data

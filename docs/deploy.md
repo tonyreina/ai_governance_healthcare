@@ -471,7 +471,7 @@ recording that a project was deleted.
 | `auth.secret_rejected` | warning | `method`, `path`, `header` | A request lacked the `PROXY_SHARED_SECRET` header (the value is never logged). **Alert on any.** |
 | `auth.token_unreadable` | warning | `header`, `reason` | A signed identity assertion could not be decoded (the token is never logged). |
 | `auth.audience_rejected` | warning | `aud`, `signer`, `expected` | A token minted for another service reached this one. |
-| `csrf.rejected` | warning | `method`, `path`, `site` | A cross-site write was refused. |
+| `csrf.rejected` | warning | `method`, `path`, `site`, `origin` | A write was refused as cross-site: `Sec-Fetch-Site` was outside the trusted set, or it was absent and the request had no `Origin` of this site and no agent bearer token (`site` is `absent` then). |
 | `access.denied` | warning | `actor`, `project`, `need`, `held`, `status` | An authenticated user reached for a project they have no right to. A burst from one `actor` is worth a page. |
 | `access.breakglass` | warning | `actor`, `project`, `action` (a list that included projects only emergency access could see has `actor`, `action` and `count`, and no `project`) | Emergency access was used. **Alert on any**, then check the project's own audit log. |
 | `project.created` | info | `actor`, `project` | A project was created. |

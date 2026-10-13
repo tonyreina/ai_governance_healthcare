@@ -25,7 +25,7 @@ from app.main import configure_logging, create_app
 from app.securitylog import SecurityEvent
 from httpx import ASGITransport, AsyncClient
 
-from .conftest import TEST_EMAIL, TEST_HEADERS, make_settings, requires_db
+from .conftest import TEST_EMAIL, TEST_HEADERS, bare_client, make_settings, requires_db
 
 pytestmark = [requires_db, pytest.mark.db]
 
@@ -120,6 +120,14 @@ async def test_a_cross_site_write_is_a_named_event(cap: Capture) -> None:
     found = cap.events("csrf.rejected")
     assert len(found) == 1
     assert found[0]["method"] == "POST" and found[0]["site"] == "cross-site"
+
+
+async def test_a_write_with_no_origin_is_a_named_event(cap: Capture) -> None:
+    async with bare_client(cap.app) as http:
+        assert (await http.post("/api/projects/x", json={})).status_code == 403
+    found = cap.events("csrf.rejected")
+    assert len(found) == 1
+    assert found[0]["method"] == "POST" and found[0]["site"] == "absent"
 
 
 async def test_a_denied_request_is_a_named_event_with_who_and_what(

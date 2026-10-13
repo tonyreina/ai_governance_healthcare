@@ -83,6 +83,19 @@ def is_agent_path(path: str) -> bool:
     return path.startswith(AGENT_PREFIX)
 
 
+def presents_bearer(request: Request) -> bool:
+    """Does this request hold a well-formed bearer token? Not yet verified.
+
+    The cross-site check (``main.py``, D-102) asks this so that the only module
+    that reads the ``Authorization`` header stays this one. It is true only on an
+    agent path: every other route ignores a token, so a token there proves
+    nothing about who sent the request."""
+    return (
+        is_agent_path(request.url.path)
+        and parse_bearer(request.headers.get("authorization")).token is not None
+    )
+
+
 class TokenState(StrEnum):
     ACTIVE = "active"
     EXPIRED = "expired"

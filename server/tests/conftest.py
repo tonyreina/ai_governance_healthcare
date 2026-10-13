@@ -26,6 +26,7 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import asyncpg
+import httpx
 import pytest
 from app.config import Settings
 from app.db import Database
@@ -106,6 +107,44 @@ async def _prepare_owner_side() -> None:
             await provision(conn, SUITE_ROLE, SUITE_PASSWORD)
     finally:
         await owner.close()
+
+
+@pytest.fixture(autouse=True)
+def clients_behave_like_the_dashboard(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test client sends an ``Origin`` equal to its own ``base_url``.
+
+    A write with neither ``Sec-Fetch-Site`` nor a same-site ``Origin`` is refused
+    (D-102), and the dashboard is a browser, which always sends one. Without this
+    each of the dozens of clients in these tests would carry it by hand. A header
+    a test sets itself always wins, and ``bare_client`` (below) is the curl-like
+    client that sends none.
+    """
+    original = httpx.AsyncClient.__init__
+
+    def init(self: httpx.AsyncClient, *args: object, **kwargs: object) -> None:
+        headers = httpx.Headers(kwargs.get("headers") or {})  # type: ignore[arg-type]
+        base = urlsplit(str(kwargs.get("base_url") or ""))
+        if (
+            not kwargs.pop("bare", False)
+            and base.scheme
+            and base.netloc
+            and "origin" not in headers
+        ):
+            headers["Origin"] = f"{base.scheme}://{base.netloc}"
+        kwargs["headers"] = headers
+        original(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(httpx.AsyncClient, "__init__", init)
+
+
+def bare_client(app: object, **headers: str) -> AsyncClient:
+    """A client like curl: the identity headers and nothing a browser adds."""
+    return AsyncClient(  # type: ignore[call-arg]
+        transport=ASGITransport(app=app),  # type: ignore[arg-type]
+        base_url="http://api.test",
+        headers={**TEST_HEADERS, **headers},
+        bare=True,
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)

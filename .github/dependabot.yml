@@ -6,6 +6,12 @@
 # anything else, and that pull request is how a pinned digest or a locked version
 # moves: a base image or a dependency changes because somebody reviewed it.
 #
+# Few at a time (D-96). Ten pull requests opened in one minute each started every
+# workflow, and a run that takes 26 minutes took over an hour waiting for a runner.
+# So each entry groups its minor and patch updates into one pull request, and each
+# opens on its own weekday. A major version still arrives alone: each one so far
+# needed a decision (D-93, D-94, D-95). tests/test_supply_chain.py checks all three.
+#
 # Not covered: pixi (docs and test tooling; locked by pixi.lock, which Dependabot does
 # not understand).
 version: 2
@@ -14,9 +20,16 @@ updates:
     directory: /server
     schedule:
       interval: weekly
+      day: monday
     open-pull-requests-limit: 5
+    groups:
+      server-python:
+        patterns: ["*"]
+        update-types: [minor, patch]
     # pydantic requires one exact pydantic-core, so the core alone cannot be bumped:
-    # the API would fail to import (PR #112). It moves when pydantic does.
+    # the API would fail to import (PR #112). Dependabot does not move it with
+    # pydantic either. A pydantic bump arrives with the old core and fails the
+    # image's import check; run `make lock` on that pull request's branch (#214).
     ignore:
       - dependency-name: pydantic-core
 
@@ -25,37 +38,60 @@ updates:
     directory: /mcp
     schedule:
       interval: weekly
+      day: tuesday
     open-pull-requests-limit: 5
-    # The same for the SDK's wire types and httpx2's transport: mcp requires one
-    # exact mcp-types, and httpx2 one exact httpcore2 (D-95). Each moves with its
-    # parent.
+    groups:
+      mcp-python:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    # The same for pydantic-core, the SDK's wire types and httpx2's transport: mcp
+    # requires one exact mcp-types, and httpx2 one exact httpcore2 (D-95). A bump of
+    # the parent needs `make lock-mcp` on its branch.
     ignore:
       - dependency-name: pydantic-core
       - dependency-name: mcp-types
       - dependency-name: httpcore2
 
+  # Both images run the same Python (D-93), so their base image moves in one pull
+  # request, majors included. It still needs the Makefile's lock image and CI's
+  # python-version moved to match; the parity check in test_supply_chain says so.
   - package-ecosystem: docker
-    directory: /server
+    directories: [/server, /mcp]
     schedule:
       interval: weekly
-
-  - package-ecosystem: docker
-    directory: /mcp
-    schedule:
-      interval: weekly
+      day: wednesday
+    groups:
+      python-images:
+        patterns: ["*"]
+        update-types: [major, minor, patch]
 
   - package-ecosystem: docker
     directory: /proxy
     schedule:
       interval: weekly
+      day: thursday
+    groups:
+      proxy-image:
+        patterns: ["*"]
+        update-types: [minor, patch]
 
   # compose.yaml pins the database and the proxy by digest.
   - package-ecosystem: docker-compose
     directory: /
     schedule:
       interval: weekly
+      day: friday
+    groups:
+      compose-images:
+        patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: saturday
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: [minor, patch]

@@ -184,6 +184,51 @@ def unpinned_actions(workflow_text: str) -> list[str]:
     return out
 
 
+def watched_directories(update: dict) -> list[str]:
+    """An entry names one ``directory`` or several ``directories``."""
+    if update.get("directories"):
+        return list(update["directories"])
+    return [update.get("directory")]
+
+
+def dependabot_load_problems(config: dict) -> list[str]:
+    """Updates arrive few at a time, so they do not queue every runner (D-96).
+
+    Ten pull requests opened in one minute each started every workflow, and runs
+    that take 26 minutes took over an hour waiting for a runner. So: minor and patch
+    updates are grouped into one pull request per entry, the two images move their
+    shared Python together (D-93), and no two entries open on the same weekday.
+    """
+    problems = []
+    updates = config.get("updates", [])
+    for update in updates:
+        name = f"{update.get('package-ecosystem')} {watched_directories(update)}"
+        kinds = set()
+        for group in (update.get("groups") or {}).values():
+            if "*" in (group.get("patterns") or []):
+                kinds |= set(group.get("update-types") or ["minor", "patch"])
+        if not {"minor", "patch"} <= kinds:
+            problems.append(f"{name} does not group its minor and patch updates")
+    together = [
+        u
+        for u in updates
+        if u.get("package-ecosystem") == "docker"
+        and {"/server", "/mcp"} <= set(watched_directories(u))
+    ]
+    if not together or not any(
+        set(g.get("update-types") or ["major", "minor", "patch"]) >= {"major", "minor"}
+        for g in (together[0].get("groups") or {}).values()
+        if "*" in (g.get("patterns") or [])
+    ):
+        problems.append(
+            "the /server and /mcp images do not move their Python in one pull request"
+        )
+    days = [u.get("schedule", {}).get("day", "monday") for u in updates]
+    for day in sorted({d for d in days if days.count(d) > 1}):
+        problems.append(f"more than one entry opens on {day}")
+    return problems
+
+
 def dependabot_problems(config: dict) -> list[str]:
     """Every shipped ecosystem is watched, in a directory that has its files."""
     want = {
@@ -196,8 +241,9 @@ def dependabot_problems(config: dict) -> list[str]:
         ("github-actions", "/", ".github/workflows"),
     }
     have = {
-        (u.get("package-ecosystem"), u.get("directory"))
+        (u.get("package-ecosystem"), where)
         for u in config.get("updates", [])
+        for where in watched_directories(u)
     }
     problems = [
         f"{eco} {where} is not watched"
@@ -205,7 +251,9 @@ def dependabot_problems(config: dict) -> list[str]:
         if (eco, where) not in have
     ]
     # pydantic pins pydantic-core to one exact version, so a bump of the core alone
-    # makes the API fail to import (PR #112). It moves only with pydantic itself.
+    # makes the API fail to import (PR #112). Dependabot does not move it with
+    # pydantic either: a pydantic bump arrives with the old core, the image's import
+    # check fails, and the pull request needs `make lock` (#214, D-96).
     updates = config.get("updates", [])
     pip = [u for u in updates if u.get("package-ecosystem") == "pip"]
     for update in pip:
@@ -217,7 +265,7 @@ def dependabot_problems(config: dict) -> list[str]:
     # The MCP SDK requires one exact mcp-types, and httpx2 one exact httpcore2 (D-95):
     # a bump of either alone cannot install beside its parent.
     for update in pip:
-        if update.get("directory") != "/mcp":
+        if "/mcp" not in watched_directories(update):
             continue
         ignored = {i.get("dependency-name") for i in update.get("ignore", [])}
         for pinned, parent in (("mcp-types", "mcp"), ("httpcore2", "httpx2")):
@@ -228,6 +276,7 @@ def dependabot_problems(config: dict) -> list[str]:
     for update in config.get("updates", []):
         if not update.get("schedule", {}).get("interval"):
             problems.append(f"{update.get('package-ecosystem')} has no schedule")
+    problems += dependabot_load_problems(config)
     for _eco, where, manifest in want:
         if not (ROOT / where.lstrip("/") / manifest).exists():
             problems.append(f"{where}/{manifest} does not exist")
@@ -499,7 +548,7 @@ def main() -> int:
     for pinned in ("mcp-types", "httpcore2"):
         dropped = yaml.safe_load(yaml.safe_dump(dep))
         for u in dropped["updates"]:
-            if u.get("directory") == "/mcp" and u.get("ignore"):
+            if "/mcp" in watched_directories(u) and u.get("ignore"):
                 u["ignore"] = [i for i in u["ignore"] if i["dependency-name"] != pinned]
         check(
             f"dropping the {pinned} ignore is noticed",
@@ -508,6 +557,45 @@ def main() -> int:
     check(
         "a missing ecosystem is noticed",
         bool(dependabot_problems({"updates": dep["updates"][1:]})),
+    )
+    ungrouped = yaml.safe_load(yaml.safe_dump(dep))
+    ungrouped["updates"][0].pop("groups", None)
+    check(
+        "an entry that stops grouping its updates is noticed",
+        any("does not group" in p for p in dependabot_problems(ungrouped)),
+    )
+    patch_only = yaml.safe_load(yaml.safe_dump(dep))
+    for group in patch_only["updates"][0]["groups"].values():
+        group["update-types"] = ["patch"]
+    check(
+        "a group that leaves minor updates ungrouped is noticed",
+        any("does not group" in p for p in dependabot_problems(patch_only)),
+    )
+    split = yaml.safe_load(yaml.safe_dump(dep))
+    images = next(
+        u
+        for u in split["updates"]
+        if "/mcp" in watched_directories(u) and u["package-ecosystem"] == "docker"
+    )
+    images["directories"] = [d for d in images["directories"] if d != "/mcp"]
+    split["updates"].append(
+        {
+            "package-ecosystem": "docker",
+            "directory": "/mcp",
+            "schedule": {"interval": "weekly", "day": "sunday"},
+            "groups": {"all": {"patterns": ["*"]}},
+        }
+    )
+    check(
+        "the two images' Python moving in separate pull requests is noticed",
+        any("one pull request" in p for p in dependabot_problems(split)),
+    )
+    same_day = yaml.safe_load(yaml.safe_dump(dep))
+    for u in same_day["updates"]:
+        u["schedule"].pop("day", None)
+    check(
+        "every entry opening on the same day is noticed",
+        any("more than one entry opens" in p for p in dependabot_problems(same_day)),
     )
 
     print("A vulnerability scan runs, and the scheduled job cannot write to main")

@@ -3773,3 +3773,27 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   `pixi run check-claims` (every quoted sentence is where its row says), and the
   strict docs build (every link). Not enforced: that a statistic is sourced or
   current. That rests on this entry and on review.
+
+### D-103 The Croissant collection period is withheld with the cohort detail
+
+- Status: Accepted: the owner's ruling of 2026-10-12 on the docs audit.
+- **The question.** `docs/exports.md` said cohort detail is withheld by default,
+  but `examples/croissant_export.py` parsed a date range out of the development
+  data and emitted it as `rai:dataCollectionTimeframe` regardless of the flag.
+- **Decided.**
+    1. **`rai:dataCollectionTimeframe` is emitted only with
+       `--include-cohort-detail`.** The collection period is cohort detail.
+    2. **Four free-text fields are always emitted as written:**
+       `rai:dataBiases`, `rai:dataSocialImpact`, `rai:dataLimitations` and
+       `rai:dataCollectionRawData`. `docs/exports.md` says so and tells
+       reviewers to read them before sharing.
+- Rejected: **publishing the dates by default and softening the warning.**
+  Dates narrow a small-cell cohort, and the default should be the safe one.
+- Rejected: **withholding the four free-text fields too.** They are the
+  reviewer's own words; the exporter cannot tell which contain identifying
+  detail, so the docs ask a person to read them.
+- Source: the owner's ruling of 2026-10-12 on the docs audit; D-60-era gate on
+  cohort detail (#60).
+- Enforced by: `tests/test_croissant_export.py` (`pixi run test-croissant`):
+  the default export has no timeframe and no dates, and the flag emits it.
+  Not enforced: that the four free-text fields are free of identifying detail.

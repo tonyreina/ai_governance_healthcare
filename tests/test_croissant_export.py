@@ -155,6 +155,24 @@ def main() -> int:
     doc, err = run(export(), "--include-cohort-detail")
     check("and still published on request", "412" in json.dumps(doc), err)
     check("with its own warning", "cohort detail included" in err, err)
+
+    print("The collection period is cohort detail too (D-103)")
+    doc, _ = run(export())
+    check(
+        "the default export has no rai:dataCollectionTimeframe",
+        "rai:dataCollectionTimeframe" not in doc,
+        str(doc.get("rai:dataCollectionTimeframe")),
+    )
+    check(
+        "and the dates appear nowhere in it",
+        "2019" not in json.dumps(doc) and "2023" not in json.dumps(doc),
+    )
+    doc, _ = run(export(), "--include-cohort-detail")
+    check(
+        "with the flag the timeframe is emitted",
+        doc.get("rai:dataCollectionTimeframe") == "2019-01/2023-06",
+        str(doc.get("rai:dataCollectionTimeframe")),
+    )
     check(
         "which does not publish names",
         not [n for n in NAMES if n in json.dumps(doc, ensure_ascii=False)],

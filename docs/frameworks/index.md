@@ -15,10 +15,10 @@ for different purposes by different people, and they ask different questions.
 
 !!! quote "What WHO reported"
 
-    Press coverage reports that in June 2026 the WHO Regional Office for Europe
-    presented OPTICA as one of four complementary approaches. We could not
-    confirm that CHAI was another. See [Does any of this work?](evidence.md) for
-    what that report says — and for the evidence that is still missing.
+    In June 2026 the WHO Regional Office for Europe published a report that
+    presents four complementary approaches to evaluating AI solutions. OPTICA
+    and CHAI are two of them. See [Does any of this work?](evidence.md) for what
+    that report says, and for the evidence that is still missing.
 
 ## The difference that matters
 

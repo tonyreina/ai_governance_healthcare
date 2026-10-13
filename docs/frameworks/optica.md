@@ -86,8 +86,8 @@ good enough for the need as defined?
 ## Status
 
 In June 2026 the WHO Regional Office for Europe named OPTICA one of four
-complementary approaches to evaluating AI in health care, as reported in press
-coverage of the report. See [Does any of this work?](evidence.md).
+complementary approaches to evaluating AI in health care, alongside
+[CHAI](chai.md). See [Does any of this work?](evidence.md).
 
 The paper reports OPTICA applied to 18 AI solutions at Clalit, spanning
 prediction models on structured EHR data, image analysis, operational, video,

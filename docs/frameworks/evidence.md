@@ -11,24 +11,27 @@ practice — implementation insights on artificial intelligence in health care*,
 the report of Working Group 1 of the Strategic Partners' Initiative for Data and
 Digital Health (WHO/EURO:2026-13225-52999-82657).
 
-Press coverage reports that it presents OPTICA as one of four complementary
-approaches. OPTICA is described there as a practical evaluation tool for
-assessing AI solutions toward adoption: 77 items in 13 chapters and four
-domains, requiring input from five designated stakeholders.
+The report cites a comprehensive review that identified more than a dozen
+reporting and evaluation frameworks, and then presents **four complementary
+approaches**. Two of them are the two frameworks this tool implements:
 
-!!! warning "What this project could not confirm"
+- **OPTICA**, described as a practical evaluation tool for assessing AI
+  solutions toward adoption, 77 items in 13 chapters and four domains,
+  requiring input from five designated stakeholders.
+- **CHAI**, described as a tool for AI solution transparency, whose applied
+  model card acts as a standardized "nutrition label" for an AI solution.
 
-    We could not read the report's PDF. We have not confirmed that it names CHAI
-    among the four approaches, what its other approaches are, how many
-    frameworks it reviewed, or any wording of its own, so none of that is
-    claimed here.
+The report notes that OPTICA "embeds requirements for organizational AI
+governance, which include continuing monitoring and impact assessment." It
+describes these approaches. It does not endorse any of them.
 
 !!! note "Why the two are on this site"
 
-    This project's own premise, not WHO's, is that OPTICA and CHAI complement
-    each other. That is the premise of the [crosswalk](../crosswalk.md): OPTICA
-    supplies the adoption-time depth, CHAI supplies the lifecycle and the
-    transparency artifact. Neither subsumes the other.
+    WHO presents the four approaches as complementary. This project's own
+    premise is that OPTICA and CHAI complement each other. That is the premise
+    of the [crosswalk](../crosswalk.md): OPTICA supplies the adoption-time depth,
+    CHAI supplies the lifecycle and the transparency artifact. Neither subsumes
+    the other.
 
 ## What the evidence actually shows
 

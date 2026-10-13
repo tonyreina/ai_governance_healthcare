@@ -605,6 +605,37 @@ def mcp_gate_is_inside_the_trust_boundary_and_says_so(
     return problems
 
 
+MCP_PAGE = ROOT / "docs" / "mcp.md"
+TRUST_HEADING = "The trust boundary, and what it costs"
+
+
+def mcp_page_states_the_trust_boundary(text: str) -> list[str]:
+    """docs/mcp.md says what compose.yaml says about the gate (review M1, C-140): it is
+    inside the trust boundary, a compromised gate is full identity forgery, why that is
+    judged acceptable, and to leave the profile off if it is not. All four, in the one
+    section, so a reader who stops after it still has the reason and the way out."""
+    found = re.search(
+        rf"^### {re.escape(TRUST_HEADING)}\n(.*?)(?=^#{{1,3}} |\Z)", text, re.S | re.M
+    )
+    if not found:
+        return [f"docs/mcp.md has no section '{TRUST_HEADING}'"]
+    section = " ".join(found.group(1).split())
+    needed = (
+        (
+            "says the gate is inside the trust boundary",
+            "`mcp-gate` is inside the trust",
+        ),
+        ("says a compromised gate is full identity forgery", "full identity forgery"),
+        ("says why that is judged acceptable", "It is judged acceptable because"),
+        ("says to leave the profile off", "leave the profile off"),
+    )
+    return [
+        f"the section does not say it: {what}"
+        for what, quote in needed
+        if quote not in section
+    ]
+
+
 def mcp_default_set_is_off(compose_cli) -> list[str]:
     """What compose itself says `up` would start, with and without the profile."""
     plain, with_profile = compose_cli(), compose_cli("--profile", MCP_PROFILE)
@@ -1161,6 +1192,44 @@ def main() -> int:
         "the gate without a healthcheck",
         lambda c: mcp_gate_is_inside_the_trust_boundary_and_says_so(c, text),
         lambda c: s_(c)[MCP_GATE].pop("healthcheck"),
+    )
+
+    page = MCP_PAGE.read_text(encoding="utf-8")
+    check(
+        "docs/mcp.md says the gate is trusted, why, and to leave it off",
+        not mcp_page_states_the_trust_boundary(page),
+        "; ".join(mcp_page_states_the_trust_boundary(page)),
+    )
+    for label, old, new in (
+        (
+            "the trust-boundary statement",
+            "`mcp-gate` is inside the trust",
+            "`mcp-gate` is outside the trust",
+        ),
+        ("the forgery consequence", "full identity forgery", "a nuisance"),
+        (
+            "the reason it is acceptable",
+            "It is judged acceptable because",
+            "It is simply so, because",
+        ),
+        ("the way out", "leave the profile off", "carry on regardless"),
+        ("the section's heading", "### " + TRUST_HEADING, "### Something else"),
+    ):
+        check(
+            f"docs/mcp.md without {label} is noticed",
+            bool(mcp_page_states_the_trust_boundary(page.replace(old, new))),
+        )
+    check(
+        "docs/mcp.md with the section's text moved under another heading is noticed",
+        bool(
+            mcp_page_states_the_trust_boundary(
+                page.replace(
+                    "### " + TRUST_HEADING + "\n",
+                    "### " + TRUST_HEADING + "\n\n## Elsewhere\n",
+                    1,
+                )
+            )
+        ),
     )
 
     real_mcp = (ROOT / "mcp" / "Dockerfile").read_text(encoding="utf-8")

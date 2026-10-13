@@ -105,6 +105,8 @@ test-workflows = "python tests/test_workflows.py"
 # The docs lane (D-105): a pull request that changes only prose skips the heavy jobs.
 # The classifier, and the scan that keeps its list of heavy-read pages exact.
 test-ci-changes = "python tests/test_ci_changes.py"
+test-require-tests = "python tests/test_require_tests.py"
+test-build-hook = "python tests/test_build_hook.py"
 # The showcase video: present, bounded, first-party, streamable, honest about the mode.
 test-docs-media = "python tests/test_docs_media.py"
 # docs/security-claims.md: every claim quoted from where it is made and backed by a

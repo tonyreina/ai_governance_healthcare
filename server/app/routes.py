@@ -49,6 +49,7 @@ from .access import (
     guard_owner_only_fields,
     readable_rows,
     require,
+    require_an_owner,
 )
 from .accessaudit import AccessAction, ExportFormat, record_access
 from .auth import Identity, identity_from_request
@@ -153,20 +154,28 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds")
 
 
+# An audience that matches no identity: never a real id, which is never blank.
+NOBODY = frozenset({" "})
+
+
 def _audience(doc: dict[str, Any], settings: Settings) -> frozenset[str] | None:
     """Who may be told that this project changed.
 
     ``None`` means everyone, which is correct in exactly two cases: identity
-    is disabled, so there is nobody to check a list against; or the project is
-    unclaimed, which access.py already treats as unrestricted. Otherwise it is
-    the union of the three role lists -- the same set ``can_read`` would admit.
+    is disabled, so there is nobody to check a list against. Otherwise it is the
+    union of the three role lists -- the same set ``can_read`` would admit.
+
+    A project with no owner is refused to everyone (R-75), so it gets an audience
+    no one can match rather than an empty one, which ``Event.visible_to`` reads as
+    "everyone". The API never stores one; this is the line that keeps a future
+    write path from announcing its changes to the whole workspace.
     """
     if not settings.require_identity:
         return None
     access = access_of(doc)
     everyone = access["owners"] + access["writers"] + access["readers"]
     if not access["owners"]:
-        return None  # unclaimed: unrestricted, per access.py
+        return NOBODY
     return frozenset(everyone)
 
 
@@ -407,7 +416,7 @@ async def create_project(
     # and leaves its creator with no access; and mistyping an address, which
     # orphans the record at birth. The creator is always listed, first, and any
     # other owner the client named is kept, so "create and share" still works.
-    # (A project with no owner at all would be "unclaimed", i.e. unrestricted.)
+    # (A project with no owner at all is refused to everyone: R-75.)
     if settings.require_identity and identity.id:
         named = _listed_ids(access.get("owners"))
         doc["access"] = {
@@ -415,6 +424,7 @@ async def create_project(
             "writers": _listed_ids(access.get("writers")),
             "readers": _listed_ids(access.get("readers")),
         }
+    require_an_owner(doc, enforced=settings.require_identity)
     async with db.acquire() as conn, conn.transaction():
         await _check_new_record(conn, doc)
         row = await conn.fetchrow(
@@ -531,6 +541,10 @@ async def patch_project(
         # changes it. Checked against the record, not the active primary, so this
         # needs no lock against a sync.
         await _check_framework_kept(conn, before, document, patch)
+        # Whatever the patch touched, it may not leave the record without an
+        # owner (R-75). That includes a break-glass edit to a record that has
+        # none: the one thing emergency access can do there is assign one.
+        require_an_owner(document, enforced=enforced)
         rev = await conn.fetchval(
             """
                 UPDATE projects

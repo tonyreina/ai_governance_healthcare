@@ -331,3 +331,55 @@ async def test_an_ordinary_owner_using_a_hold_leaves_no_emergency_record(bg) -> 
         r = await owner.post(base, json={"action": "place", "reason": "m"})
         assert r.status_code == 200
     assert await breakglass_entries(bg, "own1") == []
+
+
+# --- a project with no owner at all (R-75) ---------------------------------
+
+
+async def ownerless(bg, pid: str = "noowner") -> None:
+    """Written to the table: the API cannot create one, and nothing migrates one."""
+    async with owner_connection() as conn:
+        await conn.execute(
+            "INSERT INTO projects (id, doc, created_by, updated_by) "
+            "VALUES ($1, $2::jsonb, 'x', 'x')",
+            pid,
+            json.dumps({"meta": {"solution": pid}, "access": {"writers": [LEAVER]}}),
+        )
+
+
+async def test_an_ownerless_project_is_refused_to_everyone_but_break_glass(bg) -> None:
+    await ownerless(bg)
+    for who in (STRANGER, LEAVER, TEST_EMAIL):
+        async with bg.state.user(who) as person:
+            assert (await person.get("/api/projects")).json() == []
+            r = await person.patch("/api/projects/noowner", json={"meta": {"org": "x"}})
+            assert r.status_code == 404, who
+    async with bg.state.user(OFFICER) as officer:
+        listed = [p["id"] for p in (await officer.get("/api/projects")).json()]
+        assert "noowner" in listed
+
+
+async def test_break_glass_must_assign_an_owner_to_an_ownerless_project(bg) -> None:
+    await ownerless(bg)
+    async with bg.state.user(OFFICER) as officer:
+        r = await officer.patch("/api/projects/noowner", json={"meta": {"org": "x"}})
+        assert r.status_code == 400, "an edit may not leave it ownerless"
+        assert "owner" in r.json()["detail"]
+        r = await officer.patch("/api/projects/noowner", json={"archived": True})
+        assert r.status_code == 400
+        r = await officer.patch(
+            "/api/projects/noowner", json={"access": {"owners": [""]}}
+        )
+        assert r.status_code == 400
+        r = await officer.patch(
+            "/api/projects/noowner",
+            json={"access": {"owners": ["new.owner@hospital.example"]}},
+        )
+        assert r.status_code == 200
+    assert len(await breakglass_entries(bg, "noowner")) >= 1, "the use is recorded"
+    async with bg.state.user("new.owner@hospital.example") as owner:
+        r = await owner.patch("/api/projects/noowner", json={"meta": {"org": "ok"}})
+        assert r.status_code == 200
+    async with bg.state.user(STRANGER) as other:
+        r = await other.patch("/api/projects/noowner", json={"meta": {"org": "no"}})
+        assert r.status_code == 404

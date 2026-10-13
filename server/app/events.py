@@ -60,8 +60,9 @@ class Event:
     ``audience`` never leaves the process. It carries the ids allowed to learn
     that this project changed, so the fan-out can filter per subscriber; it is
     not serialized into the NOTIFY payload and not sent to any client. An
-    empty audience means unrestricted -- an unclaimed project, or a deployment
-    with identity disabled -- matching the access rules in access.py.
+    empty audience means unrestricted -- a deployment with identity disabled --
+    matching the access rules in access.py. A project with no owner is not that
+    case: routes.NOBODY is its audience (R-75).
     """
 
     type: str

@@ -66,11 +66,30 @@ class TestRules:
     def test_stranger_cannot_read(self):
         assert not can_read(doc_with(owners=[OWNER]), STRANGER)
 
-    def test_project_without_owners_is_open(self):
-        """Records predating access control must not lock their teams out."""
-        doc = doc_with()
+    def test_project_without_owners_is_refused_to_everyone(self):
+        """R-75: no owner means no access, not open access."""
+        for doc in (doc_with(), doc_with(writers=[WRITER], readers=[READER]), {}):
+            assert unclaimed(doc)
+            for who in (STRANGER, WRITER, READER, OWNER, None):
+                assert not can_read(doc, who), (doc, who)
+                assert not can_write(doc, who), (doc, who)
+                assert not can_own(doc, who), (doc, who)
+                assert role_of(doc, who) == ""
+
+    def test_a_blank_owner_is_not_an_owner(self):
+        doc = doc_with(owners=["", "  "])
         assert unclaimed(doc)
-        assert can_own(doc, STRANGER)
+        assert not can_read(doc, "")
+
+    def test_emergency_access_still_reaches_an_ownerless_project(self):
+        doc = doc_with()
+        assert can_read(doc, STRANGER, emergency=True)
+        assert can_write(doc, STRANGER, emergency=True)
+        assert can_own(doc, STRANGER, emergency=True)
+
+    def test_identity_disabled_is_unchanged(self):
+        """Hole 2 of the module docs stays: nobody to check a list against."""
+        assert can_own(doc_with(), STRANGER, enforced=False)
 
     def test_nothing_enforced_without_identity(self):
         """No identity means nothing to check against; say so, do not pretend."""
@@ -219,25 +238,58 @@ class TestEnforcement:
         async with await self._as(client, STRANGER) as s:
             assert (await s.get("/api/projects/plog2/log")).status_code == 404
 
-    async def test_unclaimed_project_stays_open(self, client: AsyncClient):
-        """A record from before access control existed is editable by anyone.
+    async def _ownerless(self, client: AsyncClient, pid: str, **lists) -> None:
+        """Written straight to the table: the API cannot create one (R-75).
 
-        Written directly to the table on purpose. The API cannot create one:
-        a new project gets its creator as owner, and the last owner cannot be
-        removed. That is correct, and it means the only way to reach this state
-        is to have been here before the feature -- which is exactly the
-        situation this rule protects.
+        This is the state of a record from before access control, or of a
+        database restored from a dump that had one. Nothing migrates it.
         """
         async with client.app.state.db.acquire() as conn:
             await conn.execute(
                 "INSERT INTO projects (id, doc) VALUES ($1, $2)",
-                "plegacy",
-                {"meta": {"solution": "created before access control"}},
+                pid,
+                {"meta": {"solution": "no owner"}, "access": lists},
             )
-        async with await self._as(client, STRANGER) as s:
-            assert (
-                await s.patch("/api/projects/plegacy", json={"meta": {"org": "anyone"}})
-            ).status_code == 200
+
+    async def test_ownerless_project_is_refused_to_everyone(self, client: AsyncClient):
+        """R-75: not open, not claimable. 404 to everyone, the creator included."""
+        await self._ownerless(client, "pnoowner", writers=[WRITER])
+        for who in (STRANGER, WRITER, OWNER):
+            async with await self._as(client, who) as c:
+                assert (await c.get("/api/projects")).json() == []
+                r = await c.patch("/api/projects/pnoowner", json={"meta": {"org": "x"}})
+                assert r.status_code == 404, who
+                assert (
+                    await c.patch(
+                        "/api/projects/pnoowner",
+                        json={"access": {"owners": [who]}},
+                    )
+                ).status_code == 404, "no one can claim it"
+                assert (await c.delete("/api/projects/pnoowner")).status_code == 404
+                assert (
+                    await c.get("/api/projects/pnoowner/versions")
+                ).status_code == 404
+
+    async def test_an_owner_cannot_blank_the_owner_list(self, client: AsyncClient):
+        await self._make(client, "pblank")
+        for owners in ([""], ["  "], [], "ann@x", None):
+            r = await client.patch(
+                "/api/projects/pblank", json={"access": {"owners": owners}}
+            )
+            assert r.status_code == 400, owners
+        r = await client.patch("/api/projects/pblank", json={"access": None})
+        assert r.status_code == 400
+
+    async def test_creating_never_leaves_a_project_ownerless(self, client: AsyncClient):
+        for n, access in enumerate(
+            ({"owners": []}, {"owners": [""]}, None, "x", {"writers": [WRITER]})
+        ):
+            r = await client.post(
+                f"/api/projects/pcreate{n}",
+                json={"meta": {"solution": "x"}, "access": access},
+            )
+            assert r.status_code == 201, access
+            assert OWNER in r.json()["access"]["owners"], access
 
 
 @requires_db

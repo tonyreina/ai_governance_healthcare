@@ -155,15 +155,27 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-10 Access control is enforced on the server
 
 - **Claim:** A reader cannot write, a writer cannot delete, and a stranger gets
-  404, not 403, so existence is not confirmed.
+  404, not 403, so existence is not confirmed. A project with no owner is
+  refused to everyone except break-glass identities (see C-55), who can assign
+  an owner, and no write can create or leave a project without one (R-75). With
+  identity disabled nothing is enforced, and `/api/health` says so.
 - **Asserted in:** `docs/running.md` — "| Access control enforced | **No** | **Yes, server-side** |"
 - **Asserted in:** `docs/guide.md` — "On the server these are enforced by the API, not just by the buttons the page shows."
+- **Asserted in:** `docs/guide.md` — "A project
+  with no owner is refused to everyone except emergency-access identities, who
+  can assign one"
 - **Status:** enforced
 - **Enforced by:**
   `server/tests/test_access.py::TestEnforcement::test_reader_may_not_patch`
   `server/tests/test_access.py::TestEnforcement::test_writer_may_not_delete`
   `server/tests/test_access.py::TestEnforcement::test_stranger_gets_404_not_403`
   `server/tests/test_access.py::TestEnforcement::test_list_hides_projects_you_cannot_read`
+  `server/tests/test_access.py::TestRules::test_project_without_owners_is_refused_to_everyone`
+  `server/tests/test_access.py::TestEnforcement::test_ownerless_project_is_refused_to_everyone`
+  `server/tests/test_access.py::TestEnforcement::test_creating_never_leaves_a_project_ownerless`
+  `server/tests/test_access.py::TestEnforcement::test_an_owner_cannot_blank_the_owner_list`
+  `server/tests/test_breakglass.py::test_break_glass_must_assign_an_owner_to_an_ownerless_project`
+  `tests/test_access.py`
 
 ### C-11 A writer cannot grant themselves ownership
 

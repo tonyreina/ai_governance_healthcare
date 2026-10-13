@@ -29,6 +29,13 @@ def documented_sql() -> tuple[str, str]:
     return sole, every
 
 
+def documented_ownerless_sql() -> str:
+    """The query for projects with no owner (R-75), from its own block."""
+    text = DOC.read_text(encoding="utf-8")
+    section = text[text.index("### Offboarding, and emergency access") :]
+    return re.findall(r"```sql\n(.*?)```", section, re.S)[1].strip().rstrip(";")
+
+
 async def store(pid: str, access) -> None:
     async with owner_connection() as conn:
         await conn.execute(
@@ -66,3 +73,17 @@ async def test_the_single_owner_report_lists_every_such_project(
     async with owner_connection() as conn:
         rows = await conn.fetch(every)
     assert [(r["id"], r["only_owner"]) for r in rows] == [("b", "a@x"), ("a", "z@x")]
+
+
+async def test_the_ownerless_query_lists_exactly_the_projects_with_no_owner(
+    client: AsyncClient,
+) -> None:
+    sql = documented_ownerless_sql()
+    await store("has-owner", {"owners": ["a@x"], "writers": [], "readers": []})
+    await store("empty", {"owners": [], "writers": ["w@x"], "readers": []})
+    await store("bare", {})
+    await store("odd-shape", {"owners": "not-a-list"})
+    await store("no-access", None)
+    async with owner_connection() as conn:
+        rows = await conn.fetch(sql)
+    assert [r["id"] for r in rows] == ["bare", "empty", "no-access", "odd-shape"]

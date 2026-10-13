@@ -696,7 +696,7 @@ async def _world(client: AsyncClient) -> None:
         "shared-writer": access(owners=[BOB], writers=[ALICE]),
         "bobs": access(owners=[BOB]),
         "bobs-archived": access(owners=[BOB], readers=[ALICE]),
-        "open": {},  # unclaimed: the dashboard shows it to everyone (access.py)
+        "ownerless": {},  # no owner: refused to everyone but break-glass (R-75)
     }
     for pid, acc in docs.items():
         await put_project(
@@ -723,7 +723,7 @@ async def test_a_token_sees_exactly_the_projects_its_users_dashboard_lists(
         assert agent == dashboard, who
         assert agent <= everything
     alice = set(await _ids(client, (await mint(client, ALICE))["token"]))
-    assert alice == {"mine", "shared-reader", "shared-writer", "open"}
+    assert alice == {"mine", "shared-reader", "shared-writer"}
 
 
 async def test_an_archived_project_is_never_returned_by_any_route(client) -> None:
@@ -758,10 +758,11 @@ async def test_an_emergency_user_gets_no_emergency_access_through_a_token(
     await _world(client)
     async with as_user(client, EMERGENCY) as session:
         dashboard = {p["id"] for p in (await session.get("/api/projects")).json()}
-    assert {"bobs", "mine"} <= dashboard  # the break-glass user's own dashboard
+    # the break-glass user's own dashboard, an ownerless project included
+    assert {"bobs", "mine", "ownerless"} <= dashboard
     token = (await mint(client, EMERGENCY))["token"]
     agent_ids = set(await _ids(client, token))
-    assert agent_ids == {"open"}  # only what an ordinary stranger sees
+    assert agent_ids == set()  # only what an ordinary stranger sees: nothing
     async with as_agent(client, token) as agent:
         assert (await agent.get(f"/api/agent/projects/{R('bobs')}")).status_code == 404
     # And the read trail has no break-glass entry for it.

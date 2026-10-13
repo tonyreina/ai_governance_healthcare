@@ -92,7 +92,7 @@ async def test_the_repair_leaves_other_projects_and_runs_twice_safely(
     await store(
         client, "fine", {"owners": [TEST_EMAIL], "writers": ["w@x"], "readers": []}
     )
-    await store(client, "open", {})  # unclaimed: no owners at all
+    await store(client, "open", {})  # no owners at all: refused to everyone (R-75)
     async with client.app.state.db.acquire() as conn:
         before = [
             r["doc"] for r in await conn.fetch("SELECT doc FROM projects ORDER BY id")
@@ -103,4 +103,6 @@ async def test_the_repair_leaves_other_projects_and_runs_twice_safely(
             r["doc"] for r in await conn.fetch("SELECT doc FROM projects ORDER BY id")
         ]
     assert before == after
-    assert await visible(client) >= {"fine", "open"}
+    assert await visible(client) == {"fine"}, (
+        "the repair must not open an ownerless one"
+    )

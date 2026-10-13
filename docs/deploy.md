@@ -603,6 +603,21 @@ SELECT id, doc -> 'meta' ->> 'solution' AS solution,
 The dashboard also tells an owner, in *Access*, when they are a project's only
 owner, and `make doctor` warns with a count.
 
+A project with **no** owner is refused to everyone except an emergency-access
+identity, which can assign one. The API never creates or saves such a project, and
+no migration touches an existing one (a record from before access control, or a
+database restored from an old dump, may be one). This lists them:
+
+```sql
+-- every project with no owner (refused to everyone but emergency access)
+SELECT id, doc -> 'meta' ->> 'solution' AS solution
+  FROM projects
+ WHERE CASE WHEN jsonb_typeof(doc -> 'access' -> 'owners') = 'array'
+            THEN jsonb_array_length(doc -> 'access' -> 'owners') = 0
+            ELSE true END
+ ORDER BY id;
+```
+
 **Emergency access** is for when that did not happen. It follows the HIPAA
 Security Rule's emergency access procedure (45 CFR 164.312(a)(2)(ii)): a record
 nobody can reach is a failure whatever it holds. Set

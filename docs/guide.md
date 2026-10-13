@@ -235,6 +235,9 @@ litigation hold is on it. See [Privacy and retention](privacy.md).
 
 On the server these are enforced by the API, not just by the buttons the page
 shows. The person who creates a project is always one of its owners. A project
+with no owner is refused to everyone except emergency-access identities, who
+can assign one; nothing makes such a project open, and no edit can leave a
+project without an owner. A project
 should have a second owner, because if its only owner leaves and their account is
 disabled, nobody can open or reassign it; the access section warns the sole owner
 of this. A deployment can also name emergency-access identities for exactly that

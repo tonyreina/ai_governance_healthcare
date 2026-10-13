@@ -102,11 +102,6 @@ document.addEventListener("click",async e=>{
   if(a==="dl-csv"){ download(`ai-governance-portfolio-${TODAY()}.csv`, exportCSV()); noteExport(ExportFormat.CSV); return; }
   if(!S) return;
   if(a===Act.LOG_OLDER){ if(STORE && STORE.showOlderLog) STORE.showOlderLog(CUR); return; }
-  if(a==="claim"){
-    if(!ME.id){ toast(t("toast.noUserClaim")); return; }
-    S.access=accessPatch(S,ME.id,"owner"); queuePatch(CUR,Object.assign({access:S.access},stamp()));
-    writeLog(CUR,"Claimed ownership"); RO=false; renderProject(false); toast(t("toast.nowOwner")); return;
-  }
   if(a==="grant"){
     if(!canOwn(S)){ toast(t("toast.ownerGrant")); return; }
     const el=document.querySelector("[data-grant-id]");

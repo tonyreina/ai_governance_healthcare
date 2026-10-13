@@ -1556,6 +1556,33 @@ honest answer and is a gap worth closing; see R-19.
   `tests/test_compose_isolation.py`, `tests/test_stack.py`, `tests/test_preflight.py`,
   `tests/test_doctor.py`).
 
+### R-75 A project with no owner is refused to everyone, and no write leaves one
+
+- Status: Active
+- A project whose owner list is empty (or absent, or holds only blank ids) is
+  refused to every identity except a configured break-glass (emergency-access)
+  identity: it is not listed, read, changed or deleted by anyone else, whatever
+  its writer and reader lists say, and nobody can "claim" it. The one thing
+  break-glass can do to it is assign an owner. Every write path rejects a
+  document that would be stored without an owner: create, the access change, and
+  any other patch (a break-glass edit to an ownerless record must itself assign
+  one). The agent API and the MCP server, which read through the same list as
+  the dashboard, never return one. With identity disabled nothing is enforced,
+  as before (the one hole `server/app/access.py` keeps).
+- Not covered: nothing migrates an existing ownerless record, so one from before
+  access control (or in a restored old dump) is unreachable until an
+  emergency-access identity assigns an owner; `docs/deploy.md` has a query that
+  lists them. A superuser editing the database directly can still store one.
+- Source: the owner's ruling of 2026-10-12 on the docs audit; D-100. Supersedes
+  the "unclaimed" rule that `access.py` and `15-access.js` carried (not a
+  numbered entry).
+- Enforced by: `server/tests/test_access.py` (the rules, the API, create and
+  access-change), `server/tests/test_breakglass.py` (only break-glass reaches it
+  and must assign an owner), `server/tests/test_agent_api.py` (an agent never
+  sees one), `server/tests/test_events.py` (its audience is no one),
+  `tests/test_access.py` (the browser refuses it too), and
+  `server/tests/test_offboarding_sql.py` (the listing query).
+
 ### R-76 Every free-text field opts out of browser spellcheck and form history
 
 - Status: Active

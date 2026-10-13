@@ -21,9 +21,9 @@ approaches**. Two of them are the two frameworks this tool implements:
 - **CHAI**, described as a tool for AI solution transparency, whose applied
   model card acts as a standardized "nutrition label" for an AI solution.
 
-The report notes that OPTICA "embeds requirements for organizational AI
-governance, which include continuing monitoring and impact assessment." It
-describes these approaches. It does not endorse any of them.
+The report notes (printed page 8, PDF page 14) that OPTICA "embeds requirements
+for organizational AI governance, which include continuing monitoring and impact
+assessment." It describes these approaches. It does not endorse any of them.
 
 !!! note "Why the two are on this site"
 

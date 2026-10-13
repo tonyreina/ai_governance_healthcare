@@ -161,6 +161,11 @@ jobs:
       # The identity settings the docs give per front door match what the proxy test runs (C-02).
       - run: pixi run test-front-doors
 
+      # The behavioral twin: each guarded suite is run with its tool missing and must
+      # fail under REQUIRE_TESTS=1, and skip without it (C-33). The pytest suites
+      # (requires_db, the node parity test) are proven in the server and mcp legs.
+      - run: pixi run test-require-behavior
+
       # A stale or hand-edited generated dashboard is something the build-app hook
       # fails on, and the hook's pattern covers the generated file (C-31).
       - run: pixi run test-build-hook

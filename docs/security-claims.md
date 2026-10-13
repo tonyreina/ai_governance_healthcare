@@ -483,14 +483,30 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   0 and reads as a pass. Every skip construct the test code uses (`skipif`,
   `pytest.skip`, `mark.skip`, `importorskip`, `SkipTest`, a script that prints
   "skipping" and returns) reads the variable within a few lines, which a scan of
-  `tests/`, `server/tests/` and `mcp/tests/` checks.
+  `tests/`, `server/tests/` and `mcp/tests/` checks. Beyond the scan, each suite is
+  run for real with its tool missing and must exit non-zero under
+  `REQUIRE_TESTS=1` and skip without it: the stack, MCP stack, proxy identity,
+  proxy agent-mutation, proxy MCP-mutation, proxy image, backup crypto,
+  verify-backup and dockerignore suites and the node check in
+  `scripts/check_app.py` (an empty `PATH` and a refused port), and the server and
+  MCP `requires_db` markers and the node parity test (no database, no `node`).
 - **Asserted in:** `docs/developing.md` — "to turn every skip into a failure; CI
   always does."
 - **Status:** partial
-- **Gap:** The scan names the constructs above, so a skip written another way (a bare
-  `return 0` when a tool is missing, with none of those words) is not seen. A
-  suite is not run with its tool missing to watch it fail. #231
+- **Gap:** Three guards sit after a running stack has answered, so they cannot be
+  reached without starting one, which no unit test does: `tests/test_stack.py`
+  ("playwright not installed" and a 404 from the agent API) and
+  `tests/test_stack_mcp.py` (a 404 from the agent API). The static scan still
+  covers them by its wording only. #231
 - **Enforced by:**
+  `tests/test_require_behavior.py::every guarded script suite fails under REQUIRE_TESTS=1, skips without`
+  `tests/test_require_behavior.py::every guarded script suite with a guard that returns 0 is noticed`
+  `tests/test_require_behavior.py::scripts/check_app.py node check fails under REQUIRE_TESTS=1`
+  `tests/test_require_behavior.py::a suite that crashes is not accepted as a guard`
+  `server/tests/test_require_behavior.py::test_requires_db_skips_without_the_variable_and_fails_with_it`
+  `server/tests/test_require_behavior.py::test_node_parity_skips_without_the_variable_and_fails_with_it`
+  `server/tests/test_require_behavior.py::test_a_marker_that_ignores_the_variable_is_noticed`
+  `mcp/tests/test_require_behavior.py::test_requires_db_skips_without_the_variable_and_fails_with_it`
   `tests/test_workflows.py::REQUIRE_TESTS removed is noticed`
   `tests/test_workflows.py::REQUIRE_TESTS set to 0 is noticed`
   `tests/test_require_tests.py::the scan still finds every known skip site`

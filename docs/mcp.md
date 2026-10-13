@@ -75,7 +75,7 @@ dashboard, the API and the agent API are unaffected.
  person's chatbot ──HTTPS, Authorization: Bearer <token>──►  your front door
                                                               │ (lets /mcp through)
                                                               ▼
-                                                    proxy (Caddy)  POST /mcp only
+                                                    proxy (Caddy)  /mcp only (POST, GET, DELETE)
                                                               │  strips every identity header
                                                               ▼
                                                     mcp-gate :8082
@@ -198,6 +198,7 @@ proxy, and nothing is behind it. Nothing it can reach is the main API.
 | `MCP_MAX_CONNECTIONS` | `256` | Connections the service holds at once, in all. More are answered `503`. |
 | `API_BASE_URL` | set by compose to the gate | The address the token is sent to: an `http` or `https` URL with no credentials, query or fragment. It is the only place a token goes, and a redirect is never followed. |
 | `MCP_MEM_LIMIT`, `MCP_CPUS`, `MCP_IMAGE` | `256m`, `1`, built locally | Container limits, and a registry tag (pinned by digest) to run instead of building `./mcp`. |
+| `MCP_GATE_MEM_LIMIT`, `MCP_GATE_CPUS` | `128m`, `1` | Container limits of `mcp-gate`. |
 
 No setting is a secret, and none can hold a token.
 
@@ -233,7 +234,7 @@ sign-on.
 | Azure Easy Auth (App Service or Container Apps) | List `/mcp` as excluded from authentication (`globalValidation.excludedPaths`). | Yes, where your platform version supports excluded paths. Not tested here. |
 | oauth2-proxy, or an nginx `auth_request` | Skip authentication for the path: oauth2-proxy's `skip_auth_routes` (`^/mcp$`), or `auth_request off;` in an nginx `location = /mcp`. | Yes. Not tested here. |
 | Keycloak with a gatekeeper, or an API gateway | Exempt `/mcp` from the gateway's authentication, as the gateway documents. | Depends on the gateway. Not tested here. |
-| Google Cloud IAP | IAP protects a whole backend service, with no path exemption inside it. Route `/mcp`, in the load balancer's URL map, to a second backend for the same service with IAP off. | Only with that extra backend. Not tested here. |
+| Google Cloud IAP | IAP protects a whole service, with no path exemption inside it. IAP enabled directly on Cloud Run (the shape [deploy.md](deploy.md) recommends) offers no way to leave `/mcp` unguarded, so for MCP use the load-balancer route described there: send `/mcp` in the load balancer's URL map to a second backend for the same service with IAP off. | Only with that extra backend. Not tested here. |
 | **Any front door that authenticates every path and cannot be told otherwise** | There is nothing to configure. Give `/mcp` its own host name that the front door does not guard, or run the chatbot inside the network and call the proxy directly. | **No.** The MCP service cannot be offered through such a door, and should stay off. |
 
 Two cautions apply to every row. First, the path is now reachable by anything that
@@ -331,7 +332,7 @@ Example response (abridged):
   "id": 1,
   "result": {
     "protocolVersion": "2025-06-18",
-    "capabilities": { "tools": { "listChanged": false } },
+    "capabilities": { "tools": { "listChanged": false }, "resources": { "subscribe": false, "listChanged": false }, "prompts": { "listChanged": false } },
     "serverInfo": { "name": "governance-readonly", "version": "" },
     "instructions": "Read-only access to a governance dashboard's recorded statuses, ..."
   }
@@ -377,8 +378,9 @@ Example response:
 
 `initialize` is not required before a call: each request stands alone. The checks
 come in this order, and the first to fail answers: a path other than `/mcp` is a
-`404`; a `Host` that is not allowed is a `421` and an `Origin` that is not allowed a
-`403` (and a body that is not JSON a `400`); a method other than `POST` is a `405`; a
+`404`; a `POST` whose `Content-Type` is not `application/json` is a `400`, checked
+before the `Host` and `Origin`; a `Host` that is not allowed is a `421` and an
+`Origin` that is not allowed a `403`; a method other than `POST` is a `405`; a
 compressed body is a `415`; a query string is a `400`; and only then a request with no
 bearer is a `401` with `WWW-Authenticate: Bearer`. A bearer that is not shaped like a
 token the API mints (`agt_`, 16 hex characters, a dot, 43 URL-safe characters) is not a
@@ -434,7 +436,7 @@ paged: use `next_offset` for more.
 | `owner` | string | no | Only projects this person owns, by opaque id (`u_` and 32 hex). |
 | `framework` | string | no | Only projects whose record follows this framework id. |
 | `limit` | integer | no | Page size, 1 to 100. Default 50. |
-| `offset` | integer | no | Skip this many. Default 0. |
+| `offset` | integer | no | Skip this many, 0 to 100000. Default 0. |
 
 **Result fields**
 
@@ -544,8 +546,12 @@ archived one and one that does not exist are the same error.
 
 ## Errors
 
-A failure is a tool error (`isError` is `true`) with one of a few **fixed**
-messages. The token and the upstream's response body are in none of them: the
+A failure is a tool error (`isError` is `true`). Failures that come from this
+service or the API carry one of a few **fixed** messages (below). The exception is
+a call the MCP SDK refuses itself, such as an argument that does not fit the
+tool's input schema or an unknown tool: its error is the SDK's own text, which can
+quote the caller's input, with control characters removed and cut to 300
+characters. The token and the upstream's response body are in none of them: the
 service never reads a failing answer's body, except a `422`'s own message, which
 it cuts to plain letters, digits and a little punctuation.
 
@@ -563,10 +569,13 @@ it cuts to plain letters, digits and a little punctuation.
 | `this service could not complete the request` | An unexpected failure inside the service. Its detail is logged by exception class only, never in the message. |
 
 Beyond tool errors, the HTTP layer answers `401` (no bearer), `403` (an `Origin`
-that is not allowed), `404` (any path but `/mcp`), `405` (any method but `POST`),
-`408` (a body not complete in time), `413` (a body over the limit), `415` (a compressed
-body), `421` (a `Host` that is not allowed) and `400` (a query string, which a token has
-no business in, or a body that is not JSON).
+that is not allowed), `404` (any path but `/mcp` and `/healthz`, the container's own
+health check), `405` (any method but `POST`), `406` (an `Accept` header that does not
+include `application/json`), `408` (a body not complete in time), `413` (a body over
+the limit), `415` (a compressed body), `421` (a `Host` that is not allowed), `429` (too
+many requests in progress from one source), `503` (the connection cap) and `400` (a
+query string, which a token has no business in, a `Content-Type` that is not
+`application/json`, or a body that is not JSON).
 
 ## Asking questions, and how an answer must read
 
@@ -778,7 +787,7 @@ front door in front of this stack may log what it likes.
 | Calls at once | 64 in all and 4 from one source (`MCP_MAX_IN_FLIGHT`, `MCP_MAX_IN_FLIGHT_PER_SOURCE`). A call waits up to a second (`MCP_QUEUE_WAIT_SECONDS`) for a slot and is then refused as busy. A credential that is not shaped like a token never takes one. A source is the address the proxy observed, so behind a load balancer all clients share one |
 | Connections | At the service, 256 in all (`MCP_MAX_CONNECTIONS`, then `503`) and 8 requests in progress per source (`MCP_MAX_REQUESTS_PER_SOURCE`, then `429`), so one source cannot hold every connection. At the proxy and the gate, not bounded per source: Caddy has no such setting |
 | Rate | The agent API's: a token, a person and a source each have an allowance ([the rate limit](agent-api.md#the-rate-limit)). The source is the address the proxy itself observed (never one a client sent), and behind a load balancer that is the balancer |
-| Results | A page is at most 100 projects, and a project at most 500 items |
+| Results | A page is at most 100 projects. Each list of items (the project's own, and each supplement's) is at most 500; `items_truncated` reports only the project's own list, so a supplement cut at 500 is not flagged |
 
 ## Troubleshooting
 
@@ -804,8 +813,8 @@ front door in front of this stack may log what it likes.
 
 ## Claims, and what backs them
 
-Each security sentence on this page is a row in [Security claims](security-claims.md),
-with the test that fails if it stops being true: that the service is off unless
+The security properties listed here are rows in [Security claims](security-claims.md),
+each with the test that fails if it stops being true: that the service is off unless
 its profile is asked for, that it holds no credential and stores no token, that a
 token reaches only the three read-only routes, that the tools are exactly the
 allowlist, that no free text and no name reaches a model, that a failure is a

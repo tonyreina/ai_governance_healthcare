@@ -91,8 +91,8 @@ complementary approaches to evaluating AI in health care, alongside
 
 The paper reports OPTICA applied to 18 AI solutions at Clalit, spanning
 prediction models on structured EHR data, image analysis, operational, video,
-voice, and LLM-based solutions. Reported completion time is several hours per
-stakeholder, with overall duration governed by stakeholder availability.
+voice, and LLM-based solutions. Each chapter is completed by a designated stakeholder
+in dependency order. This project has not confirmed a completion time.
 
 ## Source
 

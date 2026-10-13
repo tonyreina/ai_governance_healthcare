@@ -13,12 +13,12 @@ for different purposes by different people, and they ask different questions.
 | **Organized by** | Time — what happens when | People — who answers what, in what order |
 | **Ends with** | A recurring periodic review | A completed dossier for an approving authority |
 
-!!! quote "WHO put these two side by side"
+!!! quote "What WHO reported"
 
-    In June 2026 the WHO Regional Office for Europe reviewed more than a dozen
-    evaluation frameworks and presented four complementary approaches. OPTICA
-    and CHAI were two of them. See [Does any of this work?](evidence.md) for
-    what that report says — and for the evidence that is still missing.
+    In June 2026 the WHO Regional Office for Europe published a report that
+    presents four complementary approaches to evaluating AI solutions. OPTICA
+    and CHAI are two of them. See [Does any of this work?](evidence.md) for what
+    that report says, and for the evidence that is still missing.
 
 ## The difference that matters
 
@@ -40,7 +40,7 @@ This is why the two compose rather than compete, and it is the basis of the
 | Source | License | What that permits here |
 |---|---|---|
 | CHAI [responsible-ai-content](https://github.com/coalition-for-health-ai/responsible-ai-content) | CC BY 4.0 | Quotable with attribution |
-| CHAI Applied Model Card template | CC BY-ND 4.0 | Field *names* used. Commercial use **is** permitted; distributing a modified version of the template is not |
+| CHAI Applied Model Card template | Not consistent across CHAI's files: CC BY-ND 4.0 (documentation PDF), a permissive license (`mc-schema`), "All rights reserved" (registry); unresolved | Field *names* used. Confirm the terms with CHAI or counsel before distributing a modified card |
 | OPTICA paper (*NEJM AI*) | © 2024 Massachusetts Medical Society, "personal use only" | **Paraphrase only** — no verbatim reproduction |
 
 Both checklists on this site are therefore written in original wording. See

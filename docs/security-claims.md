@@ -324,11 +324,14 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-25 Any database password works
 
 - **Claim:** A password from `openssl rand -base64 32`, or one with any
-  character in it, connects. (About half of them crashed the API
+  character in it, connects once it reaches the API. The `.env` quoting of `$`
+  and `#` is not tested. (About half of them crashed the API
   before #72.)
-- **Asserted in:** `.env.example` — "Any password works in POSTGRES_PASSWORD
-  above"
-- **Status:** enforced
+- **Asserted in:** `.env.example` — "Any characters in POSTGRES_PASSWORD are
+  fine once they reach the API"
+- **Status:** partial
+- **Gap:** (#72, the URL builder) The tests cover the URL builder and a real role, not `.env` or compose
+  parsing, where an unquoted `#` cuts the value and `$` is interpolated.
 - **Enforced by:**
   `server/tests/test_database_url.py::TestThePiecesBecomeAUrlThatSurvivesAnyPassword::test_every_awkward_password_round_trips`
   `server/tests/test_database_url.py::TestARealRoleWithAHostilePassword::test_it_connects_and_a_wrong_password_does_not`

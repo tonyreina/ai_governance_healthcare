@@ -451,20 +451,20 @@ def main() -> int:
         ),
         (
             "the stages s3-7 is produced at",
-            "OPTICA\nproduces it at stages E and F",
-            "OPTICA\nproduces it at stages D and F",
+            "OPTICA produces it at stages E and F",
+            "OPTICA produces it at stages D and F",
             "completion stages citing s3-7",
         ),
         (
             "the stage the developer is asked for s6-3",
-            "OPTICA asks the developer for it at stage B",
-            "OPTICA asks the developer for it at stage C",
+            "OPTICA asks the developer\nfor the refresh cadence at stage B",
+            "OPTICA asks the developer\nfor the refresh cadence at stage C",
             "the developer's items citing s6-3",
         ),
         (
             "12.1's completion stage",
-            "(12.1) are written at\nstage F",
-            "(12.1) are written at\nstage E",
+            "(12.1) are written at stage F",
+            "(12.1) are written at stage E",
             "the completion stage of 12.1",
         ),
         (

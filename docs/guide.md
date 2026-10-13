@@ -5,7 +5,10 @@ registered to the day it is retired, as a governance committee would use it. It
 describes what the software does today. For the exact rule behind every status,
 see [How statuses are decided](compliance-rules.md).
 
-The steps appear in the rail on the left of every project, in this order.
+The steps below follow the order in which a review is done. Inside a project,
+the rail on the left lists the same work: project setup, each stage with its
+checkpoint, the model card, the OPTICA adoption review if it is on, and the
+report. Portfolio, re-review and retirement happen outside that rail.
 
 ## 1. Register the tool
 
@@ -235,8 +238,10 @@ shows. The person who creates a project is always one of its owners. A project
 should have a second owner, because if its only owner leaves and their account is
 disabled, nobody can open or reassign it; the access section warns the sole owner
 of this. A deployment can also name emergency-access identities for exactly that
-case, and every use of one is recorded in the project's own audit log
-([Cloud deployment](deploy.md#offboarding-and-emergency-access)).
+case, and every use of one is recorded as a security event. A use that changes or
+reads a project is also noted in that project's own audit log (reads are
+throttled, and a delete leaves only the tombstone). See
+[Cloud deployment](deploy.md#offboarding-and-emergency-access).
 
 ## The record behind it
 
@@ -247,12 +252,15 @@ case, and every use of one is recorded in the project's own audit log
   the project. Anyone who can open the project can read its earlier revisions
   through the API.
 - **Record fingerprint.** A hash of the record's contents. The setup page shows
-  it, and every export carries a SHA-256 and an MD5 of the record, so you can quote
-  one beside an exported report to tie it to the exact state it came from. It shows
-  whether two copies are the same version. It does not prove nobody altered the
-  record, and the page says so.
-- **Who read what** (shared server only). Every list, read and export is recorded
-  separately, for investigating an account that may have been compromised.
+  it, and every per-project export (JSON, HTML, PDF and Markdown) carries a
+  SHA-256 and an MD5 of the record, and the portfolio CSV carries none, so you
+  can quote one beside an exported report to tie it to the exact state it came
+  from. It shows whether two copies are the same version. It does not prove
+  nobody altered the record, and the page says so.
+- **Who read what** (shared server only). Every list and read is recorded by
+  the server, and the dashboard reports each export it produces (a record of
+  ordinary use, not a control: a modified client could omit it), separately,
+  for investigating an account that may have been compromised.
 
 ## Delete, destroy and archive
 

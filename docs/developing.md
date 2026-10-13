@@ -254,8 +254,11 @@ neutral ones unless the definition names its own catalog keys (`ui`).
 invents a `{placeholder}`, misses a plural form the language needs, holds markup,
 or if code puts an English literal on screen without going through `t()`.
 
-The translations are **machine-drafted**. The Simplified Chinese one has been
-reviewed and approved by a fluent reader; the others have not. Safety-bearing
+The translations are **machine-drafted**. A fluent reader reviewed and
+approved the Simplified Chinese one for the safety-bearing strings recorded in
+its `@meta.reviewers` (9 of the 20; the 11 newer ones, such as the report
+disclaimer, show in English until a reviewer approves them); the rest of it and
+the other catalogs are unreviewed. Safety-bearing
 warnings (the patient-data notice and the storage-mode banners, listed under
 `"@meta".safety` in `en.json`) are shown in English until someone fluent in the
 language reviews them. A wrong translation of a warning is worse than an English

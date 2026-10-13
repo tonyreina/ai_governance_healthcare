@@ -37,7 +37,9 @@ criterion — see the [crosswalk](../crosswalk.md) for why that matters.
 
 **Who answers** is the other column that decides whether evidence can be
 shared: `adopter` means only the adopting organization can answer,
-`developer` means only the solution's vendor or builder can.
+`developer` means only the solution's vendor or builder can. `either` means the
+answer depends on whether the adopting organization or the vendor hosts the
+solution (5 items: 10.5-10.7, 11.3, 11.4).
 '''
 
 [relation_labels]

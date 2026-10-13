@@ -86,16 +86,32 @@ async function flush(pid,attempt){
     }
   } finally { flushing[pid]=false; }
 }
+/* Both writers below refuse a path through a prototype twice: `safeKey` on the whole
+   path (R-52), and the same three names compared at each write. The second is not for
+   the browser's sake: CodeQL (js/prototype-pollution-utility) does not follow a check
+   made through `every(safeKey)`, so it reported these two writes as unguarded on every
+   change near them, and a dismissed alert came back as a new one. A comparison against
+   the key that is written is the guard it recognizes. */
 function patchFromPath(path,val){
   const ks=path.split("."); const out={}; let o=out;
   if(!ks.every(safeKey)) return out;
-  for(let i=0;i<ks.length-1;i++){ o=o[ks[i]]={}; } o[ks[ks.length-1]]=val; return out;
+  for(let i=0;i<ks.length;i++){
+    const k=ks[i];
+    if(k==="__proto__" || k==="constructor" || k==="prototype") return {};  // enum-ok: JavaScript's own prototype keys (UNSAFE_KEYS), not a set this project defines
+    if(i===ks.length-1) o[k]=val; else o=o[k]={};
+  }
+  return out;
 }
 function setLocal(path,val){
   const ks=path.split("."); let o=S;
   if(!ks.every(safeKey)) return;
-  for(let i=0;i<ks.length-1;i++){ if(o[ks[i]]==null||typeof o[ks[i]]!=="object") o[ks[i]]={}; o=o[ks[i]]; }
-  o[ks[ks.length-1]]=val;
+  for(let i=0;i<ks.length;i++){
+    const k=ks[i];
+    if(k==="__proto__" || k==="constructor" || k==="prototype") return;  // enum-ok: JavaScript's own prototype keys (UNSAFE_KEYS), not a set this project defines
+    if(i===ks.length-1){ o[k]=val; return; }
+    if(o[k]==null||typeof o[k]!=="object") o[k]={};
+    o=o[k];
+  }
 }
 /* Every typed, pasted or programmatic write of a field comes through here, so this
    is where credentials in an address are removed (R-70): before the value is

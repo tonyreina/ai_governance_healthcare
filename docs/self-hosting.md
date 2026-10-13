@@ -276,14 +276,21 @@ to verify a signed assertion itself — the IAP JWT, `x-amzn-oidc-data`,
 
     `compose.yaml` enforces it with networking rather than with a convention:
     the API publishes no host port, the only network it shares with anything
-    internet-facing has the proxy as its sole other member, and Postgres sits
-    on an `internal: true` network with no route off the host at all.
+    internet-facing has the proxy as its sole other member (plus `mcp-gate`,
+    only if you turn on the optional `agent-mcp` profile, which holds the same
+    shared secret and is inside the trust boundary; see below and
+    [MCP](mcp.md)), and Postgres sits on an `internal: true` network with no
+    route off the host at all.
 
-    `make check-isolation` asserts all of this against a running stack. Run it
-    after any change to the networking, and keep it in whatever runs after a
-    deploy. It exits non-zero on a published port on `api` or `db`, on a direct
-    connection to the API that succeeds, or on a forged identity header that
-    comes back as the identity.
+    `make check-isolation` asserts, against a running stack, that `api` and `db`
+    publish no host port, that the API's port is refused from the host, and that
+    a forged identity header is not accepted. The network layout is checked by
+    `tests/test_compose_isolation.py` against `compose.yaml`, not against the
+    running stack. Run `make check-isolation` after any change to the
+    networking, and keep it in whatever runs after a deploy. It exits non-zero
+    on a published port on `api` or `db`, on a direct connection to the API
+    that succeeds, or on a forged identity header that comes back as the
+    identity.
 
     `compose.dev.yaml` deliberately breaks this by publishing the API on
     `127.0.0.1:8000`. That is why it is a named override rather than
@@ -331,9 +338,11 @@ The proxy is the only service reachable from outside, so it gets the strictest
 treatment: it runs as an unprivileged user (uid 65532), drops every Linux
 capability except the one the Caddy binary asks for, and has a read-only root
 filesystem. The API drops all capabilities and is read-only too, on top of the
-unprivileged user its image already uses. All three services set
-`no-new-privileges` and have memory, CPU and process limits (see the resource
-limits in `.env.example`).
+unprivileged user its image already uses. Every service in `compose.yaml`
+sets `no-new-privileges` and has memory, CPU and process limits. The database,
+API, proxy and MCP service limits can be overridden in `.env` (see
+`.env.example`); the one-shot `migrate` and `proxy-perms` services use fixed
+limits.
 
 A small one-shot service, `proxy-perms`, hands the proxy's two named volumes to
 that user before it starts, because Docker creates them root-owned and a
@@ -351,8 +360,11 @@ task or service definition, which is where the platform applies them.
 Postgres writes to the named volume `pgdata`.
 
 ```bash
-docker compose down        # containers and networks go; pgdata stays
-docker compose down -v     # pgdata is destroyed, with no undo
+# containers and networks go, the optional MCP service included; pgdata stays
+# (same as `make down`)
+docker compose --profile agent-mcp down
+# pgdata is destroyed, with no undo and no prompt (`make prune` asks first)
+docker compose --profile agent-mcp down -v
 make backup                # pg_dump through the running server -> backups/
 ```
 
@@ -386,7 +398,9 @@ store, never typed on a command line:
 # /srv/chai/nightly-backup.sh
 cd /srv/chai
 export BACKUP_PASSPHRASE="$(cat /etc/chai/backup.pass)"
-make backup BACKUP_RETAIN=30
+# BACKUP_RETAIN counts files, not days: one a night, 35 files is the
+# 35-day rolling period the project sets (R-54)
+make backup BACKUP_RETAIN=35
 make verify-backup
 ```
 
@@ -516,9 +530,12 @@ The audit log and the version history are append-only because of database
 triggers, and a table's owner can switch a trigger off with one statement. The
 Postgres user `.env` calls `POSTGRES_USER` owns every table (and, in this
 image, is a superuser), so an API that connected as it would only be bound by the
-triggers as long as the API behaved.
+triggers as long as the API behaved. The API enforces this itself: it refuses to
+start when its connection is the owner's or a superuser's, unless
+`ALLOW_OWNER_ROLE=true`, which is for a laptop or a test and which `make doctor`
+fails on.
 
-So the API does not. Two roles:
+So the API does not connect as the owner. Two roles:
 
 | Role | Password | Held by | Can |
 |---|---|---|---|
@@ -533,6 +550,14 @@ owner's. Set `APP_POSTGRES_PASSWORD` to a **different** `openssl rand -base64 32
 than `POSTGRES_PASSWORD`; `make up` refuses to start if it is empty, short, a
 placeholder or the same.
 
+If the API is given the owner's credential anyway (a plain `docker compose up`
+that skips `make up`'s preflight with `APP_POSTGRES_PASSWORD` empty, or
+`APP_DATABASE_URL` pointing at the owner), it refuses to start with "Refusing to
+start: the database credential is the table OWNER's", because the owner can
+disable the append-only triggers (R-74). Fix the credential. `ALLOW_OWNER_ROLE=true`
+overrides this for a laptop or a test and must never be set on a deployment; see
+[Deploying with SSO](deploy.md#two-database-roles).
+
 Rotating `APP_POSTGRES_PASSWORD` is a restart, because `migrate` re-applies it:
 
 ```bash
@@ -541,7 +566,8 @@ docker compose up -d --force-recreate migrate api
 
 `make doctor` checks that the restricted role accepts its password and that the
 API reports serving as it. A Postgres superuser still bypasses all of this, which
-is why the owner's password is the one to guard, and why it lives only in a job.
+is why the owner's password is the one to guard. It is held by the migrate job
+and the `db` service, and it is still in `.env` on the host.
 
 ### Rotating the database password
 
@@ -576,6 +602,10 @@ docker compose exec db \
 docker compose up -d --force-recreate api
 ```
 
+This uses the default `chai` user and database; if you changed `POSTGRES_USER`
+or `POSTGRES_DB` in `.env`, substitute them (`make doctor` prints the command
+with your values). Double any single quote in a password you chose.
+
 That `psql` has no `-h`, so it goes over the container's Unix socket, which
 `pg_hba.conf` trusts — it needs no password, which is what makes the rotation
 possible when you have locked yourself out.
@@ -599,5 +629,7 @@ make prune       # deletes the volume: records, audit log, every version
 ```
 
 Managed PostgreSQL has none of this problem, because there is no volume and no
-`db` service — rotate with the provider and update `DATABASE_URL`. See
-[Deploying with SSO](deploy.md).
+`db` service — rotate with the provider and update the secrets as
+[Deploying with SSO](deploy.md#the-database) describes: the owner's
+`DATABASE_URL` for the migrate job, and `APP_POSTGRES_PASSWORD` with
+`APP_DATABASE_URL` for the API, then re-run the job.

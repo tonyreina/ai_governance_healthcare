@@ -82,7 +82,8 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-05 The API is reachable only through the proxy
 
 - **Claim:** The API publishes no host port, and nothing but the proxy shares
-  the internet-facing network with it.
+  the internet-facing network with it (plus `mcp-gate`, only if the optional
+  `agent-mcp` profile is turned on).
 - **Asserted in:** `docs/self-hosting.md` — "the API publishes no host port"
 - **Asserted in:** `README.md` — "so it must be unreachable except through the
   proxy."
@@ -126,10 +127,10 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 - **Claim:** The docs say the target asserts that the API is unreachable and
   that a forged identity is stripped.
-- **Asserted in:** `docs/self-hosting.md` — "`make check-isolation` asserts all
-  of this against a running stack."
+- **Asserted in:** `docs/self-hosting.md` — "`make check-isolation` asserts, against a running stack, that `api` and `db`"
 - **Status:** enforced
 - **Enforced by:**
+  `tests/test_compose_isolation.py::publishing a port on the api is noticed`
   `tests/test_check_isolation.py::a published port on`
   `tests/test_check_isolation.py::a listening port is noticed`
   `tests/test_check_isolation.py::a proxy that forwards the header is noticed`
@@ -505,8 +506,7 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 ### C-41 The data survives `docker compose down`
 
 - **Claim:** Postgres writes to a named volume, which `down` leaves alone.
-- **Asserted in:** `docs/self-hosting.md` — "containers and networks go; pgdata
-  stays"
+- **Asserted in:** `docs/self-hosting.md` — "the optional MCP service included; pgdata stays"
 - **Status:** enforced
 - **Enforced by:**
   `tests/test_compose_isolation.py::the database leaving its named volume is noticed`

@@ -10,7 +10,9 @@ name: Test
 # Three suites need three environments, so there are three kinds of job, plus a
 # unit test of this configuration:
 #
+#   changes     is this pull request prose documentation only? (D-105)
 #   workflows   the CI config itself: it must run every test that exists
+#   docs        the suites that read prose docs and need no database or browser
 #   server      the API against a real PostgreSQL (what it tests IS the database)
 #   browser-*   the dashboard in a real browser
 #   engines     the page policy and the injection suites in Firefox and WebKit
@@ -23,6 +25,18 @@ name: Test
 # dealt into three jobs of about the same length; and proxy-mcp is a matrix of
 # shards that partition its mutants. Nothing is dropped or skipped to save time:
 # test_workflows.py checks that every suite still runs, and runs once.
+#
+# A pull request that changes only prose documentation does not need the heavy jobs
+# (D-105). The `changes` job reads the changed files (scripts/ci_changes.py) and says
+# docs_only=true only when every one is a Markdown page that no heavy suite reads;
+# a push to main, a workflow change, a code change or any doubt says false and runs
+# everything. When docs_only is true the heavy jobs (server, browser-*, engines,
+# stack, proxy-mcp) are SKIPPED, and still run: `workflows (unit)`, and `docs`, the
+# suites that read prose and need no database, browser or Docker. `tests passed`
+# still reports on every pull request, because branch protection requires it, and
+# accepts a skipped heavy job ONLY when `changes` says docs_only. A workflow-level
+# `paths-ignore` was rejected: it would stop the required check from reporting at
+# all, and a docs pull request could never merge.
 #
 # REQUIRE_TESTS makes a suite that cannot run FAIL instead of skipping. A skip
 # exits 0 and reads as a pass: without this, the 106 database tests would skip
@@ -45,6 +59,80 @@ env:
   REQUIRE_TESTS: "1"
 
 jobs:
+  # Decides whether the heavy jobs run (D-105). Fails closed: on any error, on a
+  # push, or when it is unsure, docs_only is false and everything runs.
+  changes:
+    name: changes (docs only?)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      # Full history, so the merge base of the pull request and its base is there.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/ci_changes.py
+
+  # The suites that read prose documents and need no database, browser or Docker.
+  # They run on every pull request, and are what a docs-only pull request is tested
+  # by besides `workflows (unit)` (D-105). tests/test_ci_changes.py scans the
+  # repository for the documents each suite reads, so a page cannot be read by a
+  # heavy suite without the classifier knowing.
+  docs:
+    name: docs (prose and its checks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
+        with:
+          locked: true
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: server/pyproject.toml
+
+      # Every sentence that asserts a security property is quoted where it is made
+      # and backed by a test CI runs.
+      - name: the claims inventory
+        run: pixi run check-claims
+
+      # Governance metadata only, never patient data, stated where a deployer reads
+      # first and on every page (#34): reads every page, needs no browser.
+      - name: data scope
+        if: ${{ !cancelled() }}
+        run: pixi run test-data-scope
+
+      # The deployment guide names no region in its commands and has a data
+      # residency section (#58).
+      - name: deploy residency
+        if: ${{ !cancelled() }}
+        run: pixi run test-deploy-residency
+
+      # Every ARN the docs show for the audience starts the API (#51, #62). It reads
+      # every page and needs no database, so a docs-only change is checked by it here.
+      - run: pip install -e "server[dev]"
+        if: ${{ !cancelled() }}
+      - name: every ARN the docs show starts the API
+        if: ${{ !cancelled() }}
+        working-directory: server
+        run: pytest -q -rs tests/test_auth.py -k test_every_arn_the_docs_show_for_the_audience_starts
+
+      # The site builds with no broken link or nav entry (lint's hook builds it too;
+      # a docs-only change must not depend on another workflow for this).
+      - name: the site builds, strictly
+        if: ${{ !cancelled() }}
+        run: pixi run docs-build
+
   workflows:
     name: workflows (unit)
     runs-on: ubuntu-latest
@@ -58,6 +146,10 @@ jobs:
 
       # Does CI run every test that exists, and does it fail when one cannot run?
       - run: pixi run test-workflows
+
+      # The docs lane's classifier, and the scan that keeps its list of heavy-read
+      # pages exact (D-105).
+      - run: pixi run test-ci-changes
 
       # The proxy-mcp shards run every mutant exactly once, and a selector that drops
       # or repeats one is noticed (D-97).
@@ -121,6 +213,8 @@ jobs:
   # leg that runs nothing cannot pass for one that ran.
   server:
     name: server (${{ matrix.suite }}, PostgreSQL 18)
+    needs: changes
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     # The agent API's mutation tests run a copy of the server once per broken guard.
     timeout-minutes: 20
@@ -191,6 +285,8 @@ jobs:
   # rest; test_workflows.py checks both, and that every suite still runs.
   browser-1:
     name: browser (integration, Chromium, 1 of 3)
+    needs: changes
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -226,6 +322,8 @@ jobs:
 
   browser-2:
     name: browser (integration, Chromium, 2 of 3)
+    needs: changes
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -281,6 +379,8 @@ jobs:
 
   browser-3:
     name: browser (integration, Chromium, 3 of 3)
+    needs: changes
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -320,11 +420,8 @@ jobs:
         if: ${{ !cancelled() }}
         run: pixi run test-injection
 
-      # Governance metadata only, never patient data, in any mode, stated where a
-      # deployer reads first (#34). The in-app notice is in test-boot.
-      - name: data scope
-        if: ${{ !cancelled() }}
-        run: pixi run test-data-scope
+      # Governance metadata only, never patient data (#34): the in-app notice is in
+      # test-boot; the pages' statement is in the docs job (test-data-scope).
       - name: session controls (idle lock, sign-out, lost stream)
         if: ${{ !cancelled() }}
         run: pixi run test-session-ui
@@ -379,6 +476,8 @@ jobs:
 
   stack:
     name: stack (end to end, Docker Compose)
+    needs: changes
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -409,11 +508,6 @@ jobs:
       # updates, a security policy, and the real image built from the lock (#37).
       - name: supply chain
         run: pixi run test-supply-chain
-
-      # The deployment guide names no region in its commands and has a data
-      # residency section (#58).
-      - name: deploy residency
-        run: pixi run test-deploy-residency
 
       # Subject access: find one person's identifier everywhere, against a real
       # PostgreSQL (#57).
@@ -515,6 +609,8 @@ jobs:
   # and `test-mutant-shards` shows the shards run each mutant exactly once.
   proxy-mcp:
     name: proxy, the MCP route and the gate (each guard broken, ${{ matrix.shard }} of ${{ strategy.job-total }})
+    needs: changes
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -540,6 +636,8 @@ jobs:
   # error there, not a fallback to Chromium.
   engines:
     name: browser engines (${{ matrix.engine }})
+    needs: changes
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
@@ -578,16 +676,26 @@ jobs:
         run: pixi run test-markdown-render
 
   # One check that means "everything passed", so branch protection can require a
-  # single name and a new job cannot be forgotten. `skipped` counts as a failure:
-  # a job that did not run proved nothing.
+  # single name and a new job cannot be forgotten. It reports on every pull request,
+  # docs-only or not, which a workflow-level `paths-ignore` could not do (D-105).
+  # `skipped` counts as a failure: a job that did not run proved nothing. The one
+  # exception is a heavy job when `changes` says the pull request is prose only.
   tests-passed:
     name: tests passed
     if: ${{ always() }}
-    needs: [workflows, server, browser-1, browser-2, browser-3, engines, stack, proxy-mcp]
+    needs: [changes, docs, workflows, server, browser-1, browser-2, browser-3, engines, stack, proxy-mcp]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: any job failed, was canceled, or was skipped
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+      - name: a job failed or was canceled
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
         run: exit 1
-      - run: echo "every test job passed"
+      # These three run for every change, so for them skipped is never fine.
+      - name: changes, docs or workflows did not succeed
+        if: ${{ needs.changes.result != 'success' || needs.docs.result != 'success' || needs.workflows.result != 'success' }}
+        run: exit 1
+      # A heavy job may be skipped only because the change is prose only.
+      - name: a job was skipped, and the change is not docs only
+        if: ${{ contains(needs.*.result, 'skipped') && needs.changes.outputs.docs_only != 'true' }}
+        run: exit 1
+      - run: echo "every job that should have run passed"

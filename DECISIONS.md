@@ -3882,3 +3882,73 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Enforced by: `tests/test_croissant_export.py` (`pixi run test-croissant`):
   the default export has no timeframe and no dates, and the flag emits it.
   Not enforced: that the four free-text fields are free of identifying detail.
+
+### D-105 A pull request that changes only prose skips the heavy test jobs
+
+- Status: Accepted (the owner, 2026-10-12: "A docs lane"). Extends
+  the shape D-97 gave `.github/workflows/test.yml`; D-23's rules (every test
+  runs, a skip fails, one aggregate check) are unchanged for every pull request
+  that is not docs-only.
+- **Why.** A reworded paragraph ran about a dozen heavy jobs (a database, three
+  browsers, a Compose stack, a real Caddy) and rebuilt three images for the scan.
+  The suites that can fail on prose are few and light, and need none of that.
+- **What.**
+    - A `changes` job runs `scripts/ci_changes.py` on a pull request. It says
+      `docs_only=true` only when EVERY changed file is Markdown at the root or under
+      `docs/` (not `docs/app/`, the built dashboard; not `docs/assets/`,
+      media), and none is in `HEAVY_DOCS`: the pages a suite outside the lane reads
+      (`SECURITY.md`, `docs/agent-api.md`, `docs/deploy.md`, `docs/mcp.md`,
+      `docs/privacy.md`, `docs/self-hosting.md`). A push, a manual run, an empty
+      list, a failed diff or a missing variable says false, and everything runs.
+    - When true, `server`, `browser-1` to `browser-3`, `engines`, `stack` and
+      `proxy-mcp` are skipped (`needs: changes`, and an `if` on its output). Still
+      run: `workflows (unit)`, and a new `docs` job: `check-claims`,
+      `test-data-scope` and `test-deploy-residency` (both moved here; they need
+      no browser or Docker), the one server test that checks every ARN the pages
+      show, and the strict `docs-build` (the lint workflow's hook builds the site
+      too; the lane does not lean on it).
+    - `tests passed` keeps its name and its `always()`, and needs `changes`, `docs`
+      and every heavy job. It fails on any failure or cancellation; fails unless
+      `changes`, `docs` and `workflows` succeeded; and fails on a skipped job unless
+      `changes` said docs-only. A heavy job skipped on a code change is a failure.
+    - `security.yml` (the image scan) ignores `*.md` and `docs/**/*.md` on its
+      `pull_request` trigger. It is not a required check (the ruleset requires only
+      `tests passed`, verified with `gh api repos/OWNER/REPO/rules/branches/main`),
+      so a filter cannot block a merge there. Main, the schedule and CodeQL are
+      unchanged.
+- **The risk, and what prevents it.** A page misclassified as docs-only that a
+  heavy suite reads would let a change merge without the suite that breaks on it.
+  `tests/test_ci_changes.py` scans `tests/`, `server/tests/`, `mcp/tests/` and
+  `scripts/` (string literals only, so a comment saying "see CLAUDE.md" is not a
+  read; a Markdown glob counts as reading every page) and parses test.yml and
+  pixi.toml to learn which job runs each file. A page read by a file outside the
+  lane that is not in `HEAVY_DOCS` fails, and so does a listed page that nothing
+  outside the lane reads. Each is shown failing on a broken copy, as is each of
+  the workflow rules in `tests/test_workflows.py` (a heavy job without its `if`
+  or
+  without `needs: changes`, an aggregate that ignores docs_only or does not need
+  `docs`, a `docs` or `changes` job that can be skipped, a path filter on the
+  required workflow; and a push, a code file, `docs/app/` or a heavy page called
+  docs-only).
+- **Rejected.**
+    - *A workflow-level `paths-ignore` on test.yml:* the required check would not
+      report on a docs pull request, and it could never merge.
+    - *Leaving CI alone:* a prose pull request pays for the whole pipeline.
+    - *Letting `tests passed` treat skipped as a pass:* the check must keep proving
+      that a job that should have run did.
+    - *Calling every `docs/` file docs-only:* about thirty files read pages;
+      `server/tests/test_agent_docs.py` quotes `docs/agent-api.md` and the
+      supply-chain test reads `docs/deploy.md`.
+- **Not covered.** The scan is static. A suite that builds a page's path from data
+  (a directory listing, a variable) rather than a literal name or a Markdown glob
+  is not seen, so review a new test that reads documents. `docs/assets/` and every
+  non-Markdown file are never docs-only. The classifier runs from the pull
+  request's own checkout; changing it is itself a non-docs change and runs
+  everything.
+- Source: the owner's ruling of 2026-10-12 ("A docs lane"); D-97; D-23; C-48 (the
+  required check).
+- Enforced by: `tests/test_workflows.py` and `tests/test_ci_changes.py`
+  (`pixi run test-workflows`, `pixi run test-ci-changes`, both in the workflows
+  job) and a claims row, C-144. Shown on the real CI: a prose-only pull request
+  skipped the heavy jobs and a code change ran them all (recorded in the pull
+  request that introduced this).

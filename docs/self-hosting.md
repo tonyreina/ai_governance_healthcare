@@ -48,7 +48,11 @@ TLS to be terminated in front of it. `make up` refuses to start on unsafe
 settings: an empty or placeholder password, a literal identity such as
 `dev@localhost`, plain HTTP on a network, or an encryption decision nobody made
 (when the bind or `SITE_ADDRESS` says the stack is reachable beyond this
-machine).
+machine). It judges the values compose will use, so a variable exported in the
+shell (`POSTGRES_PASSWORD=x make up`) counts and wins over `.env`. With
+`DATABASE_URL` set to an external database it does not check the owner's
+password, because that database has its own credential, and it does not refuse a
+literal `IDENTITY_NAME_SOURCE`, which is only a display name.
 
 ## The commands you will use
 
@@ -586,10 +590,10 @@ accepts, and the API can no longer reach its own database:
 database not ready: password authentication failed for user "chai"
 ```
 
-Nothing warns about this, and `make up` cannot: `preflight.py` reads `.env` and
-has no running database to ask. It is also the check that sends people here,
-because it insists the password be strong and not a placeholder — which is
-exactly what makes somebody change it.
+Nothing warns about this, and `make up` cannot: `preflight.py` reads `.env`
+and the environment and has no running database to ask. It is also the check
+that sends people here, because it insists the password be strong and not a
+placeholder — which is exactly what makes somebody change it.
 
 So ask the running stack instead:
 

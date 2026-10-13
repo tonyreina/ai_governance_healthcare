@@ -7,12 +7,16 @@ sample password reaches production: ``POSTGRES_PASSWORD=replace-me`` is a
 non-empty value, so the guard passes and the database comes up with a password
 published in a public repository.
 
-So this runs before ``make up`` and checks the things compose cannot:
+So this runs before ``make up`` and checks the things compose cannot. It judges the
+values compose will use: a variable exported in the shell (``POSTGRES_PASSWORD=x
+make up``) wins over ``.env``, as it does in compose (D-106).
 
-* the database password is present, not a known placeholder, and not trivial;
-* the identity sources are either unset (the proxy then rejects every request,
-  which is a loud, safe failure) or Caddy placeholders -- never literals, which
-  would stamp every visitor as the same person;
+* the database password is present, not a known placeholder, and not trivial
+  (not checked when ``DATABASE_URL`` points at an external database, which has its
+  own credential; the API's own role password still is);
+* the identity id and email sources are either unset (the proxy then rejects
+  every request, which is a loud, safe failure) or Caddy placeholders -- never
+  literals, which would stamp every visitor as the same person;
 * the stack is not published to a non-loopback address while speaking plain
   HTTP;
 * a stack reachable beyond this machine (a non-loopback bind, or a real hostname
@@ -29,12 +33,14 @@ import ipaddress
 import os
 import re
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 ENV_FILE = Path(".env")
 
 # The defaults compose.yaml applies with `${VAR:-default}`. They are repeated here
-# because this reads `.env` ALONE and has to decide what compose will do with it.
+# because this reads `.env` and the environment and has to decide what compose
+# will do with them.
 # tests/test_preflight.py fails if either drifts from compose.yaml.
 DEFAULT_BIND = "127.0.0.1"
 # Host names that mean "only this machine". Names defined by the network stack, not by
@@ -142,6 +148,40 @@ def read_env(path: Path) -> dict[str, str]:
         key, _, value = line.partition("=")
         out[_EXPORT.sub("", key.strip())] = _value(value)
     return out
+
+
+# The variables `check` judges. A variable exported in the shell wins over `.env` in
+# compose, so these are looked up in the process environment too (D-106).
+JUDGED = frozenset(
+    {
+        "POSTGRES_PASSWORD",
+        "APP_POSTGRES_PASSWORD",
+        "DATABASE_URL",
+        "APP_DATABASE_URL",
+        "IDENTITY_ID_SOURCE",
+        "IDENTITY_NAME_SOURCE",
+        "IDENTITY_EMAIL_SOURCE",
+        "IDENTITY_STRIP_PREFIX",
+        "HTTP_BIND",
+        "SITE_ADDRESS",
+        "STORAGE_ENCRYPTION_CONFIRMED",
+    }
+)
+
+
+def effective_env(
+    file_env: dict[str, str], environ: Mapping[str, str]
+) -> dict[str, str]:
+    """The values compose will use: the process environment over `.env`.
+
+    A variable that is set in the shell wins even when it is EMPTY, as in compose
+    (`POSTGRES_PASSWORD= make up` is an empty password, not the one in `.env`).
+    Only the variables this judges are taken, so the rest of the environment cannot
+    change the outcome.
+    """
+    merged = dict(file_env)
+    merged.update({k: environ[k] for k in JUDGED if k in environ})
+    return merged
 
 
 def check(env: dict[str, str]) -> list[str]:
@@ -298,12 +338,13 @@ def main() -> int:
         print("preflight: skipped (FORCE=1)")
         return 0
 
-    problems = check(read_env(ENV_FILE))
+    problems = check(effective_env(read_env(ENV_FILE), os.environ))
     if not problems:
         print("preflight: ok")
         return 0
 
-    print(f"\n  Refusing to start. {len(problems)} problem(s) in {ENV_FILE}:\n")
+    where = f"{ENV_FILE} or the environment"
+    print(f"\n  Refusing to start. {len(problems)} problem(s) in {where}:\n")
     for i, problem in enumerate(problems, 1):
         print(f"  {i}. {problem}\n")
     print("  Fix these, or run `make up FORCE=1` if you are certain.\n")

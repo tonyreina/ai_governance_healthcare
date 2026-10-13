@@ -4073,3 +4073,27 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
   job) and a claims row, C-144. Shown on the real CI: a prose-only pull request
   skipped the heavy jobs and a code change ran them all (recorded in the pull
   request that introduced this).
+
+### D-106 Preflight judges the environment over `.env`, as compose does
+
+- Status: Accepted (the owner's request of 2026-10-13 to close issue #231).
+- **Decision.** `scripts/preflight.py` judges the values compose will use: a
+  variable set in the process environment (even to an empty string) wins over
+  `.env`, for the variables it checks (`JUDGED`). `FORCE=1` and the accepted
+  values are unchanged. Two things stay unjudged on purpose: the owner's
+  `POSTGRES_PASSWORD` when `DATABASE_URL` names an external database (that
+  database has its own credential; the API's `APP_POSTGRES_PASSWORD` is still
+  checked unless `APP_DATABASE_URL` is set), and `IDENTITY_NAME_SOURCE`, a
+  display name that decides no access (ids and emails do, and stay checked).
+- **Why.** `POSTGRES_PASSWORD=short make up` or an exported literal identity
+  reached compose and not the gate, so C-24 was true only for `.env`.
+- **Rejected.**
+    - *Reading `.env` alone and documenting the limit:* the claim would stay
+      false for the common one-line override.
+    - *Overlaying the whole environment:* unrelated variables could change the
+      outcome.
+    - *Refusing a literal name source:* it would block a harmless display
+      value and imply the name is a security boundary.
+- Source: the owner's request of 2026-10-13 to close #231; R-42, R-35.
+- Enforced by: `tests/test_preflight.py` (`pixi run test-preflight`), with
+  mutation tests for the environment handling, and claims row C-24.

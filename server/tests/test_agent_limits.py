@@ -52,22 +52,61 @@ def guard(clock: Clock, **overrides) -> AgentGuard:
 # --- cost: O(1) per failure, bounded memory ---------------------------------------------
 
 
-def test_a_hundred_thousand_sources_cost_a_bounded_time_and_memory() -> None:
-    tally = FailureTally(60, 30, 10**9)
-    worst = 0.0
-    started = time.perf_counter()
-    for i in range(100_000):
+# A call this slow is not O(1) work. The old per-failure scan took milliseconds a call
+# at this table size, and EVERY call paid it, so what matters is how many calls are
+# slow, not the single slowest: one garbage collection or scheduler pause on a busy
+# shared runner can make one call slow without the code being wrong (this asserted
+# `worst < 0.05` and failed at random, on #237 and #248).
+SLOW_CALL = 0.005  # seconds
+SLOW_ALLOWED = 0.01  # a fraction of the calls
+
+
+def charge_costs(tally: FailureTally, calls: int) -> list[float]:
+    """The time of each of `calls` charges, from as many distinct sources."""
+    costs = []
+    for i in range(calls):
         t0 = time.perf_counter()
         tally.charge(f"10.{i >> 16}.{(i >> 8) & 255}.{i & 255}", 1000.0)
-        worst = max(worst, time.perf_counter() - t0)
+        costs.append(time.perf_counter() - t0)
         assert tally.tracked <= MAX_SOURCES
-    total = time.perf_counter() - started
-    # Generous bounds, for a slow CI runner: the old per-failure scan took seconds in
-    # total and milliseconds a call at this size, and grew with the table.
-    assert total < 5.0, total
-    assert worst < 0.05, worst
+    return costs
+
+
+def too_many_slow_calls(costs: list[float]) -> bool:
+    return sum(c > SLOW_CALL for c in costs) / len(costs) > SLOW_ALLOWED
+
+
+def test_a_hundred_thousand_sources_cost_a_bounded_time_and_memory() -> None:
+    tally = FailureTally(60, 30, 10**9)
+    costs = charge_costs(tally, 100_000)
+    # Generous bounds, for a slow CI runner.
+    assert sum(costs) < 5.0, sum(costs)
+    assert not too_many_slow_calls(costs), (
+        f"{sum(c > SLOW_CALL for c in costs)} of {len(costs)} calls took over "
+        f"{SLOW_CALL * 1000:.0f} ms"
+    )
     assert tally.tracked == MAX_SOURCES
     assert tally.evicted_sources == 100_000 - MAX_SOURCES
+
+
+def test_the_cost_check_ignores_one_slow_call_and_notices_a_slow_table() -> None:
+    """The check is only worth having if it can fail, and must not fail on noise."""
+    fast = [0.00001] * 100_000
+    assert not too_many_slow_calls(fast)
+    # One pause (a collection, a descheduled thread) is noise, not a regression.
+    assert not too_many_slow_calls([0.5, *fast])
+
+    class Scanning(FailureTally):
+        """What the old code did: work proportional to the table on every call."""
+
+        def charge(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            end = time.perf_counter() + 0.006
+            while time.perf_counter() < end:
+                pass
+            return super().charge(*args, **kwargs)
+
+    slow = charge_costs(Scanning(60, 30, 10**9), 200)
+    assert too_many_slow_calls(slow), "a per-call scan was not noticed"
 
 
 def test_the_table_never_exceeds_its_cap_and_evicts_the_oldest_idle() -> None:

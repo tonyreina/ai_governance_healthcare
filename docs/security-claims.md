@@ -342,20 +342,17 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-24 `make up` refuses to start on unsafe settings
 
-- **Claim:** A placeholder or short database password, a literal identity source,
-  and a non-loopback bind over plain HTTP are all refused when they are in `.env`,
-  and `.env` is read the way compose reads it, so a blank value or a trailing
-  comment cannot get past the gate.
+- **Claim:** A placeholder or short database password, a literal identity id or
+  email source, and a non-loopback bind over plain HTTP are all refused, whether
+  they are in `.env` or exported in the shell (the environment wins over `.env`,
+  as in compose), and values are read the way compose reads them, so a blank
+  value or a trailing comment cannot get past the gate. Not judged, by design
+  (D-106): the owner's password when `DATABASE_URL` names an external database
+  (it has its own credential), and `IDENTITY_NAME_SOURCE` (a display name).
 - **Asserted in:** `README.md` — "refuses to start on unsafe settings"
 - **Asserted in:** `docs/adopting.md` — "`make up` refuses to start on unsafe settings and says why."
 - **Asserted in:** `docs/self-hosting.md` — "`make up` refuses to start on unsafe settings: an empty or placeholder password"
-- **Status:** partial
-- **Gap:** Preflight reads `.env` alone (the process environment is used only for
-  `FORCE`). Compose gives a variable exported in the shell precedence over
-  `.env`, so `POSTGRES_PASSWORD=short make up` or an exported literal identity
-  is not seen by the gate. The password checks are skipped when `DATABASE_URL`
-  points at an external database, and the literal check covers
-  `IDENTITY_ID_SOURCE` and `IDENTITY_EMAIL_SOURCE`, not the name. #231
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_preflight.py::an empty password is refused`
   `tests/test_preflight.py::15 characters is refused`
@@ -365,6 +362,15 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   `tests/test_preflight.py::so a weak one with a long note is still refused`
   `tests/test_preflight.py::an unsafe .env exits 1`
   `tests/test_preflight.py::FORCE=1 skips the check and exits 0`
+  `tests/test_preflight.py::a short password only in the environment is refused`
+  `tests/test_preflight.py::a placeholder only in the environment is refused`
+  `tests/test_preflight.py::an EMPTY exported password beats a good .env value`
+  `tests/test_preflight.py::a literal identity only in the environment is refused`
+  `tests/test_preflight.py::an unsafe .env value overridden by a safe exported one is fine`
+  `tests/test_preflight.py::mutation: .env alone -> an exported unsafe value slips through`
+  `tests/test_preflight.py::mutation: .env over the environment -> a safe export no longer wins`
+  `tests/test_preflight.py::an external DATABASE_URL skips the OWNER password checks only`
+  `tests/test_preflight.py::a literal IDENTITY_NAME_SOURCE is a display name, not refused`
 
 ### C-25 Any database password works
 
@@ -402,17 +408,15 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
   mode with the standing banner (C-26).
 - **Asserted in:** `README.md` — "never silently falls back"
 - **Asserted in:** `docs/running.md` — "The app never silently falls back from one to another."
-- **Status:** partial
-- **Gap:** The 'no store was created' and 'nothing written to localStorage' checks run for
-  401 and 403 only; the unreachable-server case checks the error text and not
-  that no store was created. A network error, a 404 or a non-JSON answer on a
-  fresh browser with no remembered origin is browser-only mode with the banner,
-  by design, not a stop. #231
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_boot_storage.py::no store was created`
   `tests/test_boot_storage.py::nothing written to localStorage`
-  `tests/test_boot_storage.py::503 -> blocking error`
-  `tests/test_boot_storage.py::network failure on a known-API origin -> blocking error`
+  `tests/test_boot_storage.py::blocking error, not a workspace`
+  `tests/test_boot_storage.py::a fallback to browser storage is noticed`
+  `tests/test_boot_storage.py::mutation: the stop branches are found in the built app`
+  `tests/test_boot_storage.py::fresh browser, non-JSON answer`
+  `tests/test_boot_storage.py::the standing banner is shown`
 
 ### C-28 After a save, the app says where the save went
 
@@ -1114,18 +1118,19 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 
 ### C-76 A translated warning is shown only once someone has reviewed it
 
-- **Claim:** The patient-data notice and the storage-mode banners stay in English
-  in a language until a reviewer is recorded for them in that catalog.
-- **Asserted in:** `docs/developing.md` — "are shown in English until someone fluent in the"
-- **Status:** partial
-- **Gap:** The evidence is one banner (`safety.local.title` and `.detail`) in one
-  language. The patient-data notice, the shared-server banner and the other keys
-  under `@meta.safety` in `en.json` (about twenty: report disclaimers, the rules
-  banner, agent-token warnings) are not asserted in either state, and the claim
-  names only the notice and banners. #231
+- **Claim:** The safety-bearing text listed under `@meta.safety` in `en.json`
+  stays in English in a language until a reviewer is recorded for that key in
+  that catalog. The list is the patient-data notice (`safety.scope`), the
+  storage-mode banners (`safety.local.title`, `safety.local.detail`,
+  `safety.server.detail`), the report disclaimers and footers, the provenance
+  notes, the rules banner and the agent-token warnings.
+- **Asserted in:** `docs/developing.md` — "are shown in English until someone"
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_i18n.py::the unreviewed safety warning stays in English`
   `tests/test_i18n.py::once a reviewer is recorded, it shows in Spanish`
+  `tests/test_i18n.py::every safety key, every language: English until reviewed, then translated`
+  `tests/test_i18n.py::mutation: a lookup that skips the reviewer check fails every pair`
 
 ### C-77 Only the database owner can dispose, and not of a recent read
 
@@ -1180,24 +1185,33 @@ honestly as `unenforced`. See [CLAUDE.md](https://github.com/tonyreina/ai_govern
 - **Claim:** No screen, dialog, language or export of the dashboard makes a
   request to another host, none of its exports carries a resource a viewer would
   fetch on its own, and opening a saved report announces nothing to a third party
-  (R-05). A link the reader chooses to follow is not such a request.
+  (R-05). A link the reader chooses to follow is not such a request. Checked on
+  the browser-only page with sample data, and on the server-backed page (served
+  from a local static server with a stand-in API, the signed-in person owning the
+  project): sign-out link, server scope notice, retirement-rules banner (each of
+  its states), access settings, litigation hold (section and both dialogs), the
+  audit log and its older entries, a read-only project, every export, agent
+  access (feature off, token list, mint, one-time reveal, revoke), the idle lock
+  and the delete dialog with its choice to destroy the history, in every
+  language. A request another host would receive, one the page's own policy
+  blocks, and a `securitypolicyviolation` all fail the walk.
 - **Asserted in:** `docs/what-it-does.md` — "The dashboard and its exports contact no
   outside service."
 - **Asserted in:** `docs/privacy.md` — "the dashboard itself sends nothing to"
 - **Asserted in:** `docs/adopting.md` — "The dashboard and its exports contact no
   outside service."
-- **Status:** partial
-- **Gap:** The walk runs the browser-only (`file://`) page with sample data. Screens that
-  exist only against a server (agent access, sign-in and session, litigation
-  hold, version history, purge dialogs) are not rendered, and what the page's
-  own CSP (`connect-src` and `img-src` `'self'`) blocks may not reach the
-  request listener. #231
+- **Status:** enforced
 - **Enforced by:**
   `tests/test_no_third_party.py::loading the dashboard makes no external request`
   `tests/test_no_third_party.py::no screen, dialog, language or export makes a request to another host`
   `tests/test_no_third_party.py::the Markdown export has no image (an image is a request when it is read)`
   `tests/test_no_third_party.py::opening the saved report makes no request to another host`
   `tests/test_no_third_party.py::the HTML export has no http(s) resource URLs at all`
+  `tests/test_no_third_party.py::the server-backed page requests no other host (catch-all route)`
+  `tests/test_no_third_party.py::and its own policy refused nothing (no securitypolicyviolation)`
+  `tests/test_no_third_party.py::every server-only screen was reached`
+  `tests/test_no_third_party.py::an <img> to another host is noticed although the policy blocks it`
+  `tests/test_no_third_party.py::a fetch() to another host is noticed although the policy blocks it`
 
 ### C-81 A SHA-256 of the record travels in the JSON export
 

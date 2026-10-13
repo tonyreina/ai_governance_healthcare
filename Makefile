@@ -44,7 +44,7 @@ env: .env  ## Create .env from .env.example if it is missing
 preflight:  ## Check .env for settings that would deploy insecurely
 	@python3 scripts/preflight.py
 
-# preflight reads .env and nothing else, so it cannot see the one failure .env
+# preflight reads .env and the environment, not the database, so it cannot see the one failure .env
 # causes and cannot explain: Postgres applies POSTGRES_PASSWORD only when it
 # initializes an empty volume, so changing it later leaves the database on the
 # old one. This asks the running database what it actually accepts.

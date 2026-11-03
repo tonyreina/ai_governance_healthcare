@@ -61,6 +61,16 @@ def caddy(image: str, *args: str) -> str:
     return out.stdout.strip()
 
 
+def go_jose_v4(image: str) -> tuple[int, ...]:
+    """The go-jose v4 version compiled into the image's Caddy, as a tuple."""
+    out = caddy(image, "build-info")
+    m = re.search(r"go-jose/go-jose/v4\s+v(\d+)\.(\d+)\.(\d+)", out)
+    return tuple(int(x) for x in m.groups()) if m else ()
+
+
+GO_JOSE_FIXED = (4, 1, 6)  # CVE-2026-116587
+
+
 def main() -> int:
     if not shutil.which("docker") or docker("info").returncode != 0:
         print("docker unavailable; skipping the proxy image checks")
@@ -87,6 +97,12 @@ def main() -> int:
         "no module added or missing beyond the standard set",
         ours_m == theirs_m,
         f"{sorted(ours_m ^ theirs_m)}",
+    )
+
+    check(
+        "go-jose is at the release that fixes CVE-2026-116587",
+        go_jose_v4(TAG) >= GO_JOSE_FIXED,
+        f"{go_jose_v4(TAG)}",
     )
 
     print("It runs as it would in the cloud")
@@ -143,6 +159,27 @@ def main() -> int:
             f"{mutant} vs {theirs_v}",
         )
         docker("rmi", "-f", f"{TAG}-older")
+
+    print("A vulnerable go-jose is noticed (mutation)")
+    jose = docker(
+        "build",
+        "-f",
+        "proxy/Dockerfile",
+        "--build-arg",
+        "GO_JOSE_VERSION=v4.1.5",
+        "-t",
+        f"{TAG}-jose",
+        str(ROOT),
+    )
+    if jose.returncode != 0:
+        check("an image built with the old go-jose builds", False, jose.stderr[-400:])
+    else:
+        check(
+            "an image built with go-jose v4.1.5 fails the go-jose check",
+            go_jose_v4(f"{TAG}-jose") < GO_JOSE_FIXED,
+            f"{go_jose_v4(f'{TAG}-jose')}",
+        )
+        docker("rmi", "-f", f"{TAG}-jose")
 
     print()
     if failures:

@@ -20,13 +20,16 @@
 # official image for building Caddy and carries Go 1.27.2. Revert to the plain
 # official binary (drop this stage and the COPY --from below) once an official
 # caddy:2 is built with a fixed Go; the image scan says when.
-FROM caddy:2-builder@sha256:b25f47453fa02f7e66c0828b4b1343658808b9000950b6825c4a1cb0c988f5f8 AS caddy-build
+FROM caddy:2-builder@sha256:c4cd20eaa0b69112fd5d4f721ffc9671687e1d5d0b155c8620cf7546dbef94c0 AS caddy-build
 ARG CADDY_VERSION=v2.11.7
 # golang.org/x/net is raised for the same reason: v0.59.0, which v2.11.7 uses, has
 # a HIGH fix pending in its HTTP/2 code (CVE-2026-78669, fixed in v0.60.0). xcaddy
 # cannot pin a dependency, so this is Caddy's documented build from source: the
 # standard modules, the release, and the one raised dependency, nothing added.
 ARG X_NET_VERSION=v0.60.0
+# github.com/go-jose/go-jose/v4 is raised the same way: v4.1.5, which Caddy uses, has
+# a HIGH denial of service in its JWK parsing (CVE-2026-116587, fixed in v4.1.6).
+ARG GO_JOSE_VERSION=v4.1.6
 WORKDIR /src
 RUN printf '%s\n' \
       'package main' \
@@ -34,13 +37,19 @@ RUN printf '%s\n' \
       'import _ "github.com/caddyserver/caddy/v2/modules/standard"' \
       'func main() { caddycmd.Main() }' > main.go \
  && go mod init caddy \
- && go get "github.com/caddyserver/caddy/v2@$CADDY_VERSION" "golang.org/x/net@$X_NET_VERSION" \
+ && go get "github.com/caddyserver/caddy/v2@$CADDY_VERSION" "golang.org/x/net@$X_NET_VERSION" "github.com/go-jose/go-jose/v4@$GO_JOSE_VERSION" \
  && go mod tidy \
  && CGO_ENABLED=0 go build -trimpath -ldflags "-w -s" -o /usr/bin/caddy .
 
-FROM caddy:2@sha256:f2a1290d0463aad60660d4ec134943f183ee2a5f6c3eb7bf32dd984f2f020772
+FROM caddy:2@sha256:36c24ad91a7ff7bc4c87fe22bfa8df3c4b18da0773d73fc12ee2c52b98c0bb7e
 
 COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
+
+# The base image's Alpine has fixed brotli-libs (CRITICAL, CVE-2026-111497) and
+# curl (HIGH, CVE-2026-92392) packages that the official image has not rebuilt with
+# yet. Only these are upgraded, so the rest of the image stays what its digest pins.
+# Drop this once the pinned caddy:2 carries them; the image scan says when.
+RUN apk upgrade --no-cache brotli-libs curl libcurl
 
 COPY proxy/Caddyfile /etc/caddy/Caddyfile
 

@@ -4097,3 +4097,31 @@ Entry shape: the decision, why, what was rejected, and where it comes from.
 - Source: the owner's request of 2026-10-13 to close #231; R-42, R-35.
 - Enforced by: `tests/test_preflight.py` (`pixi run test-preflight`), with
   mutation tests for the environment handling, and claims row C-24.
+
+### D-107 The proxy image patches what the official image has not, by name
+
+- Status: Accepted (the owner's request of 2026-11-03 to fix the failing image
+  scan; extends D-72 and does not supersede it).
+- The image scan failed on the proxy with no change here: a newer scan database
+  reports `brotli-libs` (CRITICAL, CVE-2026-111497), `curl` and `libcurl` (HIGH,
+  CVE-2026-92392) in the Alpine of the pinned `caddy:2`, and `go-jose` v4.1.5
+  (HIGH, CVE-2026-116587) in Caddy's dependencies. Newer official `caddy:2` and
+  `caddy:2-builder` images fix Go's `stdlib` finding but none of these.
+- **What changed:** both image digests are raised to the 2026-10-21 builds (in
+  `proxy/Dockerfile` and the three uses in `compose.yaml`); the Caddy build raises
+  `go-jose` to v4.1.6 the way D-72 raises `golang.org/x/net`; and the runtime
+  stage runs `apk upgrade` for those three packages only.
+  `tests/test_proxy_image.py` checks the go-jose version in the built binary and
+  that an image built with v4.1.5 fails the check.
+- **Rejected:** a `.trivyignore` entry (it weakens the check that found real
+  issues); a full `apk upgrade` (it would make the image whatever Alpine
+  published that day, not what the digest pins); waiting for upstream (the scan
+  is not a required check, but it would stay red).
+- **Not enforced by a test:** that the three Alpine packages are upgraded. The
+  image scan is the control: it fails on a fixable HIGH or CRITICAL.
+- **Revert when** the pinned `caddy:2` carries fixed brotli and curl: drop the
+  `apk upgrade` line. Drop the go-jose raise when Caddy's release requires v4.1.6.
+- Source: the image scan on PRs #260 and #263 (run 41594079770); the owner's
+  request of 2026-11-03.
+- Enforced by: `tests/test_proxy_image.py` (`pixi run test-proxy-image`) for
+  go-jose; the image scan for the Alpine packages.

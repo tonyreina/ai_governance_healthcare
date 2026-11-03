@@ -1614,6 +1614,10 @@ async def test_a_flood_of_bad_tokens_writes_nothing_and_never_blocks_a_real_toke
     async with running(
         agent_failure_rate_limit_max_requests=20,
         agent_global_failure_rate_limit_max_requests=600,
+        # One window must outlast the whole loop. It is fixed windows on a real
+        # clock: at the default 60 seconds a slow runner crossed a boundary, the
+        # counts reset, and the totals below came out short (#260).
+        rate_limit_window_seconds=3600,
     ) as client:
         victim = await mint(client, ALICE)
         known = await mint(client, BOB)  # an id the attacker has seen

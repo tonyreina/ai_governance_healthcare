@@ -1,7 +1,7 @@
 {
- "head_date": "2026-09-02T14:29:29Z",
- "head_message": "Fix formatting for Jennifer Shannon's entry",
- "head_sha": "4a946d1a5621751238d543f62f6f4e4b1732ce9f",
+ "head_date": "2026-10-28T20:14:57Z",
+ "head_message": "Merge pull request #26 from coalition-for-health-ai/feat/eng17-clarity-consent",
+ "head_sha": "d8a3312b3a2654e3efb8fcacd2b4c011e6d74bb3",
  "repo": "coalition-for-health-ai/responsible-ai-content",
  "use_cases": {
   "Ambient-AI": {

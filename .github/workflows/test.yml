@@ -658,7 +658,9 @@ jobs:
     name: browser engines (${{ matrix.engine }})
     needs: changes
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: that label moved to 26.04, where Playwright's
+    # WebKit build cannot find libicudata.so.74 and every pull request failed.
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
       fail-fast: false

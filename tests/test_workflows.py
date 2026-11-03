@@ -374,6 +374,7 @@ ENGINE_SUITES = (
     "pixi run test-markdown-render",
 )
 OTHER_ENGINES = {"firefox", "webkit"}
+ENGINES_RUNNER = "ubuntu-24.04"
 
 
 def engine_problems(workflow: dict) -> list[str]:
@@ -397,6 +398,11 @@ def engine_problems(workflow: dict) -> list[str]:
     ]
     if "playwright install" not in runs or "matrix.engine" not in runs:
         problems.append(f"{ENGINES_JOB} does not install the engine it tests")
+    if job.get("runs-on") != ENGINES_RUNNER:
+        problems.append(
+            f"{ENGINES_JOB} runs on {job.get('runs-on')!r}, not {ENGINES_RUNNER!r}: "
+            "WebKit's build does not start on ubuntu-latest (26.04)"
+        )
     return problems
 
 
@@ -763,6 +769,9 @@ def main() -> int:
     broken = copy.deepcopy(workflow)
     del jobs(broken)[ENGINES_JOB]["steps"][-1]
     check("a dropped suite is noticed", bool(engine_problems(broken)))
+    broken = copy.deepcopy(workflow)
+    jobs(broken)[ENGINES_JOB]["runs-on"] = "ubuntu-latest"
+    check("the engines job on ubuntu-latest is noticed", bool(engine_problems(broken)))
     broken = copy.deepcopy(workflow)
     del jobs(broken)[AGGREGATE_JOB]
     check("no aggregate job is noticed", bool(aggregate_problems(broken)))

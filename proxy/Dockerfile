@@ -20,7 +20,7 @@
 # official image for building Caddy and carries Go 1.27.2. Revert to the plain
 # official binary (drop this stage and the COPY --from below) once an official
 # caddy:2 is built with a fixed Go; the image scan says when.
-FROM caddy:2-builder@sha256:c4cd20eaa0b69112fd5d4f721ffc9671687e1d5d0b155c8620cf7546dbef94c0 AS caddy-build
+FROM caddy:2-builder@sha256:cda07fe9d82728c7ac44d844306d435e98131423dc7b114f05a8a8ecfff94707 AS caddy-build
 ARG CADDY_VERSION=v2.11.7
 # golang.org/x/net is raised for the same reason: v0.59.0, which v2.11.7 uses, has
 # a HIGH fix pending in its HTTP/2 code (CVE-2026-78669, fixed in v0.60.0). xcaddy
@@ -41,7 +41,7 @@ RUN printf '%s\n' \
  && go mod tidy \
  && CGO_ENABLED=0 go build -trimpath -ldflags "-w -s" -o /usr/bin/caddy .
 
-FROM caddy:2@sha256:36c24ad91a7ff7bc4c87fe22bfa8df3c4b18da0773d73fc12ee2c52b98c0bb7e
+FROM caddy:2@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
 
 COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
 
